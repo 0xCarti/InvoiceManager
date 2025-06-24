@@ -1,10 +1,13 @@
 Flask==2.3.0
-Flask_Bootstrap==3.3.7.1
-Flask_Login==0.6.3
-flask_sqlalchemy==3.1.1
-flask_wtf==1.2.1
+Flask-Bootstrap==3.3.7.1
+Flask-Login==0.6.3
+Flask-SQLAlchemy==3.1.1
+Flask-WTF==1.2.1
 python-dotenv==1.0.1
 SQLAlchemy==2.0.27
 Werkzeug==2.3.0
 WTForms==3.1.2
 pytest==7.4.0
+Flask-Migrate==4.1.0
+Flask-SocketIO==5.5.1
+
