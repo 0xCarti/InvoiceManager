@@ -7,6 +7,7 @@ from flask_login import LoginManager
 from flask_bootstrap import Bootstrap
 from flask_wtf import CSRFProtect
 from werkzeug.security import generate_password_hash
+from datetime import timedelta
 
 load_dotenv()
 db = SQLAlchemy()
@@ -50,6 +51,12 @@ def create_app(args: list):
     global socketio, GST
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+    app.config.update(
+        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE='Lax',
+        PERMANENT_SESSION_LIFETIME=timedelta(minutes=30)
+    )
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///inventory.db'
     app.config['UPLOAD_FOLDER'] = 'uploads'
     GST = os.getenv('GST')
