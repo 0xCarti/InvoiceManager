@@ -1,9 +1,18 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
+from werkzeug.utils import secure_filename
+import os
 
-from app.forms import LoginForm, UserForm, SignupForm
+from app.forms import (
+    LoginForm,
+    UserForm,
+    SignupForm,
+    CreateBackupForm,
+    RestoreBackupForm,
+)
 from app.models import User, db
+from app.backup_utils import create_backup, restore_backup
 
 auth = Blueprint('auth', __name__)
 admin = Blueprint('admin', __name__)
@@ -123,3 +132,59 @@ def delete_user(user_id):
     db.session.commit()
     flash('User deleted successfully.', 'success')
     return redirect(url_for('admin.users'))
+
+
+@admin.route('/controlpanel/backups', methods=['GET'])
+@login_required
+def backups():
+    if not current_user.is_admin:
+        abort(403)
+    from flask import current_app
+    backups_dir = current_app.config['BACKUP_FOLDER']
+    os.makedirs(backups_dir, exist_ok=True)
+    files = sorted(os.listdir(backups_dir))
+    create_form = CreateBackupForm()
+    restore_form = RestoreBackupForm()
+    return render_template('admin/backups.html', backups=files,
+                           create_form=create_form, restore_form=restore_form)
+
+
+@admin.route('/controlpanel/backups/create', methods=['POST'])
+@login_required
+def create_backup_route():
+    if not current_user.is_admin:
+        abort(403)
+    form = CreateBackupForm()
+    if form.validate_on_submit():
+        filename = create_backup()
+        flash('Backup created: ' + filename, 'success')
+    return redirect(url_for('admin.backups'))
+
+
+@admin.route('/controlpanel/backups/restore', methods=['POST'])
+@login_required
+def restore_backup_route():
+    if not current_user.is_admin:
+        abort(403)
+    form = RestoreBackupForm()
+    if form.validate_on_submit():
+        file = form.file.data
+        filename = secure_filename(file.filename)
+        from flask import current_app
+        backups_dir = current_app.config['BACKUP_FOLDER']
+        os.makedirs(backups_dir, exist_ok=True)
+        filepath = os.path.join(backups_dir, filename)
+        file.save(filepath)
+        restore_backup(filepath)
+        flash('Backup restored from ' + filename, 'success')
+    return redirect(url_for('admin.backups'))
+
+
+@admin.route('/controlpanel/backups/download/<path:filename>', methods=['GET'])
+@login_required
+def download_backup(filename):
+    if not current_user.is_admin:
+        abort(403)
+    from flask import current_app, send_from_directory
+    backups_dir = current_app.config['BACKUP_FOLDER']
+    return send_from_directory(backups_dir, filename, as_attachment=True)

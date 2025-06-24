@@ -137,3 +137,12 @@ class InvoiceFilterForm(FlaskForm):
     start_date = DateField('Start Date', validators=[Optional()])
     end_date = DateField('End Date', validators=[Optional()])
     submit = SubmitField('Filter')
+
+class CreateBackupForm(FlaskForm):
+    submit = SubmitField('Create Backup')
+
+
+class RestoreBackupForm(FlaskForm):
+    file = FileField('Backup File', validators=[FileRequired()])
+    submit = SubmitField('Restore')
+
