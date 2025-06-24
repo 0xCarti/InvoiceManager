@@ -18,6 +18,7 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(80), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     transfers = db.relationship('Transfer', backref='creator', lazy=True)
+    invoices = db.relationship('Invoice', backref='creator', lazy=True)
     active = db.Column(db.Boolean, default=False, nullable=False)
 
 
