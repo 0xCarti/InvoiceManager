@@ -26,7 +26,7 @@ def login():
             return redirect(url_for('auth.login'))
 
         login_user(user)
-        return redirect(url_for('transfers.view_transfers'))
+        return redirect(url_for('transfer.view_transfers'))
 
     from run import app
 
