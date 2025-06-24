@@ -30,7 +30,9 @@ class Location(db.Model):
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
+    quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     transfers = db.relationship('Transfer', secondary=transfer_items, backref=db.backref('items', lazy='dynamic'))
+    recipe_items = relationship("ProductRecipeItem", back_populates="item", cascade="all, delete-orphan")
 
 
 class Transfer(db.Model):
@@ -72,6 +74,7 @@ class Product(db.Model):
 
     # Define a one-to-many relationship with InvoiceProduct
     invoice_products = relationship("InvoiceProduct", back_populates="product", cascade="all, delete-orphan")
+    recipe_items = relationship("ProductRecipeItem", back_populates="product", cascade="all, delete-orphan")
 
 
 class Invoice(db.Model):
@@ -115,6 +118,17 @@ class InvoiceProduct(db.Model):
     # New tax override fields
     override_gst = db.Column(db.Boolean, nullable=True)  # True = apply GST, False = exempt, None = fallback to customer
     override_pst = db.Column(db.Boolean, nullable=True)  # True = apply PST, False = exempt, None = fallback to customer
+
+
+class ProductRecipeItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+    countable = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+
+    product = relationship('Product', back_populates='recipe_items')
+    item = relationship('Item', back_populates='recipe_items')
 
 
 class PurchaseOrder(db.Model):

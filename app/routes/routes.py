@@ -13,6 +13,7 @@ from app.forms import (
     DateRangeForm,
     CustomerForm,
     ProductForm,
+    ProductRecipeForm,
     InvoiceForm,
     SignupForm,
     LoginForm,
@@ -29,6 +30,7 @@ from app.models import (
     Product,
     Invoice,
     InvoiceProduct,
+    ProductRecipeItem,
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseInvoice,
@@ -504,6 +506,37 @@ def edit_product(product_id):
     return render_template('edit_product.html', form=form)
 
 
+@product.route('/products/<int:product_id>/recipe', methods=['GET', 'POST'])
+@login_required
+def edit_product_recipe(product_id):
+    product = db.session.get(Product, product_id)
+    if product is None:
+        abort(404)
+    form = ProductRecipeForm()
+    if form.validate_on_submit():
+        ProductRecipeItem.query.filter_by(product_id=product.id).delete()
+        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
+        for field in items:
+            index = field.split('-')[1]
+            item_id = request.form.get(f'items-{index}-item', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            countable = request.form.get(f'items-{index}-countable') == 'y'
+            if item_id and quantity is not None:
+                db.session.add(ProductRecipeItem(product_id=product.id, item_id=item_id, quantity=quantity, countable=countable))
+        db.session.commit()
+        flash('Recipe updated successfully!', 'success')
+        return redirect(url_for('product.view_products'))
+    elif request.method == 'GET':
+        form.items.min_entries = max(1, len(product.recipe_items))
+        for i, recipe_item in enumerate(product.recipe_items):
+            if len(form.items) <= i:
+                form.items.append_entry()
+            form.items[i].item.data = recipe_item.item_id
+            form.items[i].quantity.data = recipe_item.quantity
+            form.items[i].countable.data = recipe_item.countable
+    return render_template('edit_product_recipe.html', form=form, product=product)
+
+
 @product.route('/products/<int:product_id>/delete', methods=['GET'])
 @login_required
 def delete_product(product_id):
@@ -654,6 +687,14 @@ def create_invoice():
                         line_pst=line_pst
                     )
                     db.session.add(invoice_product)
+
+                    # Reduce product inventory
+                    product.quantity = (product.quantity or 0) - quantity
+
+                    # Reduce item inventories based on recipe
+                    for recipe_item in product.recipe_items:
+                        item = recipe_item.item
+                        item.quantity = (item.quantity or 0) - (recipe_item.quantity * quantity)
                 else:
                     flash(f"Product '{product_name}' not found.", 'danger')
 
