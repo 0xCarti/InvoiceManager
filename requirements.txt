@@ -11,3 +11,4 @@ pytest==7.4.0
 Flask-Migrate==4.1.0
 Flask-SocketIO==5.5.1
 
+email_validator==2.2.0
