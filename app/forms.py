@@ -1,25 +1,32 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileRequired
-from wtforms import StringField, SubmitField
-from wtforms.fields.choices import SelectField
-from wtforms.fields.datetime import DateTimeLocalField
-from wtforms.fields.form import FormField
-from wtforms.fields.list import FieldList
-from wtforms.fields.numeric import IntegerField
-from wtforms.fields.simple import PasswordField, FileField, BooleanField
-from wtforms.validators import DataRequired, Length, Email
-from wtforms import StringField, DecimalField, IntegerField, SelectField, SubmitField
-from wtforms.fields.simple import PasswordField, HiddenField
-from wtforms.validators import DataRequired, NumberRange, Length, EqualTo
-from wtforms import StringField, FloatField, SubmitField
-from wtforms.validators import DataRequired, NumberRange, InputRequired
-from flask_wtf import FlaskForm
-from wtforms import SelectField, DateField, SubmitField
-from wtforms.validators import Optional
-from wtforms import SelectMultipleField
-from wtforms.widgets import ListWidget, CheckboxInput
+from wtforms import (
+    BooleanField,
+    DateField,
+    DateTimeLocalField,
+    DecimalField,
+    FieldList,
+    FileField,
+    FormField,
+    HiddenField,
+    IntegerField,
+    PasswordField,
+    SelectField,
+    SelectMultipleField,
+    StringField,
+    SubmitField,
+)
+from wtforms.validators import (
+    DataRequired,
+    Email,
+    InputRequired,
+    Length,
+    NumberRange,
+    Optional,
+)
+from wtforms.widgets import CheckboxInput, ListWidget
 
-from app.models import Location, Item
+from app.models import Item, Location
 
 
 class LoginForm(FlaskForm):
