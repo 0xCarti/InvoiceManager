@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Recipe for {{ product.name }}</h2>
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <div id="item-list">
+            {% for item in form.items %}
+            <div class="form-row mb-2">
+                <div class="col">{{ item.item(class="form-control") }}</div>
+                <div class="col">{{ item.quantity(class="form-control") }}</div>
+                <div class="col form-check">
+                    {{ item.countable(class="form-check-input") }}
+                    {{ item.countable.label(class="form-check-label") }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary mt-3">Submit</button>
+    </form>
+</div>
+{% endblock %}

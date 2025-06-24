@@ -126,6 +126,22 @@ class ProductForm(FlaskForm):
     submit = SubmitField('Submit')
 
 
+class RecipeItemForm(FlaskForm):
+    item = SelectField('Item', coerce=int)
+    quantity = DecimalField('Quantity', validators=[InputRequired()])
+    countable = BooleanField('Countable')
+
+
+class ProductRecipeForm(FlaskForm):
+    items = FieldList(FormField(RecipeItemForm), min_entries=1)
+    submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super(ProductRecipeForm, self).__init__(*args, **kwargs)
+        for item_form in self.items:
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+
+
 class InvoiceForm(FlaskForm):
     customer = SelectField('Customer', coerce=float, validators=[DataRequired()])
     products = HiddenField('Products JSON')
