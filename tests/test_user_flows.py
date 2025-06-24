@@ -4,10 +4,16 @@ from app import db
 from app.models import User, Location
 
 
-def signup(client, email, password):
+def signup(client, email, password, confirm_password=None):
+    if confirm_password is None:
+        confirm_password = password
     return client.post(
         '/auth/signup',
-        data={'email': email, 'password': password},
+        data={
+            'email': email,
+            'password': password,
+            'confirm_password': confirm_password,
+        },
         follow_redirects=True,
     )
 

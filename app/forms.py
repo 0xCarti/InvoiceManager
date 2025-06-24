@@ -23,6 +23,7 @@ from wtforms.validators import (
     Length,
     NumberRange,
     Optional,
+    EqualTo,
 )
 from wtforms.widgets import CheckboxInput, ListWidget
 
@@ -37,6 +38,10 @@ class LoginForm(FlaskForm):
 class SignupForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired()])
+    confirm_password = PasswordField(
+        'Confirm Password',
+        validators=[DataRequired(), EqualTo('password', message='Passwords must match')]
+    )
     submit = SubmitField('Sign Up')
 
 
