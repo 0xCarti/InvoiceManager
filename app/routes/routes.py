@@ -651,7 +651,7 @@ def view_invoice(invoice_id):
         gst=gst_total,
         pst=pst_total,
         total=total,
-        GST='104805510'  # Replace with your real GST number
+        GST=GST
     )
 
 @invoice.route('/get_customer_tax_status/<int:customer_id>')

@@ -65,6 +65,10 @@ def create_app(args: list):
     Bootstrap(app)
     socketio = SocketIO(app)
 
+    @app.context_processor
+    def inject_gst():
+        return dict(GST=GST)
+
     with app.app_context():
         from app.routes import auth_routes
         from app.routes.routes import main, location, item, transfer, customer, invoice, product, report
