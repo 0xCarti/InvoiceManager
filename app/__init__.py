@@ -30,8 +30,16 @@ def create_admin_user():
 
         # Create an admin user
         admin_email = os.getenv('ADMIN_EMAIL')
-        admin_password = generate_password_hash(os.getenv('ADMIN_PASS'))
-        admin_user = User(email=admin_email, password=admin_password, is_admin=True, active=True)
+        raw_password = os.getenv('ADMIN_PASS')
+        if raw_password is None:
+            raise RuntimeError('ADMIN_PASS environment variable not set')
+        admin_password = generate_password_hash(raw_password)
+        admin_user = User(
+            email=admin_email,
+            password=admin_password,
+            is_admin=True,
+            active=True,
+        )
 
         db.session.add(admin_user)
         db.session.commit()
