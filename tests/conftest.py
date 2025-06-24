@@ -29,10 +29,6 @@ def app(tmp_path):
         yield app
         db.session.remove()
         db.drop_all()
-        # Close any remaining DB connections so the file can be deleted on Windows
-        db.engine.dispose()
-        if db_path.exists():
-            os.remove(db_path)
 
 @pytest.fixture
 def client(app):
