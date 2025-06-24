@@ -1,6 +1,7 @@
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
+from flask import url_for
 from app import db
 from app.models import User, Location, Transfer, Customer, Product, Invoice
 from tests.test_user_flows import login
@@ -64,4 +65,22 @@ def test_admin_view_and_change_user_password(client, app):
     with app.app_context():
         updated = db.session.get(User, user_id)
         assert check_password_hash(updated.password, 'changed')
+
+
+def test_admin_users_page_links_to_profile(client, app):
+    with app.app_context():
+        user = User(email='link@example.com', password=generate_password_hash('pass'), active=True)
+        db.session.add(user)
+        db.session.commit()
+        uid = user.id
+        with app.test_request_context():
+            profile_url = url_for('admin.user_profile', user_id=uid)
+
+    admin_email = os.getenv('ADMIN_EMAIL', 'admin@example.com')
+    admin_pass = os.getenv('ADMIN_PASS', 'adminpass')
+    with client:
+        login(client, admin_email, admin_pass)
+        resp = client.get('/controlpanel/users', follow_redirects=True)
+        assert resp.status_code == 200
+        assert profile_url.encode() in resp.data
 
