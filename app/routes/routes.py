@@ -28,6 +28,7 @@ from app.models import (
     TransferItem,
     Customer,
     Product,
+    LocationStandItem,
     Invoice,
     InvoiceProduct,
     ProductRecipeItem,
@@ -67,7 +68,21 @@ def add_location():
     form = LocationForm()
     if form.validate_on_submit():
         new_location = Location(name=form.name.data)
+        selected_products = [db.session.get(Product, pid) for pid in form.products.data]
+        new_location.products = selected_products
         db.session.add(new_location)
+        db.session.commit()
+
+        # Add stand sheet items for countable recipe items
+        for product_obj in selected_products:
+            for recipe_item in product_obj.recipe_items:
+                if recipe_item.countable:
+                    exists = LocationStandItem.query.filter_by(
+                        location_id=new_location.id,
+                        item_id=recipe_item.item_id
+                    ).first()
+                    if not exists:
+                        db.session.add(LocationStandItem(location_id=new_location.id, item_id=recipe_item.item_id))
         db.session.commit()
         log_activity(f'Added location {new_location.name}')
         flash('Location added successfully!')
@@ -82,19 +97,53 @@ def edit_location(location_id):
     if location is None:
         abort(404)
     form = LocationForm(obj=location)
+    if request.method == 'GET':
+        form.products.data = [p.id for p in location.products]
 
     if form.validate_on_submit():
-        form.populate_obj(location)
+        location.name = form.name.data
+        selected_products = [db.session.get(Product, pid) for pid in form.products.data]
+        location.products = selected_products
+        db.session.commit()
+
+        # Ensure stand sheet items exist for new products
+        for product_obj in selected_products:
+            for recipe_item in product_obj.recipe_items:
+                if recipe_item.countable:
+                    exists = LocationStandItem.query.filter_by(
+                        location_id=location.id,
+                        item_id=recipe_item.item_id
+                    ).first()
+                    if not exists:
+                        db.session.add(LocationStandItem(location_id=location.id, item_id=recipe_item.item_id))
         db.session.commit()
         log_activity(f'Edited location {location.id}')
         flash('Location updated successfully.', 'success')
-        return redirect(url_for('location.edit_location', location_id=location.id))
+        return redirect(url_for('locations.edit_location', location_id=location.id))
 
     # Query for completed transfers to this location
     transfers_to_location = Transfer.query.filter_by(to_location_id=location_id, completed=True).all()
 
     return render_template('locations/edit_location.html', form=form, location=location,
                            transfers=transfers_to_location)
+
+
+@location.route('/locations/<int:location_id>/stand_sheet')
+@login_required
+def view_stand_sheet(location_id):
+    location = db.session.get(Location, location_id)
+    if location is None:
+        abort(404)
+
+    items = []
+    seen = set()
+    for product_obj in location.products:
+        for recipe_item in product_obj.recipe_items:
+            if recipe_item.countable and recipe_item.item_id not in seen:
+                seen.add(recipe_item.item_id)
+                items.append(recipe_item.item)
+
+    return render_template('locations/stand_sheet.html', location=location, items=items)
 
 
 @location.route('/locations')

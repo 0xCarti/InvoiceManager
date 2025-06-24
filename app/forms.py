@@ -47,7 +47,12 @@ class SignupForm(FlaskForm):
 
 class LocationForm(FlaskForm):
     name = StringField('Location Name', validators=[DataRequired(), Length(min=2, max=100)])
+    products = SelectMultipleField('Products', coerce=int)
     submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super(LocationForm, self).__init__(*args, **kwargs)
+        self.products.choices = [(p.id, p.name) for p in Product.query.all()]
 
 
 class ItemForm(FlaskForm):

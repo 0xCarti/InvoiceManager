@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Stand Sheet - {{ location.name }}</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Expected Opening</th>
+                <th>Opening Count</th>
+                <th>Transferred In</th>
+                <th>Transferred Out</th>
+                <th>Eaten</th>
+                <th>Spoiled</th>
+                <th>Closing Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td><input type="number" class="form-control" name="open_{{ item.id }}"></td>
+                <td><input type="number" class="form-control" name="in_{{ item.id }}"></td>
+                <td><input type="number" class="form-control" name="out_{{ item.id }}"></td>
+                <td><input type="number" class="form-control" name="eaten_{{ item.id }}"></td>
+                <td><input type="number" class="form-control" name="spoiled_{{ item.id }}"></td>
+                <td><input type="number" class="form-control" name="close_{{ item.id }}"></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
