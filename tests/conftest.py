@@ -13,9 +13,9 @@ def app(tmp_path):
     os.environ.setdefault('ADMIN_EMAIL', 'admin@example.com')
     os.environ.setdefault('ADMIN_PASS', 'adminpass')
 
-    # Ensure a clean database for each test
-    db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'instance', 'inventory.db'))
-    if os.path.exists(db_path):
+    # Ensure a clean database for each test within the temp directory
+    db_path = tmp_path / 'inventory.db'
+    if db_path.exists():
         os.remove(db_path)
 
     cwd = os.getcwd()
