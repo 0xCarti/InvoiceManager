@@ -17,13 +17,26 @@ from app.forms import (
     SignupForm,
     LoginForm,
     InvoiceFilterForm,
+    PurchaseOrderForm,
+    ReceiveInvoiceForm,
 )
-from app.models import Location, Item, Transfer, TransferItem, Customer, Product, Invoice, InvoiceProduct
+from app.models import (
+    Location,
+    Item,
+    Transfer,
+    TransferItem,
+    Customer,
+    Product,
+    Invoice,
+    InvoiceProduct,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseInvoice,
+    PurchaseInvoiceItem,
+)
 from datetime import datetime
 from flask import Blueprint, render_template
 from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
-from app.models import Customer, Invoice
-from app import db
 MAX_IMPORT_SIZE = 1024 * 1024
 ALLOWED_IMPORT_EXTENSIONS = {".txt"}
 
@@ -37,6 +50,7 @@ product = Blueprint('product', __name__)
 customer = Blueprint('customer', __name__)
 invoice = Blueprint('invoice', __name__)
 report = Blueprint('report', __name__)
+purchase = Blueprint('purchase', __name__)
 
 
 @main.route('/')
@@ -859,3 +873,81 @@ def product_sales_report():
         return render_template('report_product_sales_results.html', form=form, report=report_data)
 
     return render_template('report_product_sales.html', form=form)
+
+
+@purchase.route('/purchase_orders', methods=['GET'])
+@login_required
+def view_purchase_orders():
+    orders = PurchaseOrder.query.order_by(PurchaseOrder.order_date.desc()).all()
+    return render_template('purchase_orders/view_purchase_orders.html', orders=orders)
+
+
+@purchase.route('/purchase_orders/create', methods=['GET', 'POST'])
+@login_required
+def create_purchase_order():
+    form = PurchaseOrderForm()
+    if form.validate_on_submit():
+        po = PurchaseOrder(
+            vendor_id=form.vendor.data,
+            user_id=current_user.id,
+            order_date=form.order_date.data,
+            expected_date=form.expected_date.data,
+            delivery_charge=form.delivery_charge.data or 0.0,
+        )
+        db.session.add(po)
+        db.session.commit()
+
+        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-product')]
+        for field in items:
+            index = field.split('-')[1]
+            product_id = request.form.get(f'items-{index}-product', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            if product_id and quantity:
+                db.session.add(PurchaseOrderItem(purchase_order_id=po.id, product_id=product_id, quantity=quantity))
+
+        db.session.commit()
+        log_activity(f'Created purchase order {po.id}')
+        flash('Purchase order created successfully!', 'success')
+        return redirect(url_for('purchase.view_purchase_orders'))
+
+    return render_template('purchase_orders/create_purchase_order.html', form=form)
+
+
+@purchase.route('/purchase_orders/<int:po_id>/receive', methods=['GET', 'POST'])
+@login_required
+def receive_invoice(po_id):
+    po = db.session.get(PurchaseOrder, po_id)
+    if po is None:
+        abort(404)
+    form = ReceiveInvoiceForm()
+    if form.validate_on_submit():
+        invoice = PurchaseInvoice(
+            purchase_order_id=po.id,
+            user_id=current_user.id,
+            received_date=form.received_date.data,
+            gst=form.gst.data or 0.0,
+            pst=form.pst.data or 0.0,
+            delivery_charge=form.delivery_charge.data or 0.0,
+        )
+        db.session.add(invoice)
+        db.session.commit()
+
+        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-product')]
+        for field in items:
+            index = field.split('-')[1]
+            product_id = request.form.get(f'items-{index}-product', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            cost = request.form.get(f'items-{index}-cost', type=float)
+            if product_id and quantity is not None and cost is not None:
+                db.session.add(PurchaseInvoiceItem(invoice_id=invoice.id, product_id=product_id, quantity=quantity, cost=cost))
+                product = db.session.get(Product, product_id)
+                if product:
+                    product.quantity = (product.quantity or 0) + quantity
+                    product.cost = cost
+
+        db.session.commit()
+        log_activity(f'Received invoice {invoice.id} for PO {po.id}')
+        flash('Invoice received successfully!', 'success')
+        return redirect(url_for('purchase.view_purchase_orders'))
+
+    return render_template('purchase_orders/receive_invoice.html', form=form, po=po)

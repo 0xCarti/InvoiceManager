@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Receive Invoice for PO {{ po.id }}</h2>
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+            {{ form.received_date.label(class="form-label") }}
+            {{ form.received_date(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.gst.label(class="form-label") }}
+            {{ form.gst(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.pst.label(class="form-label") }}
+            {{ form.pst(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.delivery_charge.label(class="form-label") }}
+            {{ form.delivery_charge(class="form-control") }}
+        </div>
+        <h4>Items</h4>
+        {% for item in form.items %}
+        <div class="form-row">
+            <div class="col">{{ item.product(class="form-control") }}</div>
+            <div class="col">{{ item.quantity(class="form-control") }}</div>
+            <div class="col">{{ item.cost(class="form-control") }}</div>
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary mt-3">Submit</button>
+    </form>
+</div>
+{% endblock %}
