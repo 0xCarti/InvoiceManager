@@ -59,6 +59,10 @@ def create_app(args: list):
     )
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///inventory.db'
     app.config['UPLOAD_FOLDER'] = 'uploads'
+    app.config['BACKUP_FOLDER'] = 'backups'
+
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['BACKUP_FOLDER'], exist_ok=True)
     GST = os.getenv('GST')
     if '--demo' in args:
         app.config['DEMO'] = True

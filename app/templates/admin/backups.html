@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Database Backups</h2>
+    <form action="{{ url_for('admin.create_backup_route') }}" method="post" class="mb-3">
+        {{ create_form.hidden_tag() }}
+        {{ create_form.submit(class='btn btn-primary') }}
+    </form>
+
+    <h4>Restore Backup</h4>
+    <form action="{{ url_for('admin.restore_backup_route') }}" method="post" enctype="multipart/form-data" class="mb-4">
+        {{ restore_form.hidden_tag() }}
+        <div class="form-group">
+            {{ restore_form.file.label }}
+            {{ restore_form.file(class='form-control-file') }}
+        </div>
+        {{ restore_form.submit(class='btn btn-danger') }}
+    </form>
+
+    <h4>Available Backups</h4>
+    <ul class="list-group">
+        {% for b in backups %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            {{ b }}
+            <a href="{{ url_for('admin.download_backup', filename=b) }}" class="btn btn-sm btn-secondary">Download</a>
+        </li>
+        {% else %}
+        <li class="list-group-item">No backups found.</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}
+
