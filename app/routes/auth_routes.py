@@ -14,7 +14,7 @@ from app.forms import (
     SetPasswordForm,
 )
 
-from app.models import User, db, Transfer, Invoice
+from app.models import User, db, Transfer, Invoice, ActivityLog
 from app.activity_logger import log_activity
 from app.backup_utils import create_backup, restore_backup
 
@@ -243,3 +243,12 @@ def download_backup(filename):
     backups_dir = current_app.config['BACKUP_FOLDER']
     log_activity(f'Downloaded backup {filename}')
     return send_from_directory(backups_dir, filename, as_attachment=True)
+
+
+@admin.route('/controlpanel/activity', methods=['GET'])
+@login_required
+def activity_logs():
+    if not current_user.is_admin:
+        abort(403)
+    logs = ActivityLog.query.order_by(ActivityLog.timestamp.desc()).all()
+    return render_template('admin/activity_logs.html', logs=logs)
