@@ -27,7 +27,7 @@ from wtforms.validators import (
 )
 from wtforms.widgets import CheckboxInput, ListWidget
 
-from app.models import Item, Location
+from app.models import Item, Location, Product, Customer
 
 
 class LoginForm(FlaskForm):
@@ -164,4 +164,44 @@ class CreateBackupForm(FlaskForm):
 class RestoreBackupForm(FlaskForm):
     file = FileField('Backup File', validators=[FileRequired()])
     submit = SubmitField('Restore')
+
+
+class POItemForm(FlaskForm):
+    product = SelectField('Product', coerce=int)
+    quantity = DecimalField('Quantity', validators=[InputRequired()])
+
+
+class PurchaseOrderForm(FlaskForm):
+    vendor = SelectField('Vendor', coerce=int, validators=[DataRequired()])
+    order_date = DateField('Order Date', validators=[DataRequired()])
+    expected_date = DateField('Expected Delivery Date', validators=[DataRequired()])
+    delivery_charge = DecimalField('Delivery Charge', validators=[Optional()], default=0)
+    items = FieldList(FormField(POItemForm), min_entries=1)
+    submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super(PurchaseOrderForm, self).__init__(*args, **kwargs)
+        self.vendor.choices = [(c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()]
+        for item_form in self.items:
+            item_form.product.choices = [(p.id, p.name) for p in Product.query.all()]
+
+
+class InvoiceItemReceiveForm(FlaskForm):
+    product = SelectField('Product', coerce=int)
+    quantity = DecimalField('Quantity', validators=[InputRequired()])
+    cost = DecimalField('Cost', validators=[InputRequired()])
+
+
+class ReceiveInvoiceForm(FlaskForm):
+    received_date = DateField('Received Date', validators=[DataRequired()])
+    gst = DecimalField('GST Amount', validators=[Optional()], default=0)
+    pst = DecimalField('PST Amount', validators=[Optional()], default=0)
+    delivery_charge = DecimalField('Delivery Charge', validators=[Optional()], default=0)
+    items = FieldList(FormField(InvoiceItemReceiveForm), min_entries=1)
+    submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super(ReceiveInvoiceForm, self).__init__(*args, **kwargs)
+        for item_form in self.items:
+            item_form.product.choices = [(p.id, p.name) for p in Product.query.all()]
 

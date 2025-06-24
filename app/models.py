@@ -68,6 +68,7 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=False)
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
 
     # Define a one-to-many relationship with InvoiceProduct
     invoice_products = relationship("InvoiceProduct", back_populates="product", cascade="all, delete-orphan")
@@ -114,6 +115,53 @@ class InvoiceProduct(db.Model):
     # New tax override fields
     override_gst = db.Column(db.Boolean, nullable=True)  # True = apply GST, False = exempt, None = fallback to customer
     override_pst = db.Column(db.Boolean, nullable=True)  # True = apply PST, False = exempt, None = fallback to customer
+
+
+class PurchaseOrder(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    order_date = db.Column(db.Date, nullable=False)
+    expected_date = db.Column(db.Date, nullable=False)
+    delivery_charge = db.Column(db.Float, nullable=False, default=0.0)
+    items = relationship('PurchaseOrderItem', backref='purchase_order', cascade='all, delete-orphan')
+    vendor = relationship('Customer')
+
+
+class PurchaseOrderItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_order.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+    product = relationship('Product')
+
+
+class PurchaseInvoice(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_order.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    received_date = db.Column(db.Date, nullable=False)
+    gst = db.Column(db.Float, nullable=False, default=0.0)
+    pst = db.Column(db.Float, nullable=False, default=0.0)
+    delivery_charge = db.Column(db.Float, nullable=False, default=0.0)
+    items = relationship('PurchaseInvoiceItem', backref='invoice', cascade='all, delete-orphan')
+
+    @property
+    def item_total(self):
+        return sum(i.quantity * i.cost for i in self.items)
+
+    @property
+    def total(self):
+        return self.item_total + self.delivery_charge + self.gst + self.pst
+
+
+class PurchaseInvoiceItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('purchase_invoice.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+    cost = db.Column(db.Float, nullable=False)
+    product = relationship('Product')
 
 
 class ActivityLog(db.Model):
