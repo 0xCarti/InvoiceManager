@@ -129,3 +129,11 @@ class ProductSalesReportForm(FlaskForm):
     start_date = DateField('Start Date', validators=[DataRequired()])
     end_date = DateField('End Date', validators=[DataRequired()])
     submit = SubmitField('Generate Report')
+
+
+class InvoiceFilterForm(FlaskForm):
+    invoice_id = StringField('Invoice ID', validators=[Optional()])
+    vendor_id = SelectField('Vendor', coerce=int, validators=[Optional()])
+    start_date = DateField('Start Date', validators=[Optional()])
+    end_date = DateField('End Date', validators=[Optional()])
+    submit = SubmitField('Filter')
