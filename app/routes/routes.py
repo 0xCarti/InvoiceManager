@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session, abort
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
@@ -46,7 +46,9 @@ def add_location():
 @location.route('/locations/edit/<int:location_id>', methods=['GET', 'POST'])
 @login_required
 def edit_location(location_id):
-    location = Location.query.get_or_404(location_id)
+    location = db.session.get(Location, location_id)
+    if location is None:
+        abort(404)
     form = LocationForm(obj=location)
 
     if form.validate_on_submit():
@@ -72,7 +74,9 @@ def view_locations():
 @location.route('/locations/delete/<int:location_id>', methods=['POST'])
 @login_required
 def delete_location(location_id):
-    location = Location.query.get_or_404(location_id)
+    location = db.session.get(Location, location_id)
+    if location is None:
+        abort(404)
     db.session.delete(location)
     db.session.commit()
     flash('Location deleted successfully!')
@@ -103,7 +107,9 @@ def add_item():
 @item.route('/items/edit/<int:item_id>', methods=['GET', 'POST'])
 @login_required
 def edit_item(item_id):
-    item = Item.query.get_or_404(item_id)
+    item = db.session.get(Item, item_id)
+    if item is None:
+        abort(404)
     form = ItemForm(obj=item)
     if form.validate_on_submit():
         item.name = form.name.data
@@ -116,7 +122,9 @@ def edit_item(item_id):
 @item.route('/items/delete/<int:item_id>', methods=['POST'])
 @login_required
 def delete_item(item_id):
-    item = Item.query.get_or_404(item_id)
+    item = db.session.get(Item, item_id)
+    if item is None:
+        abort(404)
     db.session.delete(item)
     db.session.commit()
     flash('Item deleted successfully!')
@@ -185,7 +193,7 @@ def add_transfer():
             item_id = request.form.get(f'items-{index}-item')
             quantity = request.form.get(f'items-{index}-quantity', type=int)
             if item_id:
-                item = Item.query.get(item_id)
+                item = db.session.get(Item, item_id)
                 if item and quantity:
                     transfer_item = TransferItem(
                         transfer_id=transfer.id,
@@ -208,7 +216,9 @@ def add_transfer():
 @transfer.route('/transfers/edit/<int:transfer_id>', methods=['GET', 'POST'])
 @login_required
 def edit_transfer(transfer_id):
-    transfer = Transfer.query.get_or_404(transfer_id)
+    transfer = db.session.get(Transfer, transfer_id)
+    if transfer is None:
+        abort(404)
     form = TransferForm(obj=transfer)
 
     if form.validate_on_submit():
@@ -247,7 +257,9 @@ def edit_transfer(transfer_id):
 @transfer.route('/transfers/delete/<int:transfer_id>', methods=['POST'])
 @login_required
 def delete_transfer(transfer_id):
-    transfer = Transfer.query.get_or_404(transfer_id)
+    transfer = db.session.get(Transfer, transfer_id)
+    if transfer is None:
+        abort(404)
     db.session.delete(transfer)
     db.session.commit()
     flash('Transfer deleted successfully!', 'success')
@@ -257,7 +269,9 @@ def delete_transfer(transfer_id):
 @transfer.route('/transfers/complete/<int:transfer_id>', methods=['GET'])
 @login_required
 def complete_transfer(transfer_id):
-    transfer = Transfer.query.get_or_404(transfer_id)
+    transfer = db.session.get(Transfer, transfer_id)
+    if transfer is None:
+        abort(404)
     transfer.completed = True
     db.session.commit()
     flash('Transfer marked as complete!', 'success')
@@ -267,7 +281,9 @@ def complete_transfer(transfer_id):
 @transfer.route('/transfers/uncomplete/<int:transfer_id>', methods=['GET'])
 @login_required
 def uncomplete_transfer(transfer_id):
-    transfer = Transfer.query.get_or_404(transfer_id)
+    transfer = db.session.get(Transfer, transfer_id)
+    if transfer is None:
+        abort(404)
     transfer.completed = False
     db.session.commit()
     flash('Transfer marked as not completed.', 'success')
@@ -277,7 +293,9 @@ def uncomplete_transfer(transfer_id):
 @transfer.route('/transfers/view/<int:transfer_id>', methods=['GET'])
 @login_required
 def view_transfer(transfer_id):
-    transfer = Transfer.query.get_or_404(transfer_id)
+    transfer = db.session.get(Transfer, transfer_id)
+    if transfer is None:
+        abort(404)
     transfer_items = TransferItem.query.filter_by(transfer_id=transfer.id).all()
     return render_template('transfers/view_transfer.html', transfer=transfer, transfer_items=transfer_items)
 
@@ -411,7 +429,9 @@ def create_product():
 @product.route('/products/<int:product_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_product(product_id):
-    product = Product.query.get_or_404(product_id)
+    product = db.session.get(Product, product_id)
+    if product is None:
+        abort(404)
     form = ProductForm()
     if form.validate_on_submit():
         product.name = form.name.data
@@ -433,7 +453,9 @@ def edit_product(product_id):
 @product.route('/products/<int:product_id>/delete', methods=['GET'])
 @login_required
 def delete_product(product_id):
-    product = Product.query.get_or_404(product_id)
+    product = db.session.get(Product, product_id)
+    if product is None:
+        abort(404)
     db.session.delete(product)
     db.session.commit()
     flash('Product deleted successfully!', 'success')
@@ -468,7 +490,9 @@ def create_customer():
 @customer.route('/customers/<int:customer_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_customer(customer_id):
-    customer = Customer.query.get_or_404(customer_id)
+    customer = db.session.get(Customer, customer_id)
+    if customer is None:
+        abort(404)
     form = CustomerForm()
 
     if form.validate_on_submit():
@@ -492,7 +516,9 @@ def edit_customer(customer_id):
 @customer.route('/customers/<int:customer_id>/delete', methods=['GET'])
 @login_required
 def delete_customer(customer_id):
-    customer = Customer.query.get_or_404(customer_id)
+    customer = db.session.get(Customer, customer_id)
+    if customer is None:
+        abort(404)
     db.session.delete(customer)
     db.session.commit()
     flash('Customer deleted successfully!', 'success')
@@ -518,7 +544,9 @@ def create_invoice():
     form.customer.choices = [(c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()]
 
     if form.validate_on_submit():
-        customer = Customer.query.get(form.customer.data)
+        customer = db.session.get(Customer, form.customer.data)
+        if customer is None:
+            abort(404)
         today = datetime.now().strftime('%d%m%y')
         count = Invoice.query.filter(
             func.date(Invoice.date_created) == func.current_date(),
@@ -585,7 +613,9 @@ def create_invoice():
 @login_required
 def delete_invoice(invoice_id):
     # Retrieve the invoice object from the database
-    invoice = Invoice.query.get_or_404(invoice_id)
+    invoice = db.session.get(Invoice, invoice_id)
+    if invoice is None:
+        abort(404)
     # Delete the invoice from the database
     db.session.delete(invoice)
     db.session.commit()
@@ -597,7 +627,9 @@ def delete_invoice(invoice_id):
 @invoice.route('/view_invoice/<invoice_id>', methods=['GET'])
 @login_required
 def view_invoice(invoice_id):
-    invoice = Invoice.query.get_or_404(invoice_id)
+    invoice = db.session.get(Invoice, invoice_id)
+    if invoice is None:
+        abort(404)
 
     subtotal = 0
     gst_total = 0
@@ -625,7 +657,9 @@ def view_invoice(invoice_id):
 @invoice.route('/get_customer_tax_status/<int:customer_id>')
 @login_required
 def get_customer_tax_status(customer_id):
-    customer = Customer.query.get_or_404(customer_id)
+    customer = db.session.get(Customer, customer_id)
+    if customer is None:
+        abort(404)
     return {
         "gst_exempt": customer.gst_exempt,
         "pst_exempt": customer.pst_exempt

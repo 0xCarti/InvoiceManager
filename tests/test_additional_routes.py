@@ -26,7 +26,7 @@ def test_admin_can_activate_user(client, app):
         assert response.headers['Location'].endswith(expected)
 
     with app.app_context():
-        updated = User.query.get(target_id)
+        updated = db.session.get(User, target_id)
         assert updated.active
 
 
