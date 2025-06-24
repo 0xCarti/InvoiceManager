@@ -57,9 +57,17 @@ def create_app(args: list):
         SESSION_COOKIE_SAMESITE='Lax',
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=30)
     )
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///inventory.db'
-    app.config['UPLOAD_FOLDER'] = 'uploads'
-    app.config['BACKUP_FOLDER'] = 'backups'
+    # Use absolute paths so that changing the working directory after app
+    # creation does not break file references. This occurs in the test suite
+    # which creates the app in a temporary directory and then changes back to
+    # the original working directory.  Building the paths here ensures they
+    # always point to the intended location.
+
+    base_dir = os.getcwd()
+    db_path = os.path.join(base_dir, 'inventory.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    app.config['UPLOAD_FOLDER'] = os.path.join(base_dir, 'uploads')
+    app.config['BACKUP_FOLDER'] = os.path.join(base_dir, 'backups')
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['BACKUP_FOLDER'], exist_ok=True)
