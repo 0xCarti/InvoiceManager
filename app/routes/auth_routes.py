@@ -50,7 +50,7 @@ def activate_user(user_id):
     user.active = True
     db.session.commit()
     flash('User account activated.', 'success')
-    return redirect(url_for('admin.users'))  # Redirect to the admin user list
+    return redirect(url_for('admin.users'))  # Redirect to the user control panel
 
 
 @admin.route('/controlpanel/users', methods=['GET', 'POST'])
