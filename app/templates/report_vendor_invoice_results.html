@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Vendor Invoice Report{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <img src="/static/live2.png" alt="Sodexo Live Header Logo" class="img-fluid"
+                style="margin-bottom: 50px; margin-top: -30px; width: 500px; height: 150px">
+        </div>
+    </div>
+
+    <h1>Invoice Report</h1>
+    <p><strong>For Vendor(s):</strong>
+        {% for vendor in customers %}
+        {{ vendor.first_name }} {{ vendor.last_name }}{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    </p>
+    <p><strong>From:</strong> {{ start }} <strong>To:</strong> {{ end }}</p>
+
+    {% if invoices %}
+    {% set ns = namespace(grand_total=0) %}
+    <table class="table table-bordered mt-4">
+        <thead>
+            <tr>
+                <th>Invoice ID</th>
+                <th>Date</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for invoice in invoices %}
+            {% set ns.grand_total = ns.grand_total + invoice.total %}
+            <tr>
+                <td>{{ invoice.invoice.id }}</td>
+                <td>{{ invoice.invoice.date_created.strftime('%Y-%m-%d') }}</td>
+                <td>${{ "%.2f"|format(invoice.total) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <th colspan="2" class="text-right">Total:</th>
+                <th>${{ "%.2f"|format(ns.grand_total) }}</th>
+            </tr>
+        </tfoot>
+    </table>
+    {% else %}
+    <p>No invoices found for the selected period.</p>
+    {% endif %}
+</div>
+{% endblock %}

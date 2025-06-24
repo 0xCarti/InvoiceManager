@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Transfer Details</h2>
+    <br>
+    <div class="row">
+        <div class="col-md-6">
+            <h3><strong>From Location:</strong> {{ transfer.from_location.name }}</h3>
+        </div>
+        <div class="col-md-6">
+            <h3><strong>To Location:</strong> {{ transfer.to_location.name }}</h3>
+        </div>
+    </div>
+    <h5><strong>User:</strong> {{ transfer.creator.email }}</h5>
+    <table class="table mt-4">
+        <thead>
+            <tr>
+                <th scope="col">Item</th>
+                <th scope="col">Quantity</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in transfer_items %}
+            <tr>
+                <td>{{ item.item.name }}</td>
+                <td>{{ item.quantity }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

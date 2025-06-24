@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Locations</h2>
+    <a href="{{ url_for('locations.add_location') }}" class="btn btn-primary mb-3">Add New Location</a>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for location in locations %}
+            <tr>
+                <td>{{ location.name }}</td>
+                <td>
+                    <a href="{{ url_for('locations.edit_location', location_id=location.id) }}" class="btn btn-info">Edit</a>
+                    <form action="{{ url_for('locations.delete_location', location_id=location.id) }}" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

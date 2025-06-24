@@ -1,0 +1,70 @@
+<!-- view_invoice.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Invoice Details{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <img src="/static/live2.png" alt="Sodexo Live Header Logo" class="img-fluid"
+                style="margin-bottom: 50px; margin-top: -30px; width: 500px; height: 150px">
+        </div>
+    </div>
+    <h1>Invoice - {{ invoice.customer.first_name }} {{ invoice.customer.last_name }}</h1>
+    <div class="row">
+        <div class="col">
+            <p><strong>Invoice Number:</strong> {{ invoice.id }}</p>
+            <p><strong>Date Created:</strong> {{ invoice.date_created.strftime('%Y-%m-%d') }}</p>
+            <h2>Products:</h2>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Product Name</th>
+                        <th>Quantity</th>
+                        <th>Price</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice_product in invoice.products %}
+                    <tr>
+                        <td>{{ invoice_product.product.name }}</td>
+                        <td>{{ invoice_product.quantity }}</td>
+                        <td>${{ "%.2f"|format(invoice_product.unit_price) }}</td>
+                        <td>${{ "%.2f"|format(invoice_product.line_subtotal + invoice_product.line_gst +
+                            invoice_product.line_pst) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <hr style="border: 2px solid black">
+            <!-- Subtotal -->
+            <div class="row justify-content-end">
+                <div class="col-6 text-right">
+                    <p><strong style="margin-right: 20px">Subtotal:</strong> ${{ "%.2f"|format(subtotal) }}</p>
+                    <p><strong style="margin-right: 20px">PST (7%):</strong> ${{ "%.2f"|format(pst) }}</p>
+                    <p><strong style="margin-right: 20px">GST (5%):</strong> ${{ "%.2f"|format(gst) }}</p>
+                    <p><strong style="margin-right: 20px">Total:</strong> ${{ "%.2f"|format(total) }}</p>
+                </div>
+            </div>
+            <div class="row justify-content-center">
+                <div class="col">
+                    <p><strong>GST #:</strong> {{ GST }}</p>
+                    <p><strong>Notice:</strong> Retail Pop Price: $4.25 <strong>- NO REFUNDS</strong></p>
+                    <p><strong>Contact:</strong> Bryce.cotton@sodexo.com</p>
+                </div>
+            </div>
+            <div class="row mt-5 justify-content-center">
+                <div class="col-md-6 text-center">
+                    <p>Delivered by: ___________________________</p>
+                </div>
+                <div class="col-md-6 text-center">
+                    <p>Received by: ____________________________</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

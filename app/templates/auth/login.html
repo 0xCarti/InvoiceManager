@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 offset-md-3">
+        <h2>Login</h2>
+        <form action="{{ url_for('auth.login') }}" method="post">
+            {{ form.hidden_tag() }}  <!-- This includes the CSRF token -->
+            <div class="form-group">
+                {{ form.email.label(class_="form-label") }}
+                {{ form.email(class_="form-control") }}
+            </div>
+            <div class="form-group">
+                {{ form.password.label(class_="form-label") }}
+                {{ form.password(class_="form-control") }}
+            </div>
+            <button type="submit" class="btn btn-primary">Login</button>
+        </form>
+        {% if demo %}
+            <h2>Username: admin@assetflow.ca</h2>
+            <h2>Password: admin</h2>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

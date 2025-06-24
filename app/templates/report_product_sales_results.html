@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+    <h2>Product Sales Report Results</h2>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Quantity Sold</th>
+                <th>Cost (each)</th>
+                <th>Price (each)</th>
+                <th>Profit per Item</th>
+                <th>Total Revenue</th>
+                <th>Total Profit</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set ns = namespace(total_revenue=0, total_profit=0) %}
+            {% for row in report %}
+                {% set ns.total_revenue = ns.total_revenue + row.revenue %}
+                {% set ns.total_profit = ns.total_profit + row.profit %}
+                <tr>
+                    <td>{{ row.name }}</td>
+                    <td>{{ row.quantity }}</td>
+                    <td>${{ "%.2f"|format(row.cost) }}</td>
+                    <td>${{ "%.2f"|format(row.price) }}</td>
+                    <td>${{ "%.2f"|format(row.profit_each) }}</td>
+                    <td>${{ "%.2f"|format(row.revenue) }}</td>
+                    <td>${{ "%.2f"|format(row.profit) }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <th colspan="5" class="text-right">Totals:</th>
+                <th>${{ "%.2f"|format(ns.total_revenue) }}</th>
+                <th>${{ "%.2f"|format(ns.total_profit) }}</th>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% endblock %}

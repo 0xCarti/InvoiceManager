@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <h2>Transfer Report</h2>
+    <p>Report Period: {{ session.report_start_datetime }} to {{ session.report_end_datetime }}</p>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>From Location</th>
+                <th>To Location</th>
+                <th>Item</th>
+                <th>Quantity</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transfer in session.aggregated_transfers %}
+            <tr>
+                <td>{{ transfer.from_location_name }}</td>
+                <td>{{ transfer.to_location_name }}</td>
+                <td>{{ transfer.item_name }}</td>
+                <td>{{ transfer.total_quantity }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

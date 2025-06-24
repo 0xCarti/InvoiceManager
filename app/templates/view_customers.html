@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}View Customers{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Customers</h2>
+    <a href="{{ url_for('customer.create_customer') }}" class="btn btn-primary mb-3">Create Customer</a>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>GST Exempt</th>
+                <th>PST Exempt</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for customer in customers %}
+            <tr>
+                <td>{{ customer.first_name }} {{ customer.last_name }}</td>
+                <td>{{ 'Yes' if customer.gst_exempt else 'No' }}</td>
+                <td>{{ 'Yes' if customer.pst_exempt else 'No' }}</td>
+                <td>
+                    <a href="{{ url_for('customer.edit_customer', customer_id=customer.id) }}" class="btn btn-primary mr-2">Edit</a>
+                    <a href="{{ url_for('customer.delete_customer', customer_id=customer.id) }}" class="btn btn-danger mr-2" onclick="return confirm('Are you sure you want to delete this customer?')">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

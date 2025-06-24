@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}View Products{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Products</h2>
+    <a href="{{ url_for('product.create_product') }}" class="btn btn-primary mb-3">Create Product</a>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Price</th>
+                <th>Cost</th> <!-- New column -->
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+            <tr>
+                <td>{{ product.name }}</td>
+                <td>{{ product.price }}</td>
+                <td>{{ product.cost }}</td> <!-- Display cost -->
+                <td>
+                    <a href="{{ url_for('product.edit_product', product_id=product.id) }}" class="btn btn-primary mr-2">Edit</a>
+                    <a href="{{ url_for('product.delete_product', product_id=product.id) }}" class="btn btn-danger">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

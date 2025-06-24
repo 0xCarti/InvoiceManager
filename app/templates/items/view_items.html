@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Items List</h2>
+    <div class="row justify-content-between">
+        <div class="col-auto">
+            <a href="{{ url_for('item.add_item') }}" class="btn btn-primary mb-3">Add New Item</a>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('item.import_items') }}" class="btn btn-info mb-3">Import Items</a>
+            <button type="submit" form="bulk-delete-form" class="btn btn-warning mb-3" onclick="return confirm('Are you sure?');">Delete Items</button>
+        </div>
+    </div>
+    <form id="bulk-delete-form" action="{{ url_for('item.bulk_delete_items') }}" method="post">
+        {{ form.hidden_tag() }}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col"><input type="checkbox" id="select-all" style="transform: scale(1.5);"></th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td><input type="checkbox" name="item_ids" value="{{ item.id }}" style="transform: scale(1.5);"></td>
+                    <td>{{ item.name }}</td>
+                    <td>
+                        <a href="{{ url_for('item.edit_item', item_id=item.id) }}" class="btn btn-secondary">Edit</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </form>
+</div>
+<script>
+document.getElementById('select-all').onclick = function() {
+    var checkboxes = document.querySelectorAll('input[type="checkbox"][name="item_ids"]');
+    for (var checkbox of checkboxes) {
+        checkbox.checked = this.checked;
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Add New Transfer</h2>
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+            {{ form.from_location_id.label(class="form-label") }}
+            {{ form.from_location_id(class="form-control") }}
+            {% if form.from_location_id.errors %}
+            {% for error in form.from_location_id.errors %}
+            <div class="alert alert-danger">{{ error }}</div>
+            {% endfor %}
+            {% endif %}
+        </div>
+        <div class="form-group">
+            {{ form.to_location_id.label(class="form-label") }}
+            {{ form.to_location_id(class="form-control") }}
+            {% if form.to_location_id.errors %}
+            {% for error in form.to_location_id.errors %}
+            <div class="alert alert-danger">{{ error }}</div>
+            {% endfor %}
+            {% endif %}
+        </div>
+        <h3>Add Items</h3>
+        <div class="form-group">
+            <label for="item-name" class="form-label">Item Name</label>
+            <input type="text" id="item-name" class="form-control" name="item-name" autocomplete="off">
+            <div id="suggestions"></div>
+        </div>
+        <div id="item-list" class="mb-3">
+            <!-- Item list will be dynamically populated -->
+        </div>
+        <br>
+        {{ form.submit(class="btn btn-success") }}
+    </form>
+</div>
+<script>
+    window.addEventListener('DOMContentLoaded', (event) => {
+    const existingItems = {{ items | tojson | safe }};
+    existingItems.forEach((item, index) => {
+        addItemToList(item, index); // Pass both item and its index
+    });
+});
+
+
+document.getElementById('item-name').addEventListener('input', function() {
+    var input = this.value;
+    if (input === ''){
+        document.getElementById('suggestions').innerHTML = '';
+        return;
+    }
+    // Make AJAX request to fetch item suggestions based on input
+    fetch('/items/search?term=' + input)
+        .then(response => response.json())
+        .then(data => {
+            var suggestionsDiv = document.getElementById('suggestions');
+            suggestionsDiv.innerHTML = '';
+            data.forEach(function(item) {
+                var suggestion = document.createElement('div');
+                suggestion.textContent = item.name; // Display the item name
+                suggestion.dataset.id = item.id; // Store the item ID in a data attribute
+                suggestion.classList.add('suggestion');
+                suggestionsDiv.appendChild(suggestion);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching item suggestions:', error);
+        });
+});
+
+document.addEventListener('click', function(event) {
+    if (event.target && event.target.classList.contains('suggestion')) {
+        var itemName = event.target.textContent; // Get the item name from textContent
+        var itemId = event.target.dataset.id; // Get the item ID from data attribute
+        addItemToList({id: itemId, name: itemName}); // Pass an object with both id and name
+    }
+});
+
+function addItemToList(item, index) {
+    var listItem = document.createElement('div');
+    listItem.classList.add('item-container', 'd-flex', 'justify-content-between', 'align-items-center', 'mb-2');
+    listItem.innerHTML = `
+        <div style="padding-left: 15px; font-weight: bold;">${item.name}</div>
+        <div class="d-flex align-items-center">
+            <input type="hidden" name="items-${index}-item" value="${item.id}">
+            <input type="number" class="form-control quantity" name="items-${index}-quantity" value="${item.quantity}" placeholder="Qty" style="max-width: 120px;">
+            <button type="button" class="btn btn-danger delete-item ml-2">Delete</button>
+        </div>
+    `;
+    document.getElementById('item-list').appendChild(listItem);
+}
+
+    document.getElementById('item-list').addEventListener('click', function(event) {
+        if (event.target && event.target.classList.contains('delete-item')) {
+            event.target.closest('.item-container').remove();
+        }
+    });
+</script>
+{% endblock %}
