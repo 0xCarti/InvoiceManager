@@ -11,6 +11,24 @@ transfer_items = db.Table('transfer_items',
                           db.Column('quantity', db.Integer, nullable=False)
                           )
 
+# Association table for products available at a location
+location_products = db.Table(
+    'location_products',
+    db.Column('location_id', db.Integer, db.ForeignKey('location.id'), primary_key=True),
+    db.Column('product_id', db.Integer, db.ForeignKey('product.id'), primary_key=True)
+)
+
+
+class LocationStandItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
+
+    location = relationship('Location', back_populates='stand_items')
+    item = relationship('Item')
+
+    __table_args__ = (db.UniqueConstraint('location_id', 'item_id', name='_loc_item_uc'),)
+
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -25,6 +43,8 @@ class User(UserMixin, db.Model):
 class Location(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
+    products = db.relationship('Product', secondary=location_products, backref='locations')
+    stand_items = db.relationship('LocationStandItem', back_populates='location', cascade='all, delete-orphan')
 
 
 class Item(db.Model):
