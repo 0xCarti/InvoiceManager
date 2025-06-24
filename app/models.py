@@ -80,7 +80,11 @@ class Invoice(db.Model):
 
     # Define a ForeignKeyConstraint to ensure referential integrity with InvoiceProduct
     __table_args__ = (
-        ForeignKeyConstraint(['id'], ['invoice_product.invoice_id']),
+        ForeignKeyConstraint(
+            ['id'],
+            ['invoice_product.invoice_id'],
+            use_alter=True,
+        ),
     )
 
     # Define the relationship with InvoiceProduct, specifying the foreign_keys argument
@@ -93,7 +97,11 @@ class Invoice(db.Model):
 
 class InvoiceProduct(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    invoice_id = db.Column(db.String(10), db.ForeignKey('invoice.id', ondelete='CASCADE'), nullable=False)
+    invoice_id = db.Column(
+        db.String(10),
+        db.ForeignKey('invoice.id', ondelete='CASCADE', use_alter=True),
+        nullable=False,
+    )
     quantity = db.Column(db.Float, nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey('product.id', ondelete='CASCADE'), nullable=False)
     product = relationship("Product", back_populates="invoice_products")
