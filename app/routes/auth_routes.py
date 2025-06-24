@@ -10,8 +10,10 @@ from app.forms import (
     SignupForm,
     CreateBackupForm,
     RestoreBackupForm,
+    ChangePasswordForm,
+    SetPasswordForm,
 )
-from app.models import User, db
+from app.models import User, db, Transfer, Invoice
 from app.backup_utils import create_backup, restore_backup
 
 auth = Blueprint('auth', __name__)
@@ -47,6 +49,46 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('auth.login'))
+
+
+@auth.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if not check_password_hash(current_user.password, form.current_password.data):
+            flash('Current password incorrect.', 'danger')
+        else:
+            current_user.password = generate_password_hash(form.new_password.data)
+            db.session.commit()
+            flash('Password updated.', 'success')
+            return redirect(url_for('auth.profile'))
+
+    transfers = Transfer.query.filter_by(user_id=current_user.id).all()
+    invoices = Invoice.query.filter_by(user_id=current_user.id).all()
+    return render_template('profile.html', user=current_user, form=form, transfers=transfers, invoices=invoices)
+
+
+@admin.route('/user_profile/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def user_profile(user_id):
+    if not current_user.is_admin:
+        abort(403)
+
+    user = db.session.get(User, user_id)
+    if user is None:
+        abort(404)
+
+    form = SetPasswordForm()
+    if form.validate_on_submit():
+        user.password = generate_password_hash(form.new_password.data)
+        db.session.commit()
+        flash('Password updated.', 'success')
+        return redirect(url_for('admin.user_profile', user_id=user_id))
+
+    transfers = Transfer.query.filter_by(user_id=user.id).all()
+    invoices = Invoice.query.filter_by(user_id=user.id).all()
+    return render_template('profile.html', user=user, form=form, transfers=transfers, invoices=invoices)
 
 
 @admin.route('/activate_user/<int:user_id>', methods=['GET'])
