@@ -62,13 +62,13 @@
             });
     });
 
+    let itemIndex = 0;
+
     document.addEventListener('click', function(event) {
         if (event.target && event.target.classList.contains('suggestion')) {
             var itemName = event.target.textContent; // Get the item name from textContent
             var itemId = event.target.dataset.id; // Get the item ID from data attribute
             addItemToList({id: itemId, name: itemName}); // Pass an object with both id and name
-            document.getElementById('suggestions').innerHTML = '';
-            document.getElementById('item-name').value = '';
         }
     });
 
@@ -78,14 +78,15 @@
         listItem.innerHTML = `
             <div style="padding-left: 15px; font-weight: bold;">${item.name}</div>
             <div class="d-flex align-items-center">
-                <input type="hidden" name="items-0-item" value="${item.id}">
-                <input type="number" class="form-control quantity" name="items-0-quantity" placeholder="Qty" style="max-width: 120px;">
+                <input type="hidden" name="items-${itemIndex}-item" value="${item.id}">
+                <input type="number" class="form-control quantity" name="items-${itemIndex}-quantity" placeholder="Qty" style="max-width: 120px;">
                 <button type="button" class="btn btn-danger delete-item ml-2">Delete</button>
             </div>
         `;
         document.getElementById('item-list').appendChild(listItem);
         document.getElementById('suggestions').innerHTML = '';
         document.getElementById('item-name').value = '';
+        itemIndex++;
     }
 
 
