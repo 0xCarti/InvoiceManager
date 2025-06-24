@@ -3,5 +3,8 @@ __pycache__/
 instance/
 pytest_cache/
 
+# local database file created during tests
+*.db
+
 backups/
 .env
