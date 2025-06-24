@@ -87,6 +87,9 @@ def users():
 def signup():
     form = SignupForm()
     if form.validate_on_submit():
+        if form.password.data != form.confirm_password.data:
+            flash('Passwords must match.', 'danger')
+            return redirect(url_for('auth.signup'))
         # Check if email already exists
         existing_user = User.query.filter_by(email=form.email.data).first()
         if existing_user:
