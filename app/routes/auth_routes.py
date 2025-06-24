@@ -46,7 +46,9 @@ def activate_user(user_id):
     if not current_user.is_admin:
         abort(403)  # Abort if the current user is not an admin
 
-    user = User.query.get_or_404(user_id)
+    user = db.session.get(User, user_id)
+    if user is None:
+        abort(404)
     user.active = True
     db.session.commit()
     flash('User account activated.', 'success')
@@ -111,7 +113,9 @@ def delete_user(user_id):
     if not current_user.is_admin:
         abort(403)  # Abort if the current user is not an admin
 
-    user_to_delete = User.query.get_or_404(user_id)
+    user_to_delete = db.session.get(User, user_id)
+    if user_to_delete is None:
+        abort(404)
     db.session.delete(user_to_delete)
     db.session.commit()
     flash('User deleted successfully.', 'success')
