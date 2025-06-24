@@ -47,10 +47,10 @@ def activate_user(user_id):
         abort(403)  # Abort if the current user is not an admin
 
     user = User.query.get_or_404(user_id)
-    user.is_active = True
+    user.active = True
     db.session.commit()
     flash('User account activated.', 'success')
-    return redirect(url_for('admin_dashboard'))  # Redirect to an admin page
+    return redirect(url_for('admin.users'))  # Redirect to users admin page
 
 
 @admin.route('/controlpanel/users', methods=['GET', 'POST'])
