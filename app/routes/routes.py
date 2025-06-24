@@ -11,6 +11,8 @@ from flask import Blueprint, render_template
 from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
 from app.models import Customer, Invoice
 from app import db
+MAX_IMPORT_SIZE = 1024 * 1024
+ALLOWED_IMPORT_EXTENSIONS = {".txt"}
 
 
 # If you're not already using a Blueprint for your main routes, create one.
@@ -318,6 +320,16 @@ def import_items():
 
         file = form.file.data
         filename = secure_filename(file.filename)
+        ext = os.path.splitext(filename)[1].lower()
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        if ext not in ALLOWED_IMPORT_EXTENSIONS:
+            flash('Only .txt files are allowed.', 'error')
+            return redirect(url_for('item.import_items'))
+        if size > MAX_IMPORT_SIZE:
+            flash('File is too large.', 'error')
+            return redirect(url_for('item.import_items'))
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
 
