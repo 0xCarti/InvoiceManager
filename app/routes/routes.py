@@ -4,7 +4,19 @@ from flask_login import login_required, current_user
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 from app import db, socketio, GST
-from app.forms import LocationForm, ItemForm, TransferForm, ImportItemsForm, DateRangeForm, CustomerForm, ProductForm, InvoiceForm, SignupForm, LoginForm
+from app.forms import (
+    LocationForm,
+    ItemForm,
+    TransferForm,
+    ImportItemsForm,
+    DateRangeForm,
+    CustomerForm,
+    ProductForm,
+    InvoiceForm,
+    SignupForm,
+    LoginForm,
+    InvoiceFilterForm,
+)
 from app.models import Location, Item, Transfer, TransferItem, Customer, Product, Invoice, InvoiceProduct
 from datetime import datetime
 from flask import Blueprint, render_template
@@ -666,11 +678,47 @@ def get_customer_tax_status(customer_id):
     }
 
 
-@invoice.route('/view_invoices', methods=['GET'])
+@invoice.route('/view_invoices', methods=['GET', 'POST'])
 @login_required
 def view_invoices():
-    invoices = Invoice.query.all()
-    return render_template('view_invoices.html', invoices=invoices[::-1])
+    form = InvoiceFilterForm()
+    form.vendor_id.choices = [(-1, 'All')] + [
+        (c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()
+    ]
+
+    # Determine filter values from form submission or query params
+    if form.validate_on_submit():
+        invoice_id = form.invoice_id.data
+        vendor_id = form.vendor_id.data
+        start_date = form.start_date.data
+        end_date = form.end_date.data
+    else:
+        invoice_id = request.args.get('invoice_id', '')
+        vendor_id = request.args.get('vendor_id', type=int)
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        start_date = datetime.fromisoformat(start_date_str) if start_date_str else None
+        end_date = datetime.fromisoformat(end_date_str) if end_date_str else None
+        form.invoice_id.data = invoice_id
+        if vendor_id is not None:
+            form.vendor_id.data = vendor_id
+        if start_date:
+            form.start_date.data = start_date
+        if end_date:
+            form.end_date.data = end_date
+
+    query = Invoice.query
+    if invoice_id:
+        query = query.filter(Invoice.id.ilike(f"%{invoice_id}%"))
+    if vendor_id and vendor_id != -1:
+        query = query.filter(Invoice.customer_id == vendor_id)
+    if start_date:
+        query = query.filter(Invoice.date_created >= datetime.combine(start_date, datetime.min.time()))
+    if end_date:
+        query = query.filter(Invoice.date_created <= datetime.combine(end_date, datetime.max.time()))
+
+    invoices = query.order_by(Invoice.date_created.desc()).all()
+    return render_template('view_invoices.html', invoices=invoices, form=form)
 
 @report.route('/reports/vendor-invoices', methods=['GET', 'POST'])
 def vendor_invoice_report():
