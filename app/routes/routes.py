@@ -4,6 +4,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 from app import db, socketio, GST
+from app.activity_logger import log_activity
 from app.forms import (
     LocationForm,
     ItemForm,
@@ -52,6 +53,7 @@ def add_location():
         new_location = Location(name=form.name.data)
         db.session.add(new_location)
         db.session.commit()
+        log_activity(f'Added location {new_location.name}')
         flash('Location added successfully!')
         return redirect(url_for('locations.view_locations'))
     return render_template('locations/add_location.html', form=form)
@@ -68,6 +70,7 @@ def edit_location(location_id):
     if form.validate_on_submit():
         form.populate_obj(location)
         db.session.commit()
+        log_activity(f'Edited location {location.id}')
         flash('Location updated successfully.', 'success')
         return redirect(url_for('location.edit_location', location_id=location.id))
 
@@ -93,6 +96,7 @@ def delete_location(location_id):
         abort(404)
     db.session.delete(location)
     db.session.commit()
+    log_activity(f'Deleted location {location.id}')
     flash('Location deleted successfully!')
     return redirect(url_for('locations.view_locations'))
 
@@ -113,6 +117,7 @@ def add_item():
         item = Item(name=form.name.data)
         db.session.add(item)
         db.session.commit()
+        log_activity(f'Added item {item.name}')
         flash('Item added successfully!')
         return redirect(url_for('item.view_items'))
     return render_template('items/add_item.html', form=form)
@@ -128,6 +133,7 @@ def edit_item(item_id):
     if form.validate_on_submit():
         item.name = form.name.data
         db.session.commit()
+        log_activity(f'Edited item {item.id}')
         flash('Item updated successfully!')
         return redirect(url_for('item.view_items'))
     return render_template('items/edit_item.html', form=form, item=item)
@@ -141,6 +147,7 @@ def delete_item(item_id):
         abort(404)
     db.session.delete(item)
     db.session.commit()
+    log_activity(f'Deleted item {item.id}')
     flash('Item deleted successfully!')
     return redirect(url_for('item.view_items'))
 
@@ -152,6 +159,7 @@ def bulk_delete_items():
     if item_ids:
         Item.query.filter(Item.id.in_(item_ids)).delete(synchronize_session='fetch')
         db.session.commit()
+        log_activity(f'Bulk deleted items {",".join(item_ids)}')
         flash('Selected items have been deleted.', 'success')
     else:
         flash('No items selected.', 'warning')
@@ -216,6 +224,7 @@ def add_transfer():
                     )
                     db.session.add(transfer_item)
         db.session.commit()
+        log_activity(f'Added transfer {transfer.id}')
 
         socketio.emit('new_transfer', {'message': 'New transfer added'})
 
@@ -257,6 +266,7 @@ def edit_transfer(transfer_id):
                 db.session.add(new_transfer_item)
 
         db.session.commit()
+        log_activity(f'Edited transfer {transfer.id}')
         flash('Transfer updated successfully!', 'success')
         return redirect(url_for('transfer.view_transfers'))
     elif form.errors:
@@ -276,6 +286,7 @@ def delete_transfer(transfer_id):
         abort(404)
     db.session.delete(transfer)
     db.session.commit()
+    log_activity(f'Deleted transfer {transfer.id}')
     flash('Transfer deleted successfully!', 'success')
     return redirect(url_for('transfer.view_transfers'))
 
@@ -288,6 +299,7 @@ def complete_transfer(transfer_id):
         abort(404)
     transfer.completed = True
     db.session.commit()
+    log_activity(f'Completed transfer {transfer.id}')
     flash('Transfer marked as complete!', 'success')
     return redirect(url_for('transfer.view_transfers'))
 
@@ -300,6 +312,7 @@ def uncomplete_transfer(transfer_id):
         abort(404)
     transfer.completed = False
     db.session.commit()
+    log_activity(f'Uncompleted transfer {transfer.id}')
     flash('Transfer marked as not completed.', 'success')
     return redirect(url_for('transfer.view_transfers'))
 
@@ -356,7 +369,8 @@ def import_items():
                         # Create a new item instance and add it to the database
                         new_item = Item(name=item_name)
                         db.session.add(new_item)
-            db.session.commit()
+        db.session.commit()
+        log_activity('Imported items from file')
 
         flash('Items imported successfully.', 'success')
         return redirect(url_for('item.import_items'))
@@ -445,6 +459,7 @@ def create_product():
         )
         db.session.add(product)
         db.session.commit()
+        log_activity(f'Created product {product.name}')
         flash('Product created successfully!', 'success')
         return redirect(url_for('product.view_products'))
     return render_template('create_product.html', form=form)
@@ -462,6 +477,7 @@ def edit_product(product_id):
         product.price = form.price.data
         product.cost = form.cost.data or 0.0  # 👈 Update cost
         db.session.commit()
+        log_activity(f'Edited product {product.id}')
         flash('Product updated successfully!', 'success')
         return redirect(url_for('product.view_products'))
     elif request.method == 'GET':
@@ -482,6 +498,7 @@ def delete_product(product_id):
         abort(404)
     db.session.delete(product)
     db.session.commit()
+    log_activity(f'Deleted product {product.id}')
     flash('Product deleted successfully!', 'success')
     return redirect(url_for('product.view_products'))
 
@@ -506,6 +523,7 @@ def create_customer():
         )
         db.session.add(customer)
         db.session.commit()
+        log_activity(f'Created customer {customer.id}')
         flash('Customer created successfully!', 'success')
         return redirect(url_for('customer.view_customers'))
     return render_template('create_customer.html', form=form)
@@ -525,6 +543,7 @@ def edit_customer(customer_id):
         customer.gst_exempt = form.gst_exempt.data
         customer.pst_exempt = form.pst_exempt.data
         db.session.commit()
+        log_activity(f'Edited customer {customer.id}')
         flash('Customer updated successfully!', 'success')
         return redirect(url_for('customer.view_customers'))
 
@@ -545,6 +564,7 @@ def delete_customer(customer_id):
         abort(404)
     db.session.delete(customer)
     db.session.commit()
+    log_activity(f'Deleted customer {customer.id}')
     flash('Customer deleted successfully!', 'success')
     return redirect(url_for('customer.view_customers'))
 
@@ -627,6 +647,7 @@ def create_invoice():
                 flash(f"Invalid product data format: '{entry}'", 'danger')
 
         db.session.commit()
+        log_activity(f'Created invoice {invoice.id}')
         flash('Invoice created successfully!', 'success')
         return redirect(url_for('invoice.view_invoices'))
 
@@ -643,6 +664,7 @@ def delete_invoice(invoice_id):
     # Delete the invoice from the database
     db.session.delete(invoice)
     db.session.commit()
+    log_activity(f'Deleted invoice {invoice.id}')
     flash('Invoice deleted successfully!', 'success')
     # Redirect the user to the home page or any other appropriate page
     return redirect(url_for('invoice.view_invoices'))

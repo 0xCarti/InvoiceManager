@@ -12,6 +12,7 @@ from app.forms import (
     RestoreBackupForm,
 )
 from app.models import User, db
+from app.activity_logger import log_activity
 from app.backup_utils import create_backup, restore_backup
 
 auth = Blueprint('auth', __name__)
@@ -35,6 +36,7 @@ def login():
             return redirect(url_for('auth.login'))
 
         login_user(user)
+        log_activity('Logged in', user.id)
         return redirect(url_for('transfer.view_transfers'))
 
     from run import app
@@ -45,7 +47,9 @@ def login():
 @auth.route('/logout')
 @login_required
 def logout():
+    user_id = current_user.id
     logout_user()
+    log_activity('Logged out', user_id)
     return redirect(url_for('auth.login'))
 
 
@@ -60,6 +64,7 @@ def activate_user(user_id):
         abort(404)
     user.active = True
     db.session.commit()
+    log_activity(f'Activated user {user_id}')
     flash('User account activated.', 'success')
     return redirect(url_for('admin.users'))  # Redirect to the user control panel
 
@@ -80,8 +85,10 @@ def users():
         if user:
             if action == 'toggle_active':
                 user.active = not user.active
+                log_activity(f'Toggled active for user {user_id}')
             elif action == 'toggle_admin':
                 user.is_admin = not user.is_admin
+                log_activity(f'Toggled admin for user {user_id}')
             db.session.commit()
             flash('User updated successfully', 'success')
         else:
@@ -114,6 +121,7 @@ def signup():
         )
         db.session.add(new_user)
         db.session.commit()
+        log_activity('Signed up', new_user.id)
         flash('Account created successfully! Please wait for account activation.', 'success')
         return redirect(url_for('auth.login'))
     return render_template('auth/signup.html', form=form)
@@ -130,6 +138,7 @@ def delete_user(user_id):
         abort(404)
     db.session.delete(user_to_delete)
     db.session.commit()
+    log_activity(f'Deleted user {user_id}')
     flash('User deleted successfully.', 'success')
     return redirect(url_for('admin.users'))
 
@@ -157,6 +166,7 @@ def create_backup_route():
     form = CreateBackupForm()
     if form.validate_on_submit():
         filename = create_backup()
+        log_activity(f'Created backup {filename}')
         flash('Backup created: ' + filename, 'success')
     return redirect(url_for('admin.backups'))
 
@@ -176,6 +186,7 @@ def restore_backup_route():
         filepath = os.path.join(backups_dir, filename)
         file.save(filepath)
         restore_backup(filepath)
+        log_activity(f'Restored backup {filename}')
         flash('Backup restored from ' + filename, 'success')
     return redirect(url_for('admin.backups'))
 
@@ -187,4 +198,5 @@ def download_backup(filename):
         abort(403)
     from flask import current_app, send_from_directory
     backups_dir = current_app.config['BACKUP_FOLDER']
+    log_activity(f'Downloaded backup {filename}')
     return send_from_directory(backups_dir, filename, as_attachment=True)
