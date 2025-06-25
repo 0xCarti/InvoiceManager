@@ -1290,14 +1290,14 @@ def edit_purchase_order(po_id):
 
         PurchaseOrderItem.query.filter_by(purchase_order_id=po.id).delete()
 
-        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-product')]
+        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
         for field in items:
             index = field.split('-')[1]
-            product_id = request.form.get(f'items-{index}-product', type=int)
+            item_id = request.form.get(f'items-{index}-item', type=int)
             unit_id = request.form.get(f'items-{index}-unit', type=int)
             quantity = request.form.get(f'items-{index}-quantity', type=float)
-            if product_id and quantity:
-                db.session.add(PurchaseOrderItem(purchase_order_id=po.id, product_id=product_id, unit_id=unit_id, quantity=quantity))
+            if item_id and quantity is not None:
+                db.session.add(PurchaseOrderItem(purchase_order_id=po.id, item_id=item_id, unit_id=unit_id, quantity=quantity))
 
         db.session.commit()
         log_activity(f'Edited purchase order {po.id}')
@@ -1313,7 +1313,10 @@ def edit_purchase_order(po_id):
         for i, poi in enumerate(po.items):
             if len(form.items) <= i:
                 form.items.append_entry()
-            form.items[i].product.data = poi.product_id
+        for item_form in form.items:
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+        for i, poi in enumerate(po.items):
+            form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
 
@@ -1329,6 +1332,14 @@ def receive_invoice(po_id):
     form = ReceiveInvoiceForm()
     if request.method == 'GET':
         form.delivery_charge.data = po.delivery_charge
+        form.items.min_entries = max(1, len(po.items))
+        while len(form.items) < len(po.items):
+            form.items.append_entry()
+        for item_form in form.items:
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+        for i, poi in enumerate(po.items):
+            form.items[i].item.data = poi.item_id
+            form.items[i].quantity.data = poi.quantity
     if form.validate_on_submit():
         invoice = PurchaseInvoice(
             purchase_order_id=po.id,
@@ -1348,7 +1359,11 @@ def receive_invoice(po_id):
             item_id = request.form.get(f'items-{index}-item', type=int)
             quantity = request.form.get(f'items-{index}-quantity', type=float)
             cost = request.form.get(f'items-{index}-cost', type=float)
+            is_return = request.form.get(f'items-{index}-return_item') is not None
             if item_id and quantity is not None and cost is not None:
+                if is_return:
+                    quantity = -abs(quantity)
+                    cost = -abs(cost)
                 db.session.add(PurchaseInvoiceItem(invoice_id=invoice.id, item_id=item_id, quantity=quantity, cost=cost))
                 item_obj = db.session.get(Item, item_id)
                 if item_obj:

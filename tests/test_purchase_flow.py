@@ -1,6 +1,8 @@
 from werkzeug.security import generate_password_hash
 from app import db
-from app.models import User, Customer, Item, ItemUnit, Location, PurchaseOrder, PurchaseOrderItem, PurchaseInvoice, LocationStandItem
+from app.models import (User, Customer, Item, ItemUnit, Location, PurchaseOrder,
+                        PurchaseOrderItem, PurchaseInvoice, PurchaseInvoiceItem,
+                        LocationStandItem)
 from tests.test_user_flows import login
 
 
@@ -132,3 +134,81 @@ def test_receive_form_prefills_delivery_charge(client, app):
         resp = client.get(f'/purchase_orders/{po_id}/receive')
         assert resp.status_code == 200
         assert b'value="5.50"' in resp.data
+
+
+def test_receive_prefills_items_and_return(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+    with client:
+        login(client, email, 'pass')
+        client.post('/purchase_orders/create', data={
+            'vendor': vendor_id,
+            'order_date': '2023-04-01',
+            'expected_date': '2023-04-05',
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 3
+        }, follow_redirects=True)
+
+    with app.app_context():
+        po = PurchaseOrder.query.first()
+        po_id = po.id
+
+    with client:
+        login(client, email, 'pass')
+        resp = client.get(f'/purchase_orders/{po_id}/receive')
+        assert resp.status_code == 200
+        assert b'name="items-0-item"' in resp.data
+
+    with client:
+        login(client, email, 'pass')
+        resp = client.post(f'/purchase_orders/{po_id}/receive', data={
+            'received_date': '2023-04-06',
+            'location_id': location_id,
+            'gst': 0,
+            'pst': 0,
+            'delivery_charge': 0,
+            'items-0-item': item_id,
+            'items-0-quantity': 3,
+            'items-0-cost': 1.5,
+            'items-0-return_item': 'y'
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        inv_item = PurchaseInvoiceItem.query.first()
+        assert inv_item.cost == -1.5
+        assert inv_item.quantity == -3
+
+
+def test_edit_purchase_order_updates(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+    with client:
+        login(client, email, 'pass')
+        client.post('/purchase_orders/create', data={
+            'vendor': vendor_id,
+            'order_date': '2023-05-01',
+            'expected_date': '2023-05-05',
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 2
+        }, follow_redirects=True)
+
+    with app.app_context():
+        po = PurchaseOrder.query.first()
+        po_id = po.id
+
+    with client:
+        login(client, email, 'pass')
+        resp = client.post(f'/purchase_orders/edit/{po_id}', data={
+            'vendor': vendor_id,
+            'order_date': '2023-05-01',
+            'expected_date': '2023-05-06',
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 5
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        poi = PurchaseOrderItem.query.filter_by(purchase_order_id=po_id).first()
+        assert poi.quantity == 5
