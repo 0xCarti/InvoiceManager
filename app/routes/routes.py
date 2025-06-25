@@ -184,6 +184,11 @@ def view_items():
 def add_item():
     form = ItemForm()
     if form.validate_on_submit():
+        recv_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.receiving_default.data)
+        trans_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.transfer_default.data)
+        if recv_count > 1 or trans_count > 1:
+            flash('Only one unit can be set as receiving and transfer default.', 'error')
+            return render_template('items/add_item.html', form=form)
         item = Item(name=form.name.data, base_unit=form.base_unit.data)
         db.session.add(item)
         db.session.commit()
@@ -235,6 +240,11 @@ def edit_item(item_id):
                     'transfer_default': unit.transfer_default
                 })
     if form.validate_on_submit():
+        recv_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.receiving_default.data)
+        trans_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.transfer_default.data)
+        if recv_count > 1 or trans_count > 1:
+            flash('Only one unit can be set as receiving and transfer default.', 'error')
+            return render_template('items/edit_item.html', form=form, item=item)
         item.name = form.name.data
         item.base_unit = form.base_unit.data
         ItemUnit.query.filter_by(item_id=item.id).delete()
@@ -632,7 +642,7 @@ def create_product():
         log_activity(f'Created product {product.name}')
         flash('Product created successfully!', 'success')
         return redirect(url_for('product.view_products'))
-    return render_template('create_product.html', form=form)
+    return render_template('create_product.html', form=form, product_id=None)
 
 
 @product.route('/products/<int:product_id>/edit', methods=['GET', 'POST'])
@@ -679,7 +689,7 @@ def edit_product(product_id):
     else:
         print(form.errors)
         print(form.cost.data)
-    return render_template('edit_product.html', form=form)
+    return render_template('edit_product.html', form=form, product_id=product.id)
 
 
 @product.route('/products/<int:product_id>/recipe', methods=['GET', 'POST'])
@@ -711,6 +721,23 @@ def edit_product_recipe(product_id):
             form.items[i].quantity.data = recipe_item.quantity
             form.items[i].countable.data = recipe_item.countable
     return render_template('edit_product_recipe.html', form=form, product=product)
+
+
+@product.route('/products/<int:product_id>/calculate_cost')
+@login_required
+def calculate_product_cost(product_id):
+    product = db.session.get(Product, product_id)
+    if product is None:
+        abort(404)
+    total = 0.0
+    for ri in product.recipe_items:
+        item_cost = getattr(ri.item, 'cost', 0.0)
+        try:
+            qty = float(ri.quantity or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        total += (item_cost or 0) * qty
+    return jsonify({'cost': total})
 
 
 @product.route('/products/<int:product_id>/delete', methods=['GET'])

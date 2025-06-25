@@ -30,7 +30,7 @@
 
         <div class="form-group">
             {{ form.cost.label(class="form-label") }}
-            {{ form.cost(class="form-control") }}
+            {{ form.cost(class="form-control", id="cost") }}
             {% if form.cost.errors %}
                 <div class="invalid-feedback">
                     {{ form.cost.errors[0] }}
@@ -50,8 +50,17 @@
             </div>
             {% endfor %}
         </div>
-
+        <button type="button" class="btn btn-secondary mb-2" id="calc-cost" disabled>Set Cost From Recipe</button>
         <button type="submit" class="btn btn-primary">Submit</button>
     </form>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btn = document.getElementById('calc-cost');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+        alert('Product must be saved before cost can be calculated from recipe.');
+    });
+});
+</script>
 {% endblock %}
