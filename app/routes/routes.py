@@ -13,17 +13,34 @@ from app.forms import (
     DateRangeForm,
     CustomerForm,
     ProductForm,
+    ProductRecipeForm,
     InvoiceForm,
     SignupForm,
     LoginForm,
     InvoiceFilterForm,
+    PurchaseOrderForm,
+    ReceiveInvoiceForm,
 )
-from app.models import Location, Item, Transfer, TransferItem, Customer, Product, Invoice, InvoiceProduct
+from app.models import (
+    Location,
+    Item,
+    ItemUnit,
+    Transfer,
+    TransferItem,
+    Customer,
+    Product,
+    LocationStandItem,
+    Invoice,
+    InvoiceProduct,
+    ProductRecipeItem,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseInvoice,
+    PurchaseInvoiceItem,
+)
 from datetime import datetime
 from flask import Blueprint, render_template
 from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
-from app.models import Customer, Invoice
-from app import db
 MAX_IMPORT_SIZE = 1024 * 1024
 ALLOWED_IMPORT_EXTENSIONS = {".txt"}
 
@@ -37,6 +54,7 @@ product = Blueprint('product', __name__)
 customer = Blueprint('customer', __name__)
 invoice = Blueprint('invoice', __name__)
 report = Blueprint('report', __name__)
+purchase = Blueprint('purchase', __name__)
 
 
 @main.route('/')
@@ -51,7 +69,21 @@ def add_location():
     form = LocationForm()
     if form.validate_on_submit():
         new_location = Location(name=form.name.data)
+        selected_products = [db.session.get(Product, pid) for pid in form.products.data]
+        new_location.products = selected_products
         db.session.add(new_location)
+        db.session.commit()
+
+        # Add stand sheet items for countable recipe items
+        for product_obj in selected_products:
+            for recipe_item in product_obj.recipe_items:
+                if recipe_item.countable:
+                    exists = LocationStandItem.query.filter_by(
+                        location_id=new_location.id,
+                        item_id=recipe_item.item_id
+                    ).first()
+                    if not exists:
+                        db.session.add(LocationStandItem(location_id=new_location.id, item_id=recipe_item.item_id))
         db.session.commit()
         log_activity(f'Added location {new_location.name}')
         flash('Location added successfully!')
@@ -66,19 +98,53 @@ def edit_location(location_id):
     if location is None:
         abort(404)
     form = LocationForm(obj=location)
+    if request.method == 'GET':
+        form.products.data = [p.id for p in location.products]
 
     if form.validate_on_submit():
-        form.populate_obj(location)
+        location.name = form.name.data
+        selected_products = [db.session.get(Product, pid) for pid in form.products.data]
+        location.products = selected_products
+        db.session.commit()
+
+        # Ensure stand sheet items exist for new products
+        for product_obj in selected_products:
+            for recipe_item in product_obj.recipe_items:
+                if recipe_item.countable:
+                    exists = LocationStandItem.query.filter_by(
+                        location_id=location.id,
+                        item_id=recipe_item.item_id
+                    ).first()
+                    if not exists:
+                        db.session.add(LocationStandItem(location_id=location.id, item_id=recipe_item.item_id))
         db.session.commit()
         log_activity(f'Edited location {location.id}')
         flash('Location updated successfully.', 'success')
-        return redirect(url_for('location.edit_location', location_id=location.id))
+        return redirect(url_for('locations.edit_location', location_id=location.id))
 
     # Query for completed transfers to this location
     transfers_to_location = Transfer.query.filter_by(to_location_id=location_id, completed=True).all()
 
     return render_template('locations/edit_location.html', form=form, location=location,
                            transfers=transfers_to_location)
+
+
+@location.route('/locations/<int:location_id>/stand_sheet')
+@login_required
+def view_stand_sheet(location_id):
+    location = db.session.get(Location, location_id)
+    if location is None:
+        abort(404)
+
+    items = []
+    seen = set()
+    for product_obj in location.products:
+        for recipe_item in product_obj.recipe_items:
+            if recipe_item.countable and recipe_item.item_id not in seen:
+                seen.add(recipe_item.item_id)
+                items.append(recipe_item.item)
+
+    return render_template('locations/stand_sheet.html', location=location, items=items)
 
 
 @location.route('/locations')
@@ -114,8 +180,28 @@ def view_items():
 def add_item():
     form = ItemForm()
     if form.validate_on_submit():
-        item = Item(name=form.name.data)
+        item = Item(name=form.name.data, base_unit=form.base_unit.data)
         db.session.add(item)
+        db.session.commit()
+
+        receiving_set = False
+        transfer_set = False
+        for uf in form.units:
+            unit_form = uf.form
+            if unit_form.name.data:
+                receiving_default = unit_form.receiving_default.data and not receiving_set
+                transfer_default = unit_form.transfer_default.data and not transfer_set
+                db.session.add(ItemUnit(
+                    item_id=item.id,
+                    name=unit_form.name.data,
+                    factor=float(unit_form.factor.data),
+                    receiving_default=receiving_default,
+                    transfer_default=transfer_default
+                ))
+                if receiving_default:
+                    receiving_set = True
+                if transfer_default:
+                    transfer_set = True
         db.session.commit()
         log_activity(f'Added item {item.name}')
         flash('Item added successfully!')
@@ -130,8 +216,42 @@ def edit_item(item_id):
     if item is None:
         abort(404)
     form = ItemForm(obj=item)
+    if request.method == 'GET':
+        for idx, unit in enumerate(item.units):
+            if idx < len(form.units):
+                form.units[idx].form.name.data = unit.name
+                form.units[idx].form.factor.data = unit.factor
+                form.units[idx].form.receiving_default.data = unit.receiving_default
+                form.units[idx].form.transfer_default.data = unit.transfer_default
+            else:
+                form.units.append_entry({
+                    'name': unit.name,
+                    'factor': unit.factor,
+                    'receiving_default': unit.receiving_default,
+                    'transfer_default': unit.transfer_default
+                })
     if form.validate_on_submit():
         item.name = form.name.data
+        item.base_unit = form.base_unit.data
+        ItemUnit.query.filter_by(item_id=item.id).delete()
+        receiving_set = False
+        transfer_set = False
+        for uf in form.units:
+            unit_form = uf.form
+            if unit_form.name.data:
+                receiving_default = unit_form.receiving_default.data and not receiving_set
+                transfer_default = unit_form.transfer_default.data and not transfer_set
+                db.session.add(ItemUnit(
+                    item_id=item.id,
+                    name=unit_form.name.data,
+                    factor=float(unit_form.factor.data),
+                    receiving_default=receiving_default,
+                    transfer_default=transfer_default
+                ))
+                if receiving_default:
+                    receiving_set = True
+                if transfer_default:
+                    transfer_set = True
         db.session.commit()
         log_activity(f'Edited item {item.id}')
         flash('Item updated successfully!')
@@ -213,14 +333,20 @@ def add_transfer():
         for item_field in items:
             index = item_field.split('-')[1]
             item_id = request.form.get(f'items-{index}-item')
-            quantity = request.form.get(f'items-{index}-quantity', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            unit_id = request.form.get(f'items-{index}-unit', type=int)
             if item_id:
                 item = db.session.get(Item, item_id)
-                if item and quantity:
+                if item and quantity is not None:
+                    factor = 1
+                    if unit_id:
+                        unit = db.session.get(ItemUnit, unit_id)
+                        if unit:
+                            factor = unit.factor
                     transfer_item = TransferItem(
                         transfer_id=transfer.id,
                         item_id=item.id,
-                        quantity=quantity
+                        quantity=quantity * factor
                     )
                     db.session.add(transfer_item)
         db.session.commit()
@@ -256,12 +382,18 @@ def edit_transfer(transfer_id):
         for item_field in items:
             index = item_field.split('-')[1]
             item_id = request.form.get(f'items-{index}-item')
-            quantity = request.form.get(f'items-{index}-quantity', type=int)
-            if item_id and quantity:  # Ensure both are provided and valid
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            unit_id = request.form.get(f'items-{index}-unit', type=int)
+            if item_id and quantity is not None:  # Ensure both are provided and valid
+                factor = 1
+                if unit_id:
+                    unit = db.session.get(ItemUnit, unit_id)
+                    if unit:
+                        factor = unit.factor
                 new_transfer_item = TransferItem(
                     transfer_id=transfer.id,
                     item_id=int(item_id),
-                    quantity=quantity
+                    quantity=quantity * factor
                 )
                 db.session.add(new_transfer_item)
 
@@ -334,6 +466,25 @@ def search_items():
     items = Item.query.filter(Item.name.ilike(f'%{search_term}%')).all()
     items_data = [{'id': item.id, 'name': item.name} for item in items]  # Create a list of dicts
     return jsonify(items_data)
+
+
+@item.route('/items/<int:item_id>/units')
+@login_required
+def item_units(item_id):
+    item = db.session.get(Item, item_id)
+    if item is None:
+        abort(404)
+    data = [
+        {
+            'id': u.id,
+            'name': u.name,
+            'factor': u.factor,
+            'receiving_default': u.receiving_default,
+            'transfer_default': u.transfer_default,
+        }
+        for u in item.units
+    ]
+    return jsonify(data)
 
 
 @item.route('/import_items', methods=['GET', 'POST'])
@@ -490,6 +641,37 @@ def edit_product(product_id):
     return render_template('edit_product.html', form=form)
 
 
+@product.route('/products/<int:product_id>/recipe', methods=['GET', 'POST'])
+@login_required
+def edit_product_recipe(product_id):
+    product = db.session.get(Product, product_id)
+    if product is None:
+        abort(404)
+    form = ProductRecipeForm()
+    if form.validate_on_submit():
+        ProductRecipeItem.query.filter_by(product_id=product.id).delete()
+        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
+        for field in items:
+            index = field.split('-')[1]
+            item_id = request.form.get(f'items-{index}-item', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            countable = request.form.get(f'items-{index}-countable') == 'y'
+            if item_id and quantity is not None:
+                db.session.add(ProductRecipeItem(product_id=product.id, item_id=item_id, quantity=quantity, countable=countable))
+        db.session.commit()
+        flash('Recipe updated successfully!', 'success')
+        return redirect(url_for('product.view_products'))
+    elif request.method == 'GET':
+        form.items.min_entries = max(1, len(product.recipe_items))
+        for i, recipe_item in enumerate(product.recipe_items):
+            if len(form.items) <= i:
+                form.items.append_entry()
+            form.items[i].item.data = recipe_item.item_id
+            form.items[i].quantity.data = recipe_item.quantity
+            form.items[i].countable.data = recipe_item.countable
+    return render_template('edit_product_recipe.html', form=form, product=product)
+
+
 @product.route('/products/<int:product_id>/delete', methods=['GET'])
 @login_required
 def delete_product(product_id):
@@ -640,6 +822,14 @@ def create_invoice():
                         line_pst=line_pst
                     )
                     db.session.add(invoice_product)
+
+                    # Reduce product inventory
+                    product.quantity = (product.quantity or 0) - quantity
+
+                    # Reduce item inventories based on recipe
+                    for recipe_item in product.recipe_items:
+                        item = recipe_item.item
+                        item.quantity = (item.quantity or 0) - (recipe_item.quantity * quantity)
                 else:
                     flash(f"Product '{product_name}' not found.", 'danger')
 
@@ -859,3 +1049,81 @@ def product_sales_report():
         return render_template('report_product_sales_results.html', form=form, report=report_data)
 
     return render_template('report_product_sales.html', form=form)
+
+
+@purchase.route('/purchase_orders', methods=['GET'])
+@login_required
+def view_purchase_orders():
+    orders = PurchaseOrder.query.order_by(PurchaseOrder.order_date.desc()).all()
+    return render_template('purchase_orders/view_purchase_orders.html', orders=orders)
+
+
+@purchase.route('/purchase_orders/create', methods=['GET', 'POST'])
+@login_required
+def create_purchase_order():
+    form = PurchaseOrderForm()
+    if form.validate_on_submit():
+        po = PurchaseOrder(
+            vendor_id=form.vendor.data,
+            user_id=current_user.id,
+            order_date=form.order_date.data,
+            expected_date=form.expected_date.data,
+            delivery_charge=form.delivery_charge.data or 0.0,
+        )
+        db.session.add(po)
+        db.session.commit()
+
+        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-product')]
+        for field in items:
+            index = field.split('-')[1]
+            product_id = request.form.get(f'items-{index}-product', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            if product_id and quantity:
+                db.session.add(PurchaseOrderItem(purchase_order_id=po.id, product_id=product_id, quantity=quantity))
+
+        db.session.commit()
+        log_activity(f'Created purchase order {po.id}')
+        flash('Purchase order created successfully!', 'success')
+        return redirect(url_for('purchase.view_purchase_orders'))
+
+    return render_template('purchase_orders/create_purchase_order.html', form=form)
+
+
+@purchase.route('/purchase_orders/<int:po_id>/receive', methods=['GET', 'POST'])
+@login_required
+def receive_invoice(po_id):
+    po = db.session.get(PurchaseOrder, po_id)
+    if po is None:
+        abort(404)
+    form = ReceiveInvoiceForm()
+    if form.validate_on_submit():
+        invoice = PurchaseInvoice(
+            purchase_order_id=po.id,
+            user_id=current_user.id,
+            received_date=form.received_date.data,
+            gst=form.gst.data or 0.0,
+            pst=form.pst.data or 0.0,
+            delivery_charge=form.delivery_charge.data or 0.0,
+        )
+        db.session.add(invoice)
+        db.session.commit()
+
+        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-product')]
+        for field in items:
+            index = field.split('-')[1]
+            product_id = request.form.get(f'items-{index}-product', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            cost = request.form.get(f'items-{index}-cost', type=float)
+            if product_id and quantity is not None and cost is not None:
+                db.session.add(PurchaseInvoiceItem(invoice_id=invoice.id, product_id=product_id, quantity=quantity, cost=cost))
+                product = db.session.get(Product, product_id)
+                if product:
+                    product.quantity = (product.quantity or 0) + quantity
+                    product.cost = cost
+
+        db.session.commit()
+        log_activity(f'Received invoice {invoice.id} for PO {po.id}')
+        flash('Invoice received successfully!', 'success')
+        return redirect(url_for('purchase.view_purchase_orders'))
+
+    return render_template('purchase_orders/receive_invoice.html', form=form, po=po)

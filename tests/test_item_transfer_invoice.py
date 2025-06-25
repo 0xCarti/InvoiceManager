@@ -1,6 +1,6 @@
 from werkzeug.security import generate_password_hash
 from app import db
-from app.models import User, Item, Location, Transfer, TransferItem, Customer, Product, Invoice
+from app.models import User, Item, ItemUnit, Location, Transfer, TransferItem, Customer, Product, Invoice
 from tests.test_user_flows import login
 
 
@@ -17,7 +17,14 @@ def test_item_lifecycle(client, app):
 
     with client:
         login(client, 'itemuser@example.com', 'pass')
-        resp = client.post('/items/add', data={'name': 'Widget'}, follow_redirects=True)
+        resp = client.post('/items/add', data={
+            'name': 'Widget',
+            'base_unit': 'each',
+            'units-0-name': 'each',
+            'units-0-factor': 1,
+            'units-0-receiving_default': 'y',
+            'units-0-transfer_default': 'y'
+        }, follow_redirects=True)
         assert resp.status_code == 200
 
     with app.app_context():
@@ -27,7 +34,14 @@ def test_item_lifecycle(client, app):
 
     with client:
         login(client, 'itemuser@example.com', 'pass')
-        resp = client.post(f'/items/edit/{item_id}', data={'name': 'Gadget'}, follow_redirects=True)
+        resp = client.post(f'/items/edit/{item_id}', data={
+            'name': 'Gadget',
+            'base_unit': 'each',
+            'units-0-name': 'each',
+            'units-0-factor': 1,
+            'units-0-receiving_default': 'y',
+            'units-0-transfer_default': 'y'
+        }, follow_redirects=True)
         assert resp.status_code == 200
 
     with app.app_context():
@@ -48,10 +62,14 @@ def test_transfer_flow(client, app):
     with app.app_context():
         loc1 = Location(name='A')
         loc2 = Location(name='B')
-        item = Item(name='Thing')
+        item = Item(name='Thing', base_unit='each')
         db.session.add_all([loc1, loc2, item])
         db.session.commit()
+        unit = ItemUnit(item_id=item.id, name='each', factor=1, receiving_default=True, transfer_default=True)
+        db.session.add(unit)
+        db.session.commit()
         loc1_id, loc2_id, item_id = loc1.id, loc2.id, item.id
+        unit_id = unit.id
 
     with client:
         login(client, 'transfer@example.com', 'pass')
@@ -59,6 +77,7 @@ def test_transfer_flow(client, app):
             'from_location_id': loc1_id,
             'to_location_id': loc2_id,
             'items-0-item': item_id,
+            'items-0-unit': unit_id,
             'items-0-quantity': 5
         }, follow_redirects=True)
         assert resp.status_code == 200

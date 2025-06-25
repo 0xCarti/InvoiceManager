@@ -9,6 +9,10 @@
             {{ form.name.label(class="form-label") }}
             {{ form.name(class="form-control") }}
         </div>
+        <div class="form-group">
+            {{ form.products.label(class="form-label") }}
+            {{ form.products(class="form-control", multiple=True) }}
+        </div>
         {{ form.submit(class="btn btn-primary") }}
     </form>
     <br>

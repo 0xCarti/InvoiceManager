@@ -8,12 +8,20 @@
         <div class="form-group">
             {{ form.name.label(class="form-label") }}
             {{ form.name(class="form-control", value=item.name) }}
-            {% if form.name.errors %}
-                {% for error in form.name.errors %}
-                    <div class="alert alert-danger">{{ error }}</div>
-                {% endfor %}
-            {% endif %}
         </div>
+        <div class="form-group">
+            {{ form.base_unit.label(class="form-label") }}
+            {{ form.base_unit(class="form-control", value=item.base_unit) }}
+        </div>
+        <h4>Units</h4>
+        {% for unit in form.units %}
+        <div class="form-row mb-2">
+            <div class="col">{{ unit.name(class="form-control") }}</div>
+            <div class="col">{{ unit.factor(class="form-control") }}</div>
+            <div class="col-auto">{{ unit.receiving_default() }} {{ unit.receiving_default.label }}</div>
+            <div class="col-auto">{{ unit.transfer_default() }} {{ unit.transfer_default.label }}</div>
+        </div>
+        {% endfor %}
         {{ form.submit(class="btn btn-success") }}
     </form>
 </div>

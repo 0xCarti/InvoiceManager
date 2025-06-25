@@ -9,6 +9,19 @@
             {{ form.name.label }}
             {{ form.name(class="form-control") }}
         </div>
+        <div class="form-group">
+            {{ form.base_unit.label }}
+            {{ form.base_unit(class="form-control") }}
+        </div>
+        <h4>Units</h4>
+        {% for unit in form.units %}
+        <div class="form-row mb-2">
+            <div class="col">{{ unit.name(class="form-control", placeholder="Name") }}</div>
+            <div class="col">{{ unit.factor(class="form-control", placeholder="Factor") }}</div>
+            <div class="col-auto">{{ unit.receiving_default() }} {{ unit.receiving_default.label }}</div>
+            <div class="col-auto">{{ unit.transfer_default() }} {{ unit.transfer_default.label }}</div>
+        </div>
+        {% endfor %}
         {{ form.submit(class="btn btn-primary") }}
     </form>
 </div>
