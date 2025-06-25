@@ -185,8 +185,10 @@ class PurchaseOrderItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_order.id'), nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    unit_id = db.Column(db.Integer, db.ForeignKey('item_unit.id'), nullable=True)
     quantity = db.Column(db.Float, nullable=False)
     product = relationship('Product')
+    unit = relationship('ItemUnit')
 
 
 class PurchaseInvoice(db.Model):

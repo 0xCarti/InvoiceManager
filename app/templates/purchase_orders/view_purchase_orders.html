@@ -23,6 +23,7 @@
                 <td>{{ order.expected_date }}</td>
                 <td>{{ order.delivery_charge }}</td>
                 <td>
+                    <a href="{{ url_for('purchase.edit_purchase_order', po_id=order.id) }}" class="btn btn-sm btn-primary">Edit</a>
                     <a href="{{ url_for('purchase.receive_invoice', po_id=order.id) }}" class="btn btn-sm btn-success">Receive</a>
                 </td>
             </tr>

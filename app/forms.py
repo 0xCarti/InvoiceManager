@@ -27,7 +27,7 @@ from wtforms.validators import (
 )
 from wtforms.widgets import CheckboxInput, ListWidget
 
-from app.models import Item, Location, Product, Customer
+from app.models import Item, Location, Product, Customer, ItemUnit
 
 
 class LoginForm(FlaskForm):
@@ -214,6 +214,7 @@ class RestoreBackupForm(FlaskForm):
 
 class POItemForm(FlaskForm):
     product = SelectField('Product', coerce=int)
+    unit = SelectField('Unit', coerce=int, validators=[Optional()], validate_choice=False)
     quantity = DecimalField('Quantity', validators=[InputRequired()])
 
 
@@ -230,6 +231,7 @@ class PurchaseOrderForm(FlaskForm):
         self.vendor.choices = [(c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()]
         for item_form in self.items:
             item_form.product.choices = [(p.id, p.name) for p in Product.query.all()]
+            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
 
 
 class InvoiceItemReceiveForm(FlaskForm):
