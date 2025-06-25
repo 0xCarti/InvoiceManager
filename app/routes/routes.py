@@ -626,7 +626,7 @@ def create_product():
         log_activity(f'Created product {product.name}')
         flash('Product created successfully!', 'success')
         return redirect(url_for('product.view_products'))
-    return render_template('create_product.html', form=form)
+    return render_template('create_product.html', form=form, product_id=None)
 
 
 @product.route('/products/<int:product_id>/edit', methods=['GET', 'POST'])
@@ -651,7 +651,7 @@ def edit_product(product_id):
     else:
         print(form.errors)
         print(form.cost.data)
-    return render_template('edit_product.html', form=form)
+    return render_template('edit_product.html', form=form, product_id=product.id)
 
 
 @product.route('/products/<int:product_id>/recipe', methods=['GET', 'POST'])
@@ -683,6 +683,23 @@ def edit_product_recipe(product_id):
             form.items[i].quantity.data = recipe_item.quantity
             form.items[i].countable.data = recipe_item.countable
     return render_template('edit_product_recipe.html', form=form, product=product)
+
+
+@product.route('/products/<int:product_id>/calculate_cost')
+@login_required
+def calculate_product_cost(product_id):
+    product = db.session.get(Product, product_id)
+    if product is None:
+        abort(404)
+    total = 0.0
+    for ri in product.recipe_items:
+        item_cost = getattr(ri.item, 'cost', 0.0)
+        try:
+            qty = float(ri.quantity or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        total += (item_cost or 0) * qty
+    return jsonify({'cost': total})
 
 
 @product.route('/products/<int:product_id>/delete', methods=['GET'])
