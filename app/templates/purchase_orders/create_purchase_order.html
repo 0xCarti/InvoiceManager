@@ -21,13 +21,45 @@
             {{ form.delivery_charge(class="form-control") }}
         </div>
         <h4>Items</h4>
+        <div id="items">
         {% for item in form.items %}
-        <div class="form-row">
+        <div class="form-row mt-2">
             <div class="col">{{ item.product(class="form-control") }}</div>
             <div class="col">{{ item.quantity(class="form-control") }}</div>
+            <div class="col-auto">
+                {% if loop.index0 > 0 %}
+                <button type="button" class="btn btn-danger remove-item">Remove</button>
+                {% endif %}
+            </div>
         </div>
         {% endfor %}
+        </div>
+        <button id="add-item" type="button" class="btn btn-secondary mt-3">Add Item</button>
         <button type="submit" class="btn btn-primary mt-3">Submit</button>
     </form>
+</div>
+
+<script>
+    const productOptions = `{% for val, label in form.items[0].product.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
+    let itemIndex = {{ form.items|length }};
+    document.getElementById('add-item').addEventListener('click', function(e) {
+        e.preventDefault();
+        const row = document.createElement('div');
+        row.classList.add('form-row','mt-2');
+        row.innerHTML = `
+            <div class="col"><select name="items-${itemIndex}-product" class="form-control">${productOptions}</select></div>
+            <div class="col"><input type="number" step="any" name="items-${itemIndex}-quantity" class="form-control"></div>
+            <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
+        `;
+        document.getElementById('items').appendChild(row);
+        itemIndex++;
+    });
+
+    document.getElementById('items').addEventListener('click', function(e) {
+        if (e.target && e.target.classList.contains('remove-item')) {
+            e.target.closest('.form-row').remove();
+        }
+    });
+</script>
 </div>
 {% endblock %}

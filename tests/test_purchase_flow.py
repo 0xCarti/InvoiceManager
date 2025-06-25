@@ -50,3 +50,36 @@ def test_purchase_and_receive(client, app):
         product = db.session.get(Product, product_id)
         assert product.quantity == 3
         assert product.cost == 2.5
+
+
+def test_purchase_order_multiple_items(client, app):
+    with app.app_context():
+        user = User(email='multi@example.com', password=generate_password_hash('pass'), active=True)
+        vendor = Customer(first_name='Multi', last_name='Vendor')
+        product1 = Product(name='PartA', price=1.0, cost=0.5)
+        product2 = Product(name='PartB', price=2.0, cost=0.8)
+        db.session.add_all([user, vendor, product1, product2])
+        db.session.commit()
+        vendor_id = vendor.id
+        prod1_id = product1.id
+        prod2_id = product2.id
+
+    with client:
+        login(client, 'multi@example.com', 'pass')
+        resp = client.post('/purchase_orders/create', data={
+            'vendor': vendor_id,
+            'order_date': '2023-02-01',
+            'expected_date': '2023-02-05',
+            'items-0-product': prod1_id,
+            'items-0-quantity': 4,
+            'items-1-product': prod2_id,
+            'items-1-quantity': 6
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        po = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).first()
+        assert po.vendor_id == vendor_id
+        assert len(po.items) == 2
+        ids = {i.product_id for i in po.items}
+        assert ids == {prod1_id, prod2_id}
