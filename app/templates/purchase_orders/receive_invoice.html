@@ -25,14 +25,41 @@
             {{ form.delivery_charge(class="form-control") }}
         </div>
         <h4>Items</h4>
+        <div id="items">
         {% for item in form.items %}
-        <div class="form-row">
-            <div class="col">{{ item.item(class="form-control") }}</div>
-            <div class="col">{{ item.quantity(class="form-control") }}</div>
-            <div class="col">{{ item.cost(class="form-control") }}</div>
+        <div class="form-row item-row mb-2 align-items-center">
+            <div class="col">{{ item.item(class="form-control", disabled=True) }}<input type="hidden" name="{{ item.item.name }}" value="{{ item.item.data }}"></div>
+            <div class="col mt-2">{{ po.items[loop.index0].unit.name }}</div>
+            <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
+            <div class="col">{{ item.cost(class="form-control cost") }}</div>
+            <div class="col form-check">{{ item.return_item(class="form-check-input return-item") }} {{ item.return_item.label(class="form-check-label") }}</div>
         </div>
         {% endfor %}
+        </div>
+        <div class="form-group mt-3">
+            <label>Total: $<span id="item-total">0.00</span></label>
+        </div>
         <button type="submit" class="btn btn-primary mt-3">Submit</button>
     </form>
 </div>
+<script>
+function updateTotal() {
+    let total = 0;
+    document.querySelectorAll('#items .item-row').forEach(row => {
+        const qty = parseFloat(row.querySelector('.quantity').value) || 0;
+        let price = parseFloat(row.querySelector('.cost').value) || 0;
+        if (row.querySelector('.return-item').checked) {
+            price = -price;
+        }
+        total += qty * price;
+    });
+    document.getElementById('item-total').textContent = total.toFixed(2);
+}
+
+document.querySelectorAll('.quantity, .cost, .return-item').forEach(el => {
+    el.addEventListener('input', updateTotal);
+    el.addEventListener('change', updateTotal);
+});
+updateTotal();
+</script>
 {% endblock %}

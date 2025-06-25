@@ -148,7 +148,7 @@ class ProductForm(FlaskForm):
 
 class RecipeItemForm(FlaskForm):
     item = SelectField('Item', coerce=int)
-    quantity = DecimalField('Quantity', validators=[InputRequired()])
+    quantity = IntegerField('Quantity', validators=[InputRequired()])
     countable = BooleanField('Countable')
 
 
@@ -242,6 +242,7 @@ class InvoiceItemReceiveForm(FlaskForm):
     item = SelectField('Item', coerce=int)
     quantity = DecimalField('Quantity', validators=[InputRequired()])
     cost = DecimalField('Cost', validators=[InputRequired()])
+    return_item = BooleanField('Return')
 
 
 class ReceiveInvoiceForm(FlaskForm):

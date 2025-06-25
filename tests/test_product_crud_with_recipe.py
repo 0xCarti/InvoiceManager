@@ -71,3 +71,22 @@ def test_edit_product_recipe_on_edit_page(client, app):
         ri = product.recipe_items[0]
         assert ri.item_id == item2_id
         assert ri.quantity == 4
+
+
+def test_recipe_accepts_integer_quantity(client, app):
+    email, item1_id, _ = setup_user_and_items(app)
+    with client:
+        login(client, email, 'pass')
+        resp = client.post('/products/create', data={
+            'name': 'Pie',
+            'price': 4,
+            'cost': 2,
+            'items-0-item': item1_id,
+            'items-0-quantity': 0,
+            'items-0-countable': 'y'
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+    with app.app_context():
+        prod = Product.query.filter_by(name='Pie').first()
+        assert prod is not None
+        assert prod.recipe_items[0].quantity == 0

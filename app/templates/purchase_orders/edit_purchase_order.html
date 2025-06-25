@@ -23,9 +23,9 @@
         <h4>Items</h4>
         <div id="items">
         {% for item in form.items %}
-        <div class="form-row mt-2">
-            <div class="col">{{ item.product(class="form-control") }}</div>
-            <div class="col">{{ item.unit(class="form-control") }}</div>
+        <div class="form-row mt-2 item-row">
+            <div class="col">{{ item.item(class="form-control item-select") }}</div>
+            <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select"></select></div>
             <div class="col">{{ item.quantity(class="form-control") }}</div>
             <div class="col-auto">
                 {% if loop.index0 > 0 %}
@@ -41,19 +41,40 @@
 </div>
 
 <script>
-    const productOptions = `{% for val, label in form.items[0].product.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
-    const unitOptions = `{% for val, label in form.items[0].unit.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
+    const itemOptions = `<option value="">Select Item</option>{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
     let itemIndex = {{ form.items|length }};
-    document.getElementById('add-item').addEventListener('click', function(e) {
-        e.preventDefault();
+
+    function createRow(index) {
         const row = document.createElement('div');
-        row.classList.add('form-row','mt-2');
+        row.classList.add('form-row','mt-2','item-row');
         row.innerHTML = `
-            <div class="col"><select name="items-${itemIndex}-product" class="form-control">${productOptions}</select></div>
-            <div class="col"><select name="items-${itemIndex}-unit" class="form-control">${unitOptions}</select></div>
-            <div class="col"><input type="number" step="any" name="items-${itemIndex}-quantity" class="form-control"></div>
+            <div class="col"><select name="items-${index}-item" class="form-control item-select">${itemOptions}</select></div>
+            <div class="col"><select name="items-${index}-unit" class="form-control unit-select"></select></div>
+            <div class="col"><input type="number" step="any" name="items-${index}-quantity" class="form-control"></div>
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
         `;
+        return row;
+    }
+
+    function fetchUnits(selectEl) {
+        const itemId = selectEl.value;
+        const unitSelect = selectEl.closest('.item-row').querySelector('.unit-select');
+        if (!itemId) {
+            unitSelect.innerHTML = '';
+            return;
+        }
+        fetch(`/items/${itemId}/units`).then(r => r.json()).then(units => {
+            let opts = '';
+            units.forEach(u => {
+                opts += `<option value="${u.id}" ${u.receiving_default ? 'selected' : ''}>${u.name}</option>`;
+            });
+            unitSelect.innerHTML = opts;
+        });
+    }
+
+    document.getElementById('add-item').addEventListener('click', function(e) {
+        e.preventDefault();
+        const row = createRow(itemIndex);
         document.getElementById('items').appendChild(row);
         itemIndex++;
     });
@@ -63,6 +84,14 @@
             e.target.closest('.form-row').remove();
         }
     });
+
+    document.getElementById('items').addEventListener('change', function(e) {
+        if (e.target && e.target.classList.contains('item-select')) {
+            fetchUnits(e.target);
+        }
+    });
+
+    document.querySelectorAll('.item-select').forEach(sel => fetchUnits(sel));
 </script>
 </div>
 {% endblock %}
