@@ -1327,6 +1327,8 @@ def receive_invoice(po_id):
     if po is None:
         abort(404)
     form = ReceiveInvoiceForm()
+    if request.method == 'GET':
+        form.delivery_charge.data = po.delivery_charge
     if form.validate_on_submit():
         invoice = PurchaseInvoice(
             purchase_order_id=po.id,
