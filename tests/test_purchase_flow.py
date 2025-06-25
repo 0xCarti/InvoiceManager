@@ -1,6 +1,6 @@
 from werkzeug.security import generate_password_hash
 from app import db
-from app.models import User, Customer, Product, PurchaseOrder, PurchaseOrderItem
+from app.models import User, Customer, Item, ItemUnit, Location, PurchaseOrder, PurchaseOrderItem, PurchaseInvoice, LocationStandItem
 from tests.test_user_flows import login
 
 
@@ -8,14 +8,19 @@ def setup_purchase(app):
     with app.app_context():
         user = User(email='buyer@example.com', password=generate_password_hash('pass'), active=True)
         vendor = Customer(first_name='Vend', last_name='Or')
-        product = Product(name='Part', price=5.0, cost=1.0)
-        db.session.add_all([user, vendor, product])
+        item = Item(name='Part', base_unit='each')
+        unit = ItemUnit(item=item, name='each', factor=1, receiving_default=True, transfer_default=True)
+        location = Location(name='Main')
+        db.session.add_all([user, vendor, item, unit, location])
         db.session.commit()
-        return user.email, vendor.id, product.id
+        lsi = LocationStandItem(location_id=location.id, item_id=item.id, expected_count=0)
+        db.session.add(lsi)
+        db.session.commit()
+        return user.email, vendor.id, item.id, location.id
 
 
 def test_purchase_and_receive(client, app):
-    email, vendor_id, product_id = setup_purchase(app)
+    email, vendor_id, item_id, location_id = setup_purchase(app)
     with client:
         login(client, email, 'pass')
         resp = client.post('/purchase_orders/create', data={
@@ -23,7 +28,7 @@ def test_purchase_and_receive(client, app):
             'order_date': '2023-01-01',
             'expected_date': '2023-01-05',
             'delivery_charge': 2,
-            'items-0-product': product_id,
+            'items-0-item': item_id,
             'items-0-quantity': 3
         }, follow_redirects=True)
         assert resp.status_code == 200
@@ -40,29 +45,40 @@ def test_purchase_and_receive(client, app):
             'gst': 0.25,
             'pst': 0.35,
             'delivery_charge': 2,
-            'items-0-product': product_id,
+            'location_id': location_id,
+            'items-0-item': item_id,
             'items-0-quantity': 3,
             'items-0-cost': 2.5
         }, follow_redirects=True)
         assert resp.status_code == 200
 
     with app.app_context():
-        product = db.session.get(Product, product_id)
-        assert product.quantity == 3
-        assert product.cost == 2.5
+        item = db.session.get(Item, item_id)
+        assert item.quantity == 3
+        assert item.cost == 2.5
+        lsi = LocationStandItem.query.filter_by(location_id=location_id, item_id=item_id).first()
+        assert lsi.expected_count == 3
 
 
 def test_purchase_order_multiple_items(client, app):
     with app.app_context():
         user = User(email='multi@example.com', password=generate_password_hash('pass'), active=True)
         vendor = Customer(first_name='Multi', last_name='Vendor')
-        product1 = Product(name='PartA', price=1.0, cost=0.5)
-        product2 = Product(name='PartB', price=2.0, cost=0.8)
-        db.session.add_all([user, vendor, product1, product2])
+        item1 = Item(name='PartA', base_unit='each')
+        item2 = Item(name='PartB', base_unit='each')
+        loc = Location(name='Main')
+        db.session.add_all([user, vendor, item1, item2, loc])
+        db.session.commit()
+        db.session.add_all([
+            ItemUnit(item_id=item1.id, name='each', factor=1, receiving_default=True, transfer_default=True),
+            ItemUnit(item_id=item2.id, name='each', factor=1, receiving_default=True, transfer_default=True),
+            LocationStandItem(location_id=loc.id, item_id=item1.id, expected_count=0),
+            LocationStandItem(location_id=loc.id, item_id=item2.id, expected_count=0),
+        ])
         db.session.commit()
         vendor_id = vendor.id
-        prod1_id = product1.id
-        prod2_id = product2.id
+        item1_id = item1.id
+        item2_id = item2.id
 
     with client:
         login(client, 'multi@example.com', 'pass')
@@ -70,9 +86,9 @@ def test_purchase_order_multiple_items(client, app):
             'vendor': vendor_id,
             'order_date': '2023-02-01',
             'expected_date': '2023-02-05',
-            'items-0-product': prod1_id,
+            'items-0-item': item1_id,
             'items-0-quantity': 4,
-            'items-1-product': prod2_id,
+            'items-1-item': item2_id,
             'items-1-quantity': 6
         }, follow_redirects=True)
         assert resp.status_code == 200
@@ -81,5 +97,5 @@ def test_purchase_order_multiple_items(client, app):
         po = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).first()
         assert po.vendor_id == vendor_id
         assert len(po.items) == 2
-        ids = {i.product_id for i in po.items}
-        assert ids == {prod1_id, prod2_id}
+        ids = {i.item_id for i in po.items}
+        assert ids == {item1_id, item2_id}

@@ -213,7 +213,7 @@ class RestoreBackupForm(FlaskForm):
 
 
 class POItemForm(FlaskForm):
-    product = SelectField('Product', coerce=int)
+    item = SelectField('Item', coerce=int)
     quantity = DecimalField('Quantity', validators=[InputRequired()])
 
 
@@ -229,17 +229,18 @@ class PurchaseOrderForm(FlaskForm):
         super(PurchaseOrderForm, self).__init__(*args, **kwargs)
         self.vendor.choices = [(c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()]
         for item_form in self.items:
-            item_form.product.choices = [(p.id, p.name) for p in Product.query.all()]
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
 
 
 class InvoiceItemReceiveForm(FlaskForm):
-    product = SelectField('Product', coerce=int)
+    item = SelectField('Item', coerce=int)
     quantity = DecimalField('Quantity', validators=[InputRequired()])
     cost = DecimalField('Cost', validators=[InputRequired()])
 
 
 class ReceiveInvoiceForm(FlaskForm):
     received_date = DateField('Received Date', validators=[DataRequired()])
+    location_id = SelectField('Location', coerce=int, validators=[DataRequired()])
     gst = DecimalField('GST Amount', validators=[Optional()], default=0)
     pst = DecimalField('PST Amount', validators=[Optional()], default=0)
     delivery_charge = DecimalField('Delivery Charge', validators=[Optional()], default=0)
@@ -248,8 +249,9 @@ class ReceiveInvoiceForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(ReceiveInvoiceForm, self).__init__(*args, **kwargs)
+        self.location_id.choices = [(l.id, l.name) for l in Location.query.all()]
         for item_form in self.items:
-            item_form.product.choices = [(p.id, p.name) for p in Product.query.all()]
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
 
 
 class DeleteForm(FlaskForm):

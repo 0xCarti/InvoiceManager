@@ -13,6 +13,10 @@
             {{ form.gst(class="form-control") }}
         </div>
         <div class="form-group">
+            {{ form.location_id.label(class="form-label") }}
+            {{ form.location_id(class="form-control") }}
+        </div>
+        <div class="form-group">
             {{ form.pst.label(class="form-label") }}
             {{ form.pst(class="form-control") }}
         </div>
@@ -23,7 +27,7 @@
         <h4>Items</h4>
         {% for item in form.items %}
         <div class="form-row">
-            <div class="col">{{ item.product(class="form-control") }}</div>
+            <div class="col">{{ item.item(class="form-control") }}</div>
             <div class="col">{{ item.quantity(class="form-control") }}</div>
             <div class="col">{{ item.cost(class="form-control") }}</div>
         </div>
