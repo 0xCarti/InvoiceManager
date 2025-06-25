@@ -1,6 +1,8 @@
 from werkzeug.security import generate_password_hash
 from app import db
-from app.models import User, Item, ItemUnit, Location, Transfer, TransferItem, Customer, Product, Invoice, LocationStandItem
+from app.models import (User, Item, ItemUnit, Location, Transfer, TransferItem,
+                        Customer, Product, Invoice, LocationStandItem,
+                        ProductRecipeItem)
 from tests.test_user_flows import login
 
 
@@ -193,3 +195,49 @@ def test_transfer_expected_counts_updated(client, app):
         l2 = LocationStandItem.query.filter_by(location_id=loc2_id, item_id=item_id).first()
         assert l1.expected_count == 0
         assert l2.expected_count == 0
+
+
+def test_stand_sheet_shows_expected_counts(client, app):
+    user_id = create_user(app, 'stand@example.com')
+    with app.app_context():
+        loc1 = Location(name='SL1')
+        loc2 = Location(name='SL2')
+        item = Item(name='StandItem', base_unit='each')
+        product = Product(name='StandProd', price=1.0, cost=0.5)
+        db.session.add_all([loc1, loc2, item, product])
+        db.session.commit()
+        unit = ItemUnit(item_id=item.id, name='each', factor=1,
+                        receiving_default=True, transfer_default=True)
+        db.session.add(unit)
+        db.session.add_all([
+            LocationStandItem(location_id=loc1.id, item_id=item.id, expected_count=0),
+            LocationStandItem(location_id=loc2.id, item_id=item.id, expected_count=0)
+        ])
+        db.session.add(ProductRecipeItem(product_id=product.id, item_id=item.id,
+                                         quantity=1, countable=True))
+        loc1.products.append(product)
+        loc2.products.append(product)
+        db.session.commit()
+        loc1_id, loc2_id, item_id, unit_id = loc1.id, loc2.id, item.id, unit.id
+
+    with client:
+        login(client, 'stand@example.com', 'pass')
+        client.post('/transfers/add', data={
+            'from_location_id': loc1_id,
+            'to_location_id': loc2_id,
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 5
+        }, follow_redirects=True)
+
+    with app.app_context():
+        transfer = Transfer.query.filter_by(user_id=user_id).first()
+        tid = transfer.id
+
+    with client:
+        login(client, 'stand@example.com', 'pass')
+        client.get(f'/transfers/complete/{tid}', follow_redirects=True)
+        resp1 = client.get(f'/locations/{loc1_id}/stand_sheet')
+        resp2 = client.get(f'/locations/{loc2_id}/stand_sheet')
+        assert b'-5' in resp1.data
+        assert b'5' in resp2.data

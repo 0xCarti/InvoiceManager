@@ -169,15 +169,19 @@ def view_stand_sheet(location_id):
     if location is None:
         abort(404)
 
-    items = []
+    stand_items = []
     seen = set()
     for product_obj in location.products:
         for recipe_item in product_obj.recipe_items:
             if recipe_item.countable and recipe_item.item_id not in seen:
                 seen.add(recipe_item.item_id)
-                items.append(recipe_item.item)
+                record = LocationStandItem.query.filter_by(
+                    location_id=location_id, item_id=recipe_item.item_id
+                ).first()
+                expected = record.expected_count if record else 0
+                stand_items.append({'item': recipe_item.item, 'expected': expected})
 
-    return render_template('locations/stand_sheet.html', location=location, items=items)
+    return render_template('locations/stand_sheet.html', location=location, stand_items=stand_items)
 
 
 @location.route('/locations')

@@ -17,16 +17,16 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in items %}
+            {% for entry in stand_items %}
             <tr>
-                <td>{{ item.name }}</td>
-                <td>{{ item.quantity }}</td>
-                <td><input type="number" class="form-control" name="open_{{ item.id }}"></td>
-                <td><input type="number" class="form-control" name="in_{{ item.id }}"></td>
-                <td><input type="number" class="form-control" name="out_{{ item.id }}"></td>
-                <td><input type="number" class="form-control" name="eaten_{{ item.id }}"></td>
-                <td><input type="number" class="form-control" name="spoiled_{{ item.id }}"></td>
-                <td><input type="number" class="form-control" name="close_{{ item.id }}"></td>
+                <td>{{ entry.item.name }}</td>
+                <td>{{ entry.expected }}</td>
+                <td><input type="number" class="form-control" name="open_{{ entry.item.id }}"></td>
+                <td><input type="number" class="form-control" name="in_{{ entry.item.id }}"></td>
+                <td><input type="number" class="form-control" name="out_{{ entry.item.id }}"></td>
+                <td><input type="number" class="form-control" name="eaten_{{ entry.item.id }}"></td>
+                <td><input type="number" class="form-control" name="spoiled_{{ entry.item.id }}"></td>
+                <td><input type="number" class="form-control" name="close_{{ entry.item.id }}"></td>
             </tr>
             {% endfor %}
         </tbody>
