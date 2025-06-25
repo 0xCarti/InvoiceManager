@@ -1241,7 +1241,7 @@ def create_purchase_order():
         db.session.add(po)
         db.session.commit()
 
-        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-product')]
+        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
         for field in items:
             index = field.split('-')[1]
             product_id = request.form.get(f'items-{index}-product', type=int)
@@ -1249,6 +1249,11 @@ def create_purchase_order():
             quantity = request.form.get(f'items-{index}-quantity', type=float)
             if product_id and quantity:
                 db.session.add(PurchaseOrderItem(purchase_order_id=po.id, product_id=product_id, unit_id=unit_id, quantity=quantity))
+
+            item_id = request.form.get(f'items-{index}-item', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            if item_id and quantity:
+                db.session.add(PurchaseOrderItem(purchase_order_id=po.id, item_id=item_id, quantity=quantity))
 
         db.session.commit()
         log_activity(f'Created purchase order {po.id}')
@@ -1314,6 +1319,7 @@ def receive_invoice(po_id):
         invoice = PurchaseInvoice(
             purchase_order_id=po.id,
             user_id=current_user.id,
+            location_id=form.location_id.data,
             received_date=form.received_date.data,
             gst=form.gst.data or 0.0,
             pst=form.pst.data or 0.0,
@@ -1322,18 +1328,23 @@ def receive_invoice(po_id):
         db.session.add(invoice)
         db.session.commit()
 
-        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-product')]
+        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
         for field in items:
             index = field.split('-')[1]
-            product_id = request.form.get(f'items-{index}-product', type=int)
+            item_id = request.form.get(f'items-{index}-item', type=int)
             quantity = request.form.get(f'items-{index}-quantity', type=float)
             cost = request.form.get(f'items-{index}-cost', type=float)
-            if product_id and quantity is not None and cost is not None:
-                db.session.add(PurchaseInvoiceItem(invoice_id=invoice.id, product_id=product_id, quantity=quantity, cost=cost))
-                product = db.session.get(Product, product_id)
-                if product:
-                    product.quantity = (product.quantity or 0) + quantity
-                    product.cost = cost
+            if item_id and quantity is not None and cost is not None:
+                db.session.add(PurchaseInvoiceItem(invoice_id=invoice.id, item_id=item_id, quantity=quantity, cost=cost))
+                item_obj = db.session.get(Item, item_id)
+                if item_obj:
+                    item_obj.quantity = (item_obj.quantity or 0) + quantity
+                    item_obj.cost = cost
+                    record = LocationStandItem.query.filter_by(location_id=invoice.location_id, item_id=item_id).first()
+                    if not record:
+                        record = LocationStandItem(location_id=invoice.location_id, item_id=item_id, expected_count=0)
+                        db.session.add(record)
+                    record.expected_count += quantity
 
         db.session.commit()
         log_activity(f'Received invoice {invoice.id} for PO {po.id}')
