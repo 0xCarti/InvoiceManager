@@ -234,6 +234,8 @@ class PurchaseOrderForm(FlaskForm):
         self.vendor.choices = [(c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()]
         for item_form in self.items:
             item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.product.choices = [(p.id, p.name) for p in Product.query.all()]
+            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
 
 
 class InvoiceItemReceiveForm(FlaskForm):
