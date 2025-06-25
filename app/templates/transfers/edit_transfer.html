@@ -79,17 +79,22 @@ document.addEventListener('click', function(event) {
 });
 
 function addItemToList(item, index) {
-    var listItem = document.createElement('div');
-    listItem.classList.add('item-container', 'd-flex', 'justify-content-between', 'align-items-center', 'mb-2');
-    listItem.innerHTML = `
-        <div style="padding-left: 15px; font-weight: bold;">${item.name}</div>
-        <div class="d-flex align-items-center">
-            <input type="hidden" name="items-${index}-item" value="${item.id}">
-            <input type="number" class="form-control quantity" name="items-${index}-quantity" value="${item.quantity}" placeholder="Qty" style="max-width: 120px;">
-            <button type="button" class="btn btn-danger delete-item ml-2">Delete</button>
-        </div>
-    `;
-    document.getElementById('item-list').appendChild(listItem);
+    fetch(`/items/${item.id}/units`).then(r => r.json()).then(units => {
+        var options = '';
+        units.forEach(u => { options += `<option value="${u.id}">${u.name}</option>`; });
+        var listItem = document.createElement('div');
+        listItem.classList.add('item-container', 'd-flex', 'justify-content-between', 'align-items-center', 'mb-2');
+        listItem.innerHTML = `
+            <div style="padding-left: 15px; font-weight: bold;">${item.name}</div>
+            <div class="d-flex align-items-center">
+                <input type="hidden" name="items-${index}-item" value="${item.id}">
+                <select name="items-${index}-unit" class="form-control mr-2" style="max-width: 120px;">${options}</select>
+                <input type="number" step="any" class="form-control quantity" name="items-${index}-quantity" value="${item.quantity}" placeholder="Qty" style="max-width: 120px;">
+                <button type="button" class="btn btn-danger delete-item ml-2">Delete</button>
+            </div>
+        `;
+        document.getElementById('item-list').appendChild(listItem);
+    });
 }
 
     document.getElementById('item-list').addEventListener('click', function(event) {

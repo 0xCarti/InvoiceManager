@@ -55,14 +55,28 @@ class LocationForm(FlaskForm):
         self.products.choices = [(p.id, p.name) for p in Product.query.all()]
 
 
+class ItemUnitForm(FlaskForm):
+    name = StringField('Unit Name', validators=[DataRequired()])
+    factor = DecimalField('Factor', validators=[InputRequired()])
+    receiving_default = BooleanField('Receiving Default')
+    transfer_default = BooleanField('Transfer Default')
+
+
 class ItemForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
+    base_unit = SelectField(
+        'Base Unit',
+        choices=[('ounce', 'Ounce'), ('gram', 'Gram'), ('each', 'Each'), ('millilitre', 'Millilitre')],
+        validators=[DataRequired()]
+    )
+    units = FieldList(FormField(ItemUnitForm), min_entries=1)
     submit = SubmitField('Submit')
 
 
 class TransferItemForm(FlaskForm):
     item = SelectField('Item', coerce=int)
-    quantity = IntegerField('Quantity')
+    unit = SelectField('Unit', coerce=int, validators=[Optional()], validate_choice=False)
+    quantity = DecimalField('Quantity', validators=[InputRequired()])
 
 
 class TransferForm(FlaskForm):
@@ -81,6 +95,7 @@ class TransferForm(FlaskForm):
         # This is just an example and might need adjustment
         for item_form in self.items:
             item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.unit.choices = []
 
 
 class UserForm(FlaskForm):

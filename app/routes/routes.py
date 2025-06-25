@@ -24,6 +24,7 @@ from app.forms import (
 from app.models import (
     Location,
     Item,
+    ItemUnit,
     Transfer,
     TransferItem,
     Customer,
@@ -179,8 +180,28 @@ def view_items():
 def add_item():
     form = ItemForm()
     if form.validate_on_submit():
-        item = Item(name=form.name.data)
+        item = Item(name=form.name.data, base_unit=form.base_unit.data)
         db.session.add(item)
+        db.session.commit()
+
+        receiving_set = False
+        transfer_set = False
+        for uf in form.units:
+            unit_form = uf.form
+            if unit_form.name.data:
+                receiving_default = unit_form.receiving_default.data and not receiving_set
+                transfer_default = unit_form.transfer_default.data and not transfer_set
+                db.session.add(ItemUnit(
+                    item_id=item.id,
+                    name=unit_form.name.data,
+                    factor=float(unit_form.factor.data),
+                    receiving_default=receiving_default,
+                    transfer_default=transfer_default
+                ))
+                if receiving_default:
+                    receiving_set = True
+                if transfer_default:
+                    transfer_set = True
         db.session.commit()
         log_activity(f'Added item {item.name}')
         flash('Item added successfully!')
@@ -195,8 +216,42 @@ def edit_item(item_id):
     if item is None:
         abort(404)
     form = ItemForm(obj=item)
+    if request.method == 'GET':
+        for idx, unit in enumerate(item.units):
+            if idx < len(form.units):
+                form.units[idx].form.name.data = unit.name
+                form.units[idx].form.factor.data = unit.factor
+                form.units[idx].form.receiving_default.data = unit.receiving_default
+                form.units[idx].form.transfer_default.data = unit.transfer_default
+            else:
+                form.units.append_entry({
+                    'name': unit.name,
+                    'factor': unit.factor,
+                    'receiving_default': unit.receiving_default,
+                    'transfer_default': unit.transfer_default
+                })
     if form.validate_on_submit():
         item.name = form.name.data
+        item.base_unit = form.base_unit.data
+        ItemUnit.query.filter_by(item_id=item.id).delete()
+        receiving_set = False
+        transfer_set = False
+        for uf in form.units:
+            unit_form = uf.form
+            if unit_form.name.data:
+                receiving_default = unit_form.receiving_default.data and not receiving_set
+                transfer_default = unit_form.transfer_default.data and not transfer_set
+                db.session.add(ItemUnit(
+                    item_id=item.id,
+                    name=unit_form.name.data,
+                    factor=float(unit_form.factor.data),
+                    receiving_default=receiving_default,
+                    transfer_default=transfer_default
+                ))
+                if receiving_default:
+                    receiving_set = True
+                if transfer_default:
+                    transfer_set = True
         db.session.commit()
         log_activity(f'Edited item {item.id}')
         flash('Item updated successfully!')
@@ -278,14 +333,20 @@ def add_transfer():
         for item_field in items:
             index = item_field.split('-')[1]
             item_id = request.form.get(f'items-{index}-item')
-            quantity = request.form.get(f'items-{index}-quantity', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            unit_id = request.form.get(f'items-{index}-unit', type=int)
             if item_id:
                 item = db.session.get(Item, item_id)
-                if item and quantity:
+                if item and quantity is not None:
+                    factor = 1
+                    if unit_id:
+                        unit = db.session.get(ItemUnit, unit_id)
+                        if unit:
+                            factor = unit.factor
                     transfer_item = TransferItem(
                         transfer_id=transfer.id,
                         item_id=item.id,
-                        quantity=quantity
+                        quantity=quantity * factor
                     )
                     db.session.add(transfer_item)
         db.session.commit()
@@ -321,12 +382,18 @@ def edit_transfer(transfer_id):
         for item_field in items:
             index = item_field.split('-')[1]
             item_id = request.form.get(f'items-{index}-item')
-            quantity = request.form.get(f'items-{index}-quantity', type=int)
-            if item_id and quantity:  # Ensure both are provided and valid
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            unit_id = request.form.get(f'items-{index}-unit', type=int)
+            if item_id and quantity is not None:  # Ensure both are provided and valid
+                factor = 1
+                if unit_id:
+                    unit = db.session.get(ItemUnit, unit_id)
+                    if unit:
+                        factor = unit.factor
                 new_transfer_item = TransferItem(
                     transfer_id=transfer.id,
                     item_id=int(item_id),
-                    quantity=quantity
+                    quantity=quantity * factor
                 )
                 db.session.add(new_transfer_item)
 
@@ -399,6 +466,25 @@ def search_items():
     items = Item.query.filter(Item.name.ilike(f'%{search_term}%')).all()
     items_data = [{'id': item.id, 'name': item.name} for item in items]  # Create a list of dicts
     return jsonify(items_data)
+
+
+@item.route('/items/<int:item_id>/units')
+@login_required
+def item_units(item_id):
+    item = db.session.get(Item, item_id)
+    if item is None:
+        abort(404)
+    data = [
+        {
+            'id': u.id,
+            'name': u.name,
+            'factor': u.factor,
+            'receiving_default': u.receiving_default,
+            'transfer_default': u.transfer_default,
+        }
+        for u in item.units
+    ]
+    return jsonify(data)
 
 
 @item.route('/import_items', methods=['GET', 'POST'])

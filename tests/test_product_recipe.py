@@ -1,6 +1,6 @@
 from werkzeug.security import generate_password_hash
 from app import db
-from app.models import User, Customer, Item, Product, ProductRecipeItem, Invoice
+from app.models import User, Customer, Item, ItemUnit, Product, ProductRecipeItem, Invoice
 from tests.test_user_flows import login
 
 
@@ -8,10 +8,17 @@ def setup_data(app):
     with app.app_context():
         user = User(email='chef@example.com', password=generate_password_hash('pass'), active=True)
         customer = Customer(first_name='Foo', last_name='Bar')
-        item1 = Item(name='Flour', quantity=100)
-        item2 = Item(name='Sugar', quantity=50)
+        item1 = Item(name='Flour', quantity=100, base_unit='gram')
+        item2 = Item(name='Sugar', quantity=50, base_unit='gram')
+        db.session.add_all([item1, item2])
+        db.session.commit()
+        db.session.add_all([
+            ItemUnit(item_id=item1.id, name='gram', factor=1, receiving_default=True, transfer_default=True),
+            ItemUnit(item_id=item2.id, name='gram', factor=1, receiving_default=True, transfer_default=True)
+        ])
+        db.session.commit()
         product = Product(name='Cake', price=5.0, cost=2.0, quantity=10)
-        db.session.add_all([user, customer, item1, item2, product])
+        db.session.add_all([user, customer, product])
         db.session.commit()
         db.session.add_all([
             ProductRecipeItem(product_id=product.id, item_id=item1.id, quantity=2, countable=True),
