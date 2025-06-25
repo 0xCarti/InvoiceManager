@@ -1257,9 +1257,15 @@ def create_purchase_order():
         for field in items:
             index = field.split('-')[1]
             item_id = request.form.get(f'items-{index}-item', type=int)
+            unit_id = request.form.get(f'items-{index}-unit', type=int)
             quantity = request.form.get(f'items-{index}-quantity', type=float)
-            if item_id and quantity:
-                db.session.add(PurchaseOrderItem(purchase_order_id=po.id, item_id=item_id, quantity=quantity))
+            if item_id and quantity is not None:
+                db.session.add(PurchaseOrderItem(
+                    purchase_order_id=po.id,
+                    item_id=item_id,
+                    unit_id=unit_id,
+                    quantity=quantity
+                ))
 
         db.session.commit()
         log_activity(f'Created purchase order {po.id}')

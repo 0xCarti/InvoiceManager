@@ -16,11 +16,11 @@ def setup_purchase(app):
         lsi = LocationStandItem(location_id=location.id, item_id=item.id, expected_count=0)
         db.session.add(lsi)
         db.session.commit()
-        return user.email, vendor.id, item.id, location.id
+        return user.email, vendor.id, item.id, location.id, unit.id
 
 
 def test_purchase_and_receive(client, app):
-    email, vendor_id, item_id, location_id = setup_purchase(app)
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
     with client:
         login(client, email, 'pass')
         resp = client.post('/purchase_orders/create', data={
@@ -29,6 +29,7 @@ def test_purchase_and_receive(client, app):
             'expected_date': '2023-01-05',
             'delivery_charge': 2,
             'items-0-item': item_id,
+            'items-0-unit': unit_id,
             'items-0-quantity': 3
         }, follow_redirects=True)
         assert resp.status_code == 200
@@ -69,9 +70,11 @@ def test_purchase_order_multiple_items(client, app):
         loc = Location(name='Main')
         db.session.add_all([user, vendor, item1, item2, loc])
         db.session.commit()
+        iu1 = ItemUnit(item_id=item1.id, name='each', factor=1, receiving_default=True, transfer_default=True)
+        iu2 = ItemUnit(item_id=item2.id, name='each', factor=1, receiving_default=True, transfer_default=True)
         db.session.add_all([
-            ItemUnit(item_id=item1.id, name='each', factor=1, receiving_default=True, transfer_default=True),
-            ItemUnit(item_id=item2.id, name='each', factor=1, receiving_default=True, transfer_default=True),
+            iu1,
+            iu2,
             LocationStandItem(location_id=loc.id, item_id=item1.id, expected_count=0),
             LocationStandItem(location_id=loc.id, item_id=item2.id, expected_count=0),
         ])
@@ -79,6 +82,8 @@ def test_purchase_order_multiple_items(client, app):
         vendor_id = vendor.id
         item1_id = item1.id
         item2_id = item2.id
+        unit1_id = iu1.id
+        unit2_id = iu2.id
 
     with client:
         login(client, 'multi@example.com', 'pass')
@@ -87,8 +92,10 @@ def test_purchase_order_multiple_items(client, app):
             'order_date': '2023-02-01',
             'expected_date': '2023-02-05',
             'items-0-item': item1_id,
+            'items-0-unit': unit1_id,
             'items-0-quantity': 4,
             'items-1-item': item2_id,
+            'items-1-unit': unit2_id,
             'items-1-quantity': 6
         }, follow_redirects=True)
         assert resp.status_code == 200
