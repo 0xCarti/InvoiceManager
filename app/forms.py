@@ -162,6 +162,16 @@ class ProductRecipeForm(FlaskForm):
             item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
 
 
+class ProductWithRecipeForm(ProductForm):
+    """Form used on product create/edit pages to also manage recipe items."""
+    items = FieldList(FormField(RecipeItemForm), min_entries=1)
+
+    def __init__(self, *args, **kwargs):
+        super(ProductWithRecipeForm, self).__init__(*args, **kwargs)
+        for item_form in self.items:
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+
+
 class InvoiceForm(FlaskForm):
     customer = SelectField('Customer', coerce=float, validators=[DataRequired()])
     products = HiddenField('Products JSON')
