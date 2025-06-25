@@ -184,20 +184,22 @@ class PurchaseOrder(db.Model):
 class PurchaseOrderItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_order.id'), nullable=False)
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
     quantity = db.Column(db.Float, nullable=False)
-    product = relationship('Product')
+    item = relationship('Item')
 
 
 class PurchaseInvoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_order.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
     received_date = db.Column(db.Date, nullable=False)
     gst = db.Column(db.Float, nullable=False, default=0.0)
     pst = db.Column(db.Float, nullable=False, default=0.0)
     delivery_charge = db.Column(db.Float, nullable=False, default=0.0)
     items = relationship('PurchaseInvoiceItem', backref='invoice', cascade='all, delete-orphan')
+    location = relationship('Location')
 
     @property
     def item_total(self):
@@ -211,10 +213,10 @@ class PurchaseInvoice(db.Model):
 class PurchaseInvoiceItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey('purchase_invoice.id'), nullable=False)
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
     quantity = db.Column(db.Float, nullable=False)
     cost = db.Column(db.Float, nullable=False)
-    product = relationship('Product')
+    item = relationship('Item')
 
 
 class ActivityLog(db.Model):
