@@ -38,8 +38,19 @@
             {% endif %}
         </div>
 
+        <div id="item-list">
+            {% for item in form.items %}
+            <div class="form-row mb-2">
+                <div class="col">{{ item.item(class="form-control") }}</div>
+                <div class="col">{{ item.quantity(class="form-control") }}</div>
+                <div class="col form-check">
+                    {{ item.countable(class="form-check-input") }}
+                    {{ item.countable.label(class="form-check-label") }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
         <button type="button" class="btn btn-secondary mb-2" id="calc-cost" disabled>Set Cost From Recipe</button>
-
         <button type="submit" class="btn btn-primary">Submit</button>
     </form>
 </div>

@@ -13,6 +13,7 @@ from app.forms import (
     DateRangeForm,
     CustomerForm,
     ProductForm,
+    ProductWithRecipeForm,
     ProductRecipeForm,
     InvoiceForm,
     SignupForm,
@@ -614,7 +615,7 @@ def view_products():
 @product.route('/products/create', methods=['GET', 'POST'])
 @login_required
 def create_product():
-    form = ProductForm()
+    form = ProductWithRecipeForm()
     if form.validate_on_submit():
         product = Product(
             name=form.name.data,
@@ -622,6 +623,21 @@ def create_product():
             cost=form.cost.data  # 👈 Save cost
         )
         db.session.add(product)
+        db.session.commit()
+
+        for item_form in form.items:
+            item_id = item_form.item.data
+            quantity = item_form.quantity.data
+            countable = item_form.countable.data
+            if item_id and quantity is not None:
+                db.session.add(
+                    ProductRecipeItem(
+                        product_id=product.id,
+                        item_id=item_id,
+                        quantity=quantity,
+                        countable=countable,
+                    )
+                )
         db.session.commit()
         log_activity(f'Created product {product.name}')
         flash('Product created successfully!', 'success')
@@ -635,11 +651,26 @@ def edit_product(product_id):
     product = db.session.get(Product, product_id)
     if product is None:
         abort(404)
-    form = ProductForm()
+    form = ProductWithRecipeForm()
     if form.validate_on_submit():
         product.name = form.name.data
         product.price = form.price.data
         product.cost = form.cost.data or 0.0  # 👈 Update cost
+
+        ProductRecipeItem.query.filter_by(product_id=product.id).delete()
+        for item_form in form.items:
+            item_id = item_form.item.data
+            quantity = item_form.quantity.data
+            countable = item_form.countable.data
+            if item_id and quantity is not None:
+                db.session.add(
+                    ProductRecipeItem(
+                        product_id=product.id,
+                        item_id=item_id,
+                        quantity=quantity,
+                        countable=countable,
+                    )
+                )
         db.session.commit()
         log_activity(f'Edited product {product.id}')
         flash('Product updated successfully!', 'success')
@@ -648,6 +679,13 @@ def edit_product(product_id):
         form.name.data = product.name
         form.price.data = product.price
         form.cost.data = product.cost or 0.0  # 👈 Pre-fill cost
+        form.items.min_entries = max(1, len(product.recipe_items))
+        for i, recipe_item in enumerate(product.recipe_items):
+            if len(form.items) <= i:
+                form.items.append_entry()
+            form.items[i].item.data = recipe_item.item_id
+            form.items[i].quantity.data = recipe_item.quantity
+            form.items[i].countable.data = recipe_item.countable
     else:
         print(form.errors)
         print(form.cost.data)
