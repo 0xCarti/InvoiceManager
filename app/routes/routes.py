@@ -718,9 +718,13 @@ def edit_product(product_id):
         form.price.data = product.price
         form.cost.data = product.cost or 0.0  # 👈 Pre-fill cost
         form.items.min_entries = max(1, len(product.recipe_items))
+        item_choices = [(itm.id, itm.name) for itm in Item.query.all()]
         for i, recipe_item in enumerate(product.recipe_items):
             if len(form.items) <= i:
                 form.items.append_entry()
+                form.items[i].item.choices = item_choices
+            else:
+                form.items[i].item.choices = item_choices
             form.items[i].item.data = recipe_item.item_id
             form.items[i].quantity.data = recipe_item.quantity
             form.items[i].countable.data = recipe_item.countable
@@ -752,9 +756,13 @@ def edit_product_recipe(product_id):
         return redirect(url_for('product.view_products'))
     elif request.method == 'GET':
         form.items.min_entries = max(1, len(product.recipe_items))
+        item_choices = [(itm.id, itm.name) for itm in Item.query.all()]
         for i, recipe_item in enumerate(product.recipe_items):
             if len(form.items) <= i:
                 form.items.append_entry()
+                form.items[i].item.choices = item_choices
+            else:
+                form.items[i].item.choices = item_choices
             form.items[i].item.data = recipe_item.item_id
             form.items[i].quantity.data = recipe_item.quantity
             form.items[i].countable.data = recipe_item.countable
