@@ -60,6 +60,36 @@ purchase = Blueprint('purchase', __name__)
 vendor = Blueprint('vendor', __name__)
 
 
+def update_expected_counts(transfer, multiplier=1):
+    """Update expected counts for locations involved in a transfer."""
+    for ti in transfer.transfer_items:
+        from_record = LocationStandItem.query.filter_by(
+            location_id=transfer.from_location_id,
+            item_id=ti.item_id
+        ).first()
+        if not from_record:
+            from_record = LocationStandItem(
+                location_id=transfer.from_location_id,
+                item_id=ti.item_id,
+                expected_count=0
+            )
+            db.session.add(from_record)
+        from_record.expected_count -= multiplier * ti.quantity
+
+        to_record = LocationStandItem.query.filter_by(
+            location_id=transfer.to_location_id,
+            item_id=ti.item_id
+        ).first()
+        if not to_record:
+            to_record = LocationStandItem(
+                location_id=transfer.to_location_id,
+                item_id=ti.item_id,
+                expected_count=0
+            )
+            db.session.add(to_record)
+        to_record.expected_count += multiplier * ti.quantity
+
+
 @main.route('/')
 @login_required
 def home():
@@ -86,7 +116,7 @@ def add_location():
                         item_id=recipe_item.item_id
                     ).first()
                     if not exists:
-                        db.session.add(LocationStandItem(location_id=new_location.id, item_id=recipe_item.item_id))
+                        db.session.add(LocationStandItem(location_id=new_location.id, item_id=recipe_item.item_id, expected_count=0))
         db.session.commit()
         log_activity(f'Added location {new_location.name}')
         flash('Location added successfully!')
@@ -119,7 +149,7 @@ def edit_location(location_id):
                         item_id=recipe_item.item_id
                     ).first()
                     if not exists:
-                        db.session.add(LocationStandItem(location_id=location.id, item_id=recipe_item.item_id))
+                        db.session.add(LocationStandItem(location_id=location.id, item_id=recipe_item.item_id, expected_count=0))
         db.session.commit()
         log_activity(f'Edited location {location.id}')
         flash('Location updated successfully.', 'success')
@@ -430,6 +460,8 @@ def delete_transfer(transfer_id):
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
+    if transfer.completed:
+        update_expected_counts(transfer, multiplier=-1)
     db.session.delete(transfer)
     db.session.commit()
     log_activity(f'Deleted transfer {transfer.id}')
@@ -444,6 +476,7 @@ def complete_transfer(transfer_id):
     if transfer is None:
         abort(404)
     transfer.completed = True
+    update_expected_counts(transfer, multiplier=1)
     db.session.commit()
     log_activity(f'Completed transfer {transfer.id}')
     flash('Transfer marked as complete!', 'success')
@@ -457,6 +490,7 @@ def uncomplete_transfer(transfer_id):
     if transfer is None:
         abort(404)
     transfer.completed = False
+    update_expected_counts(transfer, multiplier=-1)
     db.session.commit()
     log_activity(f'Uncompleted transfer {transfer.id}')
     flash('Transfer marked as not completed.', 'success')

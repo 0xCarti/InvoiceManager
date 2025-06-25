@@ -1,6 +1,6 @@
 from werkzeug.security import generate_password_hash
 from app import db
-from app.models import User, Item, ItemUnit, Location, Transfer, TransferItem, Customer, Product, Invoice
+from app.models import User, Item, ItemUnit, Location, Transfer, TransferItem, Customer, Product, Invoice, LocationStandItem
 from tests.test_user_flows import login
 
 
@@ -138,3 +138,58 @@ def test_invoice_creation_total(client, app):
         assert len(invoice.products) == 1
         assert invoice.products[0].quantity == 2
         assert round(invoice.total, 2) == 22.4
+
+
+def test_transfer_expected_counts_updated(client, app):
+    user_id = create_user(app, 'expected@example.com')
+    with app.app_context():
+        loc1 = Location(name='L1')
+        loc2 = Location(name='L2')
+        item = Item(name='Countable', base_unit='each')
+        db.session.add_all([loc1, loc2, item])
+        db.session.commit()
+        unit = ItemUnit(item_id=item.id, name='each', factor=1,
+                        receiving_default=True, transfer_default=True)
+        db.session.add(unit)
+        lsi1 = LocationStandItem(location_id=loc1.id, item_id=item.id, expected_count=0)
+        lsi2 = LocationStandItem(location_id=loc2.id, item_id=item.id, expected_count=0)
+        db.session.add_all([lsi1, lsi2])
+        db.session.commit()
+        loc1_id, loc2_id, item_id, unit_id = loc1.id, loc2.id, item.id, unit.id
+
+    with client:
+        login(client, 'expected@example.com', 'pass')
+        resp = client.post('/transfers/add', data={
+            'from_location_id': loc1_id,
+            'to_location_id': loc2_id,
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 4
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        transfer = Transfer.query.filter_by(user_id=user_id).first()
+        tid = transfer.id
+
+    with client:
+        login(client, 'expected@example.com', 'pass')
+        resp = client.get(f'/transfers/complete/{tid}', follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        l1 = LocationStandItem.query.filter_by(location_id=loc1_id, item_id=item_id).first()
+        l2 = LocationStandItem.query.filter_by(location_id=loc2_id, item_id=item_id).first()
+        assert l1.expected_count == -4
+        assert l2.expected_count == 4
+
+    with client:
+        login(client, 'expected@example.com', 'pass')
+        resp = client.get(f'/transfers/uncomplete/{tid}', follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        l1 = LocationStandItem.query.filter_by(location_id=loc1_id, item_id=item_id).first()
+        l2 = LocationStandItem.query.filter_by(location_id=loc2_id, item_id=item_id).first()
+        assert l1.expected_count == 0
+        assert l2.expected_count == 0
