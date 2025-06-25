@@ -23,6 +23,7 @@ class LocationStandItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
     item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
+    expected_count = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
 
     location = relationship('Location', back_populates='stand_items')
     item = relationship('Item')
