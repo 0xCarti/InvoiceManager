@@ -1244,12 +1244,6 @@ def create_purchase_order():
         items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
         for field in items:
             index = field.split('-')[1]
-            product_id = request.form.get(f'items-{index}-product', type=int)
-            unit_id = request.form.get(f'items-{index}-unit', type=int)
-            quantity = request.form.get(f'items-{index}-quantity', type=float)
-            if product_id and quantity:
-                db.session.add(PurchaseOrderItem(purchase_order_id=po.id, product_id=product_id, unit_id=unit_id, quantity=quantity))
-
             item_id = request.form.get(f'items-{index}-item', type=int)
             quantity = request.form.get(f'items-{index}-quantity', type=float)
             if item_id and quantity:
