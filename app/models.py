@@ -52,6 +52,7 @@ class Item(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     base_unit = db.Column(db.String(20), nullable=False)
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     transfers = db.relationship('Transfer', secondary=transfer_items, backref=db.backref('items', lazy='dynamic'))
     recipe_items = relationship("ProductRecipeItem", back_populates="item", cascade="all, delete-orphan")
     units = relationship("ItemUnit", back_populates="item", cascade="all, delete-orphan")

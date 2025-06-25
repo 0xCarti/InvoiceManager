@@ -13,6 +13,10 @@
             {{ form.base_unit.label(class="form-label") }}
             {{ form.base_unit(class="form-control", value=item.base_unit) }}
         </div>
+        <div class="form-group">
+            <label class="form-label">Cost</label>
+            <input type="text" class="form-control" value="{{ item.cost }}" readonly>
+        </div>
         <h4>Units</h4>
         <div id="units-container">
         {% for unit in form.units %}

@@ -19,6 +19,7 @@
                 <tr>
                     <th scope="col"><input type="checkbox" id="select-all" style="transform: scale(1.5);"></th>
                     <th scope="col">Name</th>
+                    <th scope="col">Cost</th>
                     <th scope="col">Actions</th>
                 </tr>
             </thead>
@@ -27,6 +28,7 @@
                 <tr>
                     <td><input type="checkbox" name="item_ids" value="{{ item.id }}" style="transform: scale(1.5);"></td>
                     <td>{{ item.name }}</td>
+                    <td>{{ item.cost }}</td>
                     <td>
                         <a href="{{ url_for('item.edit_item', item_id=item.id) }}" class="btn btn-secondary">Edit</a>
                     </td>
