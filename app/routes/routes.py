@@ -20,6 +20,7 @@ from app.forms import (
     InvoiceFilterForm,
     PurchaseOrderForm,
     ReceiveInvoiceForm,
+    DeleteForm,
 )
 from app.models import (
     Location,
@@ -151,7 +152,8 @@ def view_stand_sheet(location_id):
 @login_required
 def view_locations():
     locations = Location.query.all()
-    return render_template('locations/view_locations.html', locations=locations)
+    delete_form = DeleteForm()
+    return render_template('locations/view_locations.html', locations=locations, delete_form=delete_form)
 
 
 @location.route('/locations/delete/<int:location_id>', methods=['POST'])

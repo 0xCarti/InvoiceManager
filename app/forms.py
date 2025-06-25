@@ -241,3 +241,8 @@ class ReceiveInvoiceForm(FlaskForm):
         for item_form in self.items:
             item_form.product.choices = [(p.id, p.name) for p in Product.query.all()]
 
+
+class DeleteForm(FlaskForm):
+    """Simple form used for CSRF protection on delete actions."""
+    submit = SubmitField('Delete')
+
