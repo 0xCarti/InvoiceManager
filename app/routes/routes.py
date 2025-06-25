@@ -183,6 +183,11 @@ def view_items():
 def add_item():
     form = ItemForm()
     if form.validate_on_submit():
+        recv_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.receiving_default.data)
+        trans_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.transfer_default.data)
+        if recv_count > 1 or trans_count > 1:
+            flash('Only one unit can be set as receiving and transfer default.', 'error')
+            return render_template('items/add_item.html', form=form)
         item = Item(name=form.name.data, base_unit=form.base_unit.data)
         db.session.add(item)
         db.session.commit()
@@ -234,6 +239,11 @@ def edit_item(item_id):
                     'transfer_default': unit.transfer_default
                 })
     if form.validate_on_submit():
+        recv_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.receiving_default.data)
+        trans_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.transfer_default.data)
+        if recv_count > 1 or trans_count > 1:
+            flash('Only one unit can be set as receiving and transfer default.', 'error')
+            return render_template('items/edit_item.html', form=form, item=item)
         item.name = form.name.data
         item.base_unit = form.base_unit.data
         ItemUnit.query.filter_by(item_id=item.id).delete()
