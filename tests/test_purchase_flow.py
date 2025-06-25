@@ -106,3 +106,29 @@ def test_purchase_order_multiple_items(client, app):
         assert len(po.items) == 2
         ids = {i.item_id for i in po.items}
         assert ids == {item1_id, item2_id}
+
+
+def test_receive_form_prefills_delivery_charge(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+    with client:
+        login(client, email, 'pass')
+        client.post('/purchase_orders/create', data={
+            'vendor': vendor_id,
+            'order_date': '2023-03-01',
+            'expected_date': '2023-03-05',
+            'delivery_charge': 5.5,
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 2
+        }, follow_redirects=True)
+
+    with app.app_context():
+        po = PurchaseOrder.query.first()
+        po_id = po.id
+        assert po.delivery_charge == 5.5
+
+    with client:
+        login(client, email, 'pass')
+        resp = client.get(f'/purchase_orders/{po_id}/receive')
+        assert resp.status_code == 200
+        assert b'value="5.50"' in resp.data
