@@ -1,0 +1,55 @@
+from werkzeug.security import generate_password_hash
+
+from app import db
+from app.models import User, Customer
+from tests.test_user_flows import login
+
+
+def setup_user(app):
+    with app.app_context():
+        user = User(email='vend@example.com', password=generate_password_hash('pass'), active=True)
+        db.session.add(user)
+        db.session.commit()
+        return user.email
+
+
+def test_vendor_crud_flow(client, app):
+    email = setup_user(app)
+    with client:
+        login(client, email, 'pass')
+        resp = client.post('/vendors/create', data={
+            'first_name': 'Vend',
+            'last_name': 'Or',
+            'gst_exempt': 'y',
+            'pst_exempt': ''
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        vendor = Customer.query.filter_by(first_name='Vend', last_name='Or').first()
+        assert vendor is not None
+        vid = vendor.id
+
+    with client:
+        login(client, email, 'pass')
+        resp = client.post(f'/vendors/{vid}/edit', data={
+            'first_name': 'New',
+            'last_name': 'Vendor',
+            'gst_exempt': '',
+            'pst_exempt': 'y'
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        vendor = db.session.get(Customer, vid)
+        assert vendor.first_name == 'New'
+        assert vendor.pst_exempt
+
+    with client:
+        login(client, email, 'pass')
+        resp = client.get(f'/vendors/{vid}/delete', follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        vendor = db.session.get(Customer, vid)
+        assert vendor is None

@@ -1,0 +1,34 @@
+<!-- templates=view_vendors.html -->
+{% extends "base.html" %}
+
+{% block title %}View Vendors{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Vendors</h2>
+    <a href="{{ url_for('vendor.create_vendor') }}" class="btn btn-primary mb-3">Create Vendor</a>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>GST Exempt</th>
+                <th>PST Exempt</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for vendor in vendors %}
+            <tr>
+                <td>{{ vendor.first_name }} {{ vendor.last_name }}</td>
+                <td>{{ 'Yes' if vendor.gst_exempt else 'No' }}</td>
+                <td>{{ 'Yes' if vendor.pst_exempt else 'No' }}</td>
+                <td>
+                    <a href="{{ url_for('vendor.edit_vendor', vendor_id=vendor.id) }}" class="btn btn-primary mr-2">Edit</a>
+                    <a href="{{ url_for('vendor.delete_vendor', vendor_id=vendor.id) }}" class="btn btn-danger mr-2" onclick="return confirm('Are you sure you want to delete this vendor?')">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
