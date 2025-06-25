@@ -213,8 +213,10 @@ class RestoreBackupForm(FlaskForm):
 
 
 class POItemForm(FlaskForm):
-    product = SelectField('Product', coerce=int)
-    unit = SelectField('Unit', coerce=int, validators=[Optional()], validate_choice=False)
+    product = SelectField('Product', coerce=int, validators=[Optional()],
+                          validate_choice=False)
+    unit = SelectField('Unit', coerce=int, validators=[Optional()],
+                       validate_choice=False)
     quantity = DecimalField('Quantity', validators=[InputRequired()])
 
 
