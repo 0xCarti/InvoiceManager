@@ -50,9 +50,26 @@ class Location(db.Model):
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
+    base_unit = db.Column(db.String(20), nullable=False)
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     transfers = db.relationship('Transfer', secondary=transfer_items, backref=db.backref('items', lazy='dynamic'))
     recipe_items = relationship("ProductRecipeItem", back_populates="item", cascade="all, delete-orphan")
+    units = relationship("ItemUnit", back_populates="item", cascade="all, delete-orphan")
+
+
+class ItemUnit(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
+    name = db.Column(db.String(50), nullable=False)
+    factor = db.Column(db.Float, nullable=False)
+    receiving_default = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    transfer_default = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+
+    item = relationship('Item', back_populates='units')
+
+    __table_args__ = (
+        db.UniqueConstraint('item_id', 'name', name='_item_unit_name_uc'),
+    )
 
 
 class Transfer(db.Model):
@@ -73,7 +90,7 @@ class TransferItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     transfer_id = db.Column(db.Integer, db.ForeignKey('transfer.id'), nullable=False)
     item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
-    quantity = db.Column(db.Integer, nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
     item = relationship('Item', backref='transfer_items', lazy=True)
 
 class Customer(db.Model):
