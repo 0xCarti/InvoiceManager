@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="container mt-4">
-    <h2>Create Purchase Order</h2>
+    <h2>Edit Purchase Order</h2>
     <form method="POST">
         {{ form.hidden_tag() }}
         <div class="form-group">
@@ -26,7 +26,6 @@
         <div class="form-row mt-2">
             <div class="col">{{ item.product(class="form-control") }}</div>
             <div class="col">{{ item.unit(class="form-control") }}</div>
-            <div class="col">{{ item.item(class="form-control") }}</div>
             <div class="col">{{ item.quantity(class="form-control") }}</div>
             <div class="col-auto">
                 {% if loop.index0 > 0 %}
@@ -44,7 +43,6 @@
 <script>
     const productOptions = `{% for val, label in form.items[0].product.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
     const unitOptions = `{% for val, label in form.items[0].unit.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
-    const productOptions = `{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
     let itemIndex = {{ form.items|length }};
     document.getElementById('add-item').addEventListener('click', function(e) {
         e.preventDefault();
@@ -53,7 +51,6 @@
         row.innerHTML = `
             <div class="col"><select name="items-${itemIndex}-product" class="form-control">${productOptions}</select></div>
             <div class="col"><select name="items-${itemIndex}-unit" class="form-control">${unitOptions}</select></div>
-            <div class="col"><select name="items-${itemIndex}-item" class="form-control">${productOptions}</select></div>
             <div class="col"><input type="number" step="any" name="items-${itemIndex}-quantity" class="form-control"></div>
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
         `;

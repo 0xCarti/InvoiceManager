@@ -1244,6 +1244,12 @@ def create_purchase_order():
         items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
         for field in items:
             index = field.split('-')[1]
+            product_id = request.form.get(f'items-{index}-product', type=int)
+            unit_id = request.form.get(f'items-{index}-unit', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            if product_id and quantity:
+                db.session.add(PurchaseOrderItem(purchase_order_id=po.id, product_id=product_id, unit_id=unit_id, quantity=quantity))
+
             item_id = request.form.get(f'items-{index}-item', type=int)
             quantity = request.form.get(f'items-{index}-quantity', type=float)
             if item_id and quantity:
@@ -1255,6 +1261,51 @@ def create_purchase_order():
         return redirect(url_for('purchase.view_purchase_orders'))
 
     return render_template('purchase_orders/create_purchase_order.html', form=form)
+
+
+@purchase.route('/purchase_orders/edit/<int:po_id>', methods=['GET', 'POST'])
+@login_required
+def edit_purchase_order(po_id):
+    po = db.session.get(PurchaseOrder, po_id)
+    if po is None:
+        abort(404)
+    form = PurchaseOrderForm()
+    if form.validate_on_submit():
+        po.vendor_id = form.vendor.data
+        po.order_date = form.order_date.data
+        po.expected_date = form.expected_date.data
+        po.delivery_charge = form.delivery_charge.data or 0.0
+
+        PurchaseOrderItem.query.filter_by(purchase_order_id=po.id).delete()
+
+        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-product')]
+        for field in items:
+            index = field.split('-')[1]
+            product_id = request.form.get(f'items-{index}-product', type=int)
+            unit_id = request.form.get(f'items-{index}-unit', type=int)
+            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            if product_id and quantity:
+                db.session.add(PurchaseOrderItem(purchase_order_id=po.id, product_id=product_id, unit_id=unit_id, quantity=quantity))
+
+        db.session.commit()
+        log_activity(f'Edited purchase order {po.id}')
+        flash('Purchase order updated successfully!', 'success')
+        return redirect(url_for('purchase.view_purchase_orders'))
+
+    if request.method == 'GET':
+        form.vendor.data = po.vendor_id
+        form.order_date.data = po.order_date
+        form.expected_date.data = po.expected_date
+        form.delivery_charge.data = po.delivery_charge
+        form.items.min_entries = max(1, len(po.items))
+        for i, poi in enumerate(po.items):
+            if len(form.items) <= i:
+                form.items.append_entry()
+            form.items[i].product.data = poi.product_id
+            form.items[i].unit.data = poi.unit_id
+            form.items[i].quantity.data = poi.quantity
+
+    return render_template('purchase_orders/edit_purchase_order.html', form=form, po=po)
 
 
 @purchase.route('/purchase_orders/<int:po_id>/receive', methods=['GET', 'POST'])
