@@ -61,7 +61,7 @@ class ItemUnitForm(FlaskForm):
 
 class ItemForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
-    gl_code = SelectField('GL Code', validators=[DataRequired()])
+    gl_code = SelectField('GL Code', validators=[Optional()])
     base_unit = SelectField(
         'Base Unit',
         choices=[('ounce', 'Ounce'), ('gram', 'Gram'), ('each', 'Each'), ('millilitre', 'Millilitre')],
@@ -74,7 +74,10 @@ class ItemForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(ItemForm, self).__init__(*args, **kwargs)
-        self.gl_code.choices = [(g.code, g.code) for g in GLCode.query.all()]
+        codes = [(g.id, g.code) for g in GLCode.query.all()]
+        self.gl_code.choices = [(code, code) for _, code in codes]
+        self.gl_code_id.choices = codes
+        self.purchase_gl_code.choices = codes
 
     def validate_gl_code(self, field):
         if field.data and not str(field.data).startswith('5'):
@@ -152,7 +155,7 @@ class CustomerForm(FlaskForm):
 
 class ProductForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
-    gl_code = SelectField('GL Code', validators=[DataRequired()])
+    gl_code = SelectField('GL Code', validators=[Optional()])
     price = DecimalField('Price', validators=[DataRequired(), NumberRange(min=0.0001)])
     cost = DecimalField('Cost', validators=[InputRequired(), NumberRange(min=0)], default=0.0)
     gl_code_id = SelectField('GL Code', coerce=int, validators=[Optional()], validate_choice=False)
@@ -161,7 +164,10 @@ class ProductForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(ProductForm, self).__init__(*args, **kwargs)
-        self.gl_code.choices = [(g.code, g.code) for g in GLCode.query.all()]
+        codes = [(g.id, g.code) for g in GLCode.query.all()]
+        self.gl_code.choices = [(code, code) for _, code in codes]
+        self.gl_code_id.choices = codes
+        self.sales_gl_code.choices = codes
 
     def validate_gl_code(self, field):
         if field.data and not str(field.data).startswith('4'):

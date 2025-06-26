@@ -8,7 +8,9 @@ def setup_data(app):
     with app.app_context():
         user = User(email='gl@example.com', password=generate_password_hash('pass'), active=True)
         purchase = GLCode(code='6000')
-        sales = GLCode(code='5000')
+        sales = GLCode.query.filter_by(code='5000').first()
+        if sales is None:
+            sales = GLCode(code='5000')
         item = Item(name='Widget', base_unit='each')
         db.session.add_all([user, purchase, sales, item])
         db.session.commit()
