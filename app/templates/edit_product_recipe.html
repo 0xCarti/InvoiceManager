@@ -6,12 +6,12 @@
         {{ form.hidden_tag() }}
         <div id="item-list">
             {% for item in form.items %}
-            <div class="form-row mb-2">
+            <div class="form-row mb-2 align-items-center">
                 <div class="col">{{ item.item(class="form-control") }}</div>
                 <div class="col">{{ item.quantity(class="form-control") }}</div>
-                <div class="col form-check">
+                <div class="col-auto form-check d-flex align-items-center">
                     {{ item.countable(class="form-check-input") }}
-                    {{ item.countable.label(class="form-check-label") }}
+                    {{ item.countable.label(class="form-check-label ms-1") }}
                 </div>
             </div>
             {% endfor %}

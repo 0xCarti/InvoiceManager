@@ -33,11 +33,9 @@
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col">{{ item.cost(class="form-control cost") }}</div>
             <div class="col"><span class="line-total">0.00</span></div>
-            <div class="col form-check">{{ item.return_item(class="form-check-input return-item") }} {{ item.return_item.label(class="form-check-label") }}</div>
+            <div class="col-auto form-check d-flex align-items-center">{{ item.return_item(class="form-check-input return-item") }} {{ item.return_item.label(class="form-check-label ms-1") }}</div>
             <div class="col-auto">
-                {% if loop.index0 > 0 %}
                 <button type="button" class="btn btn-danger remove-item">Remove</button>
-                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -65,7 +63,7 @@
             <div class="col"><input type="number" step="any" name="items-${index}-quantity" class="form-control quantity"></div>
             <div class="col"><input type="number" step="any" name="items-${index}-cost" class="form-control cost"></div>
             <div class="col"><span class="line-total">0.00</span></div>
-            <div class="col form-check"><input type="checkbox" name="items-${index}-return_item" class="form-check-input return-item"></div>
+            <div class="col-auto form-check d-flex align-items-center"><input type="checkbox" name="items-${index}-return_item" class="form-check-input return-item"></div>
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
         `;
         return row;

@@ -23,14 +23,12 @@
         <h4>Items</h4>
         <div id="items">
         {% for item in form.items %}
-        <div class="form-row mt-2 item-row">
+        <div class="form-row mt-2 item-row align-items-center">
             <div class="col">{{ item.item(class="form-control item-select") }}</div>
             <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select"></select></div>
             <div class="col">{{ item.quantity(class="form-control") }}</div>
             <div class="col-auto">
-                {% if loop.index0 > 0 %}
                 <button type="button" class="btn btn-danger remove-item">Remove</button>
-                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -46,7 +44,7 @@
 
     function createRow(index) {
         const row = document.createElement('div');
-        row.classList.add('form-row','mt-2','item-row');
+        row.classList.add('form-row','mt-2','item-row','align-items-center');
         row.innerHTML = `
             <div class="col"><select name="items-${index}-item" class="form-control item-select">${itemOptions}</select></div>
             <div class="col"><select name="items-${index}-unit" class="form-control unit-select"></select></div>
