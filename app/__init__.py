@@ -94,7 +94,11 @@ def create_app(args: list):
 
     with app.app_context():
         from app.routes import auth_routes
-        from app.routes.routes import main, location, item, transfer, customer, invoice, product, report, purchase, vendor, glcode_bp
+        from app.routes.routes import main, product, customer, report, purchase, vendor, glcode_bp
+        from app.routes.location_routes import location
+        from app.routes.item_routes import item
+        from app.routes.transfer_routes import transfer
+        from app.routes.invoice_routes import invoice
         from app.routes.auth_routes import auth, admin
         from app.models import User
 
