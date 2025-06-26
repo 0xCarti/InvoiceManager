@@ -1173,7 +1173,7 @@ def create_invoice():
         flash('Invoice created successfully!', 'success')
         return redirect(url_for('invoice.view_invoices'))
 
-    return render_template('create_invoice.html', form=form)
+    return render_template('invoices/create_invoice.html', form=form)
 
 
 @invoice.route('/delete_invoice/<invoice_id>', methods=['GET'])
@@ -1215,7 +1215,7 @@ def view_invoice(invoice_id):
     total = subtotal + gst_total + pst_total
 
     return render_template(
-        'view_invoice.html',
+        'invoices/view_invoice.html',
         invoice=invoice,
         subtotal=subtotal,
         gst=gst_total,
@@ -1278,7 +1278,7 @@ def view_invoices():
         query = query.filter(Invoice.date_created <= datetime.combine(end_date, datetime.max.time()))
 
     invoices = query.order_by(Invoice.date_created.desc()).all()
-    return render_template('view_invoices.html', invoices=invoices, form=form)
+    return render_template('invoices/view_invoices.html', invoices=invoices, form=form)
 
 @report.route('/reports/vendor-invoices', methods=['GET', 'POST'])
 def vendor_invoice_report():
