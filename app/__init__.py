@@ -94,8 +94,18 @@ def create_app(args: list):
 
     with app.app_context():
         from app.routes import auth_routes
-        from app.routes.routes import main, location, item, transfer, customer, invoice, product, report, purchase, vendor, glcode_bp
         from app.routes.auth_routes import auth, admin
+        from app.routes.main_routes import main
+        from app.routes.location_routes import location
+        from app.routes.item_routes import item
+        from app.routes.transfer_routes import transfer
+        from app.routes.customer_routes import customer
+        from app.routes.invoice_routes import invoice
+        from app.routes.product_routes import product
+        from app.routes.purchase_routes import purchase
+        from app.routes.report_routes import report
+        from app.routes.vendor_routes import vendor
+        from app.routes.glcode_routes import glcode_bp
         from app.models import User
 
         app.register_blueprint(auth, url_prefix='/auth')
