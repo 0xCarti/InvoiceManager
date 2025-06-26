@@ -40,6 +40,17 @@ python run.py
 
 The application uses a local SQLite database located at `inventory.db` and creates `uploads` and `backups` directories automatically on startup.
 
+## Running Tests
+
+The project includes a suite of `pytest` tests. Execute them with:
+
+```bash
+pytest
+```
+
+The tests automatically set the necessary environment variables, so no additional setup is required.
+
+=======
 ## Features
 - Manage items, products, and invoices.
 - User authentication and admin features.
