@@ -19,11 +19,13 @@ GST = 0
 
 @login_manager.user_loader
 def load_user(user_id):
+    """Retrieve a user by ID for Flask-Login."""
     from app.models import User
     return db.session.get(User, int(user_id))
 
 
 def create_admin_user():
+    """Ensure an admin user exists for the application."""
     from app.models import User
     # Check if any admin exists
     admin_exists = User.query.filter_by(is_admin=True).first()
@@ -48,6 +50,7 @@ def create_admin_user():
 
 
 def create_app(args: list):
+    """Application factory used by Flask."""
     global socketio, GST
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
@@ -86,6 +89,7 @@ def create_app(args: list):
 
     @app.context_processor
     def inject_gst():
+        """Inject the GST constant into all templates."""
         return dict(GST=GST)
 
     with app.app_context():
