@@ -1445,15 +1445,50 @@ def reverse_purchase_invoice(invoice_id):
     po = db.session.get(PurchaseOrder, invoice.purchase_order_id)
     if po is None:
         abort(404)
-    for item in invoice.items:
+    for inv_item in invoice.items:
         factor = 1
-        if item.unit_id:
-            unit = db.session.get(ItemUnit, item.unit_id)
+        if inv_item.unit_id:
+            unit = db.session.get(ItemUnit, inv_item.unit_id)
             if unit:
                 factor = unit.factor
-        itm = db.session.get(Item, item.item_id)
+        itm = db.session.get(Item, inv_item.item_id)
         if itm:
-            itm.quantity -= item.quantity * factor
+            itm.quantity -= inv_item.quantity * factor
+
+            # Revert item cost to the most recent prior purchase invoice
+            last_item = (
+                db.session.query(PurchaseInvoiceItem)
+                .join(PurchaseInvoice)
+                .filter(
+                    PurchaseInvoiceItem.item_id == itm.id,
+                    PurchaseInvoiceItem.invoice_id != invoice.id,
+                )
+                .order_by(PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc())
+                .first()
+            )
+            if last_item:
+                last_factor = 1
+                if last_item.unit_id:
+                    last_unit = db.session.get(ItemUnit, last_item.unit_id)
+                    if last_unit:
+                        last_factor = last_unit.factor
+                itm.cost = abs(last_item.cost) / last_factor if last_factor else abs(last_item.cost)
+            else:
+                itm.cost = 0.0
+
+            # Update expected count for the location where items were received
+            record = LocationStandItem.query.filter_by(
+                location_id=invoice.location_id,
+                item_id=itm.id,
+            ).first()
+            if not record:
+                record = LocationStandItem(
+                    location_id=invoice.location_id,
+                    item_id=itm.id,
+                    expected_count=0,
+                )
+                db.session.add(record)
+            record.expected_count -= inv_item.quantity * factor
     PurchaseInvoiceItem.query.filter_by(invoice_id=invoice.id).delete()
     db.session.delete(invoice)
     po.received = False

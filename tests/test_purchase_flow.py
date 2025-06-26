@@ -287,6 +287,11 @@ def test_invoice_moves_and_reverse(client, app):
     with app.app_context():
         assert PurchaseInvoice.query.get(inv_id) is None
         assert not db.session.get(PurchaseOrder, po_id).received
+        item = db.session.get(Item, item_id)
+        assert item.quantity == 0
+        assert item.cost == 0
+        lsi = LocationStandItem.query.filter_by(location_id=location_id, item_id=item_id).first()
+        assert lsi.expected_count == 0
 
 
 def test_receive_invoice_base_unit_cost(client, app):
