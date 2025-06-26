@@ -540,6 +540,21 @@ def item_units(item_id):
     return jsonify(data)
 
 
+@item.route('/items/<int:item_id>/last_cost')
+@login_required
+def item_last_cost(item_id):
+    unit_id = request.args.get('unit_id', type=int)
+    item = db.session.get(Item, item_id)
+    if item is None:
+        abort(404)
+    factor = 1.0
+    if unit_id:
+        unit = db.session.get(ItemUnit, unit_id)
+        if unit:
+            factor = unit.factor
+    return jsonify({'cost': (item.cost or 0.0) * factor})
+
+
 @item.route('/import_items', methods=['GET', 'POST'])
 @login_required
 def import_items():
@@ -1235,7 +1250,7 @@ def product_sales_report():
 @purchase.route('/purchase_orders', methods=['GET'])
 @login_required
 def view_purchase_orders():
-    orders = PurchaseOrder.query.order_by(PurchaseOrder.order_date.desc()).all()
+    orders = PurchaseOrder.query.filter_by(received=False).order_by(PurchaseOrder.order_date.desc()).all()
     return render_template('purchase_orders/view_purchase_orders.html', orders=orders)
 
 
@@ -1386,7 +1401,8 @@ def receive_invoice(po_id):
                         if unit:
                             factor = unit.factor
                     item_obj.quantity = (item_obj.quantity or 0) + quantity * factor
-                    item_obj.cost = cost
+                    # store cost per base unit (always positive)
+                    item_obj.cost = abs(cost) / factor if factor else abs(cost)
                     record = LocationStandItem.query.filter_by(location_id=invoice.location_id, item_id=item_id).first()
                     if not record:
                         record = LocationStandItem(location_id=invoice.location_id, item_id=item_id, expected_count=0)
@@ -1394,8 +1410,52 @@ def receive_invoice(po_id):
                     record.expected_count += quantity * factor
 
         db.session.commit()
+        po.received = True
+        db.session.commit()
         log_activity(f'Received invoice {invoice.id} for PO {po.id}')
         flash('Invoice received successfully!', 'success')
-        return redirect(url_for('purchase.view_purchase_orders'))
+        return redirect(url_for('purchase.view_purchase_invoices'))
 
     return render_template('purchase_orders/receive_invoice.html', form=form, po=po)
+
+
+@purchase.route('/purchase_invoices', methods=['GET'])
+@login_required
+def view_purchase_invoices():
+    invoices = PurchaseInvoice.query.order_by(PurchaseInvoice.received_date.desc()).all()
+    return render_template('purchase_invoices/view_purchase_invoices.html', invoices=invoices)
+
+
+@purchase.route('/purchase_invoices/<int:invoice_id>')
+@login_required
+def view_purchase_invoice(invoice_id):
+    invoice = db.session.get(PurchaseInvoice, invoice_id)
+    if invoice is None:
+        abort(404)
+    return render_template('purchase_invoices/view_purchase_invoice.html', invoice=invoice)
+
+
+@purchase.route('/purchase_invoices/<int:invoice_id>/reverse')
+@login_required
+def reverse_purchase_invoice(invoice_id):
+    invoice = db.session.get(PurchaseInvoice, invoice_id)
+    if invoice is None:
+        abort(404)
+    po = db.session.get(PurchaseOrder, invoice.purchase_order_id)
+    if po is None:
+        abort(404)
+    for item in invoice.items:
+        factor = 1
+        if item.unit_id:
+            unit = db.session.get(ItemUnit, item.unit_id)
+            if unit:
+                factor = unit.factor
+        itm = db.session.get(Item, item.item_id)
+        if itm:
+            itm.quantity -= item.quantity * factor
+    PurchaseInvoiceItem.query.filter_by(invoice_id=invoice.id).delete()
+    db.session.delete(invoice)
+    po.received = False
+    db.session.commit()
+    flash('Invoice reversed successfully', 'success')
+    return redirect(url_for('purchase.view_purchase_orders'))

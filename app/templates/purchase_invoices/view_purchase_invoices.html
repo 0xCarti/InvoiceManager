@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Purchase Invoices</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>PO</th>
+                <th>Vendor</th>
+                <th>Date</th>
+                <th>Total</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for inv in invoices %}
+            <tr>
+                <td>{{ inv.id }}</td>
+                <td>{{ inv.purchase_order_id }}</td>
+                <td>{{ inv.purchase_order.vendor.first_name }} {{ inv.purchase_order.vendor.last_name }}</td>
+                <td>{{ inv.received_date }}</td>
+                <td>{{ '%.2f'|format(inv.total) }}</td>
+                <td>
+                    <a href="{{ url_for('purchase.view_purchase_invoice', invoice_id=inv.id) }}" class="btn btn-sm btn-primary">View</a>
+                    <a href="{{ url_for('purchase.reverse_purchase_invoice', invoice_id=inv.id) }}" class="btn btn-sm btn-danger">Reverse</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

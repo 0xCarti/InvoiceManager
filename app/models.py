@@ -177,6 +177,7 @@ class PurchaseOrder(db.Model):
     order_date = db.Column(db.Date, nullable=False)
     expected_date = db.Column(db.Date, nullable=False)
     delivery_charge = db.Column(db.Float, nullable=False, default=0.0)
+    received = db.Column(db.Boolean, default=False, nullable=False)
     items = relationship('PurchaseOrderItem', backref='purchase_order', cascade='all, delete-orphan')
     vendor = relationship('Customer')
 
@@ -204,6 +205,7 @@ class PurchaseInvoice(db.Model):
     delivery_charge = db.Column(db.Float, nullable=False, default=0.0)
     items = relationship('PurchaseInvoiceItem', backref='invoice', cascade='all, delete-orphan')
     location = relationship('Location')
+    purchase_order = relationship('PurchaseOrder')
 
     @property
     def item_total(self):
