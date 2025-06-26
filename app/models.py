@@ -66,11 +66,13 @@ class Item(db.Model):
     gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     purchase_gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     purchase_gl_code = relationship('GLCode', foreign_keys=[purchase_gl_code_id])
     transfers = db.relationship('Transfer', secondary=transfer_items, backref=db.backref('items', lazy='dynamic'))
     recipe_items = relationship("ProductRecipeItem", back_populates="item", cascade="all, delete-orphan")
     units = relationship("ItemUnit", back_populates="item", cascade="all, delete-orphan")
+    gl_code = relationship('GLCode', backref='items')
 
 
 class ItemUnit(db.Model):
@@ -118,6 +120,13 @@ class Customer(db.Model):
     invoices = db.relationship('Invoice', backref='customer', lazy=True)
 
 
+class GLCode(db.Model):
+    __tablename__ = 'gl_code'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(6), unique=True, nullable=False)
+    description = db.Column(db.String(255))
+
+
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -126,12 +135,14 @@ class Product(db.Model):
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     sales_gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     sales_gl_code = relationship('GLCode', foreign_keys=[sales_gl_code_id])
 
     # Define a one-to-many relationship with InvoiceProduct
     invoice_products = relationship("InvoiceProduct", back_populates="product", cascade="all, delete-orphan")
     recipe_items = relationship("ProductRecipeItem", back_populates="product", cascade="all, delete-orphan")
+    gl_code = relationship('GLCode', backref='products')
 
 
 class Invoice(db.Model):
