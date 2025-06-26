@@ -40,6 +40,11 @@ python run.py
 
 The application uses a local SQLite database located at `inventory.db` and creates `uploads` and `backups` directories automatically on startup.
 
+## Features
+- Manage items, products, and invoices.
+- User authentication and admin features.
+- Reporting and backups.
+
 ## Test Defaults
 
 When running `pytest`, the fixtures in `tests/conftest.py` set up several default values so the application can start without manual configuration:
@@ -51,3 +56,8 @@ When running `pytest`, the fixtures in `tests/conftest.py` set up several defaul
 - Two GL codes (`4000` and `5000`) are populated if none exist
 
 These defaults are provided for convenience during testing, but you can override any of the environment variables by exporting your own values before running the tests.
+
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
