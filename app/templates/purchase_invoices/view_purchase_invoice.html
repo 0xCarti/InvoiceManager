@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Invoice {{ invoice.id }}</h2>
+    <p>Purchase Order: {{ invoice.purchase_order_id }}</p>
+    <p>Vendor: {{ invoice.purchase_order.vendor.first_name }} {{ invoice.purchase_order.vendor.last_name }}</p>
+    <p>Received: {{ invoice.received_date }}</p>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Unit</th>
+                <th>Qty</th>
+                <th>Cost</th>
+                <th>Line Total</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for it in invoice.items %}
+            <tr>
+                <td>{{ it.item.name }}</td>
+                <td>{% if it.unit %}{{ it.unit.name }}{% endif %}</td>
+                <td>{{ it.quantity }}</td>
+                <td>{{ '%.2f'|format(it.cost) }}</td>
+                <td>{{ '%.2f'|format(it.line_total) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <p><strong>Item Total:</strong> {{ '%.2f'|format(invoice.item_total) }}</p>
+    <p><strong>GST:</strong> {{ '%.2f'|format(invoice.gst) }}</p>
+    <p><strong>PST:</strong> {{ '%.2f'|format(invoice.pst) }}</p>
+    <p><strong>Delivery:</strong> {{ '%.2f'|format(invoice.delivery_charge) }}</p>
+    <p><strong>Total:</strong> {{ '%.2f'|format(invoice.total) }}</p>
+</div>
+{% endblock %}

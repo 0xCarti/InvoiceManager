@@ -216,3 +216,57 @@ def test_edit_purchase_order_updates(client, app):
     with app.app_context():
         poi = PurchaseOrderItem.query.filter_by(purchase_order_id=po_id).first()
         assert poi.quantity == 5
+
+
+def test_invoice_moves_and_reverse(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+    with client:
+        login(client, email, 'pass')
+        client.post('/purchase_orders/create', data={
+            'vendor': vendor_id,
+            'order_date': '2023-06-01',
+            'expected_date': '2023-06-05',
+            'delivery_charge': 2,
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 3
+        }, follow_redirects=True)
+
+    with app.app_context():
+        po = PurchaseOrder.query.first()
+        po_id = po.id
+
+    with client:
+        login(client, email, 'pass')
+        client.post(f'/purchase_orders/{po_id}/receive', data={
+            'received_date': '2023-06-06',
+            'location_id': location_id,
+            'gst': 0.25,
+            'pst': 0.35,
+            'delivery_charge': 2,
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 3,
+            'items-0-cost': 2.5
+        }, follow_redirects=True)
+
+    with app.app_context():
+        inv = PurchaseInvoice.query.first()
+        assert round(inv.total, 2) == 10.10
+        assert db.session.get(PurchaseOrder, po_id).received
+        inv_id = inv.id
+
+    with client:
+        login(client, email, 'pass')
+        resp = client.get('/purchase_orders')
+        assert f'>{po_id}<'.encode() not in resp.data
+        resp = client.get('/purchase_invoices')
+        assert str(inv_id).encode() in resp.data
+
+    with client:
+        login(client, email, 'pass')
+        client.get(f'/purchase_invoices/{inv_id}/reverse', follow_redirects=True)
+
+    with app.app_context():
+        assert PurchaseInvoice.query.get(inv_id) is None
+        assert not db.session.get(PurchaseOrder, po_id).received

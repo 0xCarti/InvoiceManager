@@ -44,7 +44,10 @@
         </div>
         <button id="add-item" type="button" class="btn btn-secondary mt-3">Add Item</button>
         <div class="form-group mt-3">
-            <label>Total: $<span id="item-total">0.00</span></label>
+            <label>Item Total: $<span id="item-total">0.00</span></label>
+        </div>
+        <div class="form-group mt-3">
+            <label>Grand Total: $<span id="grand-total">0.00</span></label>
         </div>
         <button type="submit" class="btn btn-primary mt-3">Submit</button>
     </form>
@@ -68,6 +71,19 @@
         return row;
     }
 
+    function fetchCost(row) {
+        const itemId = row.querySelector('.item-select').value;
+        const unitId = row.querySelector('.unit-select').value;
+        if (!itemId) return;
+        fetch(`/items/${itemId}/last_cost?unit_id=${unitId}`).then(r=>r.json()).then(d=>{
+            const input = row.querySelector('.cost');
+            if (!input.dataset.touched) {
+                input.value = parseFloat(d.cost).toFixed(2);
+            }
+            updateTotals();
+        });
+    }
+
     function fetchUnits(selectEl) {
         const itemId = selectEl.value;
         const unitSelect = selectEl.closest('.item-row').querySelector('.unit-select');
@@ -81,6 +97,7 @@
                 opts += `<option value="${u.id}" ${u.receiving_default ? 'selected' : ''}>${u.name}</option>`;
             });
             unitSelect.innerHTML = opts;
+            fetchCost(selectEl.closest('.item-row'));
         });
     }
 
@@ -97,6 +114,10 @@
             total += lineTotal;
         });
         document.getElementById('item-total').textContent = total.toFixed(2);
+        const gst = parseFloat(document.getElementById('gst').value) || 0;
+        const pst = parseFloat(document.getElementById('pst').value) || 0;
+        const del = parseFloat(document.getElementById('delivery_charge').value) || 0;
+        document.getElementById('grand-total').textContent = (total + gst + pst + del).toFixed(2);
     }
 
     document.getElementById('add-item').addEventListener('click', function(e) {
@@ -117,6 +138,9 @@
         if (e.target && e.target.classList.contains('item-select')) {
             fetchUnits(e.target);
         }
+        if (e.target && e.target.classList.contains('unit-select')) {
+            fetchCost(e.target.closest('.item-row'));
+        }
         if (e.target && (e.target.classList.contains('quantity') || e.target.classList.contains('cost') || e.target.classList.contains('return-item'))) {
             updateTotals();
         }
@@ -124,11 +148,15 @@
 
     document.getElementById('items').addEventListener('input', function(e) {
         if (e.target && (e.target.classList.contains('quantity') || e.target.classList.contains('cost'))) {
+            if (e.target.classList.contains('cost')) { e.target.dataset.touched = '1'; }
             updateTotals();
         }
     });
 
     document.querySelectorAll('.item-select').forEach(sel => fetchUnits(sel));
+    document.getElementById('gst').addEventListener('input', updateTotals);
+    document.getElementById('pst').addEventListener('input', updateTotals);
+    document.getElementById('delivery_charge').addEventListener('input', updateTotals);
     updateTotals();
 </script>
 {% endblock %}
