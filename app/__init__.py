@@ -90,7 +90,7 @@ def create_app(args: list):
 
     with app.app_context():
         from app.routes import auth_routes
-        from app.routes.routes import main, location, item, transfer, customer, invoice, product, report, purchase, vendor
+        from app.routes.routes import main, location, item, transfer, customer, invoice, product, report, purchase, vendor, glcode_bp
         from app.routes.auth_routes import auth, admin
         from app.models import User
 
@@ -106,6 +106,7 @@ def create_app(args: list):
         app.register_blueprint(purchase)
         app.register_blueprint(report)
         app.register_blueprint(vendor)
+        app.register_blueprint(glcode_bp)
 
         db.create_all()
         create_admin_user()

@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}GL Codes{% endblock %}
+{% block content %}
+<div class="container mt-5">
+    <h2>GL Codes</h2>
+    <a href="{{ url_for('glcode.create_gl_code') }}" class="btn btn-primary mb-3">Add GL Code</a>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Description</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for code in codes %}
+            <tr>
+                <td>{{ code.code }}</td>
+                <td>{{ code.description or '' }}</td>
+                <td>
+                    <a href="{{ url_for('glcode.edit_gl_code', code_id=code.id) }}" class="btn btn-secondary btn-sm">Edit</a>
+                    <a href="{{ url_for('glcode.delete_gl_code', code_id=code.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?');">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

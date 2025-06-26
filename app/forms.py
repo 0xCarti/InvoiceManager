@@ -298,3 +298,9 @@ class DeleteForm(FlaskForm):
     """Simple form used for CSRF protection on delete actions."""
     submit = SubmitField('Delete')
 
+
+class GLCodeForm(FlaskForm):
+    code = StringField('Code', validators=[DataRequired(), Length(max=6)])
+    description = StringField('Description', validators=[Optional()])
+    submit = SubmitField('Submit')
+
