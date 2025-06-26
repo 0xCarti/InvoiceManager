@@ -22,6 +22,7 @@ from app.forms import (
     PurchaseOrderForm,
     ReceiveInvoiceForm,
     DeleteForm,
+    GLCodeForm,
 )
 from app.models import (
     Location,
@@ -40,6 +41,7 @@ from app.models import (
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseOrderItemArchive,
+    GLCode,
 )
 from datetime import datetime
 from flask import Blueprint, render_template
@@ -59,6 +61,7 @@ invoice = Blueprint('invoice', __name__)
 report = Blueprint('report', __name__)
 purchase = Blueprint('purchase', __name__)
 vendor = Blueprint('vendor', __name__)
+glcode_bp = Blueprint('glcode', __name__)
 
 
 def update_expected_counts(transfer, multiplier=1):
@@ -975,6 +978,54 @@ def delete_vendor(vendor_id):
     log_activity(f'Deleted vendor {vendor.id}')
     flash('Vendor deleted successfully!', 'success')
     return redirect(url_for('vendor.view_vendors'))
+
+
+@glcode_bp.route('/gl_codes')
+@login_required
+def view_gl_codes():
+    codes = GLCode.query.all()
+    return render_template('gl_codes/view_gl_codes.html', codes=codes)
+
+
+@glcode_bp.route('/gl_codes/create', methods=['GET', 'POST'])
+@login_required
+def create_gl_code():
+    form = GLCodeForm()
+    if form.validate_on_submit():
+        code = GLCode(code=form.code.data, description=form.description.data)
+        db.session.add(code)
+        db.session.commit()
+        flash('GL Code created successfully!', 'success')
+        return redirect(url_for('glcode.view_gl_codes'))
+    return render_template('gl_codes/add_gl_code.html', form=form)
+
+
+@glcode_bp.route('/gl_codes/<int:code_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_gl_code(code_id):
+    code = db.session.get(GLCode, code_id)
+    if code is None:
+        abort(404)
+    form = GLCodeForm(obj=code)
+    if form.validate_on_submit():
+        code.code = form.code.data
+        code.description = form.description.data
+        db.session.commit()
+        flash('GL Code updated successfully!', 'success')
+        return redirect(url_for('glcode.view_gl_codes'))
+    return render_template('gl_codes/edit_gl_code.html', form=form)
+
+
+@glcode_bp.route('/gl_codes/<int:code_id>/delete', methods=['GET'])
+@login_required
+def delete_gl_code(code_id):
+    code = db.session.get(GLCode, code_id)
+    if code is None:
+        abort(404)
+    db.session.delete(code)
+    db.session.commit()
+    flash('GL Code deleted successfully!', 'success')
+    return redirect(url_for('glcode.view_gl_codes'))
 
 
 @product.route('/search_products')
