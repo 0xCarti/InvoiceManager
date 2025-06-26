@@ -65,8 +65,14 @@ class ItemForm(FlaskForm):
         choices=[('ounce', 'Ounce'), ('gram', 'Gram'), ('each', 'Each'), ('millilitre', 'Millilitre')],
         validators=[DataRequired()]
     )
+    gl_code_id = SelectField('GL Code', coerce=int, validators=[Optional()], validate_choice=False)
     units = FieldList(FormField(ItemUnitForm), min_entries=1)
     submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super(ItemForm, self).__init__(*args, **kwargs)
+        from app.models import GLCode
+        self.gl_code_id.choices = [(g.id, g.code) for g in GLCode.query.all()]
 
 
 class TransferItemForm(FlaskForm):
@@ -139,7 +145,13 @@ class ProductForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
     price = DecimalField('Price', validators=[DataRequired(), NumberRange(min=0.0001)])
     cost = DecimalField('Cost', validators=[InputRequired(), NumberRange(min=0)], default=0.0)
+    gl_code_id = SelectField('GL Code', coerce=int, validators=[Optional()], validate_choice=False)
     submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super(ProductForm, self).__init__(*args, **kwargs)
+        from app.models import GLCode
+        self.gl_code_id.choices = [(g.id, g.code) for g in GLCode.query.all()]
 
 
 class RecipeItemForm(FlaskForm):

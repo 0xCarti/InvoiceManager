@@ -48,10 +48,19 @@ class Location(db.Model):
     stand_items = db.relationship('LocationStandItem', back_populates='location', cascade='all, delete-orphan')
 
 
+class GLCode(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False)
+    description = db.Column(db.String(255))
+    items = db.relationship('Item', backref='gl_code')
+    products = db.relationship('Product', backref='gl_code')
+
+
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     base_unit = db.Column(db.String(20), nullable=False)
+    gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     transfers = db.relationship('Transfer', secondary=transfer_items, backref=db.backref('items', lazy='dynamic'))
@@ -109,6 +118,7 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=False)
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
 
     # Define a one-to-many relationship with InvoiceProduct
