@@ -1352,6 +1352,22 @@ def edit_purchase_order(po_id):
     return render_template('purchase_orders/edit_purchase_order.html', form=form, po=po)
 
 
+@purchase.route('/purchase_orders/<int:po_id>/delete', methods=['GET'])
+@login_required
+def delete_purchase_order(po_id):
+    po = db.session.get(PurchaseOrder, po_id)
+    if po is None:
+        abort(404)
+    if po.received:
+        flash('Cannot delete a purchase order that has been received.', 'error')
+        return redirect(url_for('purchase.view_purchase_orders'))
+    db.session.delete(po)
+    db.session.commit()
+    log_activity(f'Deleted purchase order {po.id}')
+    flash('Purchase order deleted successfully!', 'success')
+    return redirect(url_for('purchase.view_purchase_orders'))
+
+
 @purchase.route('/purchase_orders/<int:po_id>/receive', methods=['GET', 'POST'])
 @login_required
 def receive_invoice(po_id):
