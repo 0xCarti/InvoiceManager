@@ -27,7 +27,8 @@ from wtforms.validators import (
 )
 from wtforms.widgets import CheckboxInput, ListWidget
 
-from app.models import Item, Location, Product, Customer, ItemUnit
+from app.models import Item, Location, Product, Customer, ItemUnit, GLCode
+from wtforms.validators import ValidationError
 
 
 class LoginForm(FlaskForm):
@@ -60,6 +61,7 @@ class ItemUnitForm(FlaskForm):
 
 class ItemForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
+    gl_code = SelectField('GL Code', validators=[DataRequired()])
     base_unit = SelectField(
         'Base Unit',
         choices=[('ounce', 'Ounce'), ('gram', 'Gram'), ('each', 'Each'), ('millilitre', 'Millilitre')],
@@ -67,6 +69,14 @@ class ItemForm(FlaskForm):
     )
     units = FieldList(FormField(ItemUnitForm), min_entries=1)
     submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super(ItemForm, self).__init__(*args, **kwargs)
+        self.gl_code.choices = [(g.code, g.code) for g in GLCode.query.all()]
+
+    def validate_gl_code(self, field):
+        if field.data and not str(field.data).startswith('5'):
+            raise ValidationError('Item GL codes must start with 5')
 
 
 class TransferItemForm(FlaskForm):
@@ -137,9 +147,18 @@ class CustomerForm(FlaskForm):
 
 class ProductForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
+    gl_code = SelectField('GL Code', validators=[DataRequired()])
     price = DecimalField('Price', validators=[DataRequired(), NumberRange(min=0.0001)])
     cost = DecimalField('Cost', validators=[InputRequired(), NumberRange(min=0)], default=0.0)
     submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super(ProductForm, self).__init__(*args, **kwargs)
+        self.gl_code.choices = [(g.code, g.code) for g in GLCode.query.all()]
+
+    def validate_gl_code(self, field):
+        if field.data and not str(field.data).startswith('4'):
+            raise ValidationError('Product GL codes must start with 4')
 
 
 class RecipeItemForm(FlaskForm):

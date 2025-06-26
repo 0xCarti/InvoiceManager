@@ -48,10 +48,16 @@ class Location(db.Model):
     stand_items = db.relationship('LocationStandItem', back_populates='location', cascade='all, delete-orphan')
 
 
+class GLCode(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(10), unique=True, nullable=False)
+
+
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     base_unit = db.Column(db.String(20), nullable=False)
+    gl_code = db.Column(db.String(10), nullable=True)
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     transfers = db.relationship('Transfer', secondary=transfer_items, backref=db.backref('items', lazy='dynamic'))
@@ -107,6 +113,7 @@ class Customer(db.Model):
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    gl_code = db.Column(db.String(10), nullable=True)
     price = db.Column(db.Float, nullable=False)
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")

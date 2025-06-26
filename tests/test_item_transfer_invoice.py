@@ -22,6 +22,7 @@ def test_item_lifecycle(client, app):
         resp = client.post('/items/add', data={
             'name': 'Widget',
             'base_unit': 'each',
+            'gl_code': '5000',
             'units-0-name': 'each',
             'units-0-factor': 1,
             'units-0-receiving_default': 'y',
@@ -39,6 +40,7 @@ def test_item_lifecycle(client, app):
         resp = client.post(f'/items/edit/{item_id}', data={
             'name': 'Gadget',
             'base_unit': 'each',
+            'gl_code': '5000',
             'units-0-name': 'each',
             'units-0-factor': 1,
             'units-0-receiving_default': 'y',

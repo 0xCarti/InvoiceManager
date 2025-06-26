@@ -13,6 +13,10 @@
             {{ form.base_unit.label }}
             {{ form.base_unit(class="form-control") }}
         </div>
+        <div class="form-group">
+            {{ form.gl_code.label }}
+            {{ form.gl_code(class="form-control") }}
+        </div>
         <h4>Units</h4>
         <div id="units-container">
         {% for unit in form.units %}

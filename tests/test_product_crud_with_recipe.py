@@ -28,6 +28,7 @@ def test_create_product_with_recipe_items(client, app):
             'name': 'Cake',
             'price': 5,
             'cost': 2,
+            'gl_code': '4000',
             'items-0-item': item1_id,
             'items-0-quantity': 2,
             'items-0-countable': 'y',
@@ -59,6 +60,7 @@ def test_edit_product_recipe_on_edit_page(client, app):
             'name': 'Bread',
             'price': 3.5,
             'cost': 1.5,
+            'gl_code': '4000',
             'items-0-item': item2_id,
             'items-0-quantity': 4,
             'items-0-countable': ''
@@ -81,6 +83,7 @@ def test_recipe_accepts_integer_quantity(client, app):
             'name': 'Pie',
             'price': 4,
             'cost': 2,
+            'gl_code': '4000',
             'items-0-item': item1_id,
             'items-0-quantity': 0,
             'items-0-countable': 'y'
