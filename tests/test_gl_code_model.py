@@ -14,8 +14,8 @@ def test_glcode_relationships_and_uniqueness(app):
         db.session.add_all([item, product])
         db.session.commit()
 
-        assert item.gl_code == code
-        assert product.gl_code == code
+        assert item.gl_code_rel == code
+        assert product.gl_code_rel == code
 
         db.session.add(GLCode(code='123456', description='Duplicate'))
         with pytest.raises(Exception):

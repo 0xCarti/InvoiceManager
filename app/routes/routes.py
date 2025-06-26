@@ -234,11 +234,11 @@ def add_item():
         if recv_count > 1 or trans_count > 1:
             flash('Only one unit can be set as receiving and transfer default.', 'error')
             return render_template('items/add_item.html', form=form)
-        item = Item(name=form.name.data, base_unit=form.base_unit.data, gl_code=form.gl_code.data)
-        item = Item(name=form.name.data, base_unit=form.base_unit.data, gl_code_id=form.gl_code_id.data)
         item = Item(
             name=form.name.data,
             base_unit=form.base_unit.data,
+            gl_code=form.gl_code.data,
+            gl_code_id=form.gl_code_id.data,
             purchase_gl_code_id=form.purchase_gl_code.data or None,
         )
         db.session.add(item)
@@ -304,7 +304,7 @@ def edit_item(item_id):
         item.gl_code_id = form.gl_code_id.data
         item.purchase_gl_code_id = form.purchase_gl_code.data or None
         ItemUnit.query.filter_by(item_id=item.id).delete()
-        receiving_set = Fals
+        receiving_set = False
         transfer_set = False
         for uf in form.units:
             unit_form = uf.form
@@ -695,11 +695,9 @@ def create_product():
         product = Product(
             name=form.name.data,
             price=form.price.data,
-            cost=form.cost.data,
-            gl_code=form.gl_code.data
             cost=form.cost.data,  # Save cost
-            gl_code_id=form.gl_code_id.data
-            cost=form.cost.data,
+            gl_code=form.gl_code.data,
+            gl_code_id=form.gl_code_id.data,
             sales_gl_code_id=form.sales_gl_code.data or None,
         )
         db.session.add(product)
