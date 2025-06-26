@@ -97,12 +97,14 @@ def update_expected_counts(transfer, multiplier=1):
 @main.route('/')
 @login_required
 def home():
+    """Render the transfers dashboard."""
     return render_template('transfers/view_transfers.html', user=current_user)
 
 
 @location.route('/locations/add', methods=['GET', 'POST'])
 @login_required
 def add_location():
+    """Create a new location."""
     form = LocationForm()
     if form.validate_on_submit():
         new_location = Location(name=form.name.data)
@@ -138,6 +140,7 @@ def add_location():
 @location.route('/locations/edit/<int:location_id>', methods=['GET', 'POST'])
 @login_required
 def edit_location(location_id):
+    """Edit an existing location."""
     location = db.session.get(Location, location_id)
     if location is None:
         abort(404)
@@ -179,6 +182,7 @@ def edit_location(location_id):
 @location.route('/locations/<int:location_id>/stand_sheet')
 @login_required
 def view_stand_sheet(location_id):
+    """Display the expected item counts for a location."""
     location = db.session.get(Location, location_id)
     if location is None:
         abort(404)
@@ -201,6 +205,7 @@ def view_stand_sheet(location_id):
 @location.route('/locations')
 @login_required
 def view_locations():
+    """List all locations."""
     locations = Location.query.all()
     delete_form = DeleteForm()
     return render_template('locations/view_locations.html', locations=locations, delete_form=delete_form)
@@ -209,6 +214,7 @@ def view_locations():
 @location.route('/locations/delete/<int:location_id>', methods=['POST'])
 @login_required
 def delete_location(location_id):
+    """Remove a location from the database."""
     location = db.session.get(Location, location_id)
     if location is None:
         abort(404)
@@ -222,6 +228,7 @@ def delete_location(location_id):
 @item.route('/items')
 @login_required
 def view_items():
+    """Display the inventory item list."""
     items = Item.query.all()
     form = ItemForm()
     return render_template('items/view_items.html', items=items, form=form)
@@ -230,6 +237,7 @@ def view_items():
 @item.route('/items/add', methods=['GET', 'POST'])
 @login_required
 def add_item():
+    """Add a new item to inventory."""
     form = ItemForm()
     if form.validate_on_submit():
         recv_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.receiving_default.data)
@@ -274,6 +282,7 @@ def add_item():
 @item.route('/items/edit/<int:item_id>', methods=['GET', 'POST'])
 @login_required
 def edit_item(item_id):
+    """Modify an existing item."""
     item = db.session.get(Item, item_id)
     if item is None:
         abort(404)
@@ -335,6 +344,7 @@ def edit_item(item_id):
 @item.route('/items/delete/<int:item_id>', methods=['POST'])
 @login_required
 def delete_item(item_id):
+    """Delete an item from the catalog."""
     item = db.session.get(Item, item_id)
     if item is None:
         abort(404)
@@ -348,6 +358,7 @@ def delete_item(item_id):
 @item.route('/items/bulk_delete', methods=['POST'])
 @login_required
 def bulk_delete_items():
+    """Delete multiple items in one request."""
     item_ids = request.form.getlist('item_ids')
     if item_ids:
         Item.query.filter(Item.id.in_(item_ids)).delete(synchronize_session='fetch')
@@ -362,6 +373,7 @@ def bulk_delete_items():
 @transfer.route('/transfers', methods=['GET'])
 @login_required
 def view_transfers():
+    """Show transfers with optional filtering."""
     filter_option = request.args.get('filter', 'not_completed')
     transfer_id = request.args.get('transfer_id', '', type=int)  # Optional: Search by Transfer ID
     from_location_name = request.args.get('from_location', '')  # Optional: Search by From Location
@@ -393,6 +405,7 @@ def view_transfers():
 @transfer.route('/transfers/add', methods=['GET', 'POST'])
 @login_required
 def add_transfer():
+    """Create a transfer between locations."""
     form = TransferForm()
     if form.validate_on_submit():
         transfer = Transfer(
@@ -438,6 +451,7 @@ def add_transfer():
 @transfer.route('/transfers/edit/<int:transfer_id>', methods=['GET', 'POST'])
 @login_required
 def edit_transfer(transfer_id):
+    """Update an existing transfer."""
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
@@ -486,6 +500,7 @@ def edit_transfer(transfer_id):
 @transfer.route('/transfers/delete/<int:transfer_id>', methods=['POST'])
 @login_required
 def delete_transfer(transfer_id):
+    """Permanently remove a transfer."""
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
@@ -501,6 +516,7 @@ def delete_transfer(transfer_id):
 @transfer.route('/transfers/complete/<int:transfer_id>', methods=['GET'])
 @login_required
 def complete_transfer(transfer_id):
+    """Mark a transfer as completed."""
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
@@ -515,6 +531,7 @@ def complete_transfer(transfer_id):
 @transfer.route('/transfers/uncomplete/<int:transfer_id>', methods=['GET'])
 @login_required
 def uncomplete_transfer(transfer_id):
+    """Revert a transfer to not completed."""
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
@@ -529,6 +546,7 @@ def uncomplete_transfer(transfer_id):
 @transfer.route('/transfers/view/<int:transfer_id>', methods=['GET'])
 @login_required
 def view_transfer(transfer_id):
+    """Show details for a single transfer."""
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
@@ -539,6 +557,7 @@ def view_transfer(transfer_id):
 @item.route('/items/search', methods=['GET'])
 @login_required
 def search_items():
+    """Search items by name for autocomplete fields."""
     search_term = request.args.get('term', '')
     items = Item.query.filter(Item.name.ilike(f'%{search_term}%')).all()
     items_data = [{'id': item.id, 'name': item.name} for item in items]  # Create a list of dicts
@@ -548,6 +567,7 @@ def search_items():
 @item.route('/items/<int:item_id>/units')
 @login_required
 def item_units(item_id):
+    """Return unit options for an item."""
     item = db.session.get(Item, item_id)
     if item is None:
         abort(404)
@@ -567,6 +587,7 @@ def item_units(item_id):
 @item.route('/items/<int:item_id>/last_cost')
 @login_required
 def item_last_cost(item_id):
+    """Return the last recorded cost for an item."""
     unit_id = request.args.get('unit_id', type=int)
     item = db.session.get(Item, item_id)
     if item is None:
@@ -582,6 +603,7 @@ def item_last_cost(item_id):
 @item.route('/import_items', methods=['GET', 'POST'])
 @login_required
 def import_items():
+    """Bulk import items from a text file."""
     form = ImportItemsForm()
     if form.validate_on_submit():
         from run import app
@@ -623,6 +645,7 @@ def import_items():
 
 @transfer.route('/transfers/generate_report', methods=['GET', 'POST'])
 def generate_report():
+    """Generate a transfer summary over a date range."""
     form = DateRangeForm()
     if form.validate_on_submit():
         start_datetime = form.start_datetime.data
@@ -679,6 +702,7 @@ def generate_report():
 
 @transfer.route('/transfers/report')
 def view_report():
+    """Display the previously generated transfer report."""
     aggregated_transfers = session.get('aggregated_transfers', [])
     return render_template('transfers/view_report.html', aggregated_transfers=aggregated_transfers)
 
@@ -686,6 +710,7 @@ def view_report():
 @product.route('/products')
 @login_required
 def view_products():
+    """List available products."""
     products = Product.query.all()
     return render_template('view_products.html', products=products)
 
@@ -693,6 +718,7 @@ def view_products():
 @product.route('/products/create', methods=['GET', 'POST'])
 @login_required
 def create_product():
+    """Add a new product definition."""
     form = ProductWithRecipeForm()
     if form.validate_on_submit():
         product = Product(
@@ -733,6 +759,7 @@ def create_product():
 @product.route('/products/<int:product_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_product(product_id):
+    """Edit product details and recipe."""
     product = db.session.get(Product, product_id)
     if product is None:
         abort(404)
@@ -794,6 +821,7 @@ def edit_product(product_id):
 @product.route('/products/<int:product_id>/recipe', methods=['GET', 'POST'])
 @login_required
 def edit_product_recipe(product_id):
+    """Edit the recipe for a product."""
     product = db.session.get(Product, product_id)
     if product is None:
         abort(404)
@@ -829,6 +857,7 @@ def edit_product_recipe(product_id):
 @product.route('/products/<int:product_id>/calculate_cost')
 @login_required
 def calculate_product_cost(product_id):
+    """Calculate the total recipe cost for a product."""
     product = db.session.get(Product, product_id)
     if product is None:
         abort(404)
@@ -846,6 +875,7 @@ def calculate_product_cost(product_id):
 @product.route('/products/<int:product_id>/delete', methods=['GET'])
 @login_required
 def delete_product(product_id):
+    """Delete a product and its recipe."""
     product = db.session.get(Product, product_id)
     if product is None:
         abort(404)
@@ -859,6 +889,7 @@ def delete_product(product_id):
 @customer.route('/customers')
 @login_required
 def view_customers():
+    """Display all customers."""
     customers = Customer.query.all()
     return render_template('view_customers.html', customers=customers)
 
@@ -866,6 +897,7 @@ def view_customers():
 @customer.route('/customers/create', methods=['GET', 'POST'])
 @login_required
 def create_customer():
+    """Add a customer record."""
     form = CustomerForm()
     if form.validate_on_submit():
         customer = Customer(
@@ -885,6 +917,7 @@ def create_customer():
 @customer.route('/customers/<int:customer_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_customer(customer_id):
+    """Edit customer details."""
     customer = db.session.get(Customer, customer_id)
     if customer is None:
         abort(404)
@@ -912,6 +945,7 @@ def edit_customer(customer_id):
 @customer.route('/customers/<int:customer_id>/delete', methods=['GET'])
 @login_required
 def delete_customer(customer_id):
+    """Delete a customer."""
     customer = db.session.get(Customer, customer_id)
     if customer is None:
         abort(404)
@@ -925,6 +959,7 @@ def delete_customer(customer_id):
 @vendor.route('/vendors')
 @login_required
 def view_vendors():
+    """Display all vendors."""
     vendors = Customer.query.all()
     return render_template('view_vendors.html', vendors=vendors)
 
@@ -932,6 +967,7 @@ def view_vendors():
 @vendor.route('/vendors/create', methods=['GET', 'POST'])
 @login_required
 def create_vendor():
+    """Create a new vendor."""
     form = CustomerForm()
     if form.validate_on_submit():
         vendor = Customer(
@@ -951,6 +987,7 @@ def create_vendor():
 @vendor.route('/vendors/<int:vendor_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_vendor(vendor_id):
+    """Edit vendor information."""
     vendor = db.session.get(Customer, vendor_id)
     if vendor is None:
         abort(404)
@@ -978,6 +1015,7 @@ def edit_vendor(vendor_id):
 @vendor.route('/vendors/<int:vendor_id>/delete', methods=['GET'])
 @login_required
 def delete_vendor(vendor_id):
+    """Remove a vendor from the system."""
     vendor = db.session.get(Customer, vendor_id)
     if vendor is None:
         abort(404)
@@ -991,6 +1029,7 @@ def delete_vendor(vendor_id):
 @glcode_bp.route('/gl_codes')
 @login_required
 def view_gl_codes():
+    """List GL codes."""
     codes = GLCode.query.all()
     return render_template('gl_codes/view_gl_codes.html', codes=codes)
 
@@ -998,6 +1037,7 @@ def view_gl_codes():
 @glcode_bp.route('/gl_codes/create', methods=['GET', 'POST'])
 @login_required
 def create_gl_code():
+    """Create a new GL code."""
     form = GLCodeForm()
     if form.validate_on_submit():
         code = GLCode(code=form.code.data, description=form.description.data)
@@ -1011,6 +1051,7 @@ def create_gl_code():
 @glcode_bp.route('/gl_codes/<int:code_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_gl_code(code_id):
+    """Edit an existing GL code."""
     code = db.session.get(GLCode, code_id)
     if code is None:
         abort(404)
@@ -1027,6 +1068,7 @@ def edit_gl_code(code_id):
 @glcode_bp.route('/gl_codes/<int:code_id>/delete', methods=['GET'])
 @login_required
 def delete_gl_code(code_id):
+    """Delete a GL code."""
     code = db.session.get(GLCode, code_id)
     if code is None:
         abort(404)
@@ -1038,6 +1080,7 @@ def delete_gl_code(code_id):
 
 @product.route('/search_products')
 def search_products():
+    """Return products matching a search query."""
     # Retrieve query parameter from the URL
     query = request.args.get('query', '').lower()
     # Query the database for products that match the search query
@@ -1054,6 +1097,7 @@ def search_products():
 @invoice.route('/create_invoice', methods=['GET', 'POST'])
 @login_required
 def create_invoice():
+    """Create a sales invoice."""
     form = InvoiceForm()
     form.customer.choices = [(c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()]
 
@@ -1135,6 +1179,7 @@ def create_invoice():
 @invoice.route('/delete_invoice/<invoice_id>', methods=['GET'])
 @login_required
 def delete_invoice(invoice_id):
+    """Delete an invoice and its lines."""
     # Retrieve the invoice object from the database
     invoice = db.session.get(Invoice, invoice_id)
     if invoice is None:
@@ -1151,6 +1196,7 @@ def delete_invoice(invoice_id):
 @invoice.route('/view_invoice/<invoice_id>', methods=['GET'])
 @login_required
 def view_invoice(invoice_id):
+    """Render an invoice for viewing."""
     invoice = db.session.get(Invoice, invoice_id)
     if invoice is None:
         abort(404)
@@ -1181,6 +1227,7 @@ def view_invoice(invoice_id):
 @invoice.route('/get_customer_tax_status/<int:customer_id>')
 @login_required
 def get_customer_tax_status(customer_id):
+    """Return GST and PST exemptions for a customer."""
     customer = db.session.get(Customer, customer_id)
     if customer is None:
         abort(404)
@@ -1193,6 +1240,7 @@ def get_customer_tax_status(customer_id):
 @invoice.route('/view_invoices', methods=['GET', 'POST'])
 @login_required
 def view_invoices():
+    """List invoices with optional filters."""
     form = InvoiceFilterForm()
     form.vendor_id.choices = [(-1, 'All')] + [
         (c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()
@@ -1234,6 +1282,7 @@ def view_invoices():
 
 @report.route('/reports/vendor-invoices', methods=['GET', 'POST'])
 def vendor_invoice_report():
+    """Form to select vendor invoice report parameters."""
     form = VendorInvoiceReportForm()
     form.customer.choices = [(c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()]
 
@@ -1250,6 +1299,7 @@ def vendor_invoice_report():
 
 @report.route('/reports/vendor-invoices/results')
 def vendor_invoice_report_results():
+    """Show vendor invoice report based on query parameters."""
     customer_ids = request.args.get('customer_ids')
     start = request.args.get('start')
     end = request.args.get('end')
@@ -1298,6 +1348,7 @@ def vendor_invoice_report_results():
 
 @report.route('/reports/product-sales', methods=['GET', 'POST'])
 def product_sales_report():
+    """Generate a report on product sales and profit."""
     form = ProductSalesReportForm()
     report_data = []
 
@@ -1342,6 +1393,7 @@ def product_sales_report():
 @purchase.route('/purchase_orders', methods=['GET'])
 @login_required
 def view_purchase_orders():
+    """Show outstanding purchase orders."""
     orders = PurchaseOrder.query.filter_by(received=False).order_by(PurchaseOrder.order_date.desc()).all()
     return render_template('purchase_orders/view_purchase_orders.html', orders=orders)
 
@@ -1349,6 +1401,7 @@ def view_purchase_orders():
 @purchase.route('/purchase_orders/create', methods=['GET', 'POST'])
 @login_required
 def create_purchase_order():
+    """Create a purchase order."""
     form = PurchaseOrderForm()
     if form.validate_on_submit():
         po = PurchaseOrder(
@@ -1386,6 +1439,7 @@ def create_purchase_order():
 @purchase.route('/purchase_orders/edit/<int:po_id>', methods=['GET', 'POST'])
 @login_required
 def edit_purchase_order(po_id):
+    """Modify a pending purchase order."""
     po = db.session.get(PurchaseOrder, po_id)
     if po is None:
         abort(404)
@@ -1434,6 +1488,7 @@ def edit_purchase_order(po_id):
 @purchase.route('/purchase_orders/<int:po_id>/delete', methods=['GET'])
 @login_required
 def delete_purchase_order(po_id):
+    """Delete an unreceived purchase order."""
     po = db.session.get(PurchaseOrder, po_id)
     if po is None:
         abort(404)
@@ -1450,6 +1505,7 @@ def delete_purchase_order(po_id):
 @purchase.route('/purchase_orders/<int:po_id>/receive', methods=['GET', 'POST'])
 @login_required
 def receive_invoice(po_id):
+    """Receive a purchase order and create an invoice."""
     po = db.session.get(PurchaseOrder, po_id)
     if po is None:
         abort(404)
@@ -1531,6 +1587,7 @@ def receive_invoice(po_id):
 @purchase.route('/purchase_invoices', methods=['GET'])
 @login_required
 def view_purchase_invoices():
+    """List all received purchase invoices."""
     invoices = PurchaseInvoice.query.order_by(PurchaseInvoice.received_date.desc()).all()
     return render_template('purchase_invoices/view_purchase_invoices.html', invoices=invoices)
 
@@ -1538,6 +1595,7 @@ def view_purchase_invoices():
 @purchase.route('/purchase_invoices/<int:invoice_id>')
 @login_required
 def view_purchase_invoice(invoice_id):
+    """Display a purchase invoice."""
     invoice = db.session.get(PurchaseInvoice, invoice_id)
     if invoice is None:
         abort(404)
@@ -1547,6 +1605,7 @@ def view_purchase_invoice(invoice_id):
 @purchase.route('/purchase_invoices/<int:invoice_id>/reverse')
 @login_required
 def reverse_purchase_invoice(invoice_id):
+    """Undo receipt of a purchase invoice."""
     invoice = db.session.get(PurchaseInvoice, invoice_id)
     if invoice is None:
         abort(404)

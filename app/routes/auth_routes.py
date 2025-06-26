@@ -24,6 +24,7 @@ admin = Blueprint('admin', __name__)
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
+    """Authenticate a user and start their session."""
     form = LoginForm()
     if form.validate_on_submit():
         email = form.email.data
@@ -50,6 +51,7 @@ def login():
 @auth.route('/logout')
 @login_required
 def logout():
+    """Log the current user out."""
     user_id = current_user.id
     logout_user()
     log_activity('Logged out', user_id)
@@ -59,6 +61,7 @@ def logout():
 @auth.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
+    """Allow the current user to change their password."""
     form = ChangePasswordForm()
     if form.validate_on_submit():
         if not check_password_hash(current_user.password, form.current_password.data):
@@ -77,6 +80,7 @@ def profile():
 @admin.route('/user_profile/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def user_profile(user_id):
+    """View or update another user's profile."""
     if not current_user.is_admin:
         abort(403)
 
@@ -99,6 +103,7 @@ def user_profile(user_id):
 @admin.route('/activate_user/<int:user_id>', methods=['GET'])
 @login_required
 def activate_user(user_id):
+    """Activate a user account."""
     if not current_user.is_admin:
         abort(403)  # Abort if the current user is not an admin
 
@@ -115,6 +120,7 @@ def activate_user(user_id):
 @admin.route('/controlpanel/users', methods=['GET', 'POST'])
 @login_required
 def users():
+    """Admin interface for managing users."""
     if not current_user.is_admin:
         return abort(403)  # Only allow admins to access this page
 
@@ -144,6 +150,7 @@ def users():
 
 @auth.route('/signup', methods=['GET', 'POST'])
 def signup():
+    """Register a new user account."""
     form = SignupForm()
     if form.validate_on_submit():
         if form.password.data != form.confirm_password.data:
@@ -173,6 +180,7 @@ def signup():
 @admin.route('/delete_user/<int:user_id>', methods=['POST'])
 @login_required
 def delete_user(user_id):
+    """Remove a user from the system."""
     if not current_user.is_admin:
         abort(403)  # Abort if the current user is not an admin
 
@@ -189,6 +197,7 @@ def delete_user(user_id):
 @admin.route('/controlpanel/backups', methods=['GET'])
 @login_required
 def backups():
+    """List available database backups."""
     if not current_user.is_admin:
         abort(403)
     from flask import current_app
@@ -204,6 +213,7 @@ def backups():
 @admin.route('/controlpanel/backups/create', methods=['POST'])
 @login_required
 def create_backup_route():
+    """Create a new database backup."""
     if not current_user.is_admin:
         abort(403)
     form = CreateBackupForm()
@@ -217,6 +227,7 @@ def create_backup_route():
 @admin.route('/controlpanel/backups/restore', methods=['POST'])
 @login_required
 def restore_backup_route():
+    """Restore the database from an uploaded backup."""
     if not current_user.is_admin:
         abort(403)
     form = RestoreBackupForm()
@@ -237,6 +248,7 @@ def restore_backup_route():
 @admin.route('/controlpanel/backups/download/<path:filename>', methods=['GET'])
 @login_required
 def download_backup(filename):
+    """Download a backup file."""
     if not current_user.is_admin:
         abort(403)
     from flask import current_app, send_from_directory
@@ -248,6 +260,7 @@ def download_backup(filename):
 @admin.route('/controlpanel/activity', methods=['GET'])
 @login_required
 def activity_logs():
+    """Display a log of user actions."""
     if not current_user.is_admin:
         abort(403)
     logs = ActivityLog.query.order_by(ActivityLog.timestamp.desc()).all()

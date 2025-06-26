@@ -3,6 +3,7 @@ from app.models import ActivityLog, db
 
 
 def log_activity(activity, user_id=None):
+    """Record an activity performed by a user."""
     if user_id is None:
         if current_user and not current_user.is_anonymous:
             user_id = current_user.id
