@@ -171,17 +171,22 @@ class ProductForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(ProductForm, self).__init__(*args, **kwargs)
-        codes = [(g.id, g.code) for g in GLCode.query.all()]
-        self.gl_code.choices = [(code, code) for _, code in codes]
-        self.gl_code_id.choices = codes
-        self.sales_gl_code.choices = codes
+        sales_codes = [
+            (g.id, g.code) for g in GLCode.query.filter(GLCode.code.like('4%')).all()
+        ]
+        self.gl_code.choices = [(code, code) for _, code in sales_codes]
+        self.gl_code_id.choices = sales_codes
+        self.sales_gl_code.choices = sales_codes
 
     def validate_gl_code(self, field):
         if field.data and not str(field.data).startswith('4'):
             raise ValidationError('Product GL codes must start with 4')
         from app.models import GLCode
-        self.gl_code_id.choices = [(g.id, g.code) for g in GLCode.query.all()]
-        self.sales_gl_code.choices = [(g.id, g.code) for g in GLCode.query.all()]
+        sales_codes = [
+            (g.id, g.code) for g in GLCode.query.filter(GLCode.code.like('4%')).all()
+        ]
+        self.gl_code_id.choices = sales_codes
+        self.sales_gl_code.choices = sales_codes
 
 
 class RecipeItemForm(FlaskForm):
