@@ -58,12 +58,15 @@
         const row = document.createElement('div');
         row.classList.add('form-row','mb-2','item-row','align-items-center');
         row.innerHTML = `
-            <div class="col"><select name="items-${index}-item" class="form-control item-select">${itemOptions}</select></div>
-            <div class="col"><select name="items-${index}-unit" class="form-control unit-select"></select></div>
-            <div class="col"><input type="number" step="any" name="items-${index}-quantity" class="form-control quantity"></div>
-            <div class="col"><input type="number" step="any" name="items-${index}-cost" class="form-control cost"></div>
+            <div class="col"><select name="items-${index}-item" id="items-${index}-item" class="form-control item-select">${itemOptions}</select></div>
+            <div class="col"><select name="items-${index}-unit" id="items-${index}-unit" class="form-control unit-select"></select></div>
+            <div class="col"><input type="number" step="any" name="items-${index}-quantity" id="items-${index}-quantity" class="form-control quantity"></div>
+            <div class="col"><input type="number" step="any" name="items-${index}-cost" id="items-${index}-cost" class="form-control cost"></div>
             <div class="col"><span class="line-total">0.00</span></div>
-            <div class="col-auto form-check d-flex align-items-center"><input type="checkbox" name="items-${index}-return_item" class="form-check-input return-item"></div>
+            <div class="col-auto form-check d-flex align-items-center">
+                <input type="checkbox" name="items-${index}-return_item" id="items-${index}-return_item" class="form-check-input return-item">
+                <label class="form-check-label ms-1" for="items-${index}-return_item">Return</label>
+            </div>
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
         `;
         return row;
