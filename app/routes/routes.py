@@ -703,6 +703,10 @@ def create_product():
             gl_code_id=form.gl_code_id.data,
             sales_gl_code_id=form.sales_gl_code.data or None,
         )
+        if not product.gl_code and product.gl_code_id:
+            gl = db.session.get(GLCode, product.gl_code_id)
+            if gl:
+                product.gl_code = gl.code
         db.session.add(product)
         db.session.commit()
 
@@ -740,6 +744,10 @@ def edit_product(product_id):
         product.gl_code = form.gl_code.data
         product.gl_code_id = form.gl_code_id.data
         product.sales_gl_code_id = form.sales_gl_code.data or None
+        if not product.gl_code and product.gl_code_id:
+            gl = db.session.get(GLCode, product.gl_code_id)
+            if gl:
+                product.gl_code = gl.code
 
         ProductRecipeItem.query.filter_by(product_id=product.id).delete()
         for item_form in form.items:

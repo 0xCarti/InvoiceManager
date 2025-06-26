@@ -25,20 +25,15 @@
                 <div class="invalid-feedback">
                     {{ form.price.errors[0] }}
                 </div>
-            {% endif %}
-        </div>
+        {% endif %}
+    </div>
 
-        <div class="form-group">
-            {{ form.gl_code.label(class="form-label") }}
-            {{ form.gl_code(class="form-control") }}
-        </div>
-
-        <div class="form-group">
-            {{ form.cost.label(class="form-label") }}
-            {{ form.cost(class="form-control", id="cost") }}
-            {% if form.cost.errors %}
-                <div class="invalid-feedback">
-                    {{ form.cost.errors[0] }}
+    <div class="form-group">
+        {{ form.cost.label(class="form-label") }}
+        {{ form.cost(class="form-control", id="cost") }}
+        {% if form.cost.errors %}
+            <div class="invalid-feedback">
+                {{ form.cost.errors[0] }}
                 </div>
             {% endif %}
         </div>
