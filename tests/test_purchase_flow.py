@@ -21,6 +21,23 @@ def setup_purchase(app):
         return user.email, vendor.id, item.id, location.id, unit.id
 
 
+def setup_purchase_with_case(app):
+    """Setup purchase scenario with an additional case unit."""
+    with app.app_context():
+        user = User(email='casebuyer@example.com', password=generate_password_hash('pass'), active=True)
+        vendor = Customer(first_name='Vend', last_name='Or')
+        item = Item(name='CaseItem', base_unit='each')
+        each_unit = ItemUnit(item=item, name='each', factor=1, receiving_default=True, transfer_default=True)
+        case_unit = ItemUnit(item=item, name='case', factor=24)
+        location = Location(name='Main')
+        db.session.add_all([user, vendor, item, each_unit, case_unit, location])
+        db.session.commit()
+        lsi = LocationStandItem(location_id=location.id, item_id=item.id, expected_count=0)
+        db.session.add(lsi)
+        db.session.commit()
+        return user.email, vendor.id, item.id, location.id, case_unit.id
+
+
 def test_purchase_and_receive(client, app):
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
     with client:
@@ -270,3 +287,46 @@ def test_invoice_moves_and_reverse(client, app):
     with app.app_context():
         assert PurchaseInvoice.query.get(inv_id) is None
         assert not db.session.get(PurchaseOrder, po_id).received
+
+
+def test_receive_invoice_base_unit_cost(client, app):
+    """Receiving items in cases should update item cost per base unit."""
+    email, vendor_id, item_id, location_id, case_unit_id = setup_purchase_with_case(app)
+
+    with client:
+        login(client, email, 'pass')
+        resp = client.post('/purchase_orders/create', data={
+            'vendor': vendor_id,
+            'order_date': '2023-07-01',
+            'expected_date': '2023-07-05',
+            'items-0-item': item_id,
+            'items-0-unit': case_unit_id,
+            'items-0-quantity': 1
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        po = PurchaseOrder.query.first()
+        po_id = po.id
+
+    with client:
+        login(client, email, 'pass')
+        resp = client.post(f'/purchase_orders/{po_id}/receive', data={
+            'received_date': '2023-07-06',
+            'location_id': location_id,
+            'gst': 0,
+            'pst': 0,
+            'delivery_charge': 0,
+            'items-0-item': item_id,
+            'items-0-unit': case_unit_id,
+            'items-0-quantity': 1,
+            'items-0-cost': 24
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        assert item.quantity == 24
+        assert item.cost == 1
+        lsi = LocationStandItem.query.filter_by(location_id=location_id, item_id=item_id).first()
+        assert lsi.expected_count == 24
