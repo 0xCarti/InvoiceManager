@@ -6,6 +6,7 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import create_app, db
+from app.models import GLCode
 
 @pytest.fixture
 def app(tmp_path):
@@ -33,3 +34,11 @@ def app(tmp_path):
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def gl_codes(app):
+    with app.app_context():
+        if GLCode.query.count() == 0:
+            db.session.add_all([GLCode(code='4000'), GLCode(code='5000')])
+            db.session.commit()

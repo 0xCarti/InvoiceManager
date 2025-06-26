@@ -50,20 +50,19 @@ class Location(db.Model):
 
 class GLCode(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-<<<<<<< carti/update-routes-and-forms-for-gl_code_id
+    code = db.Column(db.String(10), unique=True, nullable=False)
     code = db.Column(db.String(20), unique=True, nullable=False)
     description = db.Column(db.String(255))
     items = db.relationship('Item', backref='gl_code')
     products = db.relationship('Product', backref='gl_code')
-=======
     code = db.Column(db.String(50), unique=True, nullable=False)
->>>>>>> main
 
 
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     base_unit = db.Column(db.String(20), nullable=False)
+    gl_code = db.Column(db.String(10), nullable=True)
     gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
@@ -122,6 +121,7 @@ class Customer(db.Model):
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    gl_code = db.Column(db.String(10), nullable=True)
     price = db.Column(db.Float, nullable=False)
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)

@@ -234,18 +234,15 @@ def add_item():
         if recv_count > 1 or trans_count > 1:
             flash('Only one unit can be set as receiving and transfer default.', 'error')
             return render_template('items/add_item.html', form=form)
-<<<<<<< carti/update-routes-and-forms-for-gl_code_id
+        item = Item(name=form.name.data, base_unit=form.base_unit.data, gl_code=form.gl_code.data)
         item = Item(name=form.name.data, base_unit=form.base_unit.data, gl_code_id=form.gl_code_id.data)
-=======
         item = Item(
             name=form.name.data,
             base_unit=form.base_unit.data,
             purchase_gl_code_id=form.purchase_gl_code.data or None,
         )
->>>>>>> main
         db.session.add(item)
         db.session.commit()
-
         receiving_set = False
         transfer_set = False
         for uf in form.units:
@@ -279,11 +276,9 @@ def edit_item(item_id):
         abort(404)
     form = ItemForm(obj=item)
     if request.method == 'GET':
-<<<<<<< carti/update-routes-and-forms-for-gl_code_id
+        form.gl_code.data = item.gl_code
         form.gl_code_id.data = item.gl_code_id
-=======
         form.purchase_gl_code.data = item.purchase_gl_code_id
->>>>>>> main
         for idx, unit in enumerate(item.units):
             if idx < len(form.units):
                 form.units[idx].form.name.data = unit.name
@@ -305,13 +300,11 @@ def edit_item(item_id):
             return render_template('items/edit_item.html', form=form, item=item)
         item.name = form.name.data
         item.base_unit = form.base_unit.data
-<<<<<<< carti/update-routes-and-forms-for-gl_code_id
+        item.gl_code = form.gl_code.data
         item.gl_code_id = form.gl_code_id.data
-=======
         item.purchase_gl_code_id = form.purchase_gl_code.data or None
->>>>>>> main
         ItemUnit.query.filter_by(item_id=item.id).delete()
-        receiving_set = False
+        receiving_set = Fals
         transfer_set = False
         for uf in form.units:
             unit_form = uf.form
@@ -702,13 +695,12 @@ def create_product():
         product = Product(
             name=form.name.data,
             price=form.price.data,
-<<<<<<< carti/update-routes-and-forms-for-gl_code_id
+            cost=form.cost.data,
+            gl_code=form.gl_code.data
             cost=form.cost.data,  # Save cost
             gl_code_id=form.gl_code_id.data
-=======
             cost=form.cost.data,
             sales_gl_code_id=form.sales_gl_code.data or None,
->>>>>>> main
         )
         db.session.add(product)
         db.session.commit()
@@ -744,11 +736,9 @@ def edit_product(product_id):
         product.name = form.name.data
         product.price = form.price.data
         product.cost = form.cost.data or 0.0  # 👈 Update cost
-<<<<<<< carti/update-routes-and-forms-for-gl_code_id
+        product.gl_code = form.gl_code.data
         product.gl_code_id = form.gl_code_id.data
-=======
         product.sales_gl_code_id = form.sales_gl_code.data or None
->>>>>>> main
 
         ProductRecipeItem.query.filter_by(product_id=product.id).delete()
         for item_form in form.items:
@@ -772,11 +762,9 @@ def edit_product(product_id):
         form.name.data = product.name
         form.price.data = product.price
         form.cost.data = product.cost or 0.0  # 👈 Pre-fill cost
-<<<<<<< carti/update-routes-and-forms-for-gl_code_id
+        form.gl_code.data = product.gl_code
         form.gl_code_id.data = product.gl_code_id
-=======
         form.sales_gl_code.data = product.sales_gl_code_id
->>>>>>> main
         form.items.min_entries = max(1, len(product.recipe_items))
         item_choices = [(itm.id, itm.name) for itm in Item.query.all()]
         for i, recipe_item in enumerate(product.recipe_items):
