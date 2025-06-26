@@ -74,11 +74,15 @@ class ItemForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(ItemForm, self).__init__(*args, **kwargs)
-        purchase_codes = [
-            (g.id, g.code)
-            for g in GLCode.query.filter(GLCode.code.like('5%')).all()
+        codes = GLCode.query.filter(GLCode.code.like('5%')).all()
+        self.gl_code.choices = [
+            (g.code, f"{g.code} - {g.description}" if g.description else g.code)
+            for g in codes
         ]
-        self.gl_code.choices = [(code, code) for _, code in purchase_codes]
+        purchase_codes = [
+            (g.id, f"{g.code} - {g.description}" if g.description else g.code)
+            for g in codes
+        ]
         self.gl_code_id.choices = purchase_codes
         self.purchase_gl_code.choices = purchase_codes
 
@@ -86,9 +90,10 @@ class ItemForm(FlaskForm):
         if field.data and not str(field.data).startswith('5'):
             raise ValidationError('Item GL codes must start with 5')
         from app.models import GLCode
+        codes = GLCode.query.filter(GLCode.code.like('5%')).all()
         purchase_codes = [
-            (g.id, g.code)
-            for g in GLCode.query.filter(GLCode.code.like('5%')).all()
+            (g.id, f"{g.code} - {g.description}" if g.description else g.code)
+            for g in codes
         ]
         self.gl_code_id.choices = purchase_codes
         self.purchase_gl_code.choices = purchase_codes
