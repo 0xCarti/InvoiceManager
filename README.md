@@ -19,6 +19,22 @@ A Flask-based application for managing invoices, products and vendors. The proje
    pip install -r requirements.txt
    ```
 
+## Quick Setup
+
+If you'd like to automate the above steps, run one of the provided setup scripts
+from the project root:
+
+```bash
+./setup_linux.sh       # Linux/macOS
+# or
+powershell -ExecutionPolicy Bypass -File setup_windows.ps1  # Windows
+```
+
+The scripts will create a virtual environment, install the required
+dependencies, prompt for the values of `SECRET_KEY`, `ADMIN_EMAIL`, `ADMIN_PASS`
+and `GST`, and then generate a `.env` file. They also initialize the SQLite
+database and create the required directories.
+
 ## Required Environment Variables
 
 The application requires several variables to be present in your environment:
