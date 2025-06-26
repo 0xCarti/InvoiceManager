@@ -51,6 +51,11 @@ class Location(db.Model):
 class GLCode(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(10), unique=True, nullable=False)
+    code = db.Column(db.String(20), unique=True, nullable=False)
+    description = db.Column(db.String(255))
+    items = db.relationship('Item', backref='gl_code')
+    products = db.relationship('Product', backref='gl_code')
+    code = db.Column(db.String(50), unique=True, nullable=False)
 
 
 class Item(db.Model):
@@ -58,8 +63,11 @@ class Item(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     base_unit = db.Column(db.String(20), nullable=False)
     gl_code = db.Column(db.String(10), nullable=True)
+    gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    purchase_gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
+    purchase_gl_code = relationship('GLCode', foreign_keys=[purchase_gl_code_id])
     transfers = db.relationship('Transfer', secondary=transfer_items, backref=db.backref('items', lazy='dynamic'))
     recipe_items = relationship("ProductRecipeItem", back_populates="item", cascade="all, delete-orphan")
     units = relationship("ItemUnit", back_populates="item", cascade="all, delete-orphan")
@@ -116,7 +124,10 @@ class Product(db.Model):
     gl_code = db.Column(db.String(10), nullable=True)
     price = db.Column(db.Float, nullable=False)
     cost = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
     quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    sales_gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
+    sales_gl_code = relationship('GLCode', foreign_keys=[sales_gl_code_id])
 
     # Define a one-to-many relationship with InvoiceProduct
     invoice_products = relationship("InvoiceProduct", back_populates="product", cascade="all, delete-orphan")
