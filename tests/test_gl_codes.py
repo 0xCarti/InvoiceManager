@@ -7,7 +7,7 @@ from tests.test_user_flows import login
 def setup_data(app):
     with app.app_context():
         user = User(email='gl@example.com', password=generate_password_hash('pass'), active=True)
-        purchase = GLCode(code='6000')
+        purchase = GLCode(code='5100')
         sales = GLCode.query.filter_by(code='5000').first()
         if sales is None:
             sales = GLCode(code='5000')
