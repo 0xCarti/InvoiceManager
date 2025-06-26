@@ -2,7 +2,7 @@ from werkzeug.security import generate_password_hash
 from app import db
 from app.models import (User, Customer, Item, ItemUnit, Location, PurchaseOrder,
                         PurchaseOrderItem, PurchaseInvoice, PurchaseInvoiceItem,
-                        LocationStandItem)
+                        LocationStandItem, PurchaseOrderItemArchive)
 from tests.test_user_flows import login
 
 
@@ -50,6 +50,7 @@ def test_purchase_and_receive(client, app):
             'delivery_charge': 2,
             'location_id': location_id,
             'items-0-item': item_id,
+            'items-0-unit': unit_id,
             'items-0-quantity': 3,
             'items-0-cost': 2.5
         }, follow_redirects=True)
@@ -61,6 +62,7 @@ def test_purchase_and_receive(client, app):
         assert item.cost == 2.5
         lsi = LocationStandItem.query.filter_by(location_id=location_id, item_id=item_id).first()
         assert lsi.expected_count == 3
+        assert PurchaseOrderItemArchive.query.filter_by(purchase_order_id=po_id).count() == 1
 
 
 def test_purchase_order_multiple_items(client, app):
@@ -168,6 +170,7 @@ def test_receive_prefills_items_and_return(client, app):
             'pst': 0,
             'delivery_charge': 0,
             'items-0-item': item_id,
+            'items-0-unit': unit_id,
             'items-0-quantity': 3,
             'items-0-cost': 1.5,
             'items-0-return_item': 'y'
@@ -178,6 +181,7 @@ def test_receive_prefills_items_and_return(client, app):
         inv_item = PurchaseInvoiceItem.query.first()
         assert inv_item.cost == -1.5
         assert inv_item.quantity == -3
+        assert inv_item.unit_id == unit_id
 
 
 def test_edit_purchase_order_updates(client, app):

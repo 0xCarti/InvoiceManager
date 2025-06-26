@@ -28,14 +28,21 @@
         <div id="items">
         {% for item in form.items %}
         <div class="form-row item-row mb-2 align-items-center">
-            <div class="col">{{ item.item(class="form-control", disabled=True) }}<input type="hidden" name="{{ item.item.name }}" value="{{ item.item.data }}"></div>
-            <div class="col mt-2">{{ po.items[loop.index0].unit.name }}</div>
+            <div class="col">{{ item.item(class="form-control item-select") }}</div>
+            <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select"></select></div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col">{{ item.cost(class="form-control cost") }}</div>
+            <div class="col"><span class="line-total">0.00</span></div>
             <div class="col form-check">{{ item.return_item(class="form-check-input return-item") }} {{ item.return_item.label(class="form-check-label") }}</div>
+            <div class="col-auto">
+                {% if loop.index0 > 0 %}
+                <button type="button" class="btn btn-danger remove-item">Remove</button>
+                {% endif %}
+            </div>
         </div>
         {% endfor %}
         </div>
+        <button id="add-item" type="button" class="btn btn-secondary mt-3">Add Item</button>
         <div class="form-group mt-3">
             <label>Total: $<span id="item-total">0.00</span></label>
         </div>
@@ -43,23 +50,85 @@
     </form>
 </div>
 <script>
-function updateTotal() {
-    let total = 0;
-    document.querySelectorAll('#items .item-row').forEach(row => {
-        const qty = parseFloat(row.querySelector('.quantity').value) || 0;
-        let price = parseFloat(row.querySelector('.cost').value) || 0;
-        if (row.querySelector('.return-item').checked) {
-            price = -price;
-        }
-        total += qty * price;
-    });
-    document.getElementById('item-total').textContent = total.toFixed(2);
-}
+    const itemOptions = `<option value="">Select Item</option>{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
+    let itemIndex = {{ form.items|length }};
 
-document.querySelectorAll('.quantity, .cost, .return-item').forEach(el => {
-    el.addEventListener('input', updateTotal);
-    el.addEventListener('change', updateTotal);
-});
-updateTotal();
+    function createRow(index) {
+        const row = document.createElement('div');
+        row.classList.add('form-row','mb-2','item-row','align-items-center');
+        row.innerHTML = `
+            <div class="col"><select name="items-${index}-item" class="form-control item-select">${itemOptions}</select></div>
+            <div class="col"><select name="items-${index}-unit" class="form-control unit-select"></select></div>
+            <div class="col"><input type="number" step="any" name="items-${index}-quantity" class="form-control quantity"></div>
+            <div class="col"><input type="number" step="any" name="items-${index}-cost" class="form-control cost"></div>
+            <div class="col"><span class="line-total">0.00</span></div>
+            <div class="col form-check"><input type="checkbox" name="items-${index}-return_item" class="form-check-input return-item"></div>
+            <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
+        `;
+        return row;
+    }
+
+    function fetchUnits(selectEl) {
+        const itemId = selectEl.value;
+        const unitSelect = selectEl.closest('.item-row').querySelector('.unit-select');
+        if (!itemId) {
+            unitSelect.innerHTML = '';
+            return;
+        }
+        fetch(`/items/${itemId}/units`).then(r => r.json()).then(units => {
+            let opts = '';
+            units.forEach(u => {
+                opts += `<option value="${u.id}" ${u.receiving_default ? 'selected' : ''}>${u.name}</option>`;
+            });
+            unitSelect.innerHTML = opts;
+        });
+    }
+
+    function updateTotals() {
+        let total = 0;
+        document.querySelectorAll('#items .item-row').forEach(row => {
+            const qty = parseFloat(row.querySelector('.quantity').value) || 0;
+            let price = parseFloat(row.querySelector('.cost').value) || 0;
+            if (row.querySelector('.return-item').checked) {
+                price = -price;
+            }
+            const lineTotal = qty * price;
+            row.querySelector('.line-total').textContent = lineTotal.toFixed(2);
+            total += lineTotal;
+        });
+        document.getElementById('item-total').textContent = total.toFixed(2);
+    }
+
+    document.getElementById('add-item').addEventListener('click', function(e) {
+        e.preventDefault();
+        const row = createRow(itemIndex);
+        document.getElementById('items').appendChild(row);
+        itemIndex++;
+    });
+
+    document.getElementById('items').addEventListener('click', function(e) {
+        if (e.target && e.target.classList.contains('remove-item')) {
+            e.target.closest('.item-row').remove();
+            updateTotals();
+        }
+    });
+
+    document.getElementById('items').addEventListener('change', function(e) {
+        if (e.target && e.target.classList.contains('item-select')) {
+            fetchUnits(e.target);
+        }
+        if (e.target && (e.target.classList.contains('quantity') || e.target.classList.contains('cost') || e.target.classList.contains('return-item'))) {
+            updateTotals();
+        }
+    });
+
+    document.getElementById('items').addEventListener('input', function(e) {
+        if (e.target && (e.target.classList.contains('quantity') || e.target.classList.contains('cost'))) {
+            updateTotals();
+        }
+    });
+
+    document.querySelectorAll('.item-select').forEach(sel => fetchUnits(sel));
+    updateTotals();
 </script>
 {% endblock %}

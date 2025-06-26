@@ -39,6 +39,7 @@ from app.models import (
     PurchaseOrderItem,
     PurchaseInvoice,
     PurchaseInvoiceItem,
+    PurchaseOrderItemArchive,
 )
 from datetime import datetime
 from flask import Blueprint, render_template
@@ -1337,10 +1338,21 @@ def receive_invoice(po_id):
             form.items.append_entry()
         for item_form in form.items:
             item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
         for i, poi in enumerate(po.items):
             form.items[i].item.data = poi.item_id
+            form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
     if form.validate_on_submit():
+        if not PurchaseOrderItemArchive.query.filter_by(purchase_order_id=po.id).first():
+            for poi in po.items:
+                db.session.add(PurchaseOrderItemArchive(
+                    purchase_order_id=po.id,
+                    item_id=poi.item_id,
+                    unit_id=poi.unit_id,
+                    quantity=poi.quantity
+                ))
+            db.session.commit()
         invoice = PurchaseInvoice(
             purchase_order_id=po.id,
             user_id=current_user.id,
@@ -1357,6 +1369,7 @@ def receive_invoice(po_id):
         for field in items:
             index = field.split('-')[1]
             item_id = request.form.get(f'items-{index}-item', type=int)
+            unit_id = request.form.get(f'items-{index}-unit', type=int)
             quantity = request.form.get(f'items-{index}-quantity', type=float)
             cost = request.form.get(f'items-{index}-cost', type=float)
             is_return = request.form.get(f'items-{index}-return_item') is not None
@@ -1364,16 +1377,21 @@ def receive_invoice(po_id):
                 if is_return:
                     quantity = -abs(quantity)
                     cost = -abs(cost)
-                db.session.add(PurchaseInvoiceItem(invoice_id=invoice.id, item_id=item_id, quantity=quantity, cost=cost))
+                db.session.add(PurchaseInvoiceItem(invoice_id=invoice.id, item_id=item_id, unit_id=unit_id, quantity=quantity, cost=cost))
                 item_obj = db.session.get(Item, item_id)
                 if item_obj:
-                    item_obj.quantity = (item_obj.quantity or 0) + quantity
+                    factor = 1
+                    if unit_id:
+                        unit = db.session.get(ItemUnit, unit_id)
+                        if unit:
+                            factor = unit.factor
+                    item_obj.quantity = (item_obj.quantity or 0) + quantity * factor
                     item_obj.cost = cost
                     record = LocationStandItem.query.filter_by(location_id=invoice.location_id, item_id=item_id).first()
                     if not record:
                         record = LocationStandItem(location_id=invoice.location_id, item_id=item_id, expected_count=0)
                         db.session.add(record)
-                    record.expected_count += quantity
+                    record.expected_count += quantity * factor
 
         db.session.commit()
         log_activity(f'Received invoice {invoice.id} for PO {po.id}')
