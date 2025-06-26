@@ -65,14 +65,22 @@ class ItemForm(FlaskForm):
         choices=[('ounce', 'Ounce'), ('gram', 'Gram'), ('each', 'Each'), ('millilitre', 'Millilitre')],
         validators=[DataRequired()]
     )
+<<<<<<< carti/update-routes-and-forms-for-gl_code_id
     gl_code_id = SelectField('GL Code', coerce=int, validators=[Optional()], validate_choice=False)
+=======
+    purchase_gl_code = SelectField('Purchase GL Code', coerce=int, validators=[Optional()])
+>>>>>>> main
     units = FieldList(FormField(ItemUnitForm), min_entries=1)
     submit = SubmitField('Submit')
 
     def __init__(self, *args, **kwargs):
         super(ItemForm, self).__init__(*args, **kwargs)
         from app.models import GLCode
+<<<<<<< carti/update-routes-and-forms-for-gl_code_id
         self.gl_code_id.choices = [(g.id, g.code) for g in GLCode.query.all()]
+=======
+        self.purchase_gl_code.choices = [(g.id, g.code) for g in GLCode.query.all()]
+>>>>>>> main
 
 
 class TransferItemForm(FlaskForm):
@@ -145,13 +153,21 @@ class ProductForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
     price = DecimalField('Price', validators=[DataRequired(), NumberRange(min=0.0001)])
     cost = DecimalField('Cost', validators=[InputRequired(), NumberRange(min=0)], default=0.0)
+<<<<<<< carti/update-routes-and-forms-for-gl_code_id
     gl_code_id = SelectField('GL Code', coerce=int, validators=[Optional()], validate_choice=False)
+=======
+    sales_gl_code = SelectField('Sales GL Code', coerce=int, validators=[Optional()])
+>>>>>>> main
     submit = SubmitField('Submit')
 
     def __init__(self, *args, **kwargs):
         super(ProductForm, self).__init__(*args, **kwargs)
         from app.models import GLCode
+<<<<<<< carti/update-routes-and-forms-for-gl_code_id
         self.gl_code_id.choices = [(g.id, g.code) for g in GLCode.query.all()]
+=======
+        self.sales_gl_code.choices = [(g.id, g.code) for g in GLCode.query.all()]
+>>>>>>> main
 
 
 class RecipeItemForm(FlaskForm):
