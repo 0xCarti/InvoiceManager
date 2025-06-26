@@ -43,14 +43,12 @@
             <div class="form-row mb-2 align-items-center">
                 <div class="col">{{ item.item(class="form-control") }}</div>
                 <div class="col">{{ item.quantity(class="form-control") }}</div>
-                <div class="col form-check">
+                <div class="col-auto form-check d-flex align-items-center">
                     {{ item.countable(class="form-check-input") }}
-                    {{ item.countable.label(class="form-check-label") }}
+                    {{ item.countable.label(class="form-check-label ms-1") }}
                 </div>
                 <div class="col-auto">
-                    {% if loop.index0 > 0 %}
                     <button type="button" class="btn btn-danger remove-item">Remove</button>
-                    {% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -80,9 +78,9 @@ document.addEventListener('DOMContentLoaded', function() {
         row.innerHTML = `
             <div class="col"><select name="items-${itemIndex}-item" class="form-control">${itemOptions}</select></div>
             <div class="col"><input type="number" step="any" name="items-${itemIndex}-quantity" class="form-control"></div>
-            <div class="col form-check">
+            <div class="col-auto form-check d-flex align-items-center">
                 <input type="checkbox" name="items-${itemIndex}-countable" class="form-check-input" id="items-${itemIndex}-countable">
-                <label class="form-check-label" for="items-${itemIndex}-countable">${countableLabel}</label>
+                <label class="form-check-label ms-1" for="items-${itemIndex}-countable">${countableLabel}</label>
             </div>
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
         `;
