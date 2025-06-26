@@ -1411,6 +1411,7 @@ def receive_invoice(po_id):
 
         db.session.commit()
         po.received = True
+        db.session.add(po)
         db.session.commit()
         log_activity(f'Received invoice {invoice.id} for PO {po.id}')
         flash('Invoice received successfully!', 'success')
