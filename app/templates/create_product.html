@@ -29,11 +29,26 @@
         </div>
 
         <div class="form-group">
+            {{ form.gl_code.label(class="form-label") }}
+            {{ form.gl_code(class="form-control") }}
+        </div>
+
+        <div class="form-group">
             {{ form.cost.label(class="form-label") }}
             {{ form.cost(class="form-control", id="cost") }}
             {% if form.cost.errors %}
                 <div class="invalid-feedback">
                     {{ form.cost.errors[0] }}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            {{ form.gl_code_id.label(class="form-label") }}
+            {{ form.gl_code_id(class="form-control") }}
+            {% if form.gl_code_id.errors %}
+                <div class="invalid-feedback">
+                    {{ form.gl_code_id.errors[0] }}
                 </div>
             {% endif %}
         </div>

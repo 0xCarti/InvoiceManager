@@ -19,6 +19,7 @@ def test_add_item_multiple_units(client, app):
         resp = client.post('/items/add', data={
             'name': 'Combo',
             'base_unit': 'each',
+            'gl_code': '5000',
             'units-0-name': 'each',
             'units-0-factor': 1,
             'units-0-receiving_default': 'y',
@@ -42,6 +43,7 @@ def test_reject_multiple_defaults(client, app):
         resp = client.post('/items/add', data={
             'name': 'BadItem',
             'base_unit': 'each',
+            'gl_code': '5000',
             'units-0-name': 'each',
             'units-0-factor': 1,
             'units-0-receiving_default': 'y',
