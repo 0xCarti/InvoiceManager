@@ -335,3 +335,31 @@ def test_receive_invoice_base_unit_cost(client, app):
         assert item.cost == 1
         lsi = LocationStandItem.query.filter_by(location_id=location_id, item_id=item_id).first()
         assert lsi.expected_count == 24
+
+
+def test_delete_unreceived_purchase_order(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+
+    with client:
+        login(client, email, 'pass')
+        client.post('/purchase_orders/create', data={
+            'vendor': vendor_id,
+            'order_date': '2023-08-01',
+            'expected_date': '2023-08-05',
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 2
+        }, follow_redirects=True)
+
+    with app.app_context():
+        po = PurchaseOrder.query.first()
+        po_id = po.id
+
+    with client:
+        login(client, email, 'pass')
+        resp = client.get(f'/purchase_orders/{po_id}/delete', follow_redirects=True)
+        assert resp.status_code == 200
+
+    with app.app_context():
+        assert db.session.get(PurchaseOrder, po_id) is None
+        assert PurchaseOrderItem.query.filter_by(purchase_order_id=po_id).count() == 0
