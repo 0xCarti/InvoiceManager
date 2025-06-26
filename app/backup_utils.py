@@ -6,6 +6,7 @@ from app import db
 
 
 def _get_db_path():
+    """Return the filesystem path to the database file."""
     db_uri = current_app.config['SQLALCHEMY_DATABASE_URI']
     if db_uri.startswith('sqlite:///'):
         return db_uri.replace('sqlite:///', '', 1)
@@ -13,6 +14,7 @@ def _get_db_path():
 
 
 def create_backup():
+    """Create a timestamped copy of the database."""
     backups_dir = current_app.config['BACKUP_FOLDER']
     os.makedirs(backups_dir, exist_ok=True)
     db_path = _get_db_path()
@@ -25,6 +27,7 @@ def create_backup():
 
 
 def restore_backup(file_path):
+    """Restore the database from the specified file."""
     db_path = _get_db_path()
     db.session.remove()
     db.engine.dispose()

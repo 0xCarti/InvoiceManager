@@ -19,11 +19,13 @@ GST = 0
 
 @login_manager.user_loader
 def load_user(user_id):
+    """Retrieve a user by ID for Flask-Login."""
     from app.models import User
     return db.session.get(User, int(user_id))
 
 
 def create_admin_user():
+    """Ensure an admin user exists for the application."""
     from app.models import User
     # Check if any admin exists
     admin_exists = User.query.filter_by(is_admin=True).first()
@@ -48,6 +50,7 @@ def create_admin_user():
 
 
 def create_app(args: list):
+    """Application factory used by Flask."""
     global socketio, GST
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
@@ -86,12 +89,23 @@ def create_app(args: list):
 
     @app.context_processor
     def inject_gst():
+        """Inject the GST constant into all templates."""
         return dict(GST=GST)
 
     with app.app_context():
         from app.routes import auth_routes
-        from app.routes.routes import main, location, item, transfer, customer, invoice, product, report, purchase, vendor, glcode_bp
         from app.routes.auth_routes import auth, admin
+        from app.routes.main_routes import main
+        from app.routes.location_routes import location
+        from app.routes.item_routes import item
+        from app.routes.transfer_routes import transfer
+        from app.routes.customer_routes import customer
+        from app.routes.invoice_routes import invoice
+        from app.routes.product_routes import product
+        from app.routes.purchase_routes import purchase
+        from app.routes.report_routes import report
+        from app.routes.vendor_routes import vendor
+        from app.routes.glcode_routes import glcode_bp
         from app.models import User
 
         app.register_blueprint(auth, url_prefix='/auth')
