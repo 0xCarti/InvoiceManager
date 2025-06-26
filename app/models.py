@@ -218,9 +218,24 @@ class PurchaseInvoiceItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey('purchase_invoice.id'), nullable=False)
     item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
+    unit_id = db.Column(db.Integer, db.ForeignKey('item_unit.id'), nullable=True)
     quantity = db.Column(db.Float, nullable=False)
     cost = db.Column(db.Float, nullable=False)
     item = relationship('Item')
+    unit = relationship('ItemUnit')
+
+    @property
+    def line_total(self):
+        return self.quantity * self.cost
+
+
+class PurchaseOrderItemArchive(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    purchase_order_id = db.Column(db.Integer, nullable=False)
+    item_id = db.Column(db.Integer, nullable=False)
+    unit_id = db.Column(db.Integer, nullable=True)
+    quantity = db.Column(db.Float, nullable=False)
+    archived_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
 class ActivityLog(db.Model):

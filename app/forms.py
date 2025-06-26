@@ -240,6 +240,7 @@ class PurchaseOrderForm(FlaskForm):
 
 class InvoiceItemReceiveForm(FlaskForm):
     item = SelectField('Item', coerce=int)
+    unit = SelectField('Unit', coerce=int, validators=[Optional()], validate_choice=False)
     quantity = DecimalField('Quantity', validators=[InputRequired()])
     cost = DecimalField('Cost', validators=[InputRequired()])
     return_item = BooleanField('Return')
@@ -259,6 +260,7 @@ class ReceiveInvoiceForm(FlaskForm):
         self.location_id.choices = [(l.id, l.name) for l in Location.query.all()]
         for item_form in self.items:
             item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
 
 
 class DeleteForm(FlaskForm):
