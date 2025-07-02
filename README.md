@@ -61,7 +61,9 @@ Administrators can quickly seed the database using sample CSV files located in t
 project root. Place your own data in these files or modify the provided examples:
 
 - `example_gl_codes.csv`
-- `example_locations.csv`
+- `example_locations.csv` – includes a `products` column listing product names
+  separated by semicolons. The import will fail if any product name cannot be
+  matched exactly.
 - `example_products.csv`
 - `example_items.txt`
 - `example_customers.csv`
