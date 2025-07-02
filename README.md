@@ -50,7 +50,6 @@ pytest
 
 The tests automatically set the necessary environment variables, so no additional setup is required.
 
-=======
 ## Features
 - Manage items, products, and invoices.
 - User authentication and admin features.
