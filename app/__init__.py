@@ -105,6 +105,7 @@ def create_app(args: list):
         from app.routes.purchase_routes import purchase
         from app.routes.report_routes import report
         from app.routes.vendor_routes import vendor
+        from app.routes.event_routes import event
         from app.routes.glcode_routes import glcode_bp
         from app.models import User
 
@@ -120,6 +121,7 @@ def create_app(args: list):
         app.register_blueprint(purchase)
         app.register_blueprint(report)
         app.register_blueprint(vendor)
+        app.register_blueprint(event)
         app.register_blueprint(glcode_bp)
 
         db.create_all()

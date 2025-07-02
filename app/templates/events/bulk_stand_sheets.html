@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ event.name }} - Stand Sheets</h2>
+{% for entry in data %}
+    <h3>{{ entry.location.name }}</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Expected Opening</th>
+                <th>Opening Count</th>
+                <th>Transferred In</th>
+                <th>Transferred Out</th>
+                <th>Eaten</th>
+                <th>Spoiled</th>
+                <th>Closing Count</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for s in entry.stand_items %}
+            <tr>
+                <td>{{ s.item.name }}</td>
+                <td>{{ s.expected }}</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endfor %}
+{% endblock %}

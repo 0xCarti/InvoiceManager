@@ -46,6 +46,7 @@ class Location(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     products = db.relationship('Product', secondary=location_products, backref='locations')
     stand_items = db.relationship('LocationStandItem', back_populates='location', cascade='all, delete-orphan')
+    event_locations = db.relationship('EventLocation', back_populates='location', cascade='all, delete-orphan')
 
 
 
@@ -133,6 +134,7 @@ class Product(db.Model):
     invoice_products = relationship("InvoiceProduct", back_populates="product", cascade="all, delete-orphan")
     recipe_items = relationship("ProductRecipeItem", back_populates="product", cascade="all, delete-orphan")
     gl_code_rel = relationship('GLCode', foreign_keys=[gl_code_id], backref='products')
+    terminal_sales = relationship('TerminalSale', back_populates='product', cascade='all, delete-orphan')
 
 
 class Invoice(db.Model):
@@ -266,3 +268,37 @@ class ActivityLog(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship('User', backref='activity_logs')
+
+
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    closed = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+
+    locations = relationship('EventLocation', back_populates='event', cascade='all, delete-orphan')
+
+
+class EventLocation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
+    location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
+    opening_count = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
+    closing_count = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
+
+    event = relationship('Event', back_populates='locations')
+    location = relationship('Location', back_populates='event_locations')
+    terminal_sales = relationship('TerminalSale', back_populates='event_location', cascade='all, delete-orphan')
+
+    __table_args__ = (db.UniqueConstraint('event_id', 'location_id', name='_event_loc_uc'),)
+
+
+class TerminalSale(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_location_id = db.Column(db.Integer, db.ForeignKey('event_location.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+
+    event_location = relationship('EventLocation', back_populates='terminal_sales')
+    product = relationship('Product', back_populates='terminal_sales')

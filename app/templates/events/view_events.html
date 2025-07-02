@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Events</h2>
+<a class="btn btn-primary" href="{{ url_for('event.create_event') }}">Create Event</a>
+<table class="table mt-3">
+    <thead>
+        <tr><th>Name</th><th>Start</th><th>End</th><th>Closed</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for e in events %}
+        <tr>
+            <td>{{ e.name }}</td>
+            <td>{{ e.start_date }}</td>
+            <td>{{ e.end_date }}</td>
+            <td>{{ 'Yes' if e.closed else 'No' }}</td>
+            <td>
+                <a href="{{ url_for('event.view_event', event_id=e.id) }}">View</a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -321,3 +321,30 @@ class GLCodeForm(FlaskForm):
     description = StringField('Description', validators=[Optional()])
     submit = SubmitField('Submit')
 
+
+class EventForm(FlaskForm):
+    name = StringField('Name', validators=[DataRequired()])
+    start_date = DateField('Start Date', validators=[DataRequired()])
+    end_date = DateField('End Date', validators=[DataRequired()])
+    submit = SubmitField('Submit')
+
+
+class EventLocationForm(FlaskForm):
+    location_id = SelectField('Location', coerce=int, validators=[DataRequired()])
+    opening_count = DecimalField('Opening Count', validators=[InputRequired()], default=0)
+    closing_count = DecimalField('Closing Count', validators=[Optional()], default=0)
+    submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super(EventLocationForm, self).__init__(*args, **kwargs)
+        self.location_id.choices = [(l.id, l.name) for l in Location.query.all()]
+
+
+class TerminalSaleForm(FlaskForm):
+    product_id = SelectField('Product', coerce=int, validators=[DataRequired()])
+    quantity = DecimalField('Quantity', validators=[InputRequired()])
+    submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super(TerminalSaleForm, self).__init__(*args, **kwargs)
+        self.product_id.choices = [(p.id, p.name) for p in Product.query.all()]

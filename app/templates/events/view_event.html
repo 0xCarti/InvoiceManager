@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ event.name }}</h2>
+<p>Start: {{ event.start_date }} End: {{ event.end_date }}</p>
+<a class="btn btn-secondary" href="{{ url_for('event.add_location', event_id=event.id) }}">Add Location</a>
+<a class="btn btn-secondary" href="{{ url_for('event.bulk_stand_sheets', event_id=event.id) }}">Stand Sheets</a>
+<a class="btn btn-danger" href="{{ url_for('event.close_event', event_id=event.id) }}">Close Event</a>
+<ul class="mt-3">
+{% for el in event.locations %}
+    <li>{{ el.location.name }} - <a href="{{ url_for('event.stand_sheet', event_id=event.id, location_id=el.location_id) }}">Stand Sheet</a> | <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Add Sale</a></li>
+{% endfor %}
+</ul>
+{% endblock %}
