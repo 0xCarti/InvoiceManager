@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required
 from app import db
 from app.models import Event, EventLocation, TerminalSale, Location, LocationStandItem, Product
-from app.forms import EventForm, EventLocationForm, TerminalSaleForm
+from app.forms import EventForm, EventLocationForm, TerminalSaleForm, EventLocationConfirmForm
 
 
 event = Blueprint('event', __name__)
@@ -74,11 +74,13 @@ def add_location(event_id):
         abort(404)
     form = EventLocationForm()
     if form.validate_on_submit():
+        location = db.session.get(Location, form.location_id.data)
+        opening = sum(item.expected_count for item in location.stand_items)
         el = EventLocation(
             event_id=event_id,
             location_id=form.location_id.data,
-            opening_count=form.opening_count.data or 0,
-            closing_count=form.closing_count.data or 0,
+            opening_count=opening,
+            closing_count=0,
         )
         db.session.add(el)
         db.session.commit()
@@ -93,18 +95,31 @@ def add_terminal_sale(event_id, el_id):
     el = db.session.get(EventLocation, el_id)
     if el is None or el.event_id != event_id:
         abort(404)
-    form = TerminalSaleForm()
-    if form.validate_on_submit():
-        sale = TerminalSale(
-            event_location_id=el_id,
-            product_id=form.product_id.data,
-            quantity=form.quantity.data,
-        )
-        db.session.add(sale)
+    if request.method == 'POST':
+        for product in el.location.products:
+            qty = request.form.get(f'qty_{product.id}', type=float)
+            if qty:
+                sale = TerminalSale(event_location_id=el_id, product_id=product.id, quantity=qty)
+                db.session.add(sale)
         db.session.commit()
-        flash('Sale recorded')
+        flash('Sales recorded')
         return redirect(url_for('event.view_event', event_id=event_id))
-    return render_template('events/add_terminal_sale.html', form=form, event_location=el)
+    return render_template('events/add_terminal_sales.html', event_location=el)
+
+
+@event.route('/events/<int:event_id>/locations/<int:el_id>/confirm', methods=['GET', 'POST'])
+@login_required
+def confirm_location(event_id, el_id):
+    el = db.session.get(EventLocation, el_id)
+    if el is None or el.event_id != event_id:
+        abort(404)
+    form = EventLocationConfirmForm()
+    if form.validate_on_submit():
+        el.closing_count = form.closing_count.data or 0
+        db.session.commit()
+        flash('Location confirmed')
+        return redirect(url_for('event.view_event', event_id=event_id))
+    return render_template('events/confirm_location.html', form=form, event_location=el)
 
 
 def _get_stand_items(location_id):

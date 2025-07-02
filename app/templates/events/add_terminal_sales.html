@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Terminal Sales - {{ event_location.location.name }}</h2>
+<form method="post">
+    {{ csrf_token() }}
+    <table class="table">
+        <thead>
+            <tr><th>Product</th><th>Quantity</th></tr>
+        </thead>
+        <tbody>
+        {% for product in event_location.location.products %}
+        <tr>
+            <td>{{ product.name }}</td>
+            <td><input type="number" step="any" name="qty_{{ product.id }}" class="form-control"></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>
+{% endblock %}

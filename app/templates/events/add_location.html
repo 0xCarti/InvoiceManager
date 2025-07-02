@@ -4,8 +4,6 @@
 <form method="post">
     {{ form.csrf_token }}
     {{ form.location_id.label }} {{ form.location_id(class='form-control') }}
-    {{ form.opening_count.label }} {{ form.opening_count(class='form-control') }}
-    {{ form.closing_count.label }} {{ form.closing_count(class='form-control') }}
     {{ form.submit(class='btn btn-primary mt-2') }}
 </form>
 {% endblock %}
