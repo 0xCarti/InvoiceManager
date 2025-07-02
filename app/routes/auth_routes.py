@@ -103,6 +103,15 @@ def profile():
     return render_template('profile.html', user=current_user, form=form, transfers=transfers, invoices=invoices)
 
 
+@auth.route('/favorite/<path:link>')
+@login_required
+def toggle_favorite(link):
+    """Toggle a navigation link as favourite for the current user."""
+    current_user.toggle_favorite(link)
+    db.session.commit()
+    return redirect(request.referrer or url_for('main.home'))
+
+
 @admin.route('/user_profile/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def user_profile(user_id):

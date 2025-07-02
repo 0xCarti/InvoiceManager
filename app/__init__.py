@@ -15,6 +15,23 @@ login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 socketio = None
 GST = 0
+NAV_LINKS = {
+    'transfer.view_transfers': 'Transfers',
+    'item.view_items': 'Items',
+    'locations.view_locations': 'Locations',
+    'product.view_products': 'Products',
+    'glcode.view_gl_codes': 'GL Codes',
+    'purchase.view_purchase_orders': 'Purchase Orders',
+    'purchase.view_purchase_invoices': 'Purchase Invoices',
+    'customer.view_customers': 'Customers',
+    'vendor.view_vendors': 'Vendors',
+    'invoice.view_invoices': 'Invoices',
+    'event.view_events': 'Events',
+    'admin.users': 'Control Panel',
+    'admin.backups': 'Backups',
+    'admin.import_page': 'Data Imports',
+    'admin.activity_logs': 'Activity Logs',
+}
 
 
 @login_manager.user_loader
@@ -91,6 +108,11 @@ def create_app(args: list):
     def inject_gst():
         """Inject the GST constant into all templates."""
         return dict(GST=GST)
+
+    @app.context_processor
+    def inject_nav_links():
+        """Provide navigation labels to templates."""
+        return dict(NAV_LINKS=NAV_LINKS)
 
     with app.app_context():
         from app.routes import auth_routes
