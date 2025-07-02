@@ -363,3 +363,52 @@ def test_delete_unreceived_purchase_order(client, app):
     with app.app_context():
         assert db.session.get(PurchaseOrder, po_id) is None
         assert PurchaseOrderItem.query.filter_by(purchase_order_id=po_id).count() == 0
+
+
+def test_invoice_retains_item_and_unit_names_after_unit_removed(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+
+    with client:
+        login(client, email, 'pass')
+        client.post('/purchase_orders/create', data={
+            'vendor': vendor_id,
+            'order_date': '2023-09-01',
+            'expected_date': '2023-09-05',
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 2
+        }, follow_redirects=True)
+
+    with app.app_context():
+        po = PurchaseOrder.query.first()
+        po_id = po.id
+
+    with client:
+        login(client, email, 'pass')
+        client.post(f'/purchase_orders/{po_id}/receive', data={
+            'received_date': '2023-09-06',
+            'location_id': location_id,
+            'gst': 0,
+            'pst': 0,
+            'delivery_charge': 0,
+            'items-0-item': item_id,
+            'items-0-unit': unit_id,
+            'items-0-quantity': 2,
+            'items-0-cost': 1.5
+        }, follow_redirects=True)
+
+    with app.app_context():
+        invoice = PurchaseInvoice.query.first()
+        inv_id = invoice.id
+
+    # Remove the unit after the invoice is recorded
+    with app.app_context():
+        db.session.delete(db.session.get(ItemUnit, unit_id))
+        db.session.commit()
+
+    with app.app_context():
+        inv_item = PurchaseInvoiceItem.query.filter_by(invoice_id=inv_id).first()
+        assert inv_item.item is not None
+        assert inv_item.unit is None
+        assert inv_item.item_name == 'Part'
+        assert inv_item.unit_name == 'each'

@@ -249,8 +249,18 @@ class PurchaseInvoice(db.Model):
 class PurchaseInvoiceItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey('purchase_invoice.id'), nullable=False)
-    item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
-    unit_id = db.Column(db.Integer, db.ForeignKey('item_unit.id'), nullable=True)
+    item_id = db.Column(
+        db.Integer,
+        db.ForeignKey('item.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    unit_id = db.Column(
+        db.Integer,
+        db.ForeignKey('item_unit.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    item_name = db.Column(db.String(100), nullable=False)
+    unit_name = db.Column(db.String(50), nullable=True)
     quantity = db.Column(db.Float, nullable=False)
     cost = db.Column(db.Float, nullable=False)
     item = relationship('Item')
