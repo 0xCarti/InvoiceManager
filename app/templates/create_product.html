@@ -54,7 +54,7 @@
 
         <div id="item-list">
             {% for item in form.items %}
-            <div class="form-row mb-2 align-items-center">
+            <div class="row mb-2 align-items-center">
                 <div class="col">{{ item.item(class="form-control") }}</div>
                 <div class="col">{{ item.unit(class="form-control") }}</div>
                 <div class="col">{{ item.quantity(class="form-control") }}</div>
@@ -87,13 +87,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const countableLabel = "{{ form.items[0].countable.label.text }}";
     let itemIndex = {{ form.items|length }};
 
-    document.getElementById('add-item').addEventListener('click', function(e) {
-        e.preventDefault();
-        const row = document.createElement('div');
-        row.classList.add('form-row', 'mb-2', 'align-items-center');
-        row.innerHTML = `
-            <div class="col"><select name="items-${itemIndex}-item" class="form-control">${itemOptions}</select></div>
-            <div class="col"><select name="items-${itemIndex}-unit" class="form-control">${unitOptions}</select></div>
+        document.getElementById('add-item').addEventListener('click', function(e) {
+            e.preventDefault();
+            const row = document.createElement('div');
+            row.classList.add('row', 'mb-2', 'align-items-center');
+            row.innerHTML = `
+                <div class="col"><select name="items-${itemIndex}-item" class="form-control">${itemOptions}</select></div>
+                <div class="col"><select name="items-${itemIndex}-unit" class="form-control">${unitOptions}</select></div>
             <div class="col"><input type="number" step="any" name="items-${itemIndex}-quantity" class="form-control"></div>
             <div class="col-auto form-check d-flex align-items-center">
                 <input type="checkbox" name="items-${itemIndex}-countable" class="form-check-input" id="items-${itemIndex}-countable">
@@ -105,11 +105,11 @@ document.addEventListener('DOMContentLoaded', function() {
         itemIndex++;
     });
 
-    document.getElementById('item-list').addEventListener('click', function(e) {
-        if (e.target && e.target.classList.contains('remove-item')) {
-            e.target.closest('.form-row').remove();
-        }
-    });
+        document.getElementById('item-list').addEventListener('click', function(e) {
+            if (e.target && e.target.classList.contains('remove-item')) {
+                e.target.closest('.row').remove();
+            }
+        });
 });
 </script>
 {% endblock %}
