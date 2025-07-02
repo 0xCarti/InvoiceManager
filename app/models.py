@@ -299,6 +299,7 @@ class EventLocation(db.Model):
     event = relationship('Event', back_populates='locations')
     location = relationship('Location', back_populates='event_locations')
     terminal_sales = relationship('TerminalSale', back_populates='event_location', cascade='all, delete-orphan')
+    stand_sheet_items = relationship('EventStandSheetItem', back_populates='event_location', cascade='all, delete-orphan')
 
     __table_args__ = (db.UniqueConstraint('event_id', 'location_id', name='_event_loc_uc'),)
 
@@ -311,3 +312,22 @@ class TerminalSale(db.Model):
 
     event_location = relationship('EventLocation', back_populates='terminal_sales')
     product = relationship('Product', back_populates='terminal_sales')
+
+
+class EventStandSheetItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_location_id = db.Column(db.Integer, db.ForeignKey('event_location.id'), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
+    opening_count = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
+    transferred_in = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
+    transferred_out = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
+    eaten = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
+    spoiled = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
+    closing_count = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
+
+    event_location = relationship('EventLocation', back_populates='stand_sheet_items')
+    item = relationship('Item')
+
+    __table_args__ = (
+        db.UniqueConstraint('event_location_id', 'item_id', name='_event_loc_item_uc'),
+    )

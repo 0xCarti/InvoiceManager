@@ -12,6 +12,8 @@ from app.models import (
     EventLocation,
     TerminalSale,
 )
+from app.models import (User, Location, Item, ItemUnit, Product, ProductRecipeItem,
+                       LocationStandItem, Event, EventLocation, TerminalSale, EventStandSheetItem)
 from tests.test_user_flows import login
 
 
@@ -45,11 +47,11 @@ def setup_event_env(app):
         )
         loc.products.append(product)
         db.session.commit()
-        return user.email, loc.id, product.id
+        return user.email, loc.id, product.id, item.id
 
 
 def test_event_lifecycle(client, app):
-    email, loc_id, prod_id = setup_event_env(app)
+    email, loc_id, prod_id, item_id = setup_event_env(app)
     with client:
         login(client, email, "pass")
         client.post(
@@ -105,7 +107,7 @@ def test_event_lifecycle(client, app):
 
 
 def test_bulk_stand_sheet(client, app):
-    email, loc_id, prod_id = setup_event_env(app)
+    email, loc_id, prod_id, item_id = setup_event_env(app)
     with app.app_context():
         loc2 = Location(name="EventLoc2")
         db.session.add(loc2)
@@ -195,3 +197,45 @@ def test_no_sales_after_confirmation(client, app):
         resp = client.get(f"/events/{eid}/stand_sheet/{loc_id}")
         assert resp.status_code == 302
         assert f"/events/{eid}" in resp.headers["Location"]
+        assert b'EventLoc' in resp.data and b'EventLoc2' in resp.data
+
+
+def test_save_stand_sheet(client, app):
+    email, loc_id, prod_id, item_id = setup_event_env(app)
+    with client:
+        login(client, email, 'pass')
+        client.post('/events/create', data={
+            'name': 'SheetEvent',
+            'start_date': '2023-03-01',
+            'end_date': '2023-03-02'
+        }, follow_redirects=True)
+
+    with app.app_context():
+        ev = Event.query.filter_by(name='SheetEvent').first()
+        eid = ev.id
+
+    with client:
+        login(client, email, 'pass')
+        client.post(f'/events/{eid}/add_location', data={'location_id': loc_id}, follow_redirects=True)
+
+    with client:
+        login(client, email, 'pass')
+        client.post(f'/events/{eid}/stand_sheet/{loc_id}', data={
+            f'open_{item_id}': 5,
+            f'in_{item_id}': 2,
+            f'out_{item_id}': 1,
+            f'eaten_{item_id}': 1,
+            f'spoiled_{item_id}': 0,
+            f'close_{item_id}': 3
+        }, follow_redirects=True)
+
+    with app.app_context():
+        el = EventLocation.query.filter_by(event_id=eid, location_id=loc_id).first()
+        sheet = EventStandSheetItem.query.filter_by(event_location_id=el.id, item_id=item_id).first()
+        assert sheet is not None
+        assert sheet.opening_count == 5
+        assert sheet.transferred_in == 2
+        assert sheet.transferred_out == 1
+        assert sheet.eaten == 1
+        assert sheet.spoiled == 0
+        assert sheet.closing_count == 3

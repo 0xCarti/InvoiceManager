@@ -9,6 +9,7 @@ from app.models import (
     LocationStandItem,
     Product,
 )
+from app.models import Event, EventLocation, TerminalSale, Location, LocationStandItem, Product, EventStandSheetItem
 from app.forms import EventForm, EventLocationForm, EventLocationConfirmForm
 
 
@@ -151,6 +152,7 @@ def _get_stand_items(location_id, event_id=None):
     seen = set()
 
     sales_by_item = {}
+    sheet_map = {}
     if event_id is not None:
         el = EventLocation.query.filter_by(
             event_id=event_id, location_id=location_id
@@ -163,6 +165,9 @@ def _get_stand_items(location_id, event_id=None):
                             sales_by_item.get(ri.item_id, 0)
                             + sale.quantity * ri.quantity
                         )
+                        sales_by_item[ri.item_id] = sales_by_item.get(ri.item_id, 0) + sale.quantity * ri.quantity
+            for sheet in el.stand_sheet_items:
+                sheet_map[sheet.item_id] = sheet
 
     for product_obj in location.products:
         for recipe_item in product_obj.recipe_items:
@@ -180,6 +185,11 @@ def _get_stand_items(location_id, event_id=None):
 
 
 @event.route("/events/<int:event_id>/stand_sheet/<int:location_id>")
+                stand_items.append({'item': recipe_item.item, 'expected': expected, 'sales': sales, 'sheet': sheet_map.get(recipe_item.item_id)})
+    return location, stand_items
+
+
+@event.route('/events/<int:event_id>/stand_sheet/<int:location_id>', methods=['GET', 'POST'])
 @login_required
 def stand_sheet(event_id, location_id):
     ev = db.session.get(Event, event_id)
@@ -195,6 +205,27 @@ def stand_sheet(event_id, location_id):
     return render_template(
         "events/stand_sheet.html", event=ev, location=location, stand_items=stand_items
     )
+    el = EventLocation.query.filter_by(event_id=event_id, location_id=location_id).first()
+    if el is None:
+        abort(404)
+    location, stand_items = _get_stand_items(location_id, event_id)
+    if request.method == 'POST':
+        for entry in stand_items:
+            item_id = entry['item'].id
+            sheet = EventStandSheetItem.query.filter_by(event_location_id=el.id, item_id=item_id).first()
+            if not sheet:
+                sheet = EventStandSheetItem(event_location_id=el.id, item_id=item_id)
+                db.session.add(sheet)
+            sheet.opening_count = request.form.get(f'open_{item_id}', type=float, default=0) or 0
+            sheet.transferred_in = request.form.get(f'in_{item_id}', type=float, default=0) or 0
+            sheet.transferred_out = request.form.get(f'out_{item_id}', type=float, default=0) or 0
+            sheet.eaten = request.form.get(f'eaten_{item_id}', type=float, default=0) or 0
+            sheet.spoiled = request.form.get(f'spoiled_{item_id}', type=float, default=0) or 0
+            sheet.closing_count = request.form.get(f'close_{item_id}', type=float, default=0) or 0
+        db.session.commit()
+        flash('Stand sheet saved')
+        location, stand_items = _get_stand_items(location_id, event_id)
+    return render_template('events/stand_sheet.html', event=ev, location=location, stand_items=stand_items)
 
 
 @event.route("/events/<int:event_id>/stand_sheets")
