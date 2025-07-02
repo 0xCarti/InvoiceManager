@@ -330,6 +330,51 @@ def _import_items(path):
     return created
 
 
+def _import_locations(path):
+    """Import locations with optional product names.
+
+    The CSV must contain a ``name`` column and may include a ``products`` column
+    listing product names separated by semicolons. If any product name cannot be
+    matched exactly, a ``ValueError`` is raised and no locations are added.
+    """
+    if not os.path.exists(path):
+        return 0
+
+    pending = []
+    with open(path, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            name = row.get('name', '').strip()
+            if not name:
+                continue
+            # Skip duplicates already in the DB
+            if Location.query.filter_by(name=name).first():
+                continue
+
+            products = []
+            prod_field = row.get('products', '')
+            if prod_field:
+                for pname in prod_field.split(';'):
+                    pname = pname.strip()
+                    if not pname:
+                        continue
+                    product = Product.query.filter_by(name=pname).first()
+                    if not product:
+                        db.session.rollback()
+                        raise ValueError(f'Unknown product: {pname}')
+                    products.append(product)
+
+            pending.append((name, products))
+
+    for name, products in pending:
+        loc = Location(name=name)
+        loc.products = products
+        db.session.add(loc)
+
+    db.session.commit()
+    return len(pending)
+
+
 @admin.route('/controlpanel/imports', methods=['GET'])
 @login_required
 def import_page():
@@ -360,7 +405,11 @@ def import_data(data_type):
         abort(400)
     path = os.path.join(os.getcwd(), IMPORT_FILES[data_type])
     if data_type == 'locations':
-        count = _import_csv(path, Location, {'name': 'name'})
+        try:
+            count = _import_locations(path)
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return redirect(url_for('admin.import_page'))
     elif data_type == 'products':
         # map gl_code by code if provided
         count = 0
