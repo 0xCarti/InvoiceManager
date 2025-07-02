@@ -5,6 +5,10 @@ from app.models import (User, Location, Item, ItemUnit, Product, ProductRecipeIt
 from tests.test_user_flows import login
 from io import BytesIO
 import os
+from tempfile import NamedTemporaryFile
+from openpyxl import Workbook
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 
 def setup_upload_env(app):
@@ -295,18 +299,30 @@ def test_upload_sales_xls(client, app):
         client.post(f'/events/{eid}/add_location', data={'location_id': east_id}, follow_redirects=True)
         client.post(f'/events/{eid}/add_location', data={'location_id': west_id}, follow_redirects=True)
 
-    with open(os.path.join(os.path.dirname(__file__), '..', 'sales-with-headers.xls'), 'rb') as f:
-        data = {'file': (BytesIO(f.read()), 'sales.xls')}
-        with client:
-            login(client, email, 'pass')
-            resp = client.post(
-                f'/events/{eid}/sales/upload',
-                data=data,
-                content_type='multipart/form-data',
-                follow_redirects=True,
-            )
-            assert resp.status_code == 200
-            assert b'Pizza' in resp.data and b'Grand Valley Dog' in resp.data
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Popcorn East"])
+    ws.append([1, "591ml 7-Up", None, None, 7])
+    ws.append(["Popcorn West"])
+    ws.append([1, "591ml 7-Up", None, None, 2])
+    ws.append(["Pizza"])
+    ws.append([1, "591ml 7-Up", None, None, 5])
+    ws.append(["Grand Valley Dog"])
+    ws.append([1, "591ml 7-Up", None, None, 3])
+    tmp = BytesIO()
+    wb.save(tmp)
+    tmp.seek(0)
+    data = {'file': (tmp, 'sales.xls')}
+    with client:
+        login(client, email, 'pass')
+        resp = client.post(
+            f'/events/{eid}/sales/upload',
+            data=data,
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert b'Pizza' in resp.data and b'Grand Valley Dog' in resp.data
 
     with app.app_context():
         east_el = EventLocation.query.filter_by(event_id=eid, location_id=east_id).first()
@@ -337,18 +353,36 @@ def test_upload_sales_pdf(client, app):
         client.post(f'/events/{eid}/add_location', data={'location_id': east_id}, follow_redirects=True)
         client.post(f'/events/{eid}/add_location', data={'location_id': west_id}, follow_redirects=True)
 
-    with open(os.path.join(os.path.dirname(__file__), '..', 'sales-as-pdf.pdf'), 'rb') as f:
-        data = {'file': (BytesIO(f.read()), 'sales.pdf')}
-        with client:
-            login(client, email, 'pass')
-            resp = client.post(
-                f'/events/{eid}/sales/upload',
-                data=data,
-                content_type='multipart/form-data',
-                follow_redirects=True,
-            )
-            assert resp.status_code == 200
-            assert b'Pizza' in resp.data and b'Grand Valley Dog' in resp.data
+    pdf_buf = BytesIO()
+    c = canvas.Canvas(pdf_buf, pagesize=letter)
+    lines = [
+        "Popcorn East",
+        "1 591ml 7-Up 4.00 3 7",
+        "Popcorn West",
+        "1 591ml 7-Up 4.00 3 2",
+        "Pizza",
+        "1 591ml 7-Up 4.00 3 5",
+        "Grand Valley Dog",
+        "1 591ml 7-Up 4.00 3 3",
+    ]
+    y = 750
+    for line in lines:
+        c.drawString(100, y, line)
+        y -= 20
+    c.showPage()
+    c.save()
+    pdf_buf.seek(0)
+    data = {'file': (pdf_buf, 'sales.pdf')}
+    with client:
+        login(client, email, 'pass')
+        resp = client.post(
+            f'/events/{eid}/sales/upload',
+            data=data,
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert b'Pizza' in resp.data and b'Grand Valley Dog' in resp.data
 
     with app.app_context():
         east_el = EventLocation.query.filter_by(event_id=eid, location_id=east_id).first()
@@ -358,4 +392,5 @@ def test_upload_sales_pdf(client, app):
         sale_w = TerminalSale.query.filter_by(event_location_id=west_el.id, product_id=prod1.id).first()
         assert sale_e and sale_e.quantity == 7
         assert sale_w and sale_w.quantity == 2
+
 

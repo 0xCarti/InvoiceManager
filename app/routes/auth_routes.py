@@ -403,7 +403,12 @@ def import_data(data_type):
     form = ImportForm()
     if not form.validate_on_submit() or data_type not in IMPORT_FILES:
         abort(400)
-    path = os.path.join(os.getcwd(), IMPORT_FILES[data_type])
+    # Look for the example files inside the import_files directory which
+    # lives alongside the application package. Using current_app.root_path
+    # ensures the path works even when the working directory changes (e.g. in
+    # the test suite).
+    path = os.path.join(current_app.root_path, '..', 'import_files',
+                       IMPORT_FILES[data_type])
     if data_type == 'locations':
         try:
             count = _import_locations(path)
