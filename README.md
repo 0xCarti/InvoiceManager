@@ -68,7 +68,10 @@ or modify the provided examples:
 - `example_products.csv` – may include a `recipe` column listing item names with
   quantities separated by semicolons (e.g. `Buns:2;Patties:1`). The import will
   fail if any item name cannot be matched exactly.
-- `example_items.txt`
+- `example_items.csv` – includes optional `cost`, `base_unit` and `units`
+  columns. The `units` column lists unit name and factor pairs separated by
+  semicolons (e.g. `each:1;case:12`). The first unit becomes the receiving and
+  transfer default.
 - `example_customers.csv`
 - `example_vendors.csv`
 - `example_users.csv`

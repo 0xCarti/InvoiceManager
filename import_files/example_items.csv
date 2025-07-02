@@ -1,0 +1,4 @@
+name,base_unit,cost,units
+Buns,each,0.2,"each:1;case:12"
+Patties,each,0.5,"each:1;case:24"
+Ketchup,gram,0.05,"gram:1;bottle:1000"
