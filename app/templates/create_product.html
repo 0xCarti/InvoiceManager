@@ -54,8 +54,8 @@
                 <div class="col">{{ item.item(class="form-control") }}</div>
                 <div class="col">{{ item.unit(class="form-control") }}</div>
                 <div class="col">{{ item.quantity(class="form-control") }}</div>
-                <div class="col-auto form-check d-flex align-items-center">
-                    {{ item.countable(class="form-check-input") }}
+                <div class="col-auto">
+                    {{ item.countable() }}
                     {{ item.countable.label(class="form-check-label ms-1") }}
                 </div>
                 <div class="col-auto">
