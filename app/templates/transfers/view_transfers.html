@@ -17,18 +17,18 @@
     <div class="row mb-3 align-items-center">
         <div class="col-12 col-lg d-flex">
             <form action="" method="get" class="d-flex flex-wrap align-items-end flex-grow-1">
-                <select name="filter" class="form-control me-2" onchange="this.form.submit()">
+                <select name="filter" class="form-control me-2 narrow-field" onchange="this.form.submit()">
                     <option value="not_completed">Not Completed</option>
                     <option value="completed" {% if request.args.get(
                     'filter') == 'completed' %}selected{% endif %}>Completed</option>
                     <option value="all" {% if request.args.get(
                     'filter') == 'all' %}selected{% endif %}>All Transfers</option>
                 </select>
-                <input type="text" name="transfer_id" class="form-control me-2" placeholder="Transfer ID"
+                <input type="text" name="transfer_id" class="form-control me-2 narrow-field" placeholder="Transfer ID"
                        value="{{ request.args.get('transfer_id', '') }}">
-                <input type="text" name="from_location" class="form-control me-2" placeholder="From Location"
+                <input type="text" name="from_location" class="form-control me-2 narrow-field" placeholder="From Location"
                        value="{{ request.args.get('from_location', '') }}">
-                <input type="text" name="to_location" class="form-control me-2" placeholder="To Location"
+                <input type="text" name="to_location" class="form-control me-2 narrow-field" placeholder="To Location"
                        value="{{ request.args.get('to_location', '') }}">
                 <button type="submit" class="btn btn-info">Search</button>
             </form>
