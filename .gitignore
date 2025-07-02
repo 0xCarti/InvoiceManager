@@ -9,3 +9,6 @@ pytest_cache/
 backups/
 .env
 inventory.db
+example_gl_codes.csv
+example_gl_codes.csv
+gl_codes.csv
