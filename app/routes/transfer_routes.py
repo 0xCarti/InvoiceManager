@@ -64,7 +64,14 @@ def update_expected_counts(transfer_obj, multiplier=1):
                 expected_count=0
             )
             db.session.add(from_record)
-        from_record.expected_count -= multiplier * ti.quantity
+        new_from = from_record.expected_count - multiplier * ti.quantity
+        if new_from < 0:
+            item = db.session.get(Item, ti.item_id)
+            flash(
+                f"Warning: transfer will result in negative inventory for {item.name} at {transfer_obj.from_location.name}",
+                "warning",
+            )
+        from_record.expected_count = new_from
 
         to_record = LocationStandItem.query.filter_by(
             location_id=transfer_obj.to_location_id,
@@ -77,7 +84,14 @@ def update_expected_counts(transfer_obj, multiplier=1):
                 expected_count=0
             )
             db.session.add(to_record)
-        to_record.expected_count += multiplier * ti.quantity
+        new_to = to_record.expected_count + multiplier * ti.quantity
+        if new_to < 0:
+            item = db.session.get(Item, ti.item_id)
+            flash(
+                f"Warning: transfer will result in negative inventory for {item.name} at {transfer_obj.to_location.name}",
+                "warning",
+            )
+        to_record.expected_count = new_to
 
 @transfer.route('/transfers', methods=['GET'])
 @login_required

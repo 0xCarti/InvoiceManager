@@ -315,7 +315,13 @@ def reverse_purchase_invoice(invoice_id):
                     expected_count=0,
                 )
                 db.session.add(record)
-            record.expected_count -= inv_item.quantity * factor
+            new_count = record.expected_count - inv_item.quantity * factor
+            if new_count < 0:
+                flash(
+                    f"Warning: reversing this invoice will result in negative inventory for {itm.name} at {record.location.name}",
+                    "warning",
+                )
+            record.expected_count = new_count
     PurchaseInvoiceItem.query.filter_by(invoice_id=invoice.id).delete()
     db.session.delete(invoice)
     po.received = False
