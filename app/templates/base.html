@@ -40,14 +40,27 @@
         .suggestion:hover {
             background-color: #f8f8f8;
         }
+
+        .offcanvas-body .nav-item {
+            display: flex;
+            align-items: center;
+        }
+        .offcanvas-body .nav-item .nav-link {
+            display: inline-block;
+            width: auto;
+        }
     </style>
 </head>
 <body>
 <nav class="navbar navbar-light bg-light">
     <div class="container-fluid">
+        <button class="navbar-toggler me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
         <a class="navbar-brand" href="#">AssetFlow</a>
         {% if current_user.is_authenticated %}
-        <ul class="navbar-nav me-auto ms-2">
+        <ul class="navbar-nav flex-row me-auto ms-2">
             {% for fav in current_user.get_favorites() %}
             {% set label = NAV_LINKS.get(fav, fav.split('.')[-1].replace('_', ' ').title()) %}
             <li class="nav-item">
@@ -56,10 +69,6 @@
             {% endfor %}
         </ul>
         {% endif %}
-        <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
-                aria-controls="navbarNav" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
         <div class="offcanvas offcanvas-start" tabindex="-1" id="navbarNav" aria-labelledby="offcanvasNavbarLabel">
             <div class="offcanvas-header">
                 <h5 class="offcanvas-title" id="offcanvasNavbarLabel">Menu</h5>
