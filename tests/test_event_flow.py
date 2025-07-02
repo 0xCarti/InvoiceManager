@@ -226,3 +226,37 @@ def test_save_stand_sheet(client, app):
         assert sheet.eaten == 1
         assert sheet.spoiled == 0
         assert sheet.closing_count == 3
+
+
+def test_terminal_sales_prefill(client, app):
+    email, loc_id, prod_id, _ = setup_event_env(app)
+    with client:
+        login(client, email, 'pass')
+        client.post('/events/create', data={
+            'name': 'PrefillEvent',
+            'start_date': '2023-04-01',
+            'end_date': '2023-04-02'
+        }, follow_redirects=True)
+
+    with app.app_context():
+        ev = Event.query.filter_by(name='PrefillEvent').first()
+        eid = ev.id
+
+    with client:
+        login(client, email, 'pass')
+        client.post(f'/events/{eid}/add_location', data={'location_id': loc_id}, follow_redirects=True)
+
+    with app.app_context():
+        el = EventLocation.query.filter_by(event_id=eid, location_id=loc_id).first()
+        elid = el.id
+
+    with client:
+        login(client, email, 'pass')
+        client.post(
+            f'/events/{eid}/locations/{elid}/sales/add',
+            data={f'qty_{prod_id}': 7},
+            follow_redirects=True,
+        )
+        resp = client.get(f'/events/{eid}/locations/{elid}/sales/add')
+        assert resp.status_code == 200
+        assert b'value="7"' in resp.data or b'value="7.0"' in resp.data

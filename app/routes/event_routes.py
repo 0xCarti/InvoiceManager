@@ -103,22 +103,38 @@ def add_terminal_sale(event_id, el_id):
     if request.method == "POST":
         for product in el.location.products:
             qty = request.form.get(f"qty_{product.id}")
-            if qty:
-                try:
-                    amount = float(qty)
-                except ValueError:
-                    amount = 0
-                if amount:
+            try:
+                amount = float(qty) if qty else 0
+            except ValueError:
+                amount = 0
+
+            sale = TerminalSale.query.filter_by(
+                event_location_id=el_id, product_id=product.id
+            ).first()
+
+            if amount:
+                if sale:
+                    sale.quantity = amount
+                else:
                     sale = TerminalSale(
                         event_location_id=el_id,
                         product_id=product.id,
                         quantity=amount,
                     )
                     db.session.add(sale)
+            elif sale:
+                db.session.delete(sale)
+
         db.session.commit()
         flash("Sales recorded")
         return redirect(url_for("event.view_event", event_id=event_id))
-    return render_template("events/add_terminal_sales.html", event_location=el)
+
+    existing_sales = {s.product_id: s.quantity for s in el.terminal_sales}
+    return render_template(
+        "events/add_terminal_sales.html",
+        event_location=el,
+        existing_sales=existing_sales,
+    )
 
 
 @event.route(
