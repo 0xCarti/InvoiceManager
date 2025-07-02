@@ -49,6 +49,11 @@ from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
 
 item = Blueprint('item', __name__)
 
+# Constants for the import_items route
+# Only plain text files are allowed and uploads are capped at 1MB
+ALLOWED_IMPORT_EXTENSIONS = {'.txt'}
+MAX_IMPORT_SIZE = 1 * 1024 * 1024  # 1 MB
+
 @item.route('/items')
 @login_required
 def view_items():
