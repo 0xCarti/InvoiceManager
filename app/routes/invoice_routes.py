@@ -100,6 +100,7 @@ def create_invoice():
                     invoice_product = InvoiceProduct(
                         invoice_id=invoice.id,
                         product_id=product.id,
+                        product_name=product.name,
                         quantity=quantity,
                         override_gst=override_gst,
                         override_pst=override_pst,
@@ -160,18 +161,22 @@ def view_invoice(invoice_id):
     gst_total = 0
     pst_total = 0
 
+    invoice_lines = []
     for invoice_product in invoice.products:
         # Use stored values instead of recalculating from current product price
         line_total = invoice_product.line_subtotal
         subtotal += line_total
         gst_total += invoice_product.line_gst
         pst_total += invoice_product.line_pst
+        name = invoice_product.product.name if invoice_product.product else invoice_product.product_name
+        invoice_lines.append((invoice_product, name))
 
     total = subtotal + gst_total + pst_total
 
     return render_template(
         'invoices/view_invoice.html',
         invoice=invoice,
+        invoice_lines=invoice_lines,
         subtotal=subtotal,
         gst=gst_total,
         pst=pst_total,
