@@ -560,6 +560,7 @@ def import_page():
 @login_required
 def import_data(data_type):
     """Import a specific data type from example files."""
+    from flask import current_app
     if not current_user.is_admin:
         abort(403)
     form = ImportForm()
