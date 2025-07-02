@@ -32,6 +32,7 @@ from app.models import (
     Transfer,
     TransferItem,
     Customer,
+    Vendor,
     Product,
     LocationStandItem,
     Invoice,

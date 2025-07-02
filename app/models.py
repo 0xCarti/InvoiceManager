@@ -112,6 +112,14 @@ class Customer(db.Model):
     invoices = db.relationship('Invoice', backref='customer', lazy=True)
 
 
+class Vendor(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    first_name = db.Column(db.String(50), nullable=False)
+    last_name = db.Column(db.String(50), nullable=False)
+    gst_exempt = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    pst_exempt = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+
+
 class GLCode(db.Model):
     __tablename__ = 'gl_code'
     id = db.Column(db.Integer, primary_key=True)
@@ -193,14 +201,14 @@ class ProductRecipeItem(db.Model):
 
 class PurchaseOrder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    vendor_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False)
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendor.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     order_date = db.Column(db.Date, nullable=False)
     expected_date = db.Column(db.Date, nullable=False)
     delivery_charge = db.Column(db.Float, nullable=False, default=0.0)
     received = db.Column(db.Boolean, default=False, nullable=False)
     items = relationship('PurchaseOrderItem', backref='purchase_order', cascade='all, delete-orphan')
-    vendor = relationship('Customer')
+    vendor = relationship('Vendor', backref='purchase_orders')
 
 
 class PurchaseOrderItem(db.Model):

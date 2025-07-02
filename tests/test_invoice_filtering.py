@@ -33,11 +33,11 @@ def test_filter_by_invoice_id(client, app):
         assert b'INV3' not in response.data
 
 
-def test_filter_by_vendor(client, app):
+def test_filter_by_customer(client, app):
     user_email, c1_id, c2_id = setup_invoices(app)
     with client:
         login(client, user_email, 'pass')
-        response = client.get(f'/view_invoices?vendor_id={c1_id}', follow_redirects=True)
+        response = client.get(f'/view_invoices?customer_id={c1_id}', follow_redirects=True)
         assert b'INV1' in response.data
         assert b'INV3' in response.data
         assert b'INV2' not in response.data

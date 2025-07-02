@@ -27,7 +27,7 @@ from wtforms.validators import (
 )
 from wtforms.widgets import CheckboxInput, ListWidget
 
-from app.models import Item, Location, Product, Customer, ItemUnit, GLCode
+from app.models import Item, Location, Product, Customer, Vendor, ItemUnit, GLCode
 from wtforms.validators import ValidationError
 
 
@@ -246,7 +246,7 @@ class ProductSalesReportForm(FlaskForm):
 
 class InvoiceFilterForm(FlaskForm):
     invoice_id = StringField('Invoice ID', validators=[Optional()])
-    vendor_id = SelectField('Vendor', coerce=int, validators=[Optional()])
+    customer_id = SelectField('Customer', coerce=int, validators=[Optional()])
     start_date = DateField('Start Date', validators=[Optional()])
     end_date = DateField('End Date', validators=[Optional()])
     submit = SubmitField('Filter')
@@ -279,7 +279,7 @@ class PurchaseOrderForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(PurchaseOrderForm, self).__init__(*args, **kwargs)
-        self.vendor.choices = [(c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()]
+        self.vendor.choices = [(v.id, f"{v.first_name} {v.last_name}") for v in Vendor.query.all()]
         for item_form in self.items:
             item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
             item_form.product.choices = [(p.id, p.name) for p in Product.query.all()]

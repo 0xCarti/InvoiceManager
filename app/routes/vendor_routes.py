@@ -32,6 +32,7 @@ from app.models import (
     Transfer,
     TransferItem,
     Customer,
+    Vendor,
     Product,
     LocationStandItem,
     Invoice,
@@ -53,7 +54,7 @@ vendor = Blueprint('vendor', __name__)
 @login_required
 def view_vendors():
     """Display all vendors."""
-    vendors = Customer.query.all()
+    vendors = Vendor.query.all()
     return render_template('view_vendors.html', vendors=vendors)
 
 
@@ -63,7 +64,7 @@ def create_vendor():
     """Create a new vendor."""
     form = CustomerForm()
     if form.validate_on_submit():
-        vendor = Customer(
+        vendor = Vendor(
             first_name=form.first_name.data,
             last_name=form.last_name.data,
             gst_exempt=form.gst_exempt.data,
@@ -81,7 +82,7 @@ def create_vendor():
 @login_required
 def edit_vendor(vendor_id):
     """Edit vendor information."""
-    vendor = db.session.get(Customer, vendor_id)
+    vendor = db.session.get(Vendor, vendor_id)
     if vendor is None:
         abort(404)
     form = CustomerForm()
@@ -109,7 +110,7 @@ def edit_vendor(vendor_id):
 @login_required
 def delete_vendor(vendor_id):
     """Remove a vendor from the system."""
-    vendor = db.session.get(Customer, vendor_id)
+    vendor = db.session.get(Vendor, vendor_id)
     if vendor is None:
         abort(404)
     db.session.delete(vendor)
