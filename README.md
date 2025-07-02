@@ -65,7 +65,9 @@ or modify the provided examples:
 - `example_locations.csv` – includes a `products` column listing product names
   separated by semicolons. The import will fail if any product name cannot be
   matched exactly.
-- `example_products.csv`
+- `example_products.csv` – may include a `recipe` column listing item names with
+  quantities separated by semicolons (e.g. `Buns:2;Patties:1`). The import will
+  fail if any item name cannot be matched exactly.
 - `example_items.txt`
 - `example_customers.csv`
 - `example_vendors.csv`
