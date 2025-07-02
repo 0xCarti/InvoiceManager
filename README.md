@@ -55,6 +55,22 @@ The tests automatically set the necessary environment variables, so no additiona
 - User authentication and admin features.
 - Reporting and backups.
 
+## Data Import
+
+Administrators can quickly seed the database using sample CSV files located in the
+project root. Place your own data in these files or modify the provided examples:
+
+- `example_gl_codes.csv`
+- `example_locations.csv`
+- `example_products.csv`
+- `example_items.txt`
+- `example_customers.csv`
+- `example_vendors.csv`
+- `example_users.csv`
+
+Visit **Control Panel → Data Imports** in the web interface and click the
+corresponding button to import each dataset.
+
 ## Test Defaults
 
 When running `pytest`, the fixtures in `tests/conftest.py` set up several default values so the application can start without manual configuration:
@@ -71,3 +87,4 @@ These defaults are provided for convenience during testing, but you can override
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
