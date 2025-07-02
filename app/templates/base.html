@@ -46,6 +46,16 @@
 <nav class="navbar navbar-light bg-light">
     <div class="container-fluid">
         <a class="navbar-brand" href="#">AssetFlow</a>
+        {% if current_user.is_authenticated %}
+        <ul class="navbar-nav me-auto ms-2">
+            {% for fav in current_user.get_favorites() %}
+            {% set label = NAV_LINKS.get(fav, fav.split('.')[-1].replace('_', ' ').title()) %}
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for(fav) }}">{{ label }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
         <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
                 aria-controls="navbarNav" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
@@ -60,36 +70,69 @@
             {% if current_user.is_authenticated %}
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('transfer.view_transfers') }}">Transfers</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='transfer.view_transfers') }}" class="ms-1">
+                    {% if 'transfer.view_transfers' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('item.view_items') }}">Items</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='item.view_items') }}" class="ms-1">
+                    {% if 'item.view_items' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('locations.view_locations') }}">Locations</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='locations.view_locations') }}" class="ms-1">
+                    {% if 'locations.view_locations' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('product.view_products') }}">Products</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='product.view_products') }}" class="ms-1">
+                    {% if 'product.view_products' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('glcode.view_gl_codes') }}">GL Codes</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='glcode.view_gl_codes') }}" class="ms-1">
+                    {% if 'glcode.view_gl_codes' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('purchase.view_purchase_orders') }}">Purchase Orders</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='purchase.view_purchase_orders') }}" class="ms-1">
+                    {% if 'purchase.view_purchase_orders' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('purchase.view_purchase_invoices') }}">Purchase Invoices</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='purchase.view_purchase_invoices') }}" class="ms-1">
+                    {% if 'purchase.view_purchase_invoices' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('customer.view_customers') }}">Customers</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='customer.view_customers') }}" class="ms-1">
+                    {% if 'customer.view_customers' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('vendor.view_vendors') }}">Vendors</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='vendor.view_vendors') }}" class="ms-1">
+                    {% if 'vendor.view_vendors' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('invoice.view_invoices') }}">Invoices</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='invoice.view_invoices') }}" class="ms-1">
+                    {% if 'invoice.view_invoices' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('event.view_events') }}">Events</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='event.view_events') }}" class="ms-1">
+                    {% if 'event.view_events' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             {% endif %}
         </ul>
@@ -105,19 +148,34 @@
             {% if current_user.is_admin %}
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('admin.users') }}">Control Panel</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='admin.users') }}" class="ms-1">
+                    {% if 'admin.users' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('admin.backups') }}">Backups</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='admin.backups') }}" class="ms-1">
+                    {% if 'admin.backups' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('admin.import_page') }}">Data Imports</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='admin.import_page') }}" class="ms-1">
+                    {% if 'admin.import_page' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('admin.activity_logs') }}">Activity Logs</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='admin.activity_logs') }}" class="ms-1">
+                    {% if 'admin.activity_logs' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             {% endif %}
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('auth.profile') }}">Profile</a>
+                <a href="{{ url_for('auth.toggle_favorite', link='auth.profile') }}" class="ms-1">
+                    {% if 'auth.profile' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout</a>

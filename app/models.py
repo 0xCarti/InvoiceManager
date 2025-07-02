@@ -39,6 +39,20 @@ class User(UserMixin, db.Model):
     transfers = db.relationship('Transfer', backref='creator', lazy=True)
     invoices = db.relationship('Invoice', backref='creator', lazy=True)
     active = db.Column(db.Boolean, default=False, nullable=False)
+    favorites = db.Column(db.Text, default='')
+
+    def get_favorites(self):
+        """Return the user's favourite endpoint names as a list."""
+        return [f for f in (self.favorites or '').split(',') if f]
+
+    def toggle_favorite(self, endpoint: str):
+        """Add or remove an endpoint from the favourites list."""
+        favs = set(self.get_favorites())
+        if endpoint in favs:
+            favs.remove(endpoint)
+        else:
+            favs.add(endpoint)
+        self.favorites = ','.join(sorted(favs))
 
 
 class Location(db.Model):
