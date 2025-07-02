@@ -18,8 +18,10 @@
         <tbody>
         {% for it in invoice.items %}
             <tr>
-                <td>{{ it.item.name }}</td>
-                <td>{% if it.unit %}{{ it.unit.name }}{% endif %}</td>
+                <td>{{ it.item.name if it.item else it.item_name }}</td>
+                <td>
+                    {% if it.unit %}{{ it.unit.name }}{% else %}{{ it.unit_name }}{% endif %}
+                </td>
                 <td>{{ it.quantity }}</td>
                 <td>{{ '%.2f'|format(it.cost) }}</td>
                 <td>{{ '%.2f'|format(it.line_total) }}</td>

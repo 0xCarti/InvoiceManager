@@ -242,20 +242,32 @@ def receive_invoice(po_id):
                 if is_return:
                     quantity = -abs(quantity)
                     cost = -abs(cost)
-                db.session.add(PurchaseInvoiceItem(invoice_id=invoice.id, item_id=item_id, unit_id=unit_id, quantity=quantity, cost=cost))
+
                 item_obj = db.session.get(Item, item_id)
+                unit_obj = db.session.get(ItemUnit, unit_id) if unit_id else None
+
+                db.session.add(
+                    PurchaseInvoiceItem(
+                        invoice_id=invoice.id,
+                        item_id=item_obj.id if item_obj else None,
+                        unit_id=unit_obj.id if unit_obj else None,
+                        item_name=item_obj.name if item_obj else '',
+                        unit_name=unit_obj.name if unit_obj else None,
+                        quantity=quantity,
+                        cost=cost,
+                    )
+                )
+
                 if item_obj:
                     factor = 1
-                    if unit_id:
-                        unit = db.session.get(ItemUnit, unit_id)
-                        if unit:
-                            factor = unit.factor
+                    if unit_obj:
+                        factor = unit_obj.factor
                     item_obj.quantity = (item_obj.quantity or 0) + quantity * factor
                     # store cost per base unit (always positive)
                     item_obj.cost = abs(cost) / factor if factor else abs(cost)
-                    record = LocationStandItem.query.filter_by(location_id=invoice.location_id, item_id=item_id).first()
+                    record = LocationStandItem.query.filter_by(location_id=invoice.location_id, item_id=item_obj.id).first()
                     if not record:
-                        record = LocationStandItem(location_id=invoice.location_id, item_id=item_id, expected_count=0)
+                        record = LocationStandItem(location_id=invoice.location_id, item_id=item_obj.id, expected_count=0)
                         db.session.add(record)
                     record.expected_count += quantity * factor
 
