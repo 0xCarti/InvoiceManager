@@ -26,6 +26,7 @@ from app.models import (
     Item,
     Product,
     ProductRecipeItem,
+    ItemUnit,
     GLCode,
     Customer,
     Vendor,
@@ -40,7 +41,7 @@ IMPORT_FILES = {
     'locations': 'example_locations.csv',
     'products': 'example_products.csv',
     'gl_codes': 'example_gl_codes.csv',
-    'items': 'example_items.txt',
+    'items': 'example_items.csv',
     'customers': 'example_customers.csv',
     'vendors': 'example_vendors.csv',
     'users': 'example_users.csv',
@@ -318,15 +319,88 @@ def _import_csv(path, model, mappings):
 
 
 def _import_items(path):
+    """Import items from a CSV or plain text file.
+
+    If ``path`` points to a CSV file it may contain ``name``,
+    ``base_unit``, ``cost`` and ``units`` columns. The ``units`` column
+    should list unit name/factor pairs separated by semicolons,
+    e.g. ``each:1;case:12``. The first unit is set as both the
+    receiving and transfer default.
+    """
     if not os.path.exists(path):
         return 0
+
     created = 0
-    with open(path) as f:
-        for line in f:
-            name = line.strip()
-            if name and not Item.query.filter_by(name=name).first():
-                db.session.add(Item(name=name))
+    ext = os.path.splitext(path)[1].lower()
+    if ext == '.csv':
+        with open(path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                name = row.get('name', '').strip()
+                if not name or Item.query.filter_by(name=name).first():
+                    continue
+                base_unit = row.get('base_unit', 'each').strip() or 'each'
+                cost = float(row.get('cost') or 0)
+                item = Item(name=name, base_unit=base_unit, cost=cost)
+                db.session.add(item)
+                db.session.flush()
+
+                units_spec = row.get('units', '')
+                units = []
+                if units_spec:
+                    for idx, spec in enumerate(units_spec.split(';')):
+                        spec = spec.strip()
+                        if not spec:
+                            continue
+                        if ':' in spec:
+                            unit_name, factor_str = spec.split(':', 1)
+                            try:
+                                factor = float(factor_str)
+                            except ValueError:
+                                factor = 1.0
+                        else:
+                            unit_name = spec
+                            factor = 1.0
+                        units.append(
+                            ItemUnit(
+                                item_id=item.id,
+                                name=unit_name.strip(),
+                                factor=factor,
+                                receiving_default=(idx == 0),
+                                transfer_default=(idx == 0),
+                            )
+                        )
+                else:
+                    units.append(
+                        ItemUnit(
+                            item_id=item.id,
+                            name=base_unit,
+                            factor=1.0,
+                            receiving_default=True,
+                            transfer_default=True,
+                        )
+                    )
+                db.session.add_all(units)
                 created += 1
+    else:
+        # Fallback to simple line-based format
+        with open(path) as f:
+            for line in f:
+                name = line.strip()
+                if name and not Item.query.filter_by(name=name).first():
+                    item = Item(name=name, base_unit='each')
+                    db.session.add(item)
+                    db.session.flush()
+                    db.session.add(
+                        ItemUnit(
+                            item_id=item.id,
+                            name='each',
+                            factor=1.0,
+                            receiving_default=True,
+                            transfer_default=True,
+                        )
+                    )
+                    created += 1
     db.session.commit()
     return created
 
