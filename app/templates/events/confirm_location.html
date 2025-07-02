@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Confirm {{ event_location.location.name }} for {{ event_location.event.name }}</h2>
+<form method="post">
+    {{ form.csrf_token }}
+    {{ form.closing_count.label }} {{ form.closing_count(class='form-control') }}
+    {{ form.submit(class='btn btn-primary mt-2') }}
+</form>
+{% endblock %}
