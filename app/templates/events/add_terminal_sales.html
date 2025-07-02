@@ -2,7 +2,7 @@
 {% block content %}
 <h2>Terminal Sales - {{ event_location.location.name }}</h2>
 <form method="post">
-    {{ csrf_token() }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <table class="table">
         <thead>
             <tr><th>Product</th><th>Quantity</th></tr>
