@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from flask_wtf.file import FileRequired
+from flask_wtf.file import FileRequired, FileAllowed
 from wtforms import (
     BooleanField,
     DateField,
@@ -355,3 +355,15 @@ class TerminalSaleForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super(TerminalSaleForm, self).__init__(*args, **kwargs)
         self.product_id.choices = [(p.id, p.name) for p in Product.query.all()]
+
+
+class TerminalSalesUploadForm(FlaskForm):
+    """Form for uploading terminal sales from XLS or PDF."""
+    file = FileField(
+        "Sales File",
+        validators=[
+            FileRequired(),
+            FileAllowed({"xls", "pdf"}, "Only .xls or .pdf files are allowed."),
+        ],
+    )
+    submit = SubmitField("Upload")
