@@ -37,7 +37,9 @@
             <div class="col">{{ unit.form.factor(class="form-control") }}</div>
             <div class="col-auto">{{ unit.form.receiving_default() }} {{ unit.form.receiving_default.label }}</div>
             <div class="col-auto">{{ unit.form.transfer_default() }} {{ unit.form.transfer_default.label }}</div>
-            <button type="button" class="btn btn-danger btn-sm remove-unit ml-2">Delete</button>
+            <div class="col-auto">
+                <button type="button" class="btn btn-danger btn-sm remove-unit">Delete</button>
+            </div>
         </div>
         {% endfor %}
         </div>
