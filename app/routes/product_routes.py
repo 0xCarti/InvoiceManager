@@ -80,6 +80,7 @@ def create_product():
 
         for item_form in form.items:
             item_id = item_form.item.data
+            unit_id = item_form.unit.data or None
             quantity = item_form.quantity.data
             countable = item_form.countable.data
             if item_id and quantity is not None:
@@ -87,6 +88,7 @@ def create_product():
                     ProductRecipeItem(
                         product_id=product.id,
                         item_id=item_id,
+                        unit_id=unit_id,
                         quantity=quantity,
                         countable=countable,
                     )
@@ -121,6 +123,7 @@ def edit_product(product_id):
         ProductRecipeItem.query.filter_by(product_id=product.id).delete()
         for item_form in form.items:
             item_id = item_form.item.data
+            unit_id = item_form.unit.data or None
             quantity = item_form.quantity.data
             countable = item_form.countable.data
             if item_id and quantity is not None:
@@ -128,6 +131,7 @@ def edit_product(product_id):
                     ProductRecipeItem(
                         product_id=product.id,
                         item_id=item_id,
+                        unit_id=unit_id,
                         quantity=quantity,
                         countable=countable,
                     )
@@ -145,13 +149,17 @@ def edit_product(product_id):
         form.sales_gl_code.data = product.sales_gl_code_id
         form.items.min_entries = max(1, len(product.recipe_items))
         item_choices = [(itm.id, itm.name) for itm in Item.query.all()]
+        unit_choices = [(u.id, u.name) for u in ItemUnit.query.all()]
         for i, recipe_item in enumerate(product.recipe_items):
             if len(form.items) <= i:
                 form.items.append_entry()
                 form.items[i].item.choices = item_choices
+                form.items[i].unit.choices = unit_choices
             else:
                 form.items[i].item.choices = item_choices
+                form.items[i].unit.choices = unit_choices
             form.items[i].item.data = recipe_item.item_id
+            form.items[i].unit.data = recipe_item.unit_id
             form.items[i].quantity.data = recipe_item.quantity
             form.items[i].countable.data = recipe_item.countable
     else:
@@ -174,23 +182,28 @@ def edit_product_recipe(product_id):
         for field in items:
             index = field.split('-')[1]
             item_id = request.form.get(f'items-{index}-item', type=int)
+            unit_id = request.form.get(f'items-{index}-unit', type=int)
             quantity = request.form.get(f'items-{index}-quantity', type=float)
             countable = request.form.get(f'items-{index}-countable') == 'y'
             if item_id and quantity is not None:
-                db.session.add(ProductRecipeItem(product_id=product.id, item_id=item_id, quantity=quantity, countable=countable))
+                db.session.add(ProductRecipeItem(product_id=product.id, item_id=item_id, unit_id=unit_id, quantity=quantity, countable=countable))
         db.session.commit()
         flash('Recipe updated successfully!', 'success')
         return redirect(url_for('product.view_products'))
     elif request.method == 'GET':
         form.items.min_entries = max(1, len(product.recipe_items))
         item_choices = [(itm.id, itm.name) for itm in Item.query.all()]
+        unit_choices = [(u.id, u.name) for u in ItemUnit.query.all()]
         for i, recipe_item in enumerate(product.recipe_items):
             if len(form.items) <= i:
                 form.items.append_entry()
                 form.items[i].item.choices = item_choices
+                form.items[i].unit.choices = unit_choices
             else:
                 form.items[i].item.choices = item_choices
+                form.items[i].unit.choices = unit_choices
             form.items[i].item.data = recipe_item.item_id
+            form.items[i].unit.data = recipe_item.unit_id
             form.items[i].quantity.data = recipe_item.quantity
             form.items[i].countable.data = recipe_item.countable
     return render_template('edit_product_recipe.html', form=form, product=product)
@@ -210,7 +223,8 @@ def calculate_product_cost(product_id):
             qty = float(ri.quantity or 0)
         except (TypeError, ValueError):
             qty = 0
-    total += (item_cost or 0) * qty
+        factor = ri.unit.factor if ri.unit else 1
+        total += (item_cost or 0) * qty * factor
     return jsonify({'cost': total})
 
 

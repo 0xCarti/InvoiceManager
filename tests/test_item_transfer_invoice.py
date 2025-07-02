@@ -222,7 +222,7 @@ def test_stand_sheet_shows_expected_counts(client, app):
             LocationStandItem(location_id=loc2.id, item_id=item.id, expected_count=0)
         ])
         db.session.add(ProductRecipeItem(product_id=product.id, item_id=item.id,
-                                         quantity=1, countable=True))
+                                         unit_id=unit.id, quantity=1, countable=True))
         loc1.products.append(product)
         loc2.products.append(product)
         db.session.commit()

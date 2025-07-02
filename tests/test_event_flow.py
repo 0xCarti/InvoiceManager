@@ -48,7 +48,7 @@ def setup_event_env(app):
         )
         db.session.add(
             ProductRecipeItem(
-                product_id=product.id, item_id=item.id, quantity=1, countable=True
+                product_id=product.id, item_id=item.id, unit_id=iu.id, quantity=1, countable=True
             )
         )
         loc.products.append(product)

@@ -193,11 +193,13 @@ class ProductRecipeItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
     item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
+    unit_id = db.Column(db.Integer, db.ForeignKey('item_unit.id'), nullable=True)
     quantity = db.Column(db.Float, nullable=False)
     countable = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
 
     product = relationship('Product', back_populates='recipe_items')
     item = relationship('Item', back_populates='recipe_items')
+    unit = relationship('ItemUnit')
 
 
 class PurchaseOrder(db.Model):
