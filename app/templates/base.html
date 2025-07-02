@@ -156,6 +156,10 @@
             </li>
             {% else %}
             {% if current_user.is_admin %}
+            <li class="nav-item mt-2"><hr class="dropdown-divider"></li>
+            <li class="nav-item">
+                <span class="nav-link disabled fw-bold">Admin</span>
+            </li>
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('admin.users') }}">Control Panel</a>
                 <a href="{{ url_for('auth.toggle_favorite', link='admin.users') }}" class="ms-1">
@@ -180,6 +184,7 @@
                     {% if 'admin.activity_logs' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
                 </a>
             </li>
+            <li class="nav-item"><hr class="dropdown-divider"></li>
             {% endif %}
             <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('auth.profile') }}">Profile</a>
