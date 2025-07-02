@@ -5,30 +5,30 @@
     <h2>Transfers List</h2>
     <div class="row mb-3 align-items-center">
         <div class="col-12 col-lg-auto mb-2 mb-lg-0 d-flex align-items-center">
-            <a href="{{ url_for('transfer.add_transfer') }}" class="btn btn-primary mr-2">Add New Transfer</a>
-            <button id="new-transfer-alert" class="btn btn-warning mr-2" onclick="window.location.reload();"
+            <a href="{{ url_for('transfer.add_transfer') }}" class="btn btn-primary me-2">Add New Transfer</a>
+            <button id="new-transfer-alert" class="btn btn-warning me-2" onclick="window.location.reload();"
                     style="display: none;">
                 <img src="{{ url_for('static', filename='img/alert_icon.png') }}" alt="Reload"
                      style="width: 20px; height: 20px;"/>
             </button>
-            <a href="{{ url_for('transfer.generate_report') }}" class="btn btn-info mr-2">Generate Report</a>
+            <a href="{{ url_for('transfer.generate_report') }}" class="btn btn-info me-2">Generate Report</a>
         </div>
     </div>
     <div class="row mb-3 align-items-center">
         <div class="col-12 col-lg d-flex">
-            <form action="" method="get" class="form-inline flex-grow-1">
-                <select name="filter" class="form-control mr-2" onchange="this.form.submit()">
+            <form action="" method="get" class="d-flex flex-wrap align-items-end flex-grow-1">
+                <select name="filter" class="form-control me-2" onchange="this.form.submit()">
                     <option value="not_completed">Not Completed</option>
                     <option value="completed" {% if request.args.get(
                     'filter') == 'completed' %}selected{% endif %}>Completed</option>
                     <option value="all" {% if request.args.get(
                     'filter') == 'all' %}selected{% endif %}>All Transfers</option>
                 </select>
-                <input type="text" name="transfer_id" class="form-control mr-2" placeholder="Transfer ID"
+                <input type="text" name="transfer_id" class="form-control me-2" placeholder="Transfer ID"
                        value="{{ request.args.get('transfer_id', '') }}">
-                <input type="text" name="from_location" class="form-control mr-2" placeholder="From Location"
+                <input type="text" name="from_location" class="form-control me-2" placeholder="From Location"
                        value="{{ request.args.get('from_location', '') }}">
-                <input type="text" name="to_location" class="form-control mr-2" placeholder="To Location"
+                <input type="text" name="to_location" class="form-control me-2" placeholder="To Location"
                        value="{{ request.args.get('to_location', '') }}">
                 <button type="submit" class="btn btn-info">Search</button>
             </form>

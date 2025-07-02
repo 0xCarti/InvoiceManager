@@ -6,7 +6,7 @@
         {{ form.hidden_tag() }}
         <div id="item-list">
             {% for item in form.items %}
-            <div class="form-row mb-2 align-items-center">
+            <div class="row g-2 mb-2 align-items-center">
                 <div class="col">{{ item.item(class="form-control") }}</div>
                 <div class="col">{{ item.quantity(class="form-control") }}</div>
                 <div class="col-auto form-check d-flex align-items-center">

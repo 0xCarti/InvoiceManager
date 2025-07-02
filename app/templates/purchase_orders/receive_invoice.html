@@ -27,7 +27,7 @@
         <h4>Items</h4>
         <div id="items">
         {% for item in form.items %}
-        <div class="form-row item-row mb-2 align-items-center">
+        <div class="row g-2 item-row mb-2 align-items-center">
             <div class="col">{{ item.item(class="form-control item-select") }}</div>
             <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select"></select></div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
@@ -56,7 +56,7 @@
 
     function createRow(index) {
         const row = document.createElement('div');
-        row.classList.add('form-row','mb-2','item-row','align-items-center');
+        row.classList.add('row','g-2','mb-2','item-row','align-items-center');
         row.innerHTML = `
             <div class="col"><select name="items-${index}-item" id="items-${index}-item" class="form-control item-select">${itemOptions}</select></div>
             <div class="col"><select name="items-${index}-unit" id="items-${index}-unit" class="form-control unit-select"></select></div>
