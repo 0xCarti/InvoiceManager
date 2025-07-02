@@ -1,17 +1,5 @@
 from werkzeug.security import generate_password_hash
 from app import db
-from app.models import (
-    User,
-    Location,
-    Item,
-    ItemUnit,
-    Product,
-    ProductRecipeItem,
-    LocationStandItem,
-    Event,
-    EventLocation,
-    TerminalSale,
-)
 from app.models import (User, Location, Item, ItemUnit, Product, ProductRecipeItem,
                        LocationStandItem, Event, EventLocation, TerminalSale, EventStandSheetItem)
 from tests.test_user_flows import login
@@ -157,7 +145,7 @@ def test_bulk_stand_sheet(client, app):
 
 
 def test_no_sales_after_confirmation(client, app):
-    email, loc_id, prod_id = setup_event_env(app)
+    email, loc_id, prod_id, _ = setup_event_env(app)
     with client:
         login(client, email, "pass")
         client.post(
@@ -197,7 +185,6 @@ def test_no_sales_after_confirmation(client, app):
         resp = client.get(f"/events/{eid}/stand_sheet/{loc_id}")
         assert resp.status_code == 302
         assert f"/events/{eid}" in resp.headers["Location"]
-        assert b'EventLoc' in resp.data and b'EventLoc2' in resp.data
 
 
 def test_save_stand_sheet(client, app):

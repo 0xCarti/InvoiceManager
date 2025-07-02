@@ -1,14 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required
 from app import db
-from app.models import (
-    Event,
-    EventLocation,
-    TerminalSale,
-    Location,
-    LocationStandItem,
-    Product,
-)
 from app.models import Event, EventLocation, TerminalSale, Location, LocationStandItem, Product, EventStandSheetItem
 from app.forms import EventForm, EventLocationForm, EventLocationConfirmForm
 
@@ -155,17 +147,16 @@ def _get_stand_items(location_id, event_id=None):
     sheet_map = {}
     if event_id is not None:
         el = EventLocation.query.filter_by(
-            event_id=event_id, location_id=location_id
+            event_id=event_id,
+            location_id=location_id,
         ).first()
         if el:
             for sale in el.terminal_sales:
                 for ri in sale.product.recipe_items:
                     if ri.countable:
                         sales_by_item[ri.item_id] = (
-                            sales_by_item.get(ri.item_id, 0)
-                            + sale.quantity * ri.quantity
+                            sales_by_item.get(ri.item_id, 0) + sale.quantity * ri.quantity
                         )
-                        sales_by_item[ri.item_id] = sales_by_item.get(ri.item_id, 0) + sale.quantity * ri.quantity
             for sheet in el.stand_sheet_items:
                 sheet_map[sheet.item_id] = sheet
 
@@ -174,18 +165,20 @@ def _get_stand_items(location_id, event_id=None):
             if recipe_item.countable and recipe_item.item_id not in seen:
                 seen.add(recipe_item.item_id)
                 record = LocationStandItem.query.filter_by(
-                    location_id=location_id, item_id=recipe_item.item_id
+                    location_id=location_id,
+                    item_id=recipe_item.item_id,
                 ).first()
                 expected = record.expected_count if record else 0
                 sales = sales_by_item.get(recipe_item.item_id, 0)
                 stand_items.append(
-                    {"item": recipe_item.item, "expected": expected, "sales": sales}
+                    {
+                        "item": recipe_item.item,
+                        "expected": expected,
+                        "sales": sales,
+                        "sheet": sheet_map.get(recipe_item.item_id),
+                    }
                 )
-    return location, stand_items
 
-
-@event.route("/events/<int:event_id>/stand_sheet/<int:location_id>")
-                stand_items.append({'item': recipe_item.item, 'expected': expected, 'sales': sales, 'sheet': sheet_map.get(recipe_item.item_id)})
     return location, stand_items
 
 
@@ -195,24 +188,22 @@ def stand_sheet(event_id, location_id):
     ev = db.session.get(Event, event_id)
     if ev is None:
         abort(404)
-    el = EventLocation.query.filter_by(
-        event_id=event_id, location_id=location_id
-    ).first()
-    if el and (el.confirmed or ev.closed):
-        flash("This location is closed and the stand sheet cannot be modified.")
-        return redirect(url_for("event.view_event", event_id=event_id))
-    location, stand_items = _get_stand_items(location_id, event_id)
-    return render_template(
-        "events/stand_sheet.html", event=ev, location=location, stand_items=stand_items
-    )
     el = EventLocation.query.filter_by(event_id=event_id, location_id=location_id).first()
     if el is None:
         abort(404)
+    if el.confirmed or ev.closed:
+        flash("This location is closed and the stand sheet cannot be modified.")
+        return redirect(url_for("event.view_event", event_id=event_id))
+
     location, stand_items = _get_stand_items(location_id, event_id)
+
     if request.method == 'POST':
         for entry in stand_items:
             item_id = entry['item'].id
-            sheet = EventStandSheetItem.query.filter_by(event_location_id=el.id, item_id=item_id).first()
+            sheet = EventStandSheetItem.query.filter_by(
+                event_location_id=el.id,
+                item_id=item_id,
+            ).first()
             if not sheet:
                 sheet = EventStandSheetItem(event_location_id=el.id, item_id=item_id)
                 db.session.add(sheet)
@@ -225,7 +216,13 @@ def stand_sheet(event_id, location_id):
         db.session.commit()
         flash('Stand sheet saved')
         location, stand_items = _get_stand_items(location_id, event_id)
-    return render_template('events/stand_sheet.html', event=ev, location=location, stand_items=stand_items)
+
+    return render_template(
+        'events/stand_sheet.html',
+        event=ev,
+        location=location,
+        stand_items=stand_items,
+    )
 
 
 @event.route("/events/<int:event_id>/stand_sheets")
