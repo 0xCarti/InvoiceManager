@@ -4,7 +4,7 @@
 <div class="container mt-4">
     <h2>Stand Sheet - {{ location.name }}</h2>
     <form method="post">
-        {{ csrf_token() }}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <table class="table table-bordered">
         <thead>
             <tr>
