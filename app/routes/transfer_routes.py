@@ -23,6 +23,7 @@ from app.forms import (
     PurchaseOrderForm,
     ReceiveInvoiceForm,
     DeleteForm,
+    ConfirmForm,
     GLCodeForm,
 )
 from app.models import (
@@ -50,6 +51,36 @@ from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
 transfer = Blueprint('transfer', __name__)
 
 
+def check_negative_transfer(transfer_obj, multiplier=1):
+    """Return warnings if a transfer would cause negative inventory."""
+    warnings = []
+    for ti in transfer_obj.transfer_items:
+        from_record = LocationStandItem.query.filter_by(
+            location_id=transfer_obj.from_location_id,
+            item_id=ti.item_id
+        ).first()
+        current_from = from_record.expected_count if from_record else 0
+        new_from = current_from - multiplier * ti.quantity
+        if new_from < 0:
+            item = db.session.get(Item, ti.item_id)
+            warnings.append(
+                f"Transfer will result in negative inventory for {item.name} at {transfer_obj.from_location.name}"
+            )
+
+        to_record = LocationStandItem.query.filter_by(
+            location_id=transfer_obj.to_location_id,
+            item_id=ti.item_id
+        ).first()
+        current_to = to_record.expected_count if to_record else 0
+        new_to = current_to + multiplier * ti.quantity
+        if new_to < 0:
+            item = db.session.get(Item, ti.item_id)
+            warnings.append(
+                f"Transfer will result in negative inventory for {item.name} at {transfer_obj.to_location.name}"
+            )
+    return warnings
+
+
 def update_expected_counts(transfer_obj, multiplier=1):
     """Update expected counts for locations involved in a transfer."""
     for ti in transfer_obj.transfer_items:
@@ -65,12 +96,6 @@ def update_expected_counts(transfer_obj, multiplier=1):
             )
             db.session.add(from_record)
         new_from = from_record.expected_count - multiplier * ti.quantity
-        if new_from < 0:
-            item = db.session.get(Item, ti.item_id)
-            flash(
-                f"Warning: transfer will result in negative inventory for {item.name} at {transfer_obj.from_location.name}",
-                "warning",
-            )
         from_record.expected_count = new_from
 
         to_record = LocationStandItem.query.filter_by(
@@ -85,12 +110,6 @@ def update_expected_counts(transfer_obj, multiplier=1):
             )
             db.session.add(to_record)
         new_to = to_record.expected_count + multiplier * ti.quantity
-        if new_to < 0:
-            item = db.session.get(Item, ti.item_id)
-            flash(
-                f"Warning: transfer will result in negative inventory for {item.name} at {transfer_obj.to_location.name}",
-                "warning",
-            )
         to_record.expected_count = new_to
 
 @transfer.route('/transfers', methods=['GET'])
@@ -236,13 +255,33 @@ def delete_transfer(transfer_id):
     return redirect(url_for('transfer.view_transfers'))
 
 
-@transfer.route('/transfers/complete/<int:transfer_id>', methods=['GET'])
+@transfer.route('/transfers/complete/<int:transfer_id>', methods=['GET', 'POST'])
 @login_required
 def complete_transfer(transfer_id):
     """Mark a transfer as completed."""
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
+    warnings = check_negative_transfer(transfer, multiplier=1)
+    form = ConfirmForm()
+    if warnings and request.method == 'GET':
+        return render_template(
+            'confirm_action.html',
+            form=form,
+            warnings=warnings,
+            action_url=url_for('transfer.complete_transfer', transfer_id=transfer_id),
+            cancel_url=url_for('transfer.view_transfers'),
+            title='Confirm Transfer Completion',
+        )
+    if warnings and not form.validate_on_submit():
+        return render_template(
+            'confirm_action.html',
+            form=form,
+            warnings=warnings,
+            action_url=url_for('transfer.complete_transfer', transfer_id=transfer_id),
+            cancel_url=url_for('transfer.view_transfers'),
+            title='Confirm Transfer Completion',
+        )
     transfer.completed = True
     update_expected_counts(transfer, multiplier=1)
     db.session.commit()
@@ -251,13 +290,33 @@ def complete_transfer(transfer_id):
     return redirect(url_for('transfer.view_transfers'))
 
 
-@transfer.route('/transfers/uncomplete/<int:transfer_id>', methods=['GET'])
+@transfer.route('/transfers/uncomplete/<int:transfer_id>', methods=['GET', 'POST'])
 @login_required
 def uncomplete_transfer(transfer_id):
     """Revert a transfer to not completed."""
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
+    warnings = check_negative_transfer(transfer, multiplier=-1)
+    form = ConfirmForm()
+    if warnings and request.method == 'GET':
+        return render_template(
+            'confirm_action.html',
+            form=form,
+            warnings=warnings,
+            action_url=url_for('transfer.uncomplete_transfer', transfer_id=transfer_id),
+            cancel_url=url_for('transfer.view_transfers'),
+            title='Confirm Transfer Incomplete',
+        )
+    if warnings and not form.validate_on_submit():
+        return render_template(
+            'confirm_action.html',
+            form=form,
+            warnings=warnings,
+            action_url=url_for('transfer.uncomplete_transfer', transfer_id=transfer_id),
+            cancel_url=url_for('transfer.view_transfers'),
+            title='Confirm Transfer Incomplete',
+        )
     transfer.completed = False
     update_expected_counts(transfer, multiplier=-1)
     db.session.commit()

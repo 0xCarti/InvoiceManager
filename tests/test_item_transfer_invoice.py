@@ -95,7 +95,10 @@ def test_transfer_flow(client, app):
 
     with client:
         login(client, 'transfer@example.com', 'pass')
-        resp = client.get(f'/transfers/complete/{tid}', follow_redirects=True)
+        resp = client.get(f'/transfers/complete/{tid}')
+        assert resp.status_code == 200
+        assert b'Confirm Transfer Completion' in resp.data
+        resp = client.post(f'/transfers/complete/{tid}', follow_redirects=True)
         assert resp.status_code == 200
 
     with app.app_context():
@@ -178,7 +181,10 @@ def test_transfer_expected_counts_updated(client, app):
 
     with client:
         login(client, 'expected@example.com', 'pass')
-        resp = client.get(f'/transfers/complete/{tid}', follow_redirects=True)
+        resp = client.get(f'/transfers/complete/{tid}')
+        assert resp.status_code == 200
+        assert b'Confirm Transfer Completion' in resp.data
+        resp = client.post(f'/transfers/complete/{tid}', follow_redirects=True)
         assert resp.status_code == 200
 
     with app.app_context():
@@ -238,7 +244,9 @@ def test_stand_sheet_shows_expected_counts(client, app):
 
     with client:
         login(client, 'stand@example.com', 'pass')
-        client.get(f'/transfers/complete/{tid}', follow_redirects=True)
+        resp_confirm = client.get(f'/transfers/complete/{tid}')
+        assert b'Confirm Transfer Completion' in resp_confirm.data
+        client.post(f'/transfers/complete/{tid}', follow_redirects=True)
         resp1 = client.get(f'/locations/{loc1_id}/stand_sheet')
         resp2 = client.get(f'/locations/{loc2_id}/stand_sheet')
         assert b'-5' in resp1.data
