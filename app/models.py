@@ -294,6 +294,7 @@ class EventLocation(db.Model):
     location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
     opening_count = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
     closing_count = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
+    confirmed = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
 
     event = relationship('Event', back_populates='locations')
     location = relationship('Location', back_populates='event_locations')
