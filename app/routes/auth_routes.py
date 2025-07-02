@@ -330,6 +330,67 @@ def _import_items(path):
     return created
 
 
+def _import_products(path):
+    """Import products with optional recipe item names.
+
+    The CSV can include a ``recipe`` column listing item names separated by
+    semicolons. If any item name cannot be matched exactly, a ``ValueError`` is
+    raised and no products are added.
+    """
+    if not os.path.exists(path):
+        return 0
+
+    pending = []
+    with open(path, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            name = row.get('name')
+            if not name:
+                continue
+            if Product.query.filter_by(name=name).first():
+                continue
+
+            gl_code_id = None
+            if row.get('gl_code'):
+                gl = GLCode.query.filter_by(code=row['gl_code']).first()
+                if gl:
+                    gl_code_id = gl.id
+
+            recipe_items = []
+            recipe_field = row.get('recipe', '')
+            if recipe_field:
+                for iname in recipe_field.split(';'):
+                    iname = iname.strip()
+                    if not iname:
+                        continue
+                    item = Item.query.filter_by(name=iname).first()
+                    if not item:
+                        db.session.rollback()
+                        raise ValueError(f'Unknown item: {iname}')
+                    recipe_items.append(item)
+
+            pending.append(
+                (name, float(row['price']), float(row.get('cost', 0) or 0), gl_code_id, recipe_items)
+            )
+
+    for name, price, cost, gl_code_id, recipe_items in pending:
+        product = Product(name=name, price=price, cost=cost, gl_code_id=gl_code_id)
+        db.session.add(product)
+        db.session.flush()
+        for item in recipe_items:
+            db.session.add(
+                ProductRecipeItem(
+                    product_id=product.id,
+                    item_id=item.id,
+                    quantity=1,
+                    countable=False,
+                )
+            )
+
+    db.session.commit()
+    return len(pending)
+
+
 def _import_locations(path):
     """Import locations with optional product names.
 
@@ -411,29 +472,11 @@ def import_data(data_type):
             flash(str(exc), 'error')
             return redirect(url_for('admin.import_page'))
     elif data_type == 'products':
-        # map gl_code by code if provided
-        count = 0
-        if os.path.exists(path):
-            with open(path, newline='') as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    name = row['name']
-                    if Product.query.filter_by(name=name).first():
-                        continue
-                    gl_code_id = None
-                    if row.get('gl_code'):
-                        gl = GLCode.query.filter_by(code=row['gl_code']).first()
-                        if gl:
-                            gl_code_id = gl.id
-                    product = Product(
-                        name=name,
-                        price=float(row['price']),
-                        cost=float(row.get('cost', 0) or 0),
-                        gl_code_id=gl_code_id,
-                    )
-                    db.session.add(product)
-                    count += 1
-            db.session.commit()
+        try:
+            count = _import_products(path)
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return redirect(url_for('admin.import_page'))
     elif data_type == 'gl_codes':
         count = _import_csv(path, GLCode, {'code': 'code', 'description': 'description'})
     elif data_type == 'items':
