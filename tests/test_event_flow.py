@@ -41,8 +41,6 @@ def test_event_lifecycle(client, app):
         login(client, email, 'pass')
         client.post(f'/events/{eid}/add_location', data={
             'location_id': loc_id,
-            'opening_count': 10,
-            'closing_count': 5
         }, follow_redirects=True)
 
     with app.app_context():
@@ -53,8 +51,7 @@ def test_event_lifecycle(client, app):
     with client:
         login(client, email, 'pass')
         client.post(f'/events/{eid}/locations/{elid}/sales/add', data={
-            'product_id': prod_id,
-            'quantity': 3
+            f'qty_{prod_id}': 3
         }, follow_redirects=True)
 
     with app.app_context():
@@ -67,7 +64,7 @@ def test_event_lifecycle(client, app):
 
     with app.app_context():
         lsi = LocationStandItem.query.filter_by(location_id=loc_id).first()
-        assert lsi.expected_count == 5
+        assert lsi.expected_count == 0
         assert TerminalSale.query.filter_by(event_location_id=elid).count() == 0
 
 
@@ -98,13 +95,9 @@ def test_bulk_stand_sheet(client, app):
         login(client, email, 'pass')
         client.post(f'/events/{eid}/add_location', data={
             'location_id': loc_id,
-            'opening_count': 0,
-            'closing_count': 0
         }, follow_redirects=True)
         client.post(f'/events/{eid}/add_location', data={
             'location_id': loc2_id,
-            'opening_count': 0,
-            'closing_count': 0
         }, follow_redirects=True)
         resp = client.get(f'/events/{eid}/stand_sheets')
         assert resp.status_code == 200
