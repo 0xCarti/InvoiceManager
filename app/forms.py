@@ -260,6 +260,11 @@ class RestoreBackupForm(FlaskForm):
     submit = SubmitField('Restore')
 
 
+class ImportForm(FlaskForm):
+    """Simple form used for one-click data imports."""
+    submit = SubmitField('Import')
+
+
 class POItemForm(FlaskForm):
     item = SelectField('Item', coerce=int)
     product = SelectField('Product', coerce=int, validators=[Optional()],

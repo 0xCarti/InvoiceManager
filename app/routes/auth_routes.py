@@ -3,6 +3,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 import os
+import csv
 
 from app.forms import (
     LoginForm,
@@ -12,14 +13,37 @@ from app.forms import (
     RestoreBackupForm,
     ChangePasswordForm,
     SetPasswordForm,
+    ImportForm,
 )
 
-from app.models import User, db, Transfer, Invoice, ActivityLog
+from app.models import (
+    User,
+    db,
+    Transfer,
+    Invoice,
+    ActivityLog,
+    Location,
+    Item,
+    Product,
+    GLCode,
+    Customer,
+    Vendor,
+)
 from app.activity_logger import log_activity
 from app.backup_utils import create_backup, restore_backup
 
 auth = Blueprint('auth', __name__)
 admin = Blueprint('admin', __name__)
+
+IMPORT_FILES = {
+    'locations': 'example_locations.csv',
+    'products': 'example_products.csv',
+    'gl_codes': 'example_gl_codes.csv',
+    'items': 'example_items.txt',
+    'customers': 'example_customers.csv',
+    'vendors': 'example_vendors.csv',
+    'users': 'example_users.csv',
+}
 
 
 @auth.route('/login', methods=['GET', 'POST'])
@@ -265,3 +289,119 @@ def activity_logs():
         abort(403)
     logs = ActivityLog.query.order_by(ActivityLog.timestamp.desc()).all()
     return render_template('admin/activity_logs.html', logs=logs)
+
+
+def _import_csv(path, model, mappings):
+    """Helper to import CSV rows into a model."""
+    created = 0
+    if not os.path.exists(path):
+        return 0
+    with open(path, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            obj_kwargs = {field: row[col] for field, col in mappings.items() if row.get(col) is not None}
+            if model == User:
+                if User.query.filter_by(email=obj_kwargs['email']).first():
+                    continue
+                obj_kwargs['password'] = generate_password_hash(obj_kwargs['password'])
+                obj_kwargs['is_admin'] = row.get('is_admin', '0') == '1'
+                obj_kwargs['active'] = row.get('active', '0') == '1'
+            if model == GLCode:
+                if GLCode.query.filter_by(code=obj_kwargs['code']).first():
+                    continue
+            obj = model(**obj_kwargs)
+            db.session.add(obj)
+            created += 1
+    db.session.commit()
+    return created
+
+
+def _import_items(path):
+    if not os.path.exists(path):
+        return 0
+    created = 0
+    with open(path) as f:
+        for line in f:
+            name = line.strip()
+            if name and not Item.query.filter_by(name=name).first():
+                db.session.add(Item(name=name))
+                created += 1
+    db.session.commit()
+    return created
+
+
+@admin.route('/controlpanel/imports', methods=['GET'])
+@login_required
+def import_page():
+    """Display import options."""
+    if not current_user.is_admin:
+        abort(403)
+    forms = {key: ImportForm(prefix=key) for key in IMPORT_FILES}
+    labels = {
+        'locations': 'Import Locations',
+        'products': 'Import Products',
+        'gl_codes': 'Import GL Codes',
+        'items': 'Import Items',
+        'customers': 'Import Customers',
+        'vendors': 'Import Vendors',
+        'users': 'Import Users',
+    }
+    return render_template('admin/imports.html', forms=forms, labels=labels)
+
+
+@admin.route('/controlpanel/import/<string:data_type>', methods=['POST'])
+@login_required
+def import_data(data_type):
+    """Import a specific data type from example files."""
+    if not current_user.is_admin:
+        abort(403)
+    form = ImportForm()
+    if not form.validate_on_submit() or data_type not in IMPORT_FILES:
+        abort(400)
+    path = os.path.join(os.getcwd(), IMPORT_FILES[data_type])
+    if data_type == 'locations':
+        count = _import_csv(path, Location, {'name': 'name'})
+    elif data_type == 'products':
+        # map gl_code by code if provided
+        count = 0
+        if os.path.exists(path):
+            with open(path, newline='') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    name = row['name']
+                    if Product.query.filter_by(name=name).first():
+                        continue
+                    gl_code_id = None
+                    if row.get('gl_code'):
+                        gl = GLCode.query.filter_by(code=row['gl_code']).first()
+                        if gl:
+                            gl_code_id = gl.id
+                    product = Product(
+                        name=name,
+                        price=float(row['price']),
+                        cost=float(row.get('cost', 0) or 0),
+                        gl_code_id=gl_code_id,
+                    )
+                    db.session.add(product)
+                    count += 1
+            db.session.commit()
+    elif data_type == 'gl_codes':
+        count = _import_csv(path, GLCode, {'code': 'code', 'description': 'description'})
+    elif data_type == 'items':
+        count = _import_items(path)
+    elif data_type == 'customers':
+        count = _import_csv(path, Customer, {
+            'first_name': 'first_name',
+            'last_name': 'last_name',
+        })
+    elif data_type == 'vendors':
+        count = _import_csv(path, Vendor, {
+            'first_name': 'first_name',
+            'last_name': 'last_name',
+        })
+    elif data_type == 'users':
+        count = _import_csv(path, User, {'email': 'email', 'password': 'password'})
+    else:
+        abort(400)
+    flash(f'Imported {count} {data_type.replace("_", " ")}.', 'success')
+    return redirect(url_for('admin.import_page'))
