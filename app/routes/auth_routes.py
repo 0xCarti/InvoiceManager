@@ -322,7 +322,7 @@ def _import_items(path):
     """Import items from a CSV or plain text file.
 
     If ``path`` points to a CSV file it may contain ``name``,
-    ``base_unit``, ``cost`` and ``units`` columns. The ``units`` column
+    ``base_unit``, ``gl_code``, ``cost`` and ``units`` columns. The ``units`` column
     should list unit name/factor pairs separated by semicolons,
     e.g. ``each:1;case:12``. The first unit is set as both the
     receiving and transfer default.
@@ -341,7 +341,12 @@ def _import_items(path):
                     continue
                 base_unit = row.get('base_unit', 'each').strip() or 'each'
                 cost = float(row.get('cost') or 0)
-                item = Item(name=name, base_unit=base_unit, cost=cost)
+                gl_code_id = None
+                if row.get('gl_code'):
+                    gl = GLCode.query.filter_by(code=row['gl_code']).first()
+                    if gl:
+                        gl_code_id = gl.id
+                item = Item(name=name, base_unit=base_unit, cost=cost, gl_code_id=gl_code_id)
                 db.session.add(item)
                 db.session.flush()
 
@@ -454,7 +459,8 @@ def _import_products(path):
     """Import products with optional recipe items.
 
     The CSV may include a ``recipe`` column listing item names with optional
-    quantities separated by semicolons, e.g. ``Bun:2;Patty:1``. If any item
+    quantities and units separated by semicolons, e.g.
+    ``Bun:2:each;Patty:1:each``. If any item
     name cannot be matched exactly, a ``ValueError`` is raised and no products
     are added.
     """
@@ -484,20 +490,29 @@ def _import_products(path):
                     spec = spec.strip()
                     if not spec:
                         continue
-                    if ':' in spec:
-                        item_name, qty_str = spec.split(':', 1)
+                    parts = spec.split(':')
+                    item_name = parts[0]
+                    qty = 1.0
+                    unit_name = None
+                    if len(parts) >= 2 and parts[1] != '':
                         try:
-                            qty = float(qty_str)
+                            qty = float(parts[1])
                         except ValueError:
                             qty = 0.0
-                    else:
-                        item_name = spec
-                        qty = 1.0
+                    if len(parts) == 3 and parts[2].strip():
+                        unit_name = parts[2].strip()
                     item = Item.query.filter_by(name=item_name.strip()).first()
                     if not item:
                         db.session.rollback()
                         raise ValueError(f'Unknown item: {item_name.strip()}')
-                    recipe_items.append((item.id, qty))
+                    unit_id = None
+                    if unit_name:
+                        unit = ItemUnit.query.filter_by(item_id=item.id, name=unit_name).first()
+                        if not unit:
+                            db.session.rollback()
+                            raise ValueError(f'Unknown unit {unit_name} for item {item_name.strip()}')
+                        unit_id = unit.id
+                    recipe_items.append((item.id, qty, unit_id))
 
             pending.append((name, float(row['price']), float(row.get('cost', 0) or 0), gl_code_id, recipe_items))
 
@@ -506,11 +521,12 @@ def _import_products(path):
         product = Product(name=name, price=price, cost=cost, gl_code_id=gl_code_id)
         db.session.add(product)
         db.session.flush()
-        for item_id, qty in recipe_items:
+        for item_id, qty, unit_id in recipe_items:
             db.session.add(
                 ProductRecipeItem(
                     product_id=product.id,
                     item_id=item_id,
+                    unit_id=unit_id,
                     quantity=qty,
                     countable=False,
                 )
