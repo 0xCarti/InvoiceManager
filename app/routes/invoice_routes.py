@@ -197,26 +197,26 @@ def get_customer_tax_status(customer_id):
 def view_invoices():
     """List invoices with optional filters."""
     form = InvoiceFilterForm()
-    form.vendor_id.choices = [(-1, 'All')] + [
+    form.customer_id.choices = [(-1, 'All')] + [
         (c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()
     ]
 
     # Determine filter values from form submission or query params
     if form.validate_on_submit():
         invoice_id = form.invoice_id.data
-        vendor_id = form.vendor_id.data
+        customer_id = form.customer_id.data
         start_date = form.start_date.data
         end_date = form.end_date.data
     else:
         invoice_id = request.args.get('invoice_id', '')
-        vendor_id = request.args.get('vendor_id', type=int)
+        customer_id = request.args.get('customer_id', type=int)
         start_date_str = request.args.get('start_date')
         end_date_str = request.args.get('end_date')
         start_date = datetime.fromisoformat(start_date_str) if start_date_str else None
         end_date = datetime.fromisoformat(end_date_str) if end_date_str else None
         form.invoice_id.data = invoice_id
-        if vendor_id is not None:
-            form.vendor_id.data = vendor_id
+        if customer_id is not None:
+            form.customer_id.data = customer_id
         if start_date:
             form.start_date.data = start_date
         if end_date:
@@ -225,8 +225,8 @@ def view_invoices():
     query = Invoice.query
     if invoice_id:
         query = query.filter(Invoice.id.ilike(f"%{invoice_id}%"))
-    if vendor_id and vendor_id != -1:
-        query = query.filter(Invoice.customer_id == vendor_id)
+    if customer_id and customer_id != -1:
+        query = query.filter(Invoice.customer_id == customer_id)
     if start_date:
         query = query.filter(Invoice.date_created >= datetime.combine(start_date, datetime.min.time()))
     if end_date:

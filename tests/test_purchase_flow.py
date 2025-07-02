@@ -1,6 +1,6 @@
 from werkzeug.security import generate_password_hash
 from app import db
-from app.models import (User, Customer, Item, ItemUnit, Location, PurchaseOrder,
+from app.models import (User, Vendor, Item, ItemUnit, Location, PurchaseOrder,
                         PurchaseOrderItem, PurchaseInvoice, PurchaseInvoiceItem,
                         LocationStandItem, PurchaseOrderItemArchive)
 from tests.test_user_flows import login
@@ -9,7 +9,7 @@ from tests.test_user_flows import login
 def setup_purchase(app):
     with app.app_context():
         user = User(email='buyer@example.com', password=generate_password_hash('pass'), active=True)
-        vendor = Customer(first_name='Vend', last_name='Or')
+        vendor = Vendor(first_name='Vend', last_name='Or')
         item = Item(name='Part', base_unit='each')
         unit = ItemUnit(item=item, name='each', factor=1, receiving_default=True, transfer_default=True)
         location = Location(name='Main')
@@ -25,7 +25,7 @@ def setup_purchase_with_case(app):
     """Setup purchase scenario with an additional case unit."""
     with app.app_context():
         user = User(email='casebuyer@example.com', password=generate_password_hash('pass'), active=True)
-        vendor = Customer(first_name='Vend', last_name='Or')
+        vendor = Vendor(first_name='Vend', last_name='Or')
         item = Item(name='CaseItem', base_unit='each')
         each_unit = ItemUnit(item=item, name='each', factor=1, receiving_default=True, transfer_default=True)
         case_unit = ItemUnit(item=item, name='case', factor=24)
@@ -85,7 +85,7 @@ def test_purchase_and_receive(client, app):
 def test_purchase_order_multiple_items(client, app):
     with app.app_context():
         user = User(email='multi@example.com', password=generate_password_hash('pass'), active=True)
-        vendor = Customer(first_name='Multi', last_name='Vendor')
+        vendor = Vendor(first_name='Multi', last_name='Vendor')
         item1 = Item(name='PartA', base_unit='each')
         item2 = Item(name='PartB', base_unit='each')
         loc = Location(name='Main')

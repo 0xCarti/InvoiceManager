@@ -1,7 +1,7 @@
 from werkzeug.security import generate_password_hash
 
 from app import db
-from app.models import User, Customer
+from app.models import User, Vendor
 from tests.test_user_flows import login
 
 
@@ -26,7 +26,7 @@ def test_vendor_crud_flow(client, app):
         assert resp.status_code == 200
 
     with app.app_context():
-        vendor = Customer.query.filter_by(first_name='Vend', last_name='Or').first()
+        vendor = Vendor.query.filter_by(first_name='Vend', last_name='Or').first()
         assert vendor is not None
         vid = vendor.id
 
@@ -41,7 +41,7 @@ def test_vendor_crud_flow(client, app):
         assert resp.status_code == 200
 
     with app.app_context():
-        vendor = db.session.get(Customer, vid)
+        vendor = db.session.get(Vendor, vid)
         assert vendor.first_name == 'New'
         assert vendor.pst_exempt
 
@@ -51,5 +51,5 @@ def test_vendor_crud_flow(client, app):
         assert resp.status_code == 200
 
     with app.app_context():
-        vendor = db.session.get(Customer, vid)
+        vendor = db.session.get(Vendor, vid)
         assert vendor is None
