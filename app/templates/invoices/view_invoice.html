@@ -28,9 +28,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for invoice_product in invoice.products %}
+                    {% for invoice_product, name in invoice_lines %}
                     <tr>
-                        <td>{{ invoice_product.product.name }}</td>
+                        <td>{{ name }}</td>
                         <td>{{ invoice_product.quantity }}</td>
                         <td>${{ "%.2f"|format(invoice_product.unit_price) }}</td>
                         <td>${{ "%.2f"|format(invoice_product.line_subtotal + invoice_product.line_gst +

@@ -139,7 +139,7 @@ class Product(db.Model):
     sales_gl_code = relationship('GLCode', foreign_keys=[sales_gl_code_id])
 
     # Define a one-to-many relationship with InvoiceProduct
-    invoice_products = relationship("InvoiceProduct", back_populates="product", cascade="all, delete-orphan")
+    invoice_products = relationship("InvoiceProduct", back_populates="product")
     recipe_items = relationship("ProductRecipeItem", back_populates="product", cascade="all, delete-orphan")
     gl_code_rel = relationship('GLCode', foreign_keys=[gl_code_id], backref='products')
     terminal_sales = relationship('TerminalSale', back_populates='product', cascade='all, delete-orphan')
@@ -176,8 +176,9 @@ class InvoiceProduct(db.Model):
         nullable=False,
     )
     quantity = db.Column(db.Float, nullable=False)
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id', ondelete='CASCADE'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id', ondelete='SET NULL'), nullable=True)
     product = relationship("Product", back_populates="invoice_products")
+    product_name = db.Column(db.String(100), nullable=False)
     unit_price = db.Column(db.Float, nullable=False)
     line_subtotal = db.Column(db.Float, nullable=False)
     line_gst = db.Column(db.Float, nullable=False)
