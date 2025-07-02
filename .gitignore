@@ -10,3 +10,4 @@ backups/
 .env
 inventory.db
 import_files/
+gl_codes.csv
