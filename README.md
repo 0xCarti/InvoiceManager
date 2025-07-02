@@ -57,8 +57,9 @@ The tests automatically set the necessary environment variables, so no additiona
 
 ## Data Import
 
-Administrators can quickly seed the database using sample CSV files located in the
-project root. Place your own data in these files or modify the provided examples:
+Administrators can quickly seed the database using sample files located in the
+`import_files` directory at the project root. Place your own data in these files
+or modify the provided examples:
 
 - `example_gl_codes.csv`
 - `example_locations.csv` – includes a `products` column listing product names

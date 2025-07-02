@@ -181,7 +181,10 @@ def upload_terminal_sales(event_id):
             rows.append((loc, name.strip(), qty))
 
         if ext == ".xls" or ext == ".xlsx":
-            df = pd.read_excel(filepath, header=None)
+            # Use openpyxl for reading Excel files regardless of extension.
+            # This avoids reliance on the deprecated xlrd/xlwt packages and
+            # allows test fixtures to rename .xlsx files with a .xls suffix.
+            df = pd.read_excel(filepath, header=None, engine="openpyxl")
             current_loc = None
             for _, r in df.iterrows():
                 first, second = r.iloc[0], r.iloc[1]
