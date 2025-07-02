@@ -331,8 +331,6 @@ class EventForm(FlaskForm):
 
 class EventLocationForm(FlaskForm):
     location_id = SelectField('Location', coerce=int, validators=[DataRequired()])
-    opening_count = DecimalField('Opening Count', validators=[InputRequired()], default=0)
-    closing_count = DecimalField('Closing Count', validators=[Optional()], default=0)
     submit = SubmitField('Submit')
 
     def __init__(self, *args, **kwargs):
