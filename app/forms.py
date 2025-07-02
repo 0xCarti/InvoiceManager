@@ -196,7 +196,7 @@ class ProductForm(FlaskForm):
 
 class RecipeItemForm(FlaskForm):
     item = SelectField('Item', coerce=int)
-    quantity = IntegerField('Quantity', validators=[InputRequired()])
+    quantity = DecimalField('Quantity', validators=[InputRequired()])
     countable = BooleanField('Countable')
 
 
