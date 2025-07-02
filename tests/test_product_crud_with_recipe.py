@@ -93,3 +93,23 @@ def test_recipe_accepts_integer_quantity(client, app):
         prod = Product.query.filter_by(name='Pie').first()
         assert prod is not None
         assert prod.recipe_items[0].quantity == 0
+
+
+def test_recipe_accepts_decimal_quantity(client, app):
+    email, item1_id, _ = setup_user_and_items(app)
+    with client:
+        login(client, email, 'pass')
+        resp = client.post('/products/create', data={
+            'name': 'Muffin',
+            'price': 3,
+            'cost': 1,
+            'gl_code': '4000',
+            'items-0-item': item1_id,
+            'items-0-quantity': 0.5,
+            'items-0-countable': 'y'
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+    with app.app_context():
+        prod = Product.query.filter_by(name='Muffin').first()
+        assert prod is not None
+        assert prod.recipe_items[0].quantity == 0.5
