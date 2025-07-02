@@ -23,6 +23,7 @@ from app.forms import (
     PurchaseOrderForm,
     ReceiveInvoiceForm,
     DeleteForm,
+    ConfirmForm,
     GLCodeForm,
 )
 from app.models import (
@@ -49,6 +50,31 @@ from datetime import datetime
 from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
 
 purchase = Blueprint('purchase', __name__)
+
+
+def check_negative_invoice_reverse(invoice_obj):
+    """Return warnings if reversing the invoice would cause negative inventory."""
+    warnings = []
+    for inv_item in invoice_obj.items:
+        factor = 1
+        if inv_item.unit_id:
+            unit = db.session.get(ItemUnit, inv_item.unit_id)
+            if unit:
+                factor = unit.factor
+        itm = db.session.get(Item, inv_item.item_id)
+        if itm:
+            record = LocationStandItem.query.filter_by(
+                location_id=invoice_obj.location_id,
+                item_id=itm.id,
+            ).first()
+            current = record.expected_count if record else 0
+            new_count = current - inv_item.quantity * factor
+            if new_count < 0:
+                location_name = record.location.name if record else db.session.get(Location, invoice_obj.location_id).name
+                warnings.append(
+                    f"Reversing this invoice will result in negative inventory for {itm.name} at {location_name}"
+                )
+    return warnings
 
 @purchase.route('/purchase_orders', methods=['GET'])
 @login_required
@@ -262,7 +288,7 @@ def view_purchase_invoice(invoice_id):
     return render_template('purchase_invoices/view_purchase_invoice.html', invoice=invoice)
 
 
-@purchase.route('/purchase_invoices/<int:invoice_id>/reverse')
+@purchase.route('/purchase_invoices/<int:invoice_id>/reverse', methods=['GET', 'POST'])
 @login_required
 def reverse_purchase_invoice(invoice_id):
     """Undo receipt of a purchase invoice."""
@@ -272,6 +298,26 @@ def reverse_purchase_invoice(invoice_id):
     po = db.session.get(PurchaseOrder, invoice.purchase_order_id)
     if po is None:
         abort(404)
+    warnings = check_negative_invoice_reverse(invoice)
+    form = ConfirmForm()
+    if warnings and request.method == 'GET':
+        return render_template(
+            'confirm_action.html',
+            form=form,
+            warnings=warnings,
+            action_url=url_for('purchase.reverse_purchase_invoice', invoice_id=invoice_id),
+            cancel_url=url_for('purchase.view_purchase_invoices'),
+            title='Confirm Invoice Reversal',
+        )
+    if warnings and not form.validate_on_submit():
+        return render_template(
+            'confirm_action.html',
+            form=form,
+            warnings=warnings,
+            action_url=url_for('purchase.reverse_purchase_invoice', invoice_id=invoice_id),
+            cancel_url=url_for('purchase.view_purchase_invoices'),
+            title='Confirm Invoice Reversal',
+        )
     for inv_item in invoice.items:
         factor = 1
         if inv_item.unit_id:
@@ -315,7 +361,8 @@ def reverse_purchase_invoice(invoice_id):
                     expected_count=0,
                 )
                 db.session.add(record)
-            record.expected_count -= inv_item.quantity * factor
+            new_count = record.expected_count - inv_item.quantity * factor
+            record.expected_count = new_count
     PurchaseInvoiceItem.query.filter_by(invoice_id=invoice.id).delete()
     db.session.delete(invoice)
     po.received = False

@@ -342,6 +342,11 @@ class EventLocationConfirmForm(FlaskForm):
     submit = SubmitField('Confirm')
 
 
+class ConfirmForm(FlaskForm):
+    """Generic confirmation form used for warnings."""
+    submit = SubmitField('Confirm')
+
+
 class TerminalSaleForm(FlaskForm):
     product_id = SelectField('Product', coerce=int, validators=[DataRequired()])
     quantity = DecimalField('Quantity', validators=[InputRequired()])
