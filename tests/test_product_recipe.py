@@ -12,17 +12,16 @@ def setup_data(app):
         item2 = Item(name='Sugar', quantity=50, base_unit='gram')
         db.session.add_all([item1, item2])
         db.session.commit()
-        db.session.add_all([
-            ItemUnit(item_id=item1.id, name='gram', factor=1, receiving_default=True, transfer_default=True),
-            ItemUnit(item_id=item2.id, name='gram', factor=1, receiving_default=True, transfer_default=True)
-        ])
+        iu1 = ItemUnit(item_id=item1.id, name='gram', factor=1, receiving_default=True, transfer_default=True)
+        iu2 = ItemUnit(item_id=item2.id, name='gram', factor=1, receiving_default=True, transfer_default=True)
+        db.session.add_all([iu1, iu2])
         db.session.commit()
         product = Product(name='Cake', price=5.0, cost=2.0, quantity=10)
         db.session.add_all([user, customer, product])
         db.session.commit()
         db.session.add_all([
-            ProductRecipeItem(product_id=product.id, item_id=item1.id, quantity=2, countable=True),
-            ProductRecipeItem(product_id=product.id, item_id=item2.id, quantity=1, countable=False)
+            ProductRecipeItem(product_id=product.id, item_id=item1.id, unit_id=iu1.id, quantity=2, countable=True),
+            ProductRecipeItem(product_id=product.id, item_id=item2.id, unit_id=iu2.id, quantity=1, countable=False)
         ])
         db.session.commit()
         return user.email, customer.id, product.name, item1.id, item2.id

@@ -117,7 +117,8 @@ def create_invoice():
                     # Reduce item inventories based on recipe
                     for recipe_item in product.recipe_items:
                         item = recipe_item.item
-                        item.quantity = (item.quantity or 0) - (recipe_item.quantity * quantity)
+                        factor = recipe_item.unit.factor if recipe_item.unit else 1
+                        item.quantity = (item.quantity or 0) - (recipe_item.quantity * factor * quantity)
                 else:
                     flash(f"Product '{product_name}' not found.", 'danger')
 

@@ -284,8 +284,9 @@ def _get_stand_items(location_id, event_id=None):
             for sale in el.terminal_sales:
                 for ri in sale.product.recipe_items:
                     if ri.countable:
+                        factor = ri.unit.factor if ri.unit else 1
                         sales_by_item[ri.item_id] = (
-                            sales_by_item.get(ri.item_id, 0) + sale.quantity * ri.quantity
+                            sales_by_item.get(ri.item_id, 0) + sale.quantity * ri.quantity * factor
                         )
             for sheet in el.stand_sheet_items:
                 sheet_map[sheet.item_id] = sheet

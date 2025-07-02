@@ -196,6 +196,7 @@ class ProductForm(FlaskForm):
 
 class RecipeItemForm(FlaskForm):
     item = SelectField('Item', coerce=int)
+    unit = SelectField('Unit', coerce=int, validators=[Optional()], validate_choice=False)
     quantity = DecimalField('Quantity', validators=[InputRequired()])
     countable = BooleanField('Countable')
 
@@ -208,6 +209,7 @@ class ProductRecipeForm(FlaskForm):
         super(ProductRecipeForm, self).__init__(*args, **kwargs)
         for item_form in self.items:
             item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
 
 
 class ProductWithRecipeForm(ProductForm):
@@ -218,6 +220,7 @@ class ProductWithRecipeForm(ProductForm):
         super(ProductWithRecipeForm, self).__init__(*args, **kwargs)
         for item_form in self.items:
             item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
 
 
 class InvoiceForm(FlaskForm):

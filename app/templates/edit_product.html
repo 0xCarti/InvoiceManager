@@ -52,6 +52,7 @@
             {% for item in form.items %}
             <div class="form-row mb-2 align-items-center">
                 <div class="col">{{ item.item(class="form-control") }}</div>
+                <div class="col">{{ item.unit(class="form-control") }}</div>
                 <div class="col">{{ item.quantity(class="form-control") }}</div>
                 <div class="col-auto form-check d-flex align-items-center">
                     {{ item.countable(class="form-check-input") }}
@@ -83,6 +84,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const itemOptions = `{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
+    const unitOptions = `{% for val, label in form.items[0].unit.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
     const countableLabel = "{{ form.items[0].countable.label.text }}";
     let itemIndex = {{ form.items|length }};
 
@@ -92,6 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
         row.classList.add('form-row', 'mb-2', 'align-items-center');
         row.innerHTML = `
             <div class="col"><select name="items-${itemIndex}-item" class="form-control">${itemOptions}</select></div>
+            <div class="col"><select name="items-${itemIndex}-unit" class="form-control">${unitOptions}</select></div>
             <div class="col"><input type="number" step="any" name="items-${itemIndex}-quantity" class="form-control"></div>
             <div class="col-auto form-check d-flex align-items-center">
                 <input type="checkbox" name="items-${itemIndex}-countable" class="form-check-input" id="items-${itemIndex}-countable">
