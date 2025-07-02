@@ -3,6 +3,20 @@ from app import db
 from app.models import (User, Location, Item, ItemUnit, Product, ProductRecipeItem,
                        LocationStandItem, Event, EventLocation, TerminalSale, EventStandSheetItem)
 from tests.test_user_flows import login
+from io import BytesIO
+import os
+
+
+def setup_upload_env(app):
+    with app.app_context():
+        user = User(email="upload@example.com", password=generate_password_hash("pass"), active=True)
+        east = Location(name="Popcorn East")
+        west = Location(name="Popcorn West")
+        prod1 = Product(name="591ml 7-Up", price=1.0, cost=0.5)
+        prod2 = Product(name="Butter Topping Large", price=1.0, cost=0.5)
+        db.session.add_all([user, east, west, prod1, prod2])
+        db.session.commit()
+        return user.email, east.id, west.id, prod1.id, prod2.id
 
 
 def setup_event_env(app):
@@ -260,3 +274,88 @@ def test_terminal_sales_prefill(client, app):
         resp = client.get(f'/events/{eid}/locations/{elid}/sales/add')
         assert resp.status_code == 200
         assert b'value="7"' in resp.data or b'value="7.0"' in resp.data
+
+
+def test_upload_sales_xls(client, app):
+    email, east_id, west_id, prod1_id, prod2_id = setup_upload_env(app)
+    with client:
+        login(client, email, 'pass')
+        client.post('/events/create', data={
+            'name': 'UploadXLS',
+            'start_date': '2025-06-20',
+            'end_date': '2025-06-21'
+        }, follow_redirects=True)
+
+    with app.app_context():
+        ev = Event.query.filter_by(name='UploadXLS').first()
+        eid = ev.id
+
+    with client:
+        login(client, email, 'pass')
+        client.post(f'/events/{eid}/add_location', data={'location_id': east_id}, follow_redirects=True)
+        client.post(f'/events/{eid}/add_location', data={'location_id': west_id}, follow_redirects=True)
+
+    with open(os.path.join(os.path.dirname(__file__), '..', 'sales-with-headers.xls'), 'rb') as f:
+        data = {'file': (BytesIO(f.read()), 'sales.xls')}
+        with client:
+            login(client, email, 'pass')
+            resp = client.post(
+                f'/events/{eid}/sales/upload',
+                data=data,
+                content_type='multipart/form-data',
+                follow_redirects=True,
+            )
+            assert resp.status_code == 200
+            assert b'Pizza' in resp.data and b'Grand Valley Dog' in resp.data
+
+    with app.app_context():
+        east_el = EventLocation.query.filter_by(event_id=eid, location_id=east_id).first()
+        west_el = EventLocation.query.filter_by(event_id=eid, location_id=west_id).first()
+        prod1 = db.session.get(Product, prod1_id)
+        sale_e = TerminalSale.query.filter_by(event_location_id=east_el.id, product_id=prod1.id).first()
+        sale_w = TerminalSale.query.filter_by(event_location_id=west_el.id, product_id=prod1.id).first()
+        assert sale_e and sale_e.quantity == 7
+        assert sale_w and sale_w.quantity == 2
+
+
+def test_upload_sales_pdf(client, app):
+    email, east_id, west_id, prod1_id, prod2_id = setup_upload_env(app)
+    with client:
+        login(client, email, 'pass')
+        client.post('/events/create', data={
+            'name': 'UploadPDF',
+            'start_date': '2025-06-20',
+            'end_date': '2025-06-21'
+        }, follow_redirects=True)
+
+    with app.app_context():
+        ev = Event.query.filter_by(name='UploadPDF').first()
+        eid = ev.id
+
+    with client:
+        login(client, email, 'pass')
+        client.post(f'/events/{eid}/add_location', data={'location_id': east_id}, follow_redirects=True)
+        client.post(f'/events/{eid}/add_location', data={'location_id': west_id}, follow_redirects=True)
+
+    with open(os.path.join(os.path.dirname(__file__), '..', 'sales-as-pdf.pdf'), 'rb') as f:
+        data = {'file': (BytesIO(f.read()), 'sales.pdf')}
+        with client:
+            login(client, email, 'pass')
+            resp = client.post(
+                f'/events/{eid}/sales/upload',
+                data=data,
+                content_type='multipart/form-data',
+                follow_redirects=True,
+            )
+            assert resp.status_code == 200
+            assert b'Pizza' in resp.data and b'Grand Valley Dog' in resp.data
+
+    with app.app_context():
+        east_el = EventLocation.query.filter_by(event_id=eid, location_id=east_id).first()
+        west_el = EventLocation.query.filter_by(event_id=eid, location_id=west_id).first()
+        prod1 = db.session.get(Product, prod1_id)
+        sale_e = TerminalSale.query.filter_by(event_location_id=east_el.id, product_id=prod1.id).first()
+        sale_w = TerminalSale.query.filter_by(event_location_id=west_el.id, product_id=prod1.id).first()
+        assert sale_e and sale_e.quantity == 7
+        assert sale_w and sale_w.quantity == 2
+

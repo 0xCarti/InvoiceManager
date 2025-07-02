@@ -10,8 +10,9 @@
     <li>{{ el.location.name }} -
         {% if not el.confirmed and not event.closed %}
             <a href="{{ url_for('event.stand_sheet', event_id=event.id, location_id=el.location_id) }}">Stand Sheet</a> |
-            <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Enter Sales</a>
-            | <a href="{{ url_for('event.confirm_location', event_id=event.id, el_id=el.id) }}">Confirm</a>
+            <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Enter Sales</a> |
+            <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}">Upload Sales</a> |
+            <a href="{{ url_for('event.confirm_location', event_id=event.id, el_id=el.id) }}">Confirm</a>
         {% else %}
             Stand Sheet | Terminal Sales
             {% if el.confirmed %}| Confirmed{% endif %}

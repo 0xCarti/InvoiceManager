@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Upload Terminal Sales for {{ event.name }}</h2>
+<form method="post" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+        {{ form.file.label }}
+        {{ form.file(class="form-control-file") }}
+    </div>
+    {{ form.submit(class="btn btn-primary") }}
+</form>
+{% if unmatched %}
+<div class="alert alert-warning mt-3">
+    <p>Unmatched locations:</p>
+    <ul>
+    {% for name in unmatched %}
+        <li>{{ name }}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,8 +1,26 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
+from flask import (
+    Blueprint,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    abort,
+    current_app,
+)
 from flask_login import login_required
 from app import db
 from app.models import Event, EventLocation, TerminalSale, Location, LocationStandItem, Product, EventStandSheetItem
-from app.forms import EventForm, EventLocationForm, EventLocationConfirmForm
+from app.forms import (
+    EventForm,
+    EventLocationForm,
+    EventLocationConfirmForm,
+    TerminalSalesUploadForm,
+)
+from werkzeug.utils import secure_filename
+import os
+import pandas as pd
+import pdfplumber
 
 
 event = Blueprint("event", __name__)
@@ -134,6 +152,99 @@ def add_terminal_sale(event_id, el_id):
         "events/add_terminal_sales.html",
         event_location=el,
         existing_sales=existing_sales,
+    )
+
+
+@event.route("/events/<int:event_id>/sales/upload", methods=["GET", "POST"])
+@login_required
+def upload_terminal_sales(event_id):
+    ev = db.session.get(Event, event_id)
+    if ev is None:
+        abort(404)
+
+    form = TerminalSalesUploadForm()
+    unmatched = []
+    if form.validate_on_submit():
+        file = form.file.data
+        filename = secure_filename(file.filename)
+        ext = os.path.splitext(filename)[1].lower()
+        filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
+        file.save(filepath)
+
+        rows = []
+
+        def add_row(loc, name, qty):
+            try:
+                qty = float(qty)
+            except (TypeError, ValueError):
+                return
+            rows.append((loc, name.strip(), qty))
+
+        if ext == ".xls" or ext == ".xlsx":
+            df = pd.read_excel(filepath, header=None)
+            current_loc = None
+            for _, r in df.iterrows():
+                first, second = r.iloc[0], r.iloc[1]
+                if pd.isna(second):
+                    if isinstance(first, str):
+                        current_loc = first.strip()
+                else:
+                    if current_loc and isinstance(second, str):
+                        add_row(current_loc, second, r.iloc[4])
+        elif ext == ".pdf":
+            with pdfplumber.open(filepath) as pdf:
+                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            current_loc = None
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if not line[0].isdigit():
+                    current_loc = line
+                    continue
+                if current_loc is None:
+                    continue
+                parts = line.split()
+                idx = 1
+                while idx < len(parts) and not parts[idx].replace(".", "", 1).isdigit():
+                    idx += 1
+                if idx + 2 < len(parts):
+                    name = " ".join(parts[1:idx])
+                    qty = parts[idx + 2]
+                    add_row(current_loc, name, qty)
+
+        for loc_name, prod_name, qty in rows:
+            loc = (
+                Location.query.join(EventLocation)
+                .filter(EventLocation.event_id == event_id, Location.name == loc_name)
+                .first()
+            )
+            if not loc:
+                if loc_name not in unmatched:
+                    unmatched.append(loc_name)
+                continue
+            el = EventLocation.query.filter_by(event_id=event_id, location_id=loc.id).first()
+            if not el:
+                if loc_name not in unmatched:
+                    unmatched.append(loc_name)
+                continue
+            product = Product.query.filter_by(name=prod_name).first()
+            if not product:
+                continue
+            sale = TerminalSale.query.filter_by(event_location_id=el.id, product_id=product.id).first()
+            if sale:
+                sale.quantity = qty
+            else:
+                db.session.add(
+                    TerminalSale(event_location_id=el.id, product_id=product.id, quantity=qty)
+                )
+        db.session.commit()
+
+    return render_template(
+        "events/upload_terminal_sales.html",
+        form=form,
+        event=ev,
+        unmatched=unmatched,
     )
 
 
