@@ -40,6 +40,21 @@ python run.py
 
 The application uses a local SQLite database located at `inventory.db` and creates `uploads` and `backups` directories automatically on startup.
 
+## Docker Setup
+
+The project includes a `Dockerfile` and a `docker-compose.yml` to make running
+the application in a container straightforward on Linux and Windows. Create a
+`.env` file containing the environment variables described above and then start
+the service with:
+
+```bash
+docker compose up --build
+```
+
+The web interface will be available at <http://localhost:5000>. Uploaded files,
+backups and the SQLite database are stored on the host so data persists across
+container restarts.
+
 ## Running Tests
 
 The project includes a suite of `pytest` tests. Execute them with:

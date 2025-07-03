@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: invoice-manager
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./backups:/app/backups
+      - ./inventory.db:/app/inventory.db
+    env_file:
+      - .env
