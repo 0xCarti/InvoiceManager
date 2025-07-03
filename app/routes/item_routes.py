@@ -77,8 +77,8 @@ def add_item():
         item = Item(
             name=form.name.data,
             base_unit=form.base_unit.data,
-            gl_code=form.gl_code.data,
-            gl_code_id=form.gl_code_id.data,
+            gl_code=form.gl_code.data if 'gl_code' in request.form else None,
+            gl_code_id=form.gl_code_id.data if 'gl_code_id' in request.form else None,
             purchase_gl_code_id=form.purchase_gl_code.data or None,
         )
         db.session.add(item)
@@ -141,8 +141,10 @@ def edit_item(item_id):
             return render_template('items/edit_item.html', form=form, item=item)
         item.name = form.name.data
         item.base_unit = form.base_unit.data
-        item.gl_code = form.gl_code.data
-        item.gl_code_id = form.gl_code_id.data
+        if 'gl_code' in request.form:
+            item.gl_code = form.gl_code.data
+        if 'gl_code_id' in request.form:
+            item.gl_code_id = form.gl_code_id.data
         item.purchase_gl_code_id = form.purchase_gl_code.data or None
         ItemUnit.query.filter_by(item_id=item.id).delete()
         receiving_set = False
