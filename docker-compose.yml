@@ -2,10 +2,7 @@ version: '3.8'
 
 services:
   web:
-    build:
-      context: .
-      args:
-        PORT: ${PORT:-5000}
+    image: gwcarti/invoicemanager:latest
     container_name: invoice-manager
     ports:
       - "${PORT:-5000}:${PORT:-5000}"
