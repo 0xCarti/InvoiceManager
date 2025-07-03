@@ -90,7 +90,7 @@ function addItemToList(item, index) {
                 <input type="hidden" name="items-${index}-item" value="${item.id}">
                 <select name="items-${index}-unit" class="form-control me-2" style="max-width: 120px;">${options}</select>
                 <input type="number" step="any" class="form-control quantity" name="items-${index}-quantity" value="${item.quantity}" placeholder="Qty" style="max-width: 120px;">
-                <button type="button" class="btn btn-danger delete-item ml-2">Delete</button>
+                <button type="button" class="btn btn-danger delete-item mx-2">Delete</button>
             </div>
         `;
         document.getElementById('item-list').appendChild(listItem);
