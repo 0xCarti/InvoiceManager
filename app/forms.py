@@ -160,8 +160,11 @@ class DateRangeForm(FlaskForm):
 class CustomerForm(FlaskForm):
     first_name = StringField('First Name', validators=[DataRequired()])
     last_name = StringField('Last Name', validators=[DataRequired()])
-    gst_exempt = BooleanField('GST Exempt')
-    pst_exempt = BooleanField('PST Exempt')
+    # These checkboxes represent whether GST/PST should be charged. The
+    # underlying model stores exemption flags, so we invert these values in
+    # the routes when saving/loading data.
+    gst_exempt = BooleanField('Charge GST')
+    pst_exempt = BooleanField('Charge PST')
     submit = SubmitField('Submit')
 
 
