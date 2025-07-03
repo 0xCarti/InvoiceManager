@@ -36,6 +36,32 @@ def test_add_item_multiple_units(client, app):
         assert sum(1 for u in item.units if u.transfer_default) == 1
 
 
+def test_edit_item_shows_units_once(client, app):
+    create_user(app, 'editunits@example.com')
+    with client:
+        login(client, 'editunits@example.com', 'pass')
+        resp = client.post('/items/add', data={
+            'name': 'Pack',
+            'base_unit': 'each',
+            'gl_code': '5000',
+            'units-0-name': 'each',
+            'units-0-factor': 1,
+            'units-0-receiving_default': 'y',
+            'units-0-transfer_default': 'y',
+            'units-1-name': 'case',
+            'units-1-factor': 12
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+        with app.app_context():
+            item = Item.query.filter_by(name='Pack').first()
+            item_id = item.id
+        resp = client.get(f'/items/edit/{item_id}')
+        assert resp.status_code == 200
+        page = resp.data.decode()
+        assert page.count('name="units-0-name"') == 1
+        assert page.count('name="units-1-name"') == 1
+
+
 def test_reject_multiple_defaults(client, app):
     create_user(app, 'dupdefault@example.com')
     with client:

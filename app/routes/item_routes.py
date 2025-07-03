@@ -120,19 +120,6 @@ def edit_item(item_id):
         form.gl_code.data = item.gl_code
         form.gl_code_id.data = item.gl_code_id
         form.purchase_gl_code.data = item.purchase_gl_code_id
-        for idx, unit in enumerate(item.units):
-            if idx < len(form.units):
-                form.units[idx].form.name.data = unit.name
-                form.units[idx].form.factor.data = unit.factor
-                form.units[idx].form.receiving_default.data = unit.receiving_default
-                form.units[idx].form.transfer_default.data = unit.transfer_default
-            else:
-                form.units.append_entry({
-                    'name': unit.name,
-                    'factor': unit.factor,
-                    'receiving_default': unit.receiving_default,
-                    'transfer_default': unit.transfer_default
-                })
     if form.validate_on_submit():
         recv_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.receiving_default.data)
         trans_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.transfer_default.data)
