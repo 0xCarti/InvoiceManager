@@ -27,13 +27,15 @@
             </div>
             {% endif %}
         </div>
-        <div class="form-check">
-            {{ form.gst_exempt(class="form-check-input") }}
-            {{ form.gst_exempt.label(class="form-check-label") }}
-        </div>
-        <div class="form-check">
-            {{ form.pst_exempt(class="form-check-input") }}
-            {{ form.pst_exempt.label(class="form-check-label") }}
+        <div class="row my-2">
+            <div class="form-group col-auto">
+                {{ form.gst_exempt(class="form-check-input") }}
+                {{ form.gst_exempt.label(class="form-check-label") }}
+            </div>
+            <div class="form-group col-auto">
+                {{ form.pst_exempt(class="form-check-input") }}
+                {{ form.pst_exempt.label(class="form-check-label") }}
+            </div>
         </div>
         <button type="submit" class="btn btn-primary">Submit</button>
     </form>
