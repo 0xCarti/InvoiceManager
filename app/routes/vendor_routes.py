@@ -1,52 +1,10 @@
-import os
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session, abort
-from flask_login import login_required, current_user
-from sqlalchemy import func
-from werkzeug.utils import secure_filename
+from flask import Blueprint, render_template, flash, redirect, url_for, abort, request
+from flask_login import login_required
 
-from app import db, socketio, GST
+from app import db
 from app.activity_logger import log_activity
-from app.forms import (
-    LocationForm,
-    ItemForm,
-    TransferForm,
-    ImportItemsForm,
-    DateRangeForm,
-    CustomerForm,
-    ProductForm,
-    ProductWithRecipeForm,
-    ProductRecipeForm,
-    InvoiceForm,
-    SignupForm,
-    LoginForm,
-    InvoiceFilterForm,
-    PurchaseOrderForm,
-    ReceiveInvoiceForm,
-    DeleteForm,
-    GLCodeForm,
-)
-from app.models import (
-    Location,
-    Item,
-    ItemUnit,
-    Transfer,
-    TransferItem,
-    Customer,
-    Vendor,
-    Product,
-    LocationStandItem,
-    Invoice,
-    InvoiceProduct,
-    ProductRecipeItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
-    PurchaseInvoice,
-    PurchaseInvoiceItem,
-    PurchaseOrderItemArchive,
-    GLCode,
-)
-from datetime import datetime
-from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
+from app.forms import CustomerForm
+from app.models import Vendor
 
 vendor = Blueprint('vendor', __name__)
 
@@ -55,7 +13,7 @@ vendor = Blueprint('vendor', __name__)
 def view_vendors():
     """Display all vendors."""
     vendors = Vendor.query.all()
-    return render_template('view_vendors.html', vendors=vendors)
+    return render_template('vendors/view_vendors.html', vendors=vendors)
 
 
 @vendor.route('/vendors/create', methods=['GET', 'POST'])
@@ -76,7 +34,7 @@ def create_vendor():
         log_activity(f'Created vendor {vendor.id}')
         flash('Vendor created successfully!', 'success')
         return redirect(url_for('vendor.view_vendors'))
-    return render_template('create_vendor.html', form=form)
+    return render_template('vendors/create_vendor.html', form=form)
 
 
 @vendor.route('/vendors/<int:vendor_id>/edit', methods=['GET', 'POST'])
@@ -106,7 +64,7 @@ def edit_vendor(vendor_id):
         form.gst_exempt.data = not vendor.gst_exempt
         form.pst_exempt.data = not vendor.pst_exempt
 
-    return render_template('edit_vendor.html', form=form)
+    return render_template('vendors/edit_vendor.html', form=form)
 
 
 @vendor.route('/vendors/<int:vendor_id>/delete', methods=['GET'])

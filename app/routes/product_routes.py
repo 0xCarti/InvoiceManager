@@ -1,51 +1,10 @@
-import os
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session, abort
-from flask_login import login_required, current_user
-from sqlalchemy import func
-from werkzeug.utils import secure_filename
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort
+from flask_login import login_required
 
-from app import db, socketio, GST
+from app import db
 from app.activity_logger import log_activity
-from app.forms import (
-    LocationForm,
-    ItemForm,
-    TransferForm,
-    ImportItemsForm,
-    DateRangeForm,
-    CustomerForm,
-    ProductForm,
-    ProductWithRecipeForm,
-    ProductRecipeForm,
-    InvoiceForm,
-    SignupForm,
-    LoginForm,
-    InvoiceFilterForm,
-    PurchaseOrderForm,
-    ReceiveInvoiceForm,
-    DeleteForm,
-    GLCodeForm,
-)
-from app.models import (
-    Location,
-    Item,
-    ItemUnit,
-    Transfer,
-    TransferItem,
-    Customer,
-    Product,
-    LocationStandItem,
-    Invoice,
-    InvoiceProduct,
-    ProductRecipeItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
-    PurchaseInvoice,
-    PurchaseInvoiceItem,
-    PurchaseOrderItemArchive,
-    GLCode,
-)
-from datetime import datetime
-from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
+from app.forms import ProductWithRecipeForm, ProductRecipeForm
+from app.models import Product, Item, ItemUnit, ProductRecipeItem, GLCode
 
 product = Blueprint('product', __name__)
 
@@ -54,7 +13,7 @@ product = Blueprint('product', __name__)
 def view_products():
     """List available products."""
     products = Product.query.all()
-    return render_template('view_products.html', products=products)
+    return render_template('products/view_products.html', products=products)
 
 
 @product.route('/products/create', methods=['GET', 'POST'])
@@ -97,7 +56,7 @@ def create_product():
         log_activity(f'Created product {product.name}')
         flash('Product created successfully!', 'success')
         return redirect(url_for('product.view_products'))
-    return render_template('create_product.html', form=form, product_id=None)
+    return render_template('products/create_product.html', form=form, product_id=None)
 
 
 @product.route('/products/<int:product_id>/edit', methods=['GET', 'POST'])
@@ -165,7 +124,7 @@ def edit_product(product_id):
     else:
         print(form.errors)
         print(form.cost.data)
-    return render_template('edit_product.html', form=form, product_id=product.id)
+    return render_template('products/edit_product.html', form=form, product_id=product.id)
 
 
 @product.route('/products/<int:product_id>/recipe', methods=['GET', 'POST'])
@@ -206,7 +165,7 @@ def edit_product_recipe(product_id):
             form.items[i].unit.data = recipe_item.unit_id
             form.items[i].quantity.data = recipe_item.quantity
             form.items[i].countable.data = recipe_item.countable
-    return render_template('edit_product_recipe.html', form=form, product=product)
+    return render_template('products/edit_product_recipe.html', form=form, product=product)
 
 
 @product.route('/products/<int:product_id>/calculate_cost')
