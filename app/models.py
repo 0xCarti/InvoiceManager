@@ -359,3 +359,9 @@ class EventStandSheetItem(db.Model):
     __table_args__ = (
         db.UniqueConstraint('event_location_id', 'item_id', name='_event_loc_item_uc'),
     )
+
+
+class Setting(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+    value = db.Column(db.String(255))

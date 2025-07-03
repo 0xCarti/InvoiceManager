@@ -13,6 +13,7 @@ from app.forms import (
     ChangePasswordForm,
     SetPasswordForm,
     ImportForm,
+    GSTForm,
 )
 
 from app.models import (
@@ -29,6 +30,7 @@ from app.models import (
     GLCode,
     Customer,
     Vendor,
+    Setting,
 )
 from app.utils.activity import log_activity
 from app.utils.backup import create_backup, restore_backup
@@ -376,3 +378,28 @@ def import_data(data_type):
         abort(400)
     flash(f'Imported {count} {data_type.replace("_", " ")}.', 'success')
     return redirect(url_for('admin.import_page'))
+
+
+@admin.route('/controlpanel/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    """Allow admins to update application settings like GST number."""
+    if not current_user.is_admin:
+        abort(403)
+
+    gst_setting = Setting.query.filter_by(name='GST').first()
+    if gst_setting is None:
+        gst_setting = Setting(name='GST', value='')
+        db.session.add(gst_setting)
+        db.session.commit()
+
+    form = GSTForm(gst_number=gst_setting.value)
+    if form.validate_on_submit():
+        gst_setting.value = form.gst_number.data or ''
+        db.session.commit()
+        import app
+        app.GST = gst_setting.value
+        flash('Settings updated.', 'success')
+        return redirect(url_for('admin.settings'))
+
+    return render_template('admin/settings.html', form=form)
