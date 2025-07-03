@@ -10,3 +10,5 @@ backups/
 .env
 inventory.db
 gl_codes.csv
+.vscode/settings.json
+.gitignore
