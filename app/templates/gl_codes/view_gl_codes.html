@@ -4,6 +4,7 @@
 <div class="container mt-5">
     <h2>GL Codes</h2>
     <a href="{{ url_for('glcode.create_gl_code') }}" class="btn btn-primary mb-3">Add GL Code</a>
+    <div class="table-responsive">
     <table class="table">
         <thead>
             <tr>
@@ -25,5 +26,6 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 {% endblock %}

@@ -3,6 +3,7 @@
 <div class="container mt-4">
     <h2>GL Report for Invoice {{ invoice.id }}</h2>
     <p>Invoice Number: {{ invoice.invoice_number }}</p>
+    <div class="table-responsive">
     <table class="table">
         <thead>
             <tr>
@@ -19,5 +20,6 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 {% endblock %}
