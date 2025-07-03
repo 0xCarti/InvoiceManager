@@ -21,7 +21,7 @@ from app.models import (
     TerminalSale,
     EventStandSheetItem,
 )
-from app.backup_utils import create_backup, restore_backup
+from app.utils.backup import create_backup, restore_backup
 
 
 def populate_data():

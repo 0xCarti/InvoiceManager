@@ -1,5 +1,5 @@
 from app.models import Item, ItemUnit, GLCode
-from app.routes.auth_routes import _import_items
+from app.utils.imports import _import_items
 
 
 def test_import_items_with_cost_and_units(tmp_path, app):

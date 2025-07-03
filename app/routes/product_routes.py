@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required
 
 from app import db
-from app.activity_logger import log_activity
+from app.utils.activity import log_activity
 from app.forms import ProductWithRecipeForm, ProductRecipeForm
 from app.models import Product, Item, ItemUnit, ProductRecipeItem, GLCode
 

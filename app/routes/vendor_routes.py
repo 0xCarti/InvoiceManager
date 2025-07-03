@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, flash, redirect, url_for, abort, r
 from flask_login import login_required
 
 from app import db
-from app.activity_logger import log_activity
+from app.utils.activity import log_activity
 from app.forms import CustomerForm
 from app.models import Vendor
 
