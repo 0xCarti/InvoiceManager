@@ -3,7 +3,7 @@ from app import db
 from app.models import (User, Item, ItemUnit, Location, Transfer, TransferItem,
                         Customer, Product, Invoice, LocationStandItem,
                         ProductRecipeItem)
-from tests.test_user_flows import login
+from tests.utils import login
 
 
 def create_user(app, email='user@example.com'):
