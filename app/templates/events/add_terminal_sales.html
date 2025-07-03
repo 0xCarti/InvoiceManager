@@ -3,6 +3,7 @@
 <h2>Terminal Sales - {{ event_location.location.name }}</h2>
 <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="table-responsive">
     <table class="table">
         <thead>
             <tr><th>Product</th><th>Quantity</th></tr>
@@ -19,6 +20,7 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
     <button type="submit" class="btn btn-primary mt-2">Submit</button>
 </form>
 {% endblock %}

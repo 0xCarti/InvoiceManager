@@ -9,7 +9,7 @@
     <div class="row justify-content-center">
         <div class="col-md-6">
             <img src="/static/live2.png" alt="Sodexo Live Header Logo" class="img-fluid"
-                style="margin-bottom: 50px; margin-top: -30px; width: 500px; height: 150px">
+                style="margin-bottom: 50px; margin-top: -30px; max-width: 500px; width: 100%; height: auto;">
         </div>
     </div>
     <h1>Invoice - {{ invoice.customer.first_name }} {{ invoice.customer.last_name }}</h1>
@@ -18,6 +18,7 @@
             <p><strong>Invoice Number:</strong> {{ invoice.id }}</p>
             <p><strong>Date Created:</strong> {{ invoice.date_created.strftime('%Y-%m-%d') }}</p>
             <h2>Products:</h2>
+            <div class="table-responsive">
             <table class="table">
                 <thead>
                     <tr>
@@ -39,6 +40,7 @@
                     {% endfor %}
                 </tbody>
             </table>
+            </div>
             <hr style="border: 2px solid black">
             <!-- Subtotal -->
             <div class="row justify-content-end">

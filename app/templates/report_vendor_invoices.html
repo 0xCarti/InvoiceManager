@@ -20,6 +20,7 @@
 
     {% if invoices %}
     <h4>Results</h4>
+    <div class="table-responsive">
     <table class="table table-bordered">
         <thead>
             <tr>
@@ -38,6 +39,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
     {% endif %}
 </div>
 {% endblock %}
