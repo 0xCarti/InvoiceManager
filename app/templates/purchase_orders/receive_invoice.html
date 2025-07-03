@@ -24,6 +24,10 @@
             {{ form.delivery_charge.label(class="form-label") }}
             {{ form.delivery_charge(class="form-control narrow-field") }}
         </div>
+        <div class="form-group">
+            {{ form.invoice_number.label(class="form-label") }}
+            {{ form.invoice_number(class="form-control narrow-field") }}
+        </div>
         <h4>Items</h4>
         <div id="items">
         {% for item in form.items %}
