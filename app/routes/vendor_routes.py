@@ -67,8 +67,9 @@ def create_vendor():
         vendor = Vendor(
             first_name=form.first_name.data,
             last_name=form.last_name.data,
-            gst_exempt=form.gst_exempt.data,
-            pst_exempt=form.pst_exempt.data
+            # Checkbox checked means charge tax, so exemption is the inverse
+            gst_exempt=not form.gst_exempt.data,
+            pst_exempt=not form.pst_exempt.data
         )
         db.session.add(vendor)
         db.session.commit()
@@ -90,8 +91,9 @@ def edit_vendor(vendor_id):
     if form.validate_on_submit():
         vendor.first_name = form.first_name.data
         vendor.last_name = form.last_name.data
-        vendor.gst_exempt = form.gst_exempt.data
-        vendor.pst_exempt = form.pst_exempt.data
+        # Store exemptions as the inverse of the checkbox state
+        vendor.gst_exempt = not form.gst_exempt.data
+        vendor.pst_exempt = not form.pst_exempt.data
         db.session.commit()
         log_activity(f'Edited vendor {vendor.id}')
         flash('Vendor updated successfully!', 'success')
@@ -100,8 +102,9 @@ def edit_vendor(vendor_id):
     elif request.method == 'GET':
         form.first_name.data = vendor.first_name
         form.last_name.data = vendor.last_name
-        form.gst_exempt.data = vendor.gst_exempt
-        form.pst_exempt.data = vendor.pst_exempt
+        # Invert stored values so the checkbox represents charging tax
+        form.gst_exempt.data = not vendor.gst_exempt
+        form.pst_exempt.data = not vendor.pst_exempt
 
     return render_template('edit_vendor.html', form=form)
 

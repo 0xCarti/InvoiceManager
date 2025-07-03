@@ -20,6 +20,7 @@ def test_vendor_crud_flow(client, app):
         resp = client.post('/vendors/create', data={
             'first_name': 'Vend',
             'last_name': 'Or',
+            # Checked means charge tax. Leave PST unchecked to mark exempt.
             'gst_exempt': 'y',
             'pst_exempt': ''
         }, follow_redirects=True)
@@ -35,6 +36,7 @@ def test_vendor_crud_flow(client, app):
         resp = client.post(f'/vendors/{vid}/edit', data={
             'first_name': 'New',
             'last_name': 'Vendor',
+            # Unchecked = GST exempt, checked = charge PST
             'gst_exempt': '',
             'pst_exempt': 'y'
         }, follow_redirects=True)
@@ -43,7 +45,8 @@ def test_vendor_crud_flow(client, app):
     with app.app_context():
         vendor = db.session.get(Vendor, vid)
         assert vendor.first_name == 'New'
-        assert vendor.pst_exempt
+        # PST checkbox was checked so vendor should not be PST exempt
+        assert not vendor.pst_exempt
 
     with client:
         login(client, email, 'pass')

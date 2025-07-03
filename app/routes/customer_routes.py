@@ -66,8 +66,9 @@ def create_customer():
         customer = Customer(
             first_name=form.first_name.data,
             last_name=form.last_name.data,
-            gst_exempt=form.gst_exempt.data,
-            pst_exempt=form.pst_exempt.data
+            # Checkbox checked means charge tax, so exemption is the inverse
+            gst_exempt=not form.gst_exempt.data,
+            pst_exempt=not form.pst_exempt.data
         )
         db.session.add(customer)
         db.session.commit()
@@ -89,8 +90,9 @@ def edit_customer(customer_id):
     if form.validate_on_submit():
         customer.first_name = form.first_name.data
         customer.last_name = form.last_name.data
-        customer.gst_exempt = form.gst_exempt.data
-        customer.pst_exempt = form.pst_exempt.data
+        # Store exemptions as the inverse of the checkbox state
+        customer.gst_exempt = not form.gst_exempt.data
+        customer.pst_exempt = not form.pst_exempt.data
         db.session.commit()
         log_activity(f'Edited customer {customer.id}')
         flash('Customer updated successfully!', 'success')
@@ -99,8 +101,9 @@ def edit_customer(customer_id):
     elif request.method == 'GET':
         form.first_name.data = customer.first_name
         form.last_name.data = customer.last_name
-        form.gst_exempt.data = customer.gst_exempt
-        form.pst_exempt.data = customer.pst_exempt
+        # Invert stored values so the checkbox represents charging tax
+        form.gst_exempt.data = not customer.gst_exempt
+        form.pst_exempt.data = not customer.pst_exempt
 
     return render_template('edit_customer.html', form=form)
 
