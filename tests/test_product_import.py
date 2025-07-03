@@ -1,7 +1,7 @@
 import pytest
 from app import db
 from app.models import Product, Item, ItemUnit, ProductRecipeItem
-from app.routes.auth_routes import _import_products
+from app.utils.imports import _import_products
 
 
 def test_import_products_with_recipe(tmp_path, app):

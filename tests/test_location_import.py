@@ -1,7 +1,7 @@
 import pytest
 from app import db
 from app.models import Location, Product
-from app.routes.auth_routes import _import_locations
+from app.utils.imports import _import_locations
 
 
 def test_import_locations_with_products(tmp_path, app):

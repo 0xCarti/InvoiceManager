@@ -5,7 +5,7 @@ from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
 from app import db, socketio, GST
-from app.activity_logger import log_activity
+from app.utils.activity import log_activity
 from app.forms import (
     LocationForm,
     ItemForm,

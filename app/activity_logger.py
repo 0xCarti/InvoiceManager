@@ -1,12 +1,5 @@
-from flask_login import current_user
-from app.models import ActivityLog, db
+"""Deprecated module. Use :mod:`app.utils.activity` instead."""
 
+from app.utils.activity import log_activity
 
-def log_activity(activity, user_id=None):
-    """Record an activity performed by a user."""
-    if user_id is None:
-        if current_user and not current_user.is_anonymous:
-            user_id = current_user.id
-    log = ActivityLog(user_id=user_id, activity=activity)
-    db.session.add(log)
-    db.session.commit()
+__all__ = ["log_activity"]
