@@ -9,6 +9,7 @@
                 <th>PO</th>
                 <th>Vendor</th>
                 <th>Date</th>
+                <th>Invoice #</th>
                 <th>Total</th>
                 <th>Actions</th>
             </tr>
@@ -20,6 +21,7 @@
                 <td>{{ inv.purchase_order_id }}</td>
                 <td>{{ inv.purchase_order.vendor.first_name }} {{ inv.purchase_order.vendor.last_name }}</td>
                 <td>{{ inv.received_date }}</td>
+                <td>{{ inv.invoice_number or '' }}</td>
                 <td>{{ '%.2f'|format(inv.total) }}</td>
                 <td>
                     <a href="{{ url_for('purchase.view_purchase_invoice', invoice_id=inv.id) }}" class="btn btn-sm btn-primary">View</a>

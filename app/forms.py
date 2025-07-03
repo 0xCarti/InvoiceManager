@@ -306,6 +306,7 @@ class InvoiceItemReceiveForm(FlaskForm):
 
 
 class ReceiveInvoiceForm(FlaskForm):
+    invoice_number = StringField('Invoice Number', validators=[Optional()])
     received_date = DateField('Received Date', validators=[DataRequired()])
     location_id = SelectField('Location', coerce=int, validators=[DataRequired()])
     gst = DecimalField('GST Amount', validators=[Optional()], default=0)
