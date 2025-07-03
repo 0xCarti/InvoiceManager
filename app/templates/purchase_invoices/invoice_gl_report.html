@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h2>GL Report for Invoice {{ invoice.id }}</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>GL Code</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for code, total in report %}
+            <tr>
+                <td>{{ code }}</td>
+                <td>{{ '%.2f'|format(total) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
