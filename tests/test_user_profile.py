@@ -4,7 +4,7 @@ import os
 from flask import url_for
 from app import db
 from app.models import User, Location, Transfer, Customer, Product, Invoice
-from tests.test_user_flows import login
+from tests.utils import login
 
 
 def create_user(app, email='user@example.com'):

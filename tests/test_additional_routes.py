@@ -5,7 +5,7 @@ from werkzeug.security import generate_password_hash
 from app import db
 from app.models import User, Location, Transfer
 import os
-from tests.test_user_flows import login
+from tests.utils import login
 
 
 def test_admin_can_activate_user(client, app):

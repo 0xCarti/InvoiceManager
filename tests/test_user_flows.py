@@ -2,28 +2,7 @@ from werkzeug.security import generate_password_hash
 
 from app import db
 from app.models import User, Location
-
-
-def signup(client, email, password, confirm_password=None):
-    if confirm_password is None:
-        confirm_password = password
-    return client.post(
-        '/auth/signup',
-        data={
-            'email': email,
-            'password': password,
-            'confirm_password': confirm_password,
-        },
-        follow_redirects=True,
-    )
-
-
-def login(client, email, password):
-    return client.post(
-        '/auth/login',
-        data={'email': email, 'password': password},
-        follow_redirects=True,
-    )
+from tests.utils import signup, login
 
 
 def test_signup_creates_user(client, app):

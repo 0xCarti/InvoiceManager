@@ -2,7 +2,7 @@ from werkzeug.security import generate_password_hash
 from app import db
 from app.models import (User, Location, Item, ItemUnit, Product, ProductRecipeItem,
                        LocationStandItem, Event, EventLocation, TerminalSale, EventStandSheetItem)
-from tests.test_user_flows import login
+from tests.utils import login
 from io import BytesIO
 import os
 from tempfile import NamedTemporaryFile
