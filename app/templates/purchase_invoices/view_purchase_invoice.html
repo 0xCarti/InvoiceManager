@@ -6,6 +6,7 @@
     <p>Vendor: {{ invoice.purchase_order.vendor.first_name }} {{ invoice.purchase_order.vendor.last_name }}</p>
     <p>Invoice Number: {{ invoice.invoice_number }}</p>
     <p>Received: {{ invoice.received_date }}</p>
+    <div class="table-responsive">
     <table class="table">
         <thead>
             <tr>
@@ -30,6 +31,7 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
     <p><strong>Item Total:</strong> {{ '%.2f'|format(invoice.item_total) }}</p>
     <p><strong>GST:</strong> {{ '%.2f'|format(invoice.gst) }}</p>
     <p><strong>PST:</strong> {{ '%.2f'|format(invoice.pst) }}</p>

@@ -7,6 +7,7 @@
 <div class="container mt-5">
     <h2>Vendors</h2>
     <a href="{{ url_for('vendor.create_vendor') }}" class="btn btn-primary mb-3">Create Vendor</a>
+    <div class="table-responsive">
     <table class="table">
         <thead>
             <tr>
@@ -30,5 +31,6 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 {% endblock %}

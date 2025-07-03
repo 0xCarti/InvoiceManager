@@ -6,6 +6,7 @@
 <div class="container mt-5">
     <h2>Products</h2>
     <a href="{{ url_for('product.create_product') }}" class="btn btn-primary mb-3">Create Product</a>
+    <div class="table-responsive">
     <table class="table">
         <thead>
             <tr>
@@ -29,5 +30,6 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 {% endblock %}
