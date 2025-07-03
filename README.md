@@ -29,8 +29,9 @@ The application requires several variables to be present in your environment:
 - `SECRET_KEY` – Flask secret key used for sessions.
 - `ADMIN_EMAIL` – email address for the initial administrator account.
 - `ADMIN_PASS` – password for the administrator account.
-- `GST` – GST number to display on invoices (optional).
 - `PORT` – port the web server listens on (optional, defaults to 5000).
+
+The GST number can now be set from the application control panel after installation.
 
 These can be placed in a `.env` file or exported in your shell before starting the app.
 

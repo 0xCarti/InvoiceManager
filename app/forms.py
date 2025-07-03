@@ -379,3 +379,8 @@ class TerminalSalesUploadForm(FlaskForm):
         ],
     )
     submit = SubmitField("Upload")
+
+
+class GSTForm(FlaskForm):
+    gst_number = StringField('GST Number', validators=[Optional(), Length(max=50)])
+    submit = SubmitField('Update')

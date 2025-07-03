@@ -14,7 +14,7 @@ db = SQLAlchemy()
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 socketio = None
-GST = 0
+GST = ''
 NAV_LINKS = {
     'transfer.view_transfers': 'Transfers',
     'item.view_items': 'Items',
@@ -29,6 +29,7 @@ NAV_LINKS = {
     'event.view_events': 'Events',
     'admin.users': 'Control Panel',
     'admin.backups': 'Backups',
+    'admin.settings': 'Settings',
     'admin.import_page': 'Data Imports',
     'admin.activity_logs': 'Activity Logs',
 }
@@ -91,7 +92,7 @@ def create_app(args: list):
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['BACKUP_FOLDER'], exist_ok=True)
-    GST = os.getenv('GST')
+
     if '--demo' in args:
         app.config['DEMO'] = True
     else:
@@ -148,6 +149,13 @@ def create_app(args: list):
 
         db.create_all()
         create_admin_user()
+        from app.models import Setting
+        setting = Setting.query.filter_by(name='GST').first()
+        if setting is None:
+            setting = Setting(name='GST', value='')
+            db.session.add(setting)
+            db.session.commit()
+        GST = setting.value
         CSRFProtect(app)
 
     return app, socketio
