@@ -59,9 +59,12 @@ exporting it in your shell) before starting the service:
 docker compose up --build
 ```
 
+The `import_files` directory is also mapped as a volume so you can update the
+CSV templates from the host machine.
+
 The web interface will be available at `http://localhost:$PORT` (default `5000`). Uploaded files,
-backups and the SQLite database are stored on the host so data persists across
-container restarts.
+import templates, backups and the SQLite database are stored on the host so data
+persists across container restarts.
 
 ## Running Tests
 
