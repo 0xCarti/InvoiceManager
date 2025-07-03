@@ -27,6 +27,7 @@ The application requires several variables to be present in your environment:
 - `ADMIN_EMAIL` – email address for the initial administrator account.
 - `ADMIN_PASS` – password for the administrator account.
 - `GST` – GST number to display on invoices (optional).
+- `PORT` – port the web server listens on (optional, defaults to 5000).
 
 These can be placed in a `.env` file or exported in your shell before starting the app.
 
@@ -38,7 +39,25 @@ After installing the dependencies and setting the environment variables, start t
 python run.py
 ```
 
+Set `PORT` in your environment to change the port (default `5000`).
+
 The application uses a local SQLite database located at `inventory.db` and creates `uploads` and `backups` directories automatically on startup.
+
+## Docker Setup
+
+The project includes a `Dockerfile` and a `docker-compose.yml` to make running
+the application in a container straightforward on Linux and Windows. Create a
+`.env` file containing the environment variables described above. You can also
+specify the port the app will use by adding a `PORT` variable to `.env` (or by
+exporting it in your shell) before starting the service:
+
+```bash
+docker compose up --build
+```
+
+The web interface will be available at `http://localhost:$PORT` (default `5000`). Uploaded files,
+backups and the SQLite database are stored on the host so data persists across
+container restarts.
 
 ## Running Tests
 

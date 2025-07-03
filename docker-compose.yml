@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        PORT: ${PORT:-5000}
+    container_name: invoice-manager
+    ports:
+      - "${PORT:-5000}:${PORT:-5000}"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./backups:/app/backups
+      - ./inventory.db:/app/inventory.db
+    env_file:
+      - .env
+    environment:
+      - PORT=${PORT:-5000}
