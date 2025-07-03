@@ -300,6 +300,41 @@ def view_purchase_invoice(invoice_id):
     return render_template('purchase_invoices/view_purchase_invoice.html', invoice=invoice)
 
 
+@purchase.route('/purchase_invoices/<int:invoice_id>/report')
+@login_required
+def purchase_invoice_report(invoice_id):
+    """Generate a GL code summary for a purchase invoice."""
+    invoice = db.session.get(PurchaseInvoice, invoice_id)
+    if invoice is None:
+        abort(404)
+
+    gl_totals = {}
+    item_total = 0
+    for it in invoice.items:
+        line_total = it.line_total
+        item_total += line_total
+        code = None
+        if it.item and it.item.purchase_gl_code:
+            code = it.item.purchase_gl_code.code
+        elif it.item and it.item.purchase_gl_code_id:
+            gl = db.session.get(GLCode, it.item.purchase_gl_code_id)
+            code = gl.code if gl else None
+        if not code:
+            code = 'Unassigned'
+        gl_totals[code] = gl_totals.get(code, 0) + line_total
+
+    if item_total:
+        for code, value in list(gl_totals.items()):
+            share = value / item_total
+            gl_totals[code] = value + share * invoice.pst + share * invoice.delivery_charge
+
+    if invoice.gst:
+        gl_totals['102702'] = gl_totals.get('102702', 0) + invoice.gst
+
+    report = sorted(gl_totals.items())
+    return render_template('purchase_invoices/invoice_gl_report.html', invoice=invoice, report=report)
+
+
 @purchase.route('/purchase_invoices/<int:invoice_id>/reverse', methods=['GET', 'POST'])
 @login_required
 def reverse_purchase_invoice(invoice_id):

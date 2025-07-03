@@ -23,6 +23,7 @@
                 <td>{{ '%.2f'|format(inv.total) }}</td>
                 <td>
                     <a href="{{ url_for('purchase.view_purchase_invoice', invoice_id=inv.id) }}" class="btn btn-sm btn-primary">View</a>
+                    <a href="{{ url_for('purchase.purchase_invoice_report', invoice_id=inv.id) }}" class="btn btn-sm btn-secondary">Report</a>
                     <a href="{{ url_for('purchase.reverse_purchase_invoice', invoice_id=inv.id) }}" class="btn btn-sm btn-danger">Reverse</a>
                 </td>
             </tr>
