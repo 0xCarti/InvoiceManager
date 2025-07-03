@@ -1,51 +1,10 @@
-import os
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session, abort
-from flask_login import login_required, current_user
-from sqlalchemy import func
-from werkzeug.utils import secure_filename
+from flask import Blueprint, render_template, flash, redirect, url_for, abort, request
+from flask_login import login_required
 
-from app import db, socketio, GST
+from app import db
 from app.activity_logger import log_activity
-from app.forms import (
-    LocationForm,
-    ItemForm,
-    TransferForm,
-    ImportItemsForm,
-    DateRangeForm,
-    CustomerForm,
-    ProductForm,
-    ProductWithRecipeForm,
-    ProductRecipeForm,
-    InvoiceForm,
-    SignupForm,
-    LoginForm,
-    InvoiceFilterForm,
-    PurchaseOrderForm,
-    ReceiveInvoiceForm,
-    DeleteForm,
-    GLCodeForm,
-)
-from app.models import (
-    Location,
-    Item,
-    ItemUnit,
-    Transfer,
-    TransferItem,
-    Customer,
-    Product,
-    LocationStandItem,
-    Invoice,
-    InvoiceProduct,
-    ProductRecipeItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
-    PurchaseInvoice,
-    PurchaseInvoiceItem,
-    PurchaseOrderItemArchive,
-    GLCode,
-)
-from datetime import datetime
-from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
+from app.forms import CustomerForm
+from app.models import Customer
 
 customer = Blueprint('customer', __name__)
 
@@ -54,7 +13,7 @@ customer = Blueprint('customer', __name__)
 def view_customers():
     """Display all customers."""
     customers = Customer.query.all()
-    return render_template('view_customers.html', customers=customers)
+    return render_template('customers/view_customers.html', customers=customers)
 
 
 @customer.route('/customers/create', methods=['GET', 'POST'])
@@ -75,7 +34,7 @@ def create_customer():
         log_activity(f'Created customer {customer.id}')
         flash('Customer created successfully!', 'success')
         return redirect(url_for('customer.view_customers'))
-    return render_template('create_customer.html', form=form)
+    return render_template('customers/create_customer.html', form=form)
 
 
 @customer.route('/customers/<int:customer_id>/edit', methods=['GET', 'POST'])
@@ -105,7 +64,7 @@ def edit_customer(customer_id):
         form.gst_exempt.data = not customer.gst_exempt
         form.pst_exempt.data = not customer.pst_exempt
 
-    return render_template('edit_customer.html', form=form)
+    return render_template('customers/edit_customer.html', form=form)
 
 
 @customer.route('/customers/<int:customer_id>/delete', methods=['GET'])
