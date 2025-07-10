@@ -86,7 +86,8 @@
 <body>
     <nav class="navbar navbar-light bg-light">
         <div class="container-fluid">
-            <button class="navbar-toggler me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
+            <a class="navbar-brand" href="#">AssetFlow</a>
+            <button class="navbar-toggler ms-2 me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
                 aria-controls="navbarNav" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -94,7 +95,6 @@
                 data-bs-target="#favoritesNav" aria-controls="favoritesNav" aria-label="Toggle favorites">
                 &#9733;
             </button>
-            <a class="navbar-brand" href="#">AssetFlow</a>
             {% if current_user.is_authenticated %}
             <div class="d-none d-md-block">
             <ul class="navbar-nav flex-row me-auto ms-2">
