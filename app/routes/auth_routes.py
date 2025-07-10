@@ -3,11 +3,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 import os
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from app.forms import (
     LoginForm,
     UserForm,
     SignupForm,
+    PasswordResetRequestForm,
     CreateBackupForm,
     RestoreBackupForm,
     ChangePasswordForm,
@@ -32,6 +34,7 @@ from app.models import (
     Vendor,
     Setting,
 )
+from app.utils import send_email
 from app.utils.activity import log_activity
 from app.utils.backup import create_backup, restore_backup
 from app.utils.imports import (
@@ -53,6 +56,23 @@ IMPORT_FILES = {
     'vendors': 'example_vendors.csv',
     'users': 'example_users.csv',
 }
+
+
+def _serializer():
+    from flask import current_app
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+
+
+def generate_reset_token(user_id: int) -> str:
+    return _serializer().dumps({'user_id': user_id})
+
+
+def verify_reset_token(token: str, max_age: int = 3600):
+    try:
+        data = _serializer().loads(token, max_age=max_age)
+    except (BadSignature, SignatureExpired):
+        return None
+    return db.session.get(User, data.get('user_id'))
 
 
 @auth.route('/login', methods=['GET', 'POST'])
@@ -89,6 +109,41 @@ def logout():
     logout_user()
     log_activity('Logged out', user_id)
     return redirect(url_for('auth.login'))
+
+
+@auth.route('/reset', methods=['GET', 'POST'])
+def reset_request():
+    """Request a password reset email."""
+    form = PasswordResetRequestForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if not user:
+            flash('No account found with that email.', 'danger')
+            return render_template('auth/reset_request.html', form=form)
+
+        token = generate_reset_token(user.id)
+        reset_url = url_for('auth.reset_token', token=token, _external=True)
+        send_email(user.email, 'Password Reset', f'Click the link to reset your password: {reset_url}')
+        flash('A reset link has been sent to your email.', 'success')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/reset_request.html', form=form)
+
+
+@auth.route('/reset/<token>', methods=['GET', 'POST'])
+def reset_token(token):
+    """Set a new password using a reset token."""
+    user = verify_reset_token(token)
+    if not user:
+        flash('Invalid or expired token.', 'danger')
+        return redirect(url_for('auth.reset_request'))
+
+    form = SetPasswordForm()
+    if form.validate_on_submit():
+        user.password = generate_password_hash(form.new_password.data)
+        db.session.commit()
+        flash('Password updated.', 'success')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/reset_token.html', form=form)
 
 
 @auth.route('/profile', methods=['GET', 'POST'])

@@ -30,6 +30,14 @@ The application requires several variables to be present in your environment:
 - `ADMIN_EMAIL` – email address for the initial administrator account.
 - `ADMIN_PASS` – password for the administrator account.
 - `PORT` – port the web server listens on (optional, defaults to 5000).
+- `SMTP_HOST` – hostname of your SMTP server.
+- `SMTP_PORT` – port for the SMTP server (defaults to 25).
+- `SMTP_USERNAME` – username for SMTP authentication.
+- `SMTP_PASSWORD` – password for SMTP authentication.
+- `SMTP_SENDER` – email address used as the sender.
+- `SMTP_USE_TLS` – set to `true` to enable TLS.
+
+These SMTP variables enable password reset emails. Configure them in your `.env` file if you want users to reset forgotten passwords.
 
 The GST number can now be set from the application control panel after installation.
 

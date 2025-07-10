@@ -46,6 +46,12 @@ class SignupForm(FlaskForm):
     submit = SubmitField('Sign Up')
 
 
+class PasswordResetRequestForm(FlaskForm):
+    """Form for requesting a password reset email."""
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    submit = SubmitField('Send Reset Email')
+
+
 class LocationForm(FlaskForm):
     name = StringField('Location Name', validators=[DataRequired(), Length(min=2, max=100)])
     products = HiddenField('Products')

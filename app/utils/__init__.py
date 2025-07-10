@@ -8,6 +8,7 @@ from .imports import (
     _import_locations,
     _import_products,
 )
+from .email import send_email
 
 __all__ = [
     'log_activity',
@@ -17,4 +18,5 @@ __all__ = [
     '_import_items',
     '_import_locations',
     '_import_products',
+    'send_email',
 ]
