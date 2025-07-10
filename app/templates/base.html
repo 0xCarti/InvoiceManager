@@ -86,8 +86,7 @@
 <body>
     <nav class="navbar navbar-light bg-light">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">AssetFlow</a>
-            <button class="navbar-toggler ms-2 me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
+            <button class="navbar-toggler me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
                 aria-controls="navbarNav" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -97,7 +96,7 @@
             </button>
             {% if current_user.is_authenticated %}
             <div class="d-none d-md-block">
-            <ul class="navbar-nav flex-row me-auto ms-2">
+            <ul class="navbar-nav flex-row me-auto">
                 {% for fav in current_user.get_favorites() if not fav.startswith('admin.') %}
                 {% set label = NAV_LINKS.get(fav, fav.split('.')[-1].replace('_', ' ').title()) %}
                 <li class="nav-item">

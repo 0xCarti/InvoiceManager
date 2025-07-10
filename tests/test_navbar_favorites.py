@@ -12,5 +12,5 @@ def test_navbar_has_separate_admin_section(client, app):
         resp = client.get('/')
         assert resp.status_code == 200
         html = resp.data.decode()
-        assert '<ul class="navbar-nav flex-row me-auto ms-2">' in html
+        assert '<ul class="navbar-nav flex-row me-auto">' in html
         assert '<ul class="navbar-nav flex-row ms-auto">' in html
