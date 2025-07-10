@@ -388,49 +388,54 @@ def import_page():
 @admin.route('/controlpanel/import/<string:data_type>', methods=['POST'])
 @login_required
 def import_data(data_type):
-    """Import a specific data type from example files."""
+    """Import a specific data type from an uploaded CSV file."""
     from flask import current_app
     if not current_user.is_admin:
         abort(403)
     form = ImportForm()
     if not form.validate_on_submit() or data_type not in IMPORT_FILES:
         abort(400)
-    # Look for the example files inside the import_files directory which
-    # lives alongside the application package. Using current_app.root_path
-    # ensures the path works even when the working directory changes (e.g. in
-    # the test suite).
-    path = os.path.join(current_app.root_path, '..', 'import_files',
-                       IMPORT_FILES[data_type])
-    if data_type == 'locations':
-        try:
+
+    file = form.file.data
+    filename = secure_filename(file.filename)
+    if not filename.lower().endswith('.csv'):
+        flash('Please upload a CSV file.', 'error')
+        return redirect(url_for('admin.import_page'))
+
+    upload_dir = current_app.config['UPLOAD_FOLDER']
+    os.makedirs(upload_dir, exist_ok=True)
+    path = os.path.join(upload_dir, filename)
+    file.save(path)
+
+    try:
+        if data_type == 'locations':
             count = _import_locations(path)
-        except ValueError as exc:
-            flash(str(exc), 'error')
-            return redirect(url_for('admin.import_page'))
-    elif data_type == 'products':
-        try:
+        elif data_type == 'products':
             count = _import_products(path)
-        except ValueError as exc:
-            flash(str(exc), 'error')
-            return redirect(url_for('admin.import_page'))
-    elif data_type == 'gl_codes':
-        count = _import_csv(path, GLCode, {'code': 'code', 'description': 'description'})
-    elif data_type == 'items':
-        count = _import_items(path)
-    elif data_type == 'customers':
-        count = _import_csv(path, Customer, {
-            'first_name': 'first_name',
-            'last_name': 'last_name',
-        })
-    elif data_type == 'vendors':
-        count = _import_csv(path, Vendor, {
-            'first_name': 'first_name',
-            'last_name': 'last_name',
-        })
-    elif data_type == 'users':
-        count = _import_csv(path, User, {'email': 'email', 'password': 'password'})
-    else:
-        abort(400)
+        elif data_type == 'gl_codes':
+            count = _import_csv(path, GLCode, {'code': 'code', 'description': 'description'})
+        elif data_type == 'items':
+            count = _import_items(path)
+        elif data_type == 'customers':
+            count = _import_csv(path, Customer, {
+                'first_name': 'first_name',
+                'last_name': 'last_name',
+            })
+        elif data_type == 'vendors':
+            count = _import_csv(path, Vendor, {
+                'first_name': 'first_name',
+                'last_name': 'last_name',
+            })
+        elif data_type == 'users':
+            count = _import_csv(path, User, {'email': 'email', 'password': 'password'})
+        else:
+            abort(400)
+    except ValueError as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('admin.import_page'))
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
     flash(f'Imported {count} {data_type.replace("_", " ")}.', 'success')
     return redirect(url_for('admin.import_page'))
 

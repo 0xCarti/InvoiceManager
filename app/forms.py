@@ -346,8 +346,11 @@ class RestoreBackupForm(FlaskForm):
 
 
 class ImportForm(FlaskForm):
-    """Simple form used for one-click data imports."""
+    """Upload a CSV file for bulk imports."""
 
+    file = FileField(
+        "CSV File", validators=[FileRequired(), FileAllowed({".csv"}, "CSV only!")]
+    )
     submit = SubmitField("Import")
 
 
