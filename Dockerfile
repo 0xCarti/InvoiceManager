@@ -12,7 +12,10 @@ COPY . .
 
 ARG PORT=5000
 ENV PORT=${PORT}
+ENV FLASK_APP=run.py
+ENV FLASK_SKIP_CREATE_ALL=1
 
 EXPOSE ${PORT}
 
-CMD ["python", "run.py"]
+CMD ["sh", "-c", "flask db upgrade && python run.py"]
+
