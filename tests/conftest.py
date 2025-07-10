@@ -13,6 +13,11 @@ def app(tmp_path):
     os.environ.setdefault('SECRET_KEY', 'testsecret')
     os.environ.setdefault('ADMIN_EMAIL', 'admin@example.com')
     os.environ.setdefault('ADMIN_PASS', 'adminpass')
+    os.environ.setdefault('SMTP_HOST', 'localhost')
+    os.environ.setdefault('SMTP_PORT', '25')
+    os.environ.setdefault('SMTP_USERNAME', 'user')
+    os.environ.setdefault('SMTP_PASSWORD', 'pass')
+    os.environ.setdefault('SMTP_SENDER', 'test@example.com')
 
     # Ensure a clean database for each test within the temp directory
     db_path = tmp_path / 'inventory.db'
