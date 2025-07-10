@@ -67,8 +67,8 @@ exporting it in your shell) before starting the service:
 docker compose up --build
 ```
 
-The `import_files` directory is also mapped as a volume so you can update the
-CSV templates from the host machine.
+The repository includes an `import_files` directory containing example CSV files
+that can be used as templates for data imports.
 
 The web interface will be available at `http://localhost:$PORT` (default `5000`). Uploaded files,
 import templates, backups and the SQLite database are stored on the host so data
@@ -91,9 +91,10 @@ The tests automatically set the necessary environment variables, so no additiona
 
 ## Data Import
 
-Administrators can quickly seed the database using sample files located in the
-`import_files` directory at the project root. Place your own data in these files
-or modify the provided examples:
+Administrators can quickly seed the database by uploading CSV files from the
+**Control Panel → Data Imports** page. Example templates are available in the
+`import_files` directory at the project root if you want to use them as a
+starting point:
 
 - `example_gl_codes.csv`
 - `example_locations.csv` – includes a `products` column listing product names
@@ -110,8 +111,9 @@ or modify the provided examples:
 - `example_vendors.csv`
 - `example_users.csv`
 
-Visit **Control Panel → Data Imports** in the web interface and click the
-corresponding button to import each dataset.
+Visit **Control Panel → Data Imports** in the web interface, choose the
+appropriate CSV file, and click the corresponding button to import each
+dataset.
 
 ## Test Defaults
 
