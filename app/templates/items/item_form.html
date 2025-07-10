@@ -1,18 +1,16 @@
-{% extends 'base.html' %}
+{% extends 'shared/form_page.html' %}
 
-{% block content %}
-<div class="container mt-4">
-    <h2>Edit Item</h2>
+{% block form_content %}
     <form method="POST">
         {{ form.hidden_tag() }}
         <div class="row">
             <div class="col-md-6 mb-3">
                 {{ form.name.label(class="form-label") }}
-                {{ form.name(class="form-control", value=item.name) }}
+                {{ form.name(class="form-control") }}
             </div>
             <div class="col-md-6 mb-3">
                 {{ form.base_unit.label(class="form-label") }}
-                {{ form.base_unit(class="form-control", value=item.base_unit) }}
+                {{ form.base_unit(class="form-control") }}
             </div>
         </div>
         <div class="row">
@@ -21,16 +19,18 @@
                 {{ form.purchase_gl_code(class="form-control") }}
             </div>
         </div>
+        {% if item %}
         <div class="form-group">
             <label class="form-label">Cost</label>
             <input type="text" class="form-control" value="{{ item.cost }}" readonly>
         </div>
+        {% endif %}
         <h4>Units</h4>
         <div id="units-container">
         {% for unit in form.units %}
         <div class="row mb-2">
-            <div class="col">{{ unit.form.name(class="form-control") }}</div>
-            <div class="col">{{ unit.form.factor(class="form-control") }}</div>
+            <div class="col">{{ unit.form.name(class="form-control", placeholder="Name") }}</div>
+            <div class="col">{{ unit.form.factor(class="form-control", placeholder="Factor") }}</div>
             <div class="col-auto">{{ unit.form.receiving_default() }} {{ unit.form.receiving_default.label }}</div>
             <div class="col-auto">{{ unit.form.transfer_default() }} {{ unit.form.transfer_default.label }}</div>
             <div class="col-auto">
@@ -40,10 +40,9 @@
         {% endfor %}
         </div>
         <button type="button" class="btn btn-secondary" id="add-unit">Add Unit</button>
-        {{ form.submit(class="btn btn-success") }}
+        {{ form.submit(class="btn btn-primary") }}
     </form>
-</div>
-<script>
+    <script>
         let unitIndex = {{ form.units|length }};
         document.getElementById('add-unit').addEventListener('click', function() {
             const container = document.getElementById('units-container');
@@ -63,5 +62,5 @@
                 e.target.closest('.row').remove();
             }
         });
-</script>
+    </script>
 {% endblock %}

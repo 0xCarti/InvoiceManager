@@ -34,7 +34,7 @@ def create_customer():
         log_activity(f'Created customer {customer.id}')
         flash('Customer created successfully!', 'success')
         return redirect(url_for('customer.view_customers'))
-    return render_template('customers/create_customer.html', form=form)
+    return render_template('customers/customer_form.html', form=form, title='Create Customer')
 
 
 @customer.route('/customers/<int:customer_id>/edit', methods=['GET', 'POST'])
@@ -64,7 +64,7 @@ def edit_customer(customer_id):
         form.gst_exempt.data = not customer.gst_exempt
         form.pst_exempt.data = not customer.pst_exempt
 
-    return render_template('customers/edit_customer.html', form=form)
+    return render_template('customers/customer_form.html', form=form, title='Edit Customer')
 
 
 @customer.route('/customers/<int:customer_id>/delete', methods=['GET'])
