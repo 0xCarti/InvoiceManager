@@ -121,12 +121,12 @@ class TransferForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super(TransferForm, self).__init__(*args, **kwargs)
         # Dynamically set choices for from_location_id and to_location_id
-        self.from_location_id.choices = [(l.id, l.name) for l in Location.query.all()]
-        self.to_location_id.choices = [(l.id, l.name) for l in Location.query.all()]
+        self.from_location_id.choices = [(l.id, l.name) for l in Location.query.filter_by(archived=False).all()]
+        self.to_location_id.choices = [(l.id, l.name) for l in Location.query.filter_by(archived=False).all()]
         # Here you might need to ensure that item choices are correctly populated
         # This is just an example and might need adjustment
         for item_form in self.items:
-            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
             item_form.unit.choices = []
 
 
@@ -217,7 +217,7 @@ class ProductRecipeForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super(ProductRecipeForm, self).__init__(*args, **kwargs)
         for item_form in self.items:
-            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
             item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
 
 
@@ -228,7 +228,7 @@ class ProductWithRecipeForm(ProductForm):
     def __init__(self, *args, **kwargs):
         super(ProductWithRecipeForm, self).__init__(*args, **kwargs)
         for item_form in self.items:
-            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
             item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
 
 
@@ -296,9 +296,9 @@ class PurchaseOrderForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(PurchaseOrderForm, self).__init__(*args, **kwargs)
-        self.vendor.choices = [(v.id, f"{v.first_name} {v.last_name}") for v in Vendor.query.all()]
+        self.vendor.choices = [(v.id, f"{v.first_name} {v.last_name}") for v in Vendor.query.filter_by(archived=False).all()]
         for item_form in self.items:
-            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
             item_form.product.choices = [(p.id, p.name) for p in Product.query.all()]
             item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
 
@@ -323,9 +323,9 @@ class ReceiveInvoiceForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(ReceiveInvoiceForm, self).__init__(*args, **kwargs)
-        self.location_id.choices = [(l.id, l.name) for l in Location.query.all()]
+        self.location_id.choices = [(l.id, l.name) for l in Location.query.filter_by(archived=False).all()]
         for item_form in self.items:
-            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
             item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
 
 
@@ -353,7 +353,7 @@ class EventLocationForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(EventLocationForm, self).__init__(*args, **kwargs)
-        self.location_id.choices = [(l.id, l.name) for l in Location.query.all()]
+        self.location_id.choices = [(l.id, l.name) for l in Location.query.filter_by(archived=False).all()]
 
 
 class EventLocationConfirmForm(FlaskForm):

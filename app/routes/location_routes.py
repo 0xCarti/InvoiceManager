@@ -154,7 +154,7 @@ def view_stand_sheet(location_id):
 @login_required
 def view_locations():
     """List all locations."""
-    locations = Location.query.all()
+    locations = Location.query.filter_by(archived=False).all()
     delete_form = DeleteForm()
     return render_template('locations/view_locations.html', locations=locations, delete_form=delete_form)
 
@@ -166,8 +166,8 @@ def delete_location(location_id):
     location = db.session.get(Location, location_id)
     if location is None:
         abort(404)
-    db.session.delete(location)
+    location.archived = True
     db.session.commit()
-    log_activity(f'Deleted location {location.id}')
-    flash('Location deleted successfully!')
+    log_activity(f'Archived location {location.id}')
+    flash('Location archived successfully!')
     return redirect(url_for('locations.view_locations'))

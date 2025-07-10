@@ -70,10 +70,15 @@ def check_negative_invoice_reverse(invoice_obj):
             current = record.expected_count if record else 0
             new_count = current - inv_item.quantity * factor
             if new_count < 0:
-                location_name = record.location.name if record else db.session.get(Location, invoice_obj.location_id).name
+                loc = record.location if record else db.session.get(Location, invoice_obj.location_id)
+                location_name = loc.name if loc else invoice_obj.location_name
                 warnings.append(
                     f"Reversing this invoice will result in negative inventory for {itm.name} at {location_name}"
                 )
+        else:
+            warnings.append(
+                f"Cannot reverse invoice because item '{inv_item.item_name}' no longer exists"
+            )
     return warnings
 
 @purchase.route('/purchase_orders', methods=['GET'])
@@ -93,6 +98,7 @@ def create_purchase_order():
         po = PurchaseOrder(
             vendor_id=form.vendor.data,
             user_id=current_user.id,
+            vendor_name=f"{db.session.get(Vendor, form.vendor.data).first_name} {db.session.get(Vendor, form.vendor.data).last_name}",
             order_date=form.order_date.data,
             expected_date=form.expected_date.data,
             delivery_charge=form.delivery_charge.data or 0.0,
@@ -132,6 +138,7 @@ def edit_purchase_order(po_id):
     form = PurchaseOrderForm()
     if form.validate_on_submit():
         po.vendor_id = form.vendor.data
+        po.vendor_name = f"{db.session.get(Vendor, form.vendor.data).first_name} {db.session.get(Vendor, form.vendor.data).last_name}"
         po.order_date = form.order_date.data
         po.expected_date = form.expected_date.data
         po.delivery_charge = form.delivery_charge.data or 0.0
@@ -162,7 +169,7 @@ def edit_purchase_order(po_id):
             if len(form.items) <= i:
                 form.items.append_entry()
         for item_form in form.items:
-            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
         for i, poi in enumerate(po.items):
             form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
@@ -202,7 +209,7 @@ def receive_invoice(po_id):
         while len(form.items) < len(po.items):
             form.items.append_entry()
         for item_form in form.items:
-            item_form.item.choices = [(i.id, i.name) for i in Item.query.all()]
+            item_form.item.choices = [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
             item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
         for i, poi in enumerate(po.items):
             form.items[i].item.data = poi.item_id
@@ -222,6 +229,8 @@ def receive_invoice(po_id):
             purchase_order_id=po.id,
             user_id=current_user.id,
             location_id=form.location_id.data,
+            vendor_name=po.vendor_name,
+            location_name=db.session.get(Location, form.location_id.data).name,
             received_date=form.received_date.data,
             invoice_number=form.invoice_number.data,
             gst=form.gst.data or 0.0,
@@ -373,44 +382,53 @@ def reverse_purchase_invoice(invoice_id):
             if unit:
                 factor = unit.factor
         itm = db.session.get(Item, inv_item.item_id)
-        if itm:
-            itm.quantity -= inv_item.quantity * factor
+        if not itm:
+            flash(f"Cannot reverse invoice because item '{inv_item.item_name}' no longer exists.", 'error')
+            return redirect(url_for('purchase.view_purchase_invoices'))
 
-            # Revert item cost to the most recent prior purchase invoice
-            last_item = (
-                db.session.query(PurchaseInvoiceItem)
-                .join(PurchaseInvoice)
-                .filter(
-                    PurchaseInvoiceItem.item_id == itm.id,
-                    PurchaseInvoiceItem.invoice_id != invoice.id,
-                )
-                .order_by(PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc())
-                .first()
+        itm.quantity -= inv_item.quantity * factor
+
+        # Revert item cost to the most recent prior purchase invoice
+        last_item = (
+            db.session.query(PurchaseInvoiceItem)
+            .join(PurchaseInvoice)
+            .filter(
+                PurchaseInvoiceItem.item_id == itm.id,
+                PurchaseInvoiceItem.invoice_id != invoice.id,
             )
-            if last_item:
-                last_factor = 1
-                if last_item.unit_id:
-                    last_unit = db.session.get(ItemUnit, last_item.unit_id)
-                    if last_unit:
-                        last_factor = last_unit.factor
-                itm.cost = abs(last_item.cost) / last_factor if last_factor else abs(last_item.cost)
-            else:
-                itm.cost = 0.0
+            .order_by(PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc())
+            .first()
+        )
+        if last_item:
+            last_factor = 1
+            if last_item.unit_id:
+                last_unit = db.session.get(ItemUnit, last_item.unit_id)
+                if last_unit:
+                    last_factor = last_unit.factor
+            itm.cost = abs(last_item.cost) / last_factor if last_factor else abs(last_item.cost)
+        else:
+            itm.cost = 0.0
 
-            # Update expected count for the location where items were received
-            record = LocationStandItem.query.filter_by(
+        # Update expected count for the location where items were received
+        record = LocationStandItem.query.filter_by(
+            location_id=invoice.location_id,
+            item_id=itm.id,
+        ).first()
+        if not record:
+            record = LocationStandItem(
                 location_id=invoice.location_id,
                 item_id=itm.id,
-            ).first()
-            if not record:
-                record = LocationStandItem(
-                    location_id=invoice.location_id,
-                    item_id=itm.id,
-                    expected_count=0,
-                )
-                db.session.add(record)
-            new_count = record.expected_count - inv_item.quantity * factor
-            record.expected_count = new_count
+                expected_count=0,
+            )
+            db.session.add(record)
+        new_count = record.expected_count - inv_item.quantity * factor
+        record.expected_count = new_count
+
+    loc = db.session.get(Location, invoice.location_id)
+    if not loc:
+        flash('Cannot reverse invoice because location no longer exists.', 'error')
+        return redirect(url_for('purchase.view_purchase_invoices'))
+
     PurchaseInvoiceItem.query.filter_by(invoice_id=invoice.id).delete()
     db.session.delete(invoice)
     po.received = False

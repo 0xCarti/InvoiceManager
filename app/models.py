@@ -58,6 +58,7 @@ class User(UserMixin, db.Model):
 class Location(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
+    archived = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     products = db.relationship('Product', secondary=location_products, backref='locations')
     stand_items = db.relationship('LocationStandItem', back_populates='location', cascade='all, delete-orphan')
     event_locations = db.relationship('EventLocation', back_populates='location', cascade='all, delete-orphan')
@@ -79,6 +80,7 @@ class Item(db.Model):
     recipe_items = relationship("ProductRecipeItem", back_populates="item", cascade="all, delete-orphan")
     units = relationship("ItemUnit", back_populates="item", cascade="all, delete-orphan")
     gl_code_rel = relationship('GLCode', foreign_keys=[gl_code_id], backref='items')
+    archived = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
 
 
 class ItemUnit(db.Model):
@@ -103,6 +105,8 @@ class Transfer(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     date_created = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     completed = db.Column(db.Boolean, default=False, nullable=False)
+    from_location_name = db.Column(db.String(100), nullable=False, server_default='')
+    to_location_name = db.Column(db.String(100), nullable=False, server_default='')
 
     # Define relationships to Location model
     from_location = relationship('Location', foreign_keys=[from_location_id])
@@ -116,6 +120,7 @@ class TransferItem(db.Model):
     item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
     quantity = db.Column(db.Float, nullable=False)
     item = relationship('Item', backref='transfer_items', lazy=True)
+    item_name = db.Column(db.String(100), nullable=False, server_default='')
 
 class Customer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -123,6 +128,7 @@ class Customer(db.Model):
     last_name = db.Column(db.String(50), nullable=False)
     gst_exempt = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     pst_exempt = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    archived = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     invoices = db.relationship('Invoice', backref='customer', lazy=True)
 
 
@@ -132,6 +138,7 @@ class Vendor(db.Model):
     last_name = db.Column(db.String(50), nullable=False)
     gst_exempt = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     pst_exempt = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    archived = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
 
 
 class GLCode(db.Model):
@@ -220,6 +227,7 @@ class PurchaseOrder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     vendor_id = db.Column(db.Integer, db.ForeignKey('vendor.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    vendor_name = db.Column(db.String(100), nullable=False, server_default='')
     order_date = db.Column(db.Date, nullable=False)
     expected_date = db.Column(db.Date, nullable=False)
     delivery_charge = db.Column(db.Float, nullable=False, default=0.0)
@@ -245,6 +253,8 @@ class PurchaseInvoice(db.Model):
     purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_order.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
+    vendor_name = db.Column(db.String(100), nullable=False, server_default='')
+    location_name = db.Column(db.String(100), nullable=False, server_default='')
     received_date = db.Column(db.Date, nullable=False)
     invoice_number = db.Column(db.String(50), nullable=True)
     gst = db.Column(db.Float, nullable=False, default=0.0)

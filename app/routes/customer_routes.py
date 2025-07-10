@@ -12,7 +12,7 @@ customer = Blueprint('customer', __name__)
 @login_required
 def view_customers():
     """Display all customers."""
-    customers = Customer.query.all()
+    customers = Customer.query.filter_by(archived=False).all()
     return render_template('customers/view_customers.html', customers=customers)
 
 
@@ -74,7 +74,8 @@ def delete_customer(customer_id):
     customer = db.session.get(Customer, customer_id)
     if customer is None:
         abort(404)
-    db.session.delete(customer)
+    customer.archived = True
     db.session.commit()
-    log_activity(f'Deleted customer {customer.id}')
-    flash('Customer deleted successfully!', 'success')
+    log_activity(f'Archived customer {customer.id}')
+    flash('Customer archived successfully!', 'success')
+    return redirect(url_for('customer.view_customers'))

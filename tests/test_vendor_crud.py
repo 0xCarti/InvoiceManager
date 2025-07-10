@@ -55,4 +55,4 @@ def test_vendor_crud_flow(client, app):
 
     with app.app_context():
         vendor = db.session.get(Vendor, vid)
-        assert vendor is None
+        assert vendor.archived

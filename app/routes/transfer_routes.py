@@ -63,8 +63,10 @@ def check_negative_transfer(transfer_obj, multiplier=1):
         new_from = current_from - multiplier * ti.quantity
         if new_from < 0:
             item = db.session.get(Item, ti.item_id)
+            item_name = item.name if item else ti.item_name
+            from_name = transfer_obj.from_location.name if transfer_obj.from_location else transfer_obj.from_location_name
             warnings.append(
-                f"Transfer will result in negative inventory for {item.name} at {transfer_obj.from_location.name}"
+                f"Transfer will result in negative inventory for {item_name} at {from_name}"
             )
 
         to_record = LocationStandItem.query.filter_by(
@@ -75,8 +77,10 @@ def check_negative_transfer(transfer_obj, multiplier=1):
         new_to = current_to + multiplier * ti.quantity
         if new_to < 0:
             item = db.session.get(Item, ti.item_id)
+            item_name = item.name if item else ti.item_name
+            to_name = transfer_obj.to_location.name if transfer_obj.to_location else transfer_obj.to_location_name
             warnings.append(
-                f"Transfer will result in negative inventory for {item.name} at {transfer_obj.to_location.name}"
+                f"Transfer will result in negative inventory for {item_name} at {to_name}"
             )
     return warnings
 
@@ -153,7 +157,9 @@ def add_transfer():
         transfer = Transfer(
             from_location_id=form.from_location_id.data,
             to_location_id=form.to_location_id.data,
-            user_id=current_user.id
+            user_id=current_user.id,
+            from_location_name=db.session.get(Location, form.from_location_id.data).name,
+            to_location_name=db.session.get(Location, form.to_location_id.data).name
         )
         db.session.add(transfer)
         # Dynamically determine the number of items added
@@ -174,7 +180,8 @@ def add_transfer():
                     transfer_item = TransferItem(
                         transfer_id=transfer.id,
                         item_id=item.id,
-                        quantity=quantity * factor
+                        quantity=quantity * factor,
+                        item_name=item.name
                     )
                     db.session.add(transfer_item)
         db.session.commit()
@@ -202,6 +209,8 @@ def edit_transfer(transfer_id):
     if form.validate_on_submit():
         transfer.from_location_id = form.from_location_id.data
         transfer.to_location_id = form.to_location_id.data
+        transfer.from_location_name = db.session.get(Location, form.from_location_id.data).name
+        transfer.to_location_name = db.session.get(Location, form.to_location_id.data).name
 
         # Clear existing TransferItem entries
         TransferItem.query.filter_by(transfer_id=transfer.id).delete()
@@ -222,7 +231,8 @@ def edit_transfer(transfer_id):
                 new_transfer_item = TransferItem(
                     transfer_id=transfer.id,
                     item_id=int(item_id),
-                    quantity=quantity * factor
+                    quantity=quantity * factor,
+                    item_name=db.session.get(Item, int(item_id)).name
                 )
                 db.session.add(new_transfer_item)
 
