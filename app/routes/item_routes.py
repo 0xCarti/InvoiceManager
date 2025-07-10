@@ -73,7 +73,7 @@ def add_item():
         trans_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.transfer_default.data)
         if recv_count > 1 or trans_count > 1:
             flash('Only one unit can be set as receiving and transfer default.', 'error')
-            return render_template('items/add_item.html', form=form)
+            return render_template('items/item_form.html', form=form, title='Add Item')
         item = Item(
             name=form.name.data,
             base_unit=form.base_unit.data,
@@ -105,7 +105,7 @@ def add_item():
         log_activity(f'Added item {item.name}')
         flash('Item added successfully!')
         return redirect(url_for('item.view_items'))
-    return render_template('items/add_item.html', form=form)
+    return render_template('items/item_form.html', form=form, title='Add Item')
 
 
 @item.route('/items/edit/<int:item_id>', methods=['GET', 'POST'])
@@ -125,7 +125,7 @@ def edit_item(item_id):
         trans_count = sum(1 for uf in form.units if uf.form.name.data and uf.form.transfer_default.data)
         if recv_count > 1 or trans_count > 1:
             flash('Only one unit can be set as receiving and transfer default.', 'error')
-            return render_template('items/edit_item.html', form=form, item=item)
+            return render_template('items/item_form.html', form=form, item=item, title='Edit Item')
         item.name = form.name.data
         item.base_unit = form.base_unit.data
         if 'gl_code' in request.form:
@@ -156,7 +156,7 @@ def edit_item(item_id):
         log_activity(f'Edited item {item.id}')
         flash('Item updated successfully!')
         return redirect(url_for('item.view_items'))
-    return render_template('items/edit_item.html', form=form, item=item)
+    return render_template('items/item_form.html', form=form, item=item, title='Edit Item')
 
 
 @item.route('/items/delete/<int:item_id>', methods=['POST'])

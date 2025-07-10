@@ -34,7 +34,7 @@ def create_vendor():
         log_activity(f'Created vendor {vendor.id}')
         flash('Vendor created successfully!', 'success')
         return redirect(url_for('vendor.view_vendors'))
-    return render_template('vendors/create_vendor.html', form=form)
+    return render_template('vendors/vendor_form.html', form=form, title='Create Vendor')
 
 
 @vendor.route('/vendors/<int:vendor_id>/edit', methods=['GET', 'POST'])
@@ -64,7 +64,7 @@ def edit_vendor(vendor_id):
         form.gst_exempt.data = not vendor.gst_exempt
         form.pst_exempt.data = not vendor.pst_exempt
 
-    return render_template('vendors/edit_vendor.html', form=form)
+    return render_template('vendors/vendor_form.html', form=form, title='Edit Vendor')
 
 
 @vendor.route('/vendors/<int:vendor_id>/delete', methods=['GET'])
