@@ -12,7 +12,7 @@ vendor = Blueprint('vendor', __name__)
 @login_required
 def view_vendors():
     """Display all vendors."""
-    vendors = Vendor.query.all()
+    vendors = Vendor.query.filter_by(archived=False).all()
     return render_template('vendors/view_vendors.html', vendors=vendors)
 
 
@@ -74,8 +74,8 @@ def delete_vendor(vendor_id):
     vendor = db.session.get(Vendor, vendor_id)
     if vendor is None:
         abort(404)
-    db.session.delete(vendor)
+    vendor.archived = True
     db.session.commit()
-    log_activity(f'Deleted vendor {vendor.id}')
-    flash('Vendor deleted successfully!', 'success')
+    log_activity(f'Archived vendor {vendor.id}')
+    flash('Vendor archived successfully!', 'success')
     return redirect(url_for('vendor.view_vendors'))

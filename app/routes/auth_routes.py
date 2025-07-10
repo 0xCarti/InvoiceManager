@@ -284,10 +284,10 @@ def delete_user(user_id):
     user_to_delete = db.session.get(User, user_id)
     if user_to_delete is None:
         abort(404)
-    db.session.delete(user_to_delete)
+    user_to_delete.active = False
     db.session.commit()
-    log_activity(f'Deleted user {user_id}')
-    flash('User deleted successfully.', 'success')
+    log_activity(f'Archived user {user_id}')
+    flash('User archived successfully.', 'success')
     return redirect(url_for('admin.users'))
 
 

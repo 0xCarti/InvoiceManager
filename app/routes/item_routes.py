@@ -58,7 +58,7 @@ MAX_IMPORT_SIZE = 1 * 1024 * 1024  # 1 MB
 @login_required
 def view_items():
     """Display the inventory item list."""
-    items = Item.query.all()
+    items = Item.query.filter_by(archived=False).all()
     form = ItemForm()
     return render_template('items/view_items.html', items=items, form=form)
 
@@ -166,10 +166,10 @@ def delete_item(item_id):
     item = db.session.get(Item, item_id)
     if item is None:
         abort(404)
-    db.session.delete(item)
+    item.archived = True
     db.session.commit()
-    log_activity(f'Deleted item {item.id}')
-    flash('Item deleted successfully!')
+    log_activity(f'Archived item {item.id}')
+    flash('Item archived successfully!')
     return redirect(url_for('item.view_items'))
 
 
@@ -179,10 +179,10 @@ def bulk_delete_items():
     """Delete multiple items in one request."""
     item_ids = request.form.getlist('item_ids')
     if item_ids:
-        Item.query.filter(Item.id.in_(item_ids)).delete(synchronize_session='fetch')
+        Item.query.filter(Item.id.in_(item_ids)).update({'archived': True}, synchronize_session='fetch')
         db.session.commit()
-        log_activity(f'Bulk deleted items {",".join(item_ids)}')
-        flash('Selected items have been deleted.', 'success')
+        log_activity(f'Bulk archived items {",".join(item_ids)}')
+        flash('Selected items have been archived.', 'success')
     else:
         flash('No items selected.', 'warning')
     return redirect(url_for('item.view_items'))

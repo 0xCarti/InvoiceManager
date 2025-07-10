@@ -58,7 +58,7 @@ def test_item_lifecycle(client, app):
         assert resp.status_code == 200
 
     with app.app_context():
-        assert db.session.get(Item, item_id) is None
+        assert db.session.get(Item, item_id).archived
 
 
 def test_transfer_flow(client, app):

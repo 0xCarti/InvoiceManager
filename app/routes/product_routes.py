@@ -107,7 +107,7 @@ def edit_product(product_id):
         form.gl_code_id.data = product.gl_code_id
         form.sales_gl_code.data = product.sales_gl_code_id
         form.items.min_entries = max(1, len(product.recipe_items))
-        item_choices = [(itm.id, itm.name) for itm in Item.query.all()]
+        item_choices = [(itm.id, itm.name) for itm in Item.query.filter_by(archived=False).all()]
         unit_choices = [(u.id, u.name) for u in ItemUnit.query.all()]
         for i, recipe_item in enumerate(product.recipe_items):
             if len(form.items) <= i:
@@ -151,7 +151,7 @@ def edit_product_recipe(product_id):
         return redirect(url_for('product.view_products'))
     elif request.method == 'GET':
         form.items.min_entries = max(1, len(product.recipe_items))
-        item_choices = [(itm.id, itm.name) for itm in Item.query.all()]
+        item_choices = [(itm.id, itm.name) for itm in Item.query.filter_by(archived=False).all()]
         unit_choices = [(u.id, u.name) for u in ItemUnit.query.all()]
         for i, recipe_item in enumerate(product.recipe_items):
             if len(form.items) <= i:
