@@ -61,7 +61,7 @@ def _import_items(path):
                 name = row.get('name', '').strip()
                 if not name or Item.query.filter_by(name=name).first():
                     continue
-                base_unit = row.get('base_unit', 'each').strip() or 'each'
+                base_unit = row.get('base_unit', 'each').strip().lower() or 'each'
                 cost = float(row.get('cost') or 0)
                 gl_code_id = None
                 if row.get('gl_code'):
