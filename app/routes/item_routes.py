@@ -261,8 +261,8 @@ def import_items():
             for line in file:
                 item_name = line.strip()
                 if item_name:
-                    # Check if item already exists to avoid duplicates
-                    existing_item = Item.query.filter_by(name=item_name).first()
+                    # Check if an active item already exists to avoid duplicates
+                    existing_item = Item.query.filter_by(name=item_name, archived=False).first()
                     if not existing_item:
                         # Create a new item instance and add it to the database
                         new_item = Item(name=item_name)

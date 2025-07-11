@@ -68,7 +68,7 @@ class Location(db.Model):
 
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
     base_unit = db.Column(db.String(20), nullable=False)
     gl_code = db.Column(db.String(10), nullable=True)
     gl_code_id = db.Column(db.Integer, db.ForeignKey('gl_code.id'), nullable=True)
@@ -81,6 +81,11 @@ class Item(db.Model):
     units = relationship("ItemUnit", back_populates="item", cascade="all, delete-orphan")
     gl_code_rel = relationship('GLCode', foreign_keys=[gl_code_id], backref='items')
     archived = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+
+    __table_args__ = (
+        db.Index('uix_item_name_active', 'name', unique=True,
+                 sqlite_where=db.text('archived = 0')),
+    )
 
 
 class ItemUnit(db.Model):
