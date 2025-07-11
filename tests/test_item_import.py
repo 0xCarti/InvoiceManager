@@ -36,3 +36,16 @@ def test_import_items_txt(tmp_path, app):
         assert len(item.units) == 1
         assert item.units[0].name == "each"
 
+
+def test_import_items_csv_with_bom(tmp_path, app):
+    csv_path = tmp_path / "items_bom.csv"
+    csv_content = "\ufeffname,base_unit,cost\nWidget,each,0.5\n"
+    csv_path.write_bytes(csv_content.encode("utf-8"))
+
+    with app.app_context():
+        count = _import_items(str(csv_path))
+        assert count == 1
+        item = Item.query.filter_by(name="Widget").first()
+        assert item is not None
+        assert item.base_unit == "each"
+
