@@ -392,7 +392,7 @@ def import_data(data_type):
     from flask import current_app
     if not current_user.is_admin:
         abort(403)
-    form = ImportForm()
+    form = ImportForm(prefix=data_type)
     if not form.validate_on_submit() or data_type not in IMPORT_FILES:
         abort(400)
 
