@@ -59,7 +59,7 @@ def _import_items(path):
             reader = csv.DictReader(csvfile)
             for row in reader:
                 name = row.get('name', '').strip()
-                if not name or Item.query.filter_by(name=name).first():
+                if not name or Item.query.filter_by(name=name, archived=False).first():
                     continue
                 base_unit = row.get('base_unit', 'each').strip().lower() or 'each'
                 cost = float(row.get('cost') or 0)
@@ -113,7 +113,7 @@ def _import_items(path):
         with open(path, encoding='utf-8-sig') as f:
             for line in f:
                 name = line.strip()
-                if name and not Item.query.filter_by(name=name).first():
+                if name and not Item.query.filter_by(name=name, archived=False).first():
                     item = Item(name=name, base_unit='each')
                     db.session.add(item)
                     db.session.flush()
