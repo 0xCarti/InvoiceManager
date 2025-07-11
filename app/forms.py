@@ -349,7 +349,7 @@ class ImportForm(FlaskForm):
     """Upload a CSV file for bulk imports."""
 
     file = FileField(
-        "CSV File", validators=[FileRequired(), FileAllowed({".csv"}, "CSV only!")]
+        "CSV File", validators=[FileRequired(), FileAllowed({"csv"}, "CSV only!")]
     )
     submit = SubmitField("Import")
 
