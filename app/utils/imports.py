@@ -23,7 +23,7 @@ def _import_csv(path, model, mappings):
     created = 0
     if not os.path.exists(path):
         return 0
-    with open(path, newline='') as csvfile:
+    with open(path, newline='', encoding='utf-8-sig') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             obj_kwargs = {
@@ -55,7 +55,7 @@ def _import_items(path):
     created = 0
     ext = os.path.splitext(path)[1].lower()
     if ext == '.csv':
-        with open(path, newline='') as csvfile:
+        with open(path, newline='', encoding='utf-8-sig') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 name = row.get('name', '').strip()
@@ -110,7 +110,7 @@ def _import_items(path):
                 db.session.add_all(units)
                 created += 1
     else:
-        with open(path) as f:
+        with open(path, encoding='utf-8-sig') as f:
             for line in f:
                 name = line.strip()
                 if name and not Item.query.filter_by(name=name).first():
@@ -137,7 +137,7 @@ def _import_locations(path):
         return 0
 
     pending = []
-    with open(path, newline='') as csvfile:
+    with open(path, newline='', encoding='utf-8-sig') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             name = row.get('name', '').strip()
@@ -176,7 +176,7 @@ def _import_products(path):
         return 0
 
     pending = []
-    with open(path, newline='') as csvfile:
+    with open(path, newline='', encoding='utf-8-sig') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             name = row.get('name', '').strip()
