@@ -504,3 +504,9 @@ class TimezoneForm(FlaskForm):
         validators=[Optional()],
     )
     submit = SubmitField("Update Timezone")
+
+
+class NotificationForm(FlaskForm):
+    phone_number = StringField("Phone Number", validators=[Optional(), Length(max=20)])
+    notify_transfers = BooleanField("Send text on new transfer")
+    submit = SubmitField("Update Notifications")
