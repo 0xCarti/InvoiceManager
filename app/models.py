@@ -170,6 +170,13 @@ class Product(db.Model):
     gl_code_rel = relationship('GLCode', foreign_keys=[gl_code_id], backref='products')
     terminal_sales = relationship('TerminalSale', back_populates='product', cascade='all, delete-orphan')
 
+    @property
+    def food_cost_percentage(self) -> float:
+        """Return the food cost as a percentage of the price before tax."""
+        if self.price:
+            return (self.cost / self.price) * 100
+        return 0.0
+
 
 class Invoice(db.Model):
     id = db.Column(db.String(10), primary_key=True)  # Adjust length based on your requirements
