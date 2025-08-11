@@ -14,6 +14,7 @@
                 <th>Name</th>
                 <th>Price</th>
                 <th>Cost</th> <!-- New column -->
+                <th>Food Cost %</th>
                 <th>Action</th>
             </tr>
         </thead>
@@ -23,6 +24,7 @@
                 <td>{{ product.name }}</td>
                 <td>{{ product.price }}</td>
                 <td>{{ product.cost }}</td> <!-- Display cost -->
+                <td>{{ '{:.2f}%'.format(product.food_cost_percentage) }}</td>
                 <td>
                     <a href="{{ url_for('product.edit_product', product_id=product.id) }}" class="btn btn-primary mr-2">Edit</a>
                     <a href="{{ url_for('product.delete_product', product_id=product.id) }}" class="btn btn-danger">Delete</a>
