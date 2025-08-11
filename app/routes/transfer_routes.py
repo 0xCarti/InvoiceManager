@@ -5,6 +5,7 @@ from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
 from app import db, socketio, GST
+from app.utils.sms import send_sms
 from app.utils.activity import log_activity
 from app.forms import (
     LocationForm,
@@ -28,6 +29,7 @@ from app.forms import (
 )
 from app.models import (
     Location,
+    User,
     Item,
     ItemUnit,
     Transfer,
@@ -188,6 +190,14 @@ def add_transfer():
         log_activity(f'Added transfer {transfer.id}')
 
         socketio.emit('new_transfer', {'message': 'New transfer added'})
+
+        try:
+            notify_users = User.query.filter_by(notify_transfers=True).all()
+            for user in notify_users:
+                if user.phone_number:
+                    send_sms(user.phone_number, f'Transfer {transfer.id} created')
+        except Exception:
+            pass
 
         flash('Transfer added successfully!', 'success')
         return redirect(url_for('transfer.view_transfers'))
