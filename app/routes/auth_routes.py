@@ -1,9 +1,22 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, abort
+from flask import (
+    Blueprint,
+    render_template,
+    redirect,
+    url_for,
+    request,
+    flash,
+    abort,
+    current_app,
+)
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 import os
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from datetime import datetime
+import platform
+import subprocess
+import flask
 
 from app.forms import (
     LoginForm,
@@ -365,6 +378,31 @@ def activity_logs():
 
 
 
+
+
+@admin.route('/controlpanel/system', methods=['GET'])
+@login_required
+def system_info():
+    """Display runtime system information."""
+    if not current_user.is_admin:
+        abort(403)
+    start = current_app.config.get('START_TIME')
+    uptime = None
+    if start:
+        uptime = datetime.utcnow() - start
+    try:
+        version = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode().strip()
+    except Exception:
+        version = 'unknown'
+    info = {
+        'platform': platform.platform(),
+        'python_version': platform.python_version(),
+        'flask_version': flask.__version__,
+        'version': version,
+        'started_at': start,
+        'uptime': str(uptime).split('.')[0] if uptime else 'unknown',
+    }
+    return render_template('admin/system_info.html', info=info)
 
 @admin.route('/controlpanel/imports', methods=['GET'])
 @login_required
