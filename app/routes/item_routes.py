@@ -197,6 +197,34 @@ def search_items():
     return jsonify(items_data)
 
 
+@item.route('/items/quick_add', methods=['POST'])
+@login_required
+def quick_add_item():
+    """Create a minimal item via AJAX for purchase orders."""
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    base_unit = data.get('base_unit')
+    valid_units = {'ounce', 'gram', 'each', 'millilitre'}
+    if not name or base_unit not in valid_units:
+        return jsonify({'error': 'Invalid data'}), 400
+    if Item.query.filter_by(name=name, archived=False).first():
+        return jsonify({'error': 'Item exists'}), 400
+    item = Item(name=name, base_unit=base_unit)
+    db.session.add(item)
+    db.session.commit()
+    unit = ItemUnit(
+        item_id=item.id,
+        name=base_unit,
+        factor=1,
+        receiving_default=True,
+        transfer_default=True,
+    )
+    db.session.add(unit)
+    db.session.commit()
+    log_activity(f'Added item {item.name}')
+    return jsonify({'id': item.id, 'name': item.name})
+
+
 @item.route('/items/<int:item_id>/units')
 @login_required
 def item_units(item_id):
