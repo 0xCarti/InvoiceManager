@@ -84,3 +84,16 @@ def test_admin_users_page_links_to_profile(client, app):
         assert resp.status_code == 200
         assert profile_url.encode() in resp.data
 
+
+def test_user_can_set_timezone(client, app):
+    create_user(app, 'tz@example.com')
+    with client:
+        login(client, 'tz@example.com', 'oldpass')
+        resp = client.post(
+            '/auth/profile', data={'timezone': 'US/Eastern'}, follow_redirects=True
+        )
+        assert resp.status_code == 200
+    with app.app_context():
+        user = User.query.filter_by(email='tz@example.com').first()
+        assert user.timezone == 'US/Eastern'
+

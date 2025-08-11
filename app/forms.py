@@ -27,9 +27,12 @@ from wtforms.validators import (
 )
 from wtforms.widgets import CheckboxInput, ListWidget
 
+from zoneinfo import available_timezones
+
 from app.models import Item, Location, Product, Customer, Vendor, ItemUnit, GLCode
 from wtforms.validators import ValidationError
 
+TIMEZONE_CHOICES = sorted(available_timezones())
 
 class LoginForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
@@ -486,6 +489,18 @@ class TerminalSalesUploadForm(FlaskForm):
     submit = SubmitField("Upload")
 
 
-class GSTForm(FlaskForm):
+class SettingsForm(FlaskForm):
     gst_number = StringField("GST Number", validators=[Optional(), Length(max=50)])
+    default_timezone = SelectField(
+        "Default Timezone", choices=[(tz, tz) for tz in TIMEZONE_CHOICES]
+    )
     submit = SubmitField("Update")
+
+
+class TimezoneForm(FlaskForm):
+    timezone = SelectField(
+        "Timezone",
+        choices=[("", "Use Default")] + [(tz, tz) for tz in TIMEZONE_CHOICES],
+        validators=[Optional()],
+    )
+    submit = SubmitField("Update Timezone")

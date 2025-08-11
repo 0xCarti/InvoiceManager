@@ -7,7 +7,8 @@ from flask_login import LoginManager
 from flask_bootstrap import Bootstrap
 from flask_wtf import CSRFProtect
 from werkzeug.security import generate_password_hash
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 
 load_dotenv()
 db = SQLAlchemy()
@@ -15,6 +16,7 @@ login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 socketio = None
 GST = ''
+DEFAULT_TIMEZONE = 'UTC'
 NAV_LINKS = {
     'transfer.view_transfers': 'Transfers',
     'item.view_items': 'Items',
@@ -70,7 +72,7 @@ def create_admin_user():
 
 def create_app(args: list):
     """Application factory used by Flask."""
-    global socketio, GST
+    global socketio, GST, DEFAULT_TIMEZONE
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
     app.config.update(
@@ -106,6 +108,22 @@ def create_app(args: list):
     login_manager.init_app(app)
     Bootstrap(app)
     socketio = SocketIO(app)
+
+    from flask_login import current_user
+
+    def format_datetime(value, fmt='%Y-%m-%d %H:%M:%S'):
+        if value is None:
+            return ''
+        tz_name = getattr(current_user, 'timezone', None) or DEFAULT_TIMEZONE or 'UTC'
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo('UTC')
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=dt_timezone.utc)
+        return value.astimezone(tz).strftime(fmt)
+
+    app.jinja_env.filters['format_datetime'] = format_datetime
 
     @app.context_processor
     def inject_gst():
@@ -156,8 +174,14 @@ def create_app(args: list):
         if setting is None:
             setting = Setting(name='GST', value='')
             db.session.add(setting)
-            db.session.commit()
+
+        tz_setting = Setting.query.filter_by(name='DEFAULT_TIMEZONE').first()
+        if tz_setting is None:
+            tz_setting = Setting(name='DEFAULT_TIMEZONE', value='UTC')
+            db.session.add(tz_setting)
+        db.session.commit()
         GST = setting.value
+        DEFAULT_TIMEZONE = tz_setting.value or 'UTC'
         CSRFProtect(app)
 
     return app, socketio
