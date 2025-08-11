@@ -7,7 +7,7 @@ from flask_login import LoginManager
 from flask_bootstrap import Bootstrap
 from flask_wtf import CSRFProtect
 from werkzeug.security import generate_password_hash
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 load_dotenv()
 db = SQLAlchemy()
@@ -32,6 +32,7 @@ NAV_LINKS = {
     'admin.settings': 'Settings',
     'admin.import_page': 'Data Imports',
     'admin.activity_logs': 'Activity Logs',
+    'admin.system_info': 'System Info',
 }
 
 
@@ -78,6 +79,7 @@ def create_app(args: list):
         SESSION_COOKIE_SAMESITE='Lax',
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=30)
     )
+    app.config['START_TIME'] = datetime.utcnow()
     # Use absolute paths so that changing the working directory after app
     # creation does not break file references. This occurs in the test suite
     # which creates the app in a temporary directory and then changes back to

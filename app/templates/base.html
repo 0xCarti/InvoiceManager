@@ -263,6 +263,12 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin.system_info') }}">System Info</a>
+                            <a href="{{ url_for('auth.toggle_favorite', link='admin.system_info') }}" class="ms-1">
+                                {% if 'admin.system_info' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <hr class="dropdown-divider">
                         </li>
                         {% endif %}
