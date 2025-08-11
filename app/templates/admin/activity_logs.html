@@ -15,7 +15,7 @@
         <tbody>
             {% for log in logs %}
             <tr>
-                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ log.timestamp|format_datetime('%Y-%m-%d %H:%M:%S') }}</td>
                 <td>{{ log.user.email if log.user else 'System' }}</td>
                 <td>{{ log.activity }}</td>
             </tr>

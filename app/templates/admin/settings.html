@@ -9,6 +9,10 @@
             {{ form.gst_number.label }}
             {{ form.gst_number(class='form-control') }}
         </div>
+        <div class="form-group mt-2">
+            {{ form.default_timezone.label }}
+            {{ form.default_timezone(class='form-control') }}
+        </div>
         {{ form.submit(class='btn btn-primary') }}
     </form>
 </div>

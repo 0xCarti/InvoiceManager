@@ -40,6 +40,7 @@ class User(UserMixin, db.Model):
     invoices = db.relationship('Invoice', backref='creator', lazy=True)
     active = db.Column(db.Boolean, default=False, nullable=False)
     favorites = db.Column(db.Text, default='')
+    timezone = db.Column(db.String(50))
 
     def get_favorites(self):
         """Return the user's favourite endpoint names as a list."""

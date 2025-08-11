@@ -39,7 +39,7 @@
             {% for invoice in invoices %}
             <tr>
                 <td>{{ invoice.id }}</td>
-                <td>{{ invoice.date_created.strftime('%Y-%m-%d') }}</td>
+                <td>{{ invoice.date_created|format_datetime('%Y-%m-%d') }}</td>
                 <td>{{ invoice.customer.first_name }} {{ invoice.customer.last_name }}</td>
                 <td>
                     <a href="{{ url_for('invoice.view_invoice', invoice_id=invoice.id) }}"

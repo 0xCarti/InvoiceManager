@@ -28,7 +28,8 @@ from app.forms import (
     ChangePasswordForm,
     SetPasswordForm,
     ImportForm,
-    GSTForm,
+    SettingsForm,
+    TimezoneForm,
 )
 
 from app.models import (
@@ -164,6 +165,7 @@ def reset_token(token):
 def profile():
     """Allow the current user to change their password."""
     form = ChangePasswordForm()
+    tz_form = TimezoneForm(timezone=current_user.timezone or '')
     if form.validate_on_submit():
         if not check_password_hash(current_user.password, form.current_password.data):
             flash('Current password incorrect.', 'danger')
@@ -172,10 +174,22 @@ def profile():
             db.session.commit()
             flash('Password updated.', 'success')
             return redirect(url_for('auth.profile'))
+    elif 'timezone' in request.form and tz_form.validate_on_submit():
+        current_user.timezone = tz_form.timezone.data or None
+        db.session.commit()
+        flash('Timezone updated.', 'success')
+        return redirect(url_for('auth.profile'))
 
     transfers = Transfer.query.filter_by(user_id=current_user.id).all()
     invoices = Invoice.query.filter_by(user_id=current_user.id).all()
-    return render_template('profile.html', user=current_user, form=form, transfers=transfers, invoices=invoices)
+    return render_template(
+        'profile.html',
+        user=current_user,
+        form=form,
+        tz_form=tz_form,
+        transfers=transfers,
+        invoices=invoices,
+    )
 
 
 @auth.route('/favorite/<path:link>')
@@ -199,15 +213,28 @@ def user_profile(user_id):
         abort(404)
 
     form = SetPasswordForm()
+    tz_form = TimezoneForm(timezone=user.timezone or '')
     if form.validate_on_submit():
         user.password = generate_password_hash(form.new_password.data)
         db.session.commit()
         flash('Password updated.', 'success')
         return redirect(url_for('admin.user_profile', user_id=user_id))
+    elif 'timezone' in request.form and tz_form.validate_on_submit():
+        user.timezone = tz_form.timezone.data or None
+        db.session.commit()
+        flash('Timezone updated.', 'success')
+        return redirect(url_for('admin.user_profile', user_id=user_id))
 
     transfers = Transfer.query.filter_by(user_id=user.id).all()
     invoices = Invoice.query.filter_by(user_id=user.id).all()
-    return render_template('profile.html', user=user, form=form, transfers=transfers, invoices=invoices)
+    return render_template(
+        'profile.html',
+        user=user,
+        form=form,
+        tz_form=tz_form,
+        transfers=transfers,
+        invoices=invoices,
+    )
 
 
 @admin.route('/activate_user/<int:user_id>', methods=['GET'])
@@ -489,14 +516,23 @@ def settings():
     if gst_setting is None:
         gst_setting = Setting(name='GST', value='')
         db.session.add(gst_setting)
-        db.session.commit()
 
-    form = GSTForm(gst_number=gst_setting.value)
+    tz_setting = Setting.query.filter_by(name='DEFAULT_TIMEZONE').first()
+    if tz_setting is None:
+        tz_setting = Setting(name='DEFAULT_TIMEZONE', value='UTC')
+        db.session.add(tz_setting)
+    db.session.commit()
+
+    form = SettingsForm(
+        gst_number=gst_setting.value, default_timezone=tz_setting.value
+    )
     if form.validate_on_submit():
         gst_setting.value = form.gst_number.data or ''
+        tz_setting.value = form.default_timezone.data or 'UTC'
         db.session.commit()
         import app
         app.GST = gst_setting.value
+        app.DEFAULT_TIMEZONE = tz_setting.value
         flash('Settings updated.', 'success')
         return redirect(url_for('admin.settings'))
 

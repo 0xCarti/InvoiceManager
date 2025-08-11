@@ -34,7 +34,7 @@
             {% set ns.grand_total = ns.grand_total + invoice.total %}
             <tr>
                 <td>{{ invoice.invoice.id }}</td>
-                <td>{{ invoice.invoice.date_created.strftime('%Y-%m-%d') }}</td>
+                <td>{{ invoice.invoice.date_created|format_datetime('%Y-%m-%d') }}</td>
                 <td>${{ "%.2f"|format(invoice.total) }}</td>
             </tr>
             {% endfor %}
