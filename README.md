@@ -53,7 +53,9 @@ python run.py
 
 Set `PORT` in your environment to change the port (default `5000`).
 
-The application uses a local SQLite database located at `inventory.db` and creates `uploads` and `backups` directories automatically on startup.
+The application uses a local SQLite database located at `inventory.db`. If the
+database file is missing, it and the `uploads`, `backups`, and `import_files`
+directories are created automatically on startup.
 
 ## Docker Setup
 

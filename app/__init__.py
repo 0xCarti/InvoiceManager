@@ -90,12 +90,20 @@ def create_app(args: list):
 
     base_dir = os.getcwd()
     db_path = os.path.join(base_dir, 'inventory.db')
+    if os.path.isdir(db_path):
+        db_path = os.path.join(db_path, 'inventory.db')
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    if not os.path.exists(db_path):
+        open(db_path, 'a').close()
+
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     app.config['UPLOAD_FOLDER'] = os.path.join(base_dir, 'uploads')
     app.config['BACKUP_FOLDER'] = os.path.join(base_dir, 'backups')
+    app.config['IMPORT_FOLDER'] = os.path.join(base_dir, 'import_files')
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['BACKUP_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['IMPORT_FOLDER'], exist_ok=True)
 
     if '--demo' in args:
         app.config['DEMO'] = True
