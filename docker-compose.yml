@@ -9,9 +9,10 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./backups:/app/backups
-      - ./inventory.db:/app/inventory.db
+      - ./data:/app/data
       - ./import_files:/app/import_files
     env_file:
       - .env
     environment:
       - PORT=${PORT:-5000}
+      - DATABASE_PATH=/app/data/inventory.db
