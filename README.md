@@ -71,8 +71,10 @@ The repository includes an `import_files` directory containing example CSV files
 that can be used as templates for data imports.
 
 The web interface will be available at `http://localhost:$PORT` (default `5000`). Uploaded files,
-import templates, backups and the SQLite database are stored on the host so data
-persists across container restarts.
+import templates, backups and the SQLite database are stored on the host in the
+`uploads`, `backups`, `import_files` and `data` directories respectively. These
+folders are created automatically when the container starts so no manual setup
+is required.
 
 ## Running Tests
 

@@ -89,7 +89,15 @@ def create_app(args: list):
     # always point to the intended location.
 
     base_dir = os.getcwd()
-    db_path = os.path.join(base_dir, 'inventory.db')
+    # Allow overriding the database location via the DATABASE_PATH environment
+    # variable.  This is useful for container deployments where the database
+    # may reside in a mounted volume.  If the provided path is a directory,
+    # store the SQLite file inside that directory.
+    db_path = os.getenv('DATABASE_PATH', os.path.join(base_dir, 'inventory.db'))
+    if os.path.isdir(db_path):
+        db_path = os.path.join(db_path, 'inventory.db')
+
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     app.config['UPLOAD_FOLDER'] = os.path.join(base_dir, 'uploads')
     app.config['BACKUP_FOLDER'] = os.path.join(base_dir, 'backups')
