@@ -17,6 +17,7 @@ from datetime import datetime
 import platform
 import subprocess
 import flask
+from urllib.parse import urlparse
 
 from app.forms import (
     LoginForm,
@@ -210,8 +211,13 @@ def toggle_favorite(link):
     """Toggle a navigation link as favourite for the current user."""
     current_user.toggle_favorite(link)
     db.session.commit()
-    return redirect(request.referrer or url_for('main.home'))
-
+    referrer = request.referrer
+    if referrer:
+        safe_referrer = referrer.replace("\\", "")
+        parsed = urlparse(safe_referrer)
+        if not parsed.scheme and not parsed.netloc:
+            return redirect(safe_referrer)
+    return redirect(url_for('main.home'))
 
 @admin.route('/user_profile/<int:user_id>', methods=['GET', 'POST'])
 @login_required
