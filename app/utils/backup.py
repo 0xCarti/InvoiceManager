@@ -91,7 +91,6 @@ def restore_backup(file_path):
         for row in rows:
             record = {col.name: row[col.name] for col in select_cols}
 
-            # Supply defaults for new columns not in backup
             for col in table.columns:
                 if col.name not in record:
                     default = None
@@ -100,6 +99,18 @@ def restore_backup(file_path):
                         if callable(default):
                             default = default()
                     record[col.name] = default
+                else:
+                    value = record[col.name]
+                    if isinstance(col.type, db.DateTime) and isinstance(value, str):
+                        try:
+                            record[col.name] = datetime.fromisoformat(value)
+                        except ValueError:
+                            pass
+                    elif isinstance(col.type, db.Date) and isinstance(value, str):
+                        try:
+                            record[col.name] = datetime.fromisoformat(value).date()
+                        except ValueError:
+                            pass
 
             insert_rows.append(record)
 
