@@ -196,7 +196,9 @@ def add_transfer():
             from_location_name=db.session.get(
                 Location, form.from_location_id.data
             ).name,
-            to_location_name=db.session.get(Location, form.to_location_id.data).name,
+            to_location_name=db.session.get(
+                Location, form.to_location_id.data
+            ).name,
         )
         db.session.add(transfer)
         # Dynamically determine the number of items added
@@ -234,7 +236,9 @@ def add_transfer():
             notify_users = User.query.filter_by(notify_transfers=True).all()
             for user in notify_users:
                 if user.phone_number:
-                    send_sms(user.phone_number, f"Transfer {transfer.id} created")
+                    send_sms(
+                        user.phone_number, f"Transfer {transfer.id} created"
+                    )
         except Exception:
             pass
 
@@ -279,7 +283,9 @@ def edit_transfer(transfer_id):
             item_id = request.form.get(f"items-{index}-item")
             quantity = request.form.get(f"items-{index}-quantity", type=float)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
-            if item_id and quantity is not None:  # Ensure both are provided and valid
+            if (
+                item_id and quantity is not None
+            ):  # Ensure both are provided and valid
                 factor = 1
                 if unit_id:
                     unit = db.session.get(ItemUnit, unit_id)
@@ -306,7 +312,10 @@ def edit_transfer(transfer_id):
         for item in transfer.transfer_items
     ]
     return render_template(
-        "transfers/edit_transfer.html", form=form, transfer=transfer, items=items
+        "transfers/edit_transfer.html",
+        form=form,
+        transfer=transfer,
+        items=items,
     )
 
 
@@ -326,7 +335,10 @@ def delete_transfer(transfer_id):
     return redirect(url_for("transfer.view_transfers"))
 
 
-@transfer.route("/transfers/complete/<int:transfer_id>", methods=["GET", "POST"])
+@transfer.route(
+    "/transfers/complete/<int:transfer_id>", methods=["GET", "POST"]
+)
+
 @login_required
 def complete_transfer(transfer_id):
     """Mark a transfer as completed."""
@@ -340,7 +352,9 @@ def complete_transfer(transfer_id):
             "confirm_action.html",
             form=form,
             warnings=warnings,
-            action_url=url_for("transfer.complete_transfer", transfer_id=transfer_id),
+            action_url=url_for(
+                "transfer.complete_transfer", transfer_id=transfer_id
+            ),
             cancel_url=url_for("transfer.view_transfers"),
             title="Confirm Transfer Completion",
         )
@@ -349,7 +363,9 @@ def complete_transfer(transfer_id):
             "confirm_action.html",
             form=form,
             warnings=warnings,
-            action_url=url_for("transfer.complete_transfer", transfer_id=transfer_id),
+            action_url=url_for(
+                "transfer.complete_transfer", transfer_id=transfer_id
+            ),
             cancel_url=url_for("transfer.view_transfers"),
             title="Confirm Transfer Completion",
         )
@@ -361,7 +377,10 @@ def complete_transfer(transfer_id):
     return redirect(url_for("transfer.view_transfers"))
 
 
-@transfer.route("/transfers/uncomplete/<int:transfer_id>", methods=["GET", "POST"])
+@transfer.route(
+    "/transfers/uncomplete/<int:transfer_id>", methods=["GET", "POST"]
+)
+
 @login_required
 def uncomplete_transfer(transfer_id):
     """Revert a transfer to not completed."""
@@ -375,7 +394,9 @@ def uncomplete_transfer(transfer_id):
             "confirm_action.html",
             form=form,
             warnings=warnings,
-            action_url=url_for("transfer.uncomplete_transfer", transfer_id=transfer_id),
+            action_url=url_for(
+                "transfer.uncomplete_transfer", transfer_id=transfer_id
+            ),
             cancel_url=url_for("transfer.view_transfers"),
             title="Confirm Transfer Incomplete",
         )
@@ -384,7 +405,9 @@ def uncomplete_transfer(transfer_id):
             "confirm_action.html",
             form=form,
             warnings=warnings,
-            action_url=url_for("transfer.uncomplete_transfer", transfer_id=transfer_id),
+            action_url=url_for(
+                "transfer.uncomplete_transfer", transfer_id=transfer_id
+            ),
             cancel_url=url_for("transfer.view_transfers"),
             title="Confirm Transfer Incomplete",
         )
@@ -403,9 +426,13 @@ def view_transfer(transfer_id):
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
-    transfer_items = TransferItem.query.filter_by(transfer_id=transfer.id).all()
+    transfer_items = TransferItem.query.filter_by(
+        transfer_id=transfer.id
+    ).all()
     return render_template(
-        "transfers/view_transfer.html", transfer=transfer, transfer_items=transfer_items
+        "transfers/view_transfer.html",
+        transfer=transfer,
+        transfer_items=transfer_items,
     )
 
 
@@ -435,7 +462,7 @@ def generate_report():
             .join(from_location, Transfer.from_location_id == from_location.id)
             .join(to_location, Transfer.to_location_id == to_location.id)
             .filter(
-                Transfer.completed,
+                Transfer.completed == True,
                 Transfer.date_created >= start_datetime,
                 Transfer.date_created <= end_datetime,
             )
@@ -456,8 +483,12 @@ def generate_report():
         ]
 
         # Store start and end date/time in session for use in the report
-        session["report_start_datetime"] = start_datetime.strftime("%Y-%m-%d %H:%M")
-        session["report_end_datetime"] = end_datetime.strftime("%Y-%m-%d %H:%M")
+        session["report_start_datetime"] = start_datetime.strftime(
+            "%Y-%m-%d %H:%M"
+        )
+        session["report_end_datetime"] = end_datetime.strftime(
+            "%Y-%m-%d %H:%M"
+        )
 
         flash("Transfer report generated successfully.", "success")
         return redirect(url_for("transfer.view_report"))

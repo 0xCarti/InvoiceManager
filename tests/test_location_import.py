@@ -1,4 +1,5 @@
 import pytest
+
 from app import db
 from app.models import Location, Product
 from app.utils.imports import _import_locations
@@ -35,4 +36,3 @@ def test_import_locations_missing_product(tmp_path, app):
         with pytest.raises(ValueError):
             _import_locations(str(csv_path))
         assert Location.query.count() == 0
-

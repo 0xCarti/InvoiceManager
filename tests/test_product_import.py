@@ -1,6 +1,7 @@
 import pytest
+
 from app import db
-from app.models import Product, Item, ItemUnit, ProductRecipeItem
+from app.models import Item, ItemUnit, Product, ProductRecipeItem
 from app.utils.imports import _import_products
 
 
@@ -11,12 +12,26 @@ def test_import_products_with_recipe(tmp_path, app):
         p = Item(name="Patties", base_unit="each")
         db.session.add_all([b, p])
         db.session.commit()
-        bu = ItemUnit(item_id=b.id, name="each", factor=1, receiving_default=True, transfer_default=True)
-        pu = ItemUnit(item_id=p.id, name="each", factor=1, receiving_default=True, transfer_default=True)
+        bu = ItemUnit(
+            item_id=b.id,
+            name="each",
+            factor=1,
+            receiving_default=True,
+            transfer_default=True,
+        )
+        pu = ItemUnit(
+            item_id=p.id,
+            name="each",
+            factor=1,
+            receiving_default=True,
+            transfer_default=True,
+        )
         db.session.add_all([bu, pu])
         db.session.commit()
 
-    csv_path.write_text("name,price,cost,gl_code,recipe\nBurger,5,3,4000,Buns:2:each;Patties:1:each\n")
+    csv_path.write_text(
+        "name,price,cost,gl_code,recipe\nBurger,5,3,4000,Buns:2:each;Patties:1:each\n"
+    )
 
     with app.app_context():
         count = _import_products(str(csv_path))
@@ -35,10 +50,11 @@ def test_import_products_with_recipe(tmp_path, app):
 
 def test_import_products_missing_item(tmp_path, app):
     csv_path = tmp_path / "prods.csv"
-    csv_path.write_text("name,price,cost,gl_code,recipe\nBurger,5,3,4000,Missing:1\n")
+    csv_path.write_text(
+        "name,price,cost,gl_code,recipe\nBurger,5,3,4000,Missing:1\n"
+    )
 
     with app.app_context():
         with pytest.raises(ValueError):
             _import_products(str(csv_path))
         assert Product.query.count() == 0
-

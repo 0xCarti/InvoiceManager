@@ -1,6 +1,7 @@
 from werkzeug.security import generate_password_hash
+
 from app import db
-from app.models import User, Item, ItemUnit, Product, ProductRecipeItem
+from app.models import Item, ItemUnit, Product, ProductRecipeItem, User
 
 
 def setup_products(app):
@@ -37,13 +38,22 @@ def setup_products(app):
         db.session.add_all(
             [
                 ProductRecipeItem(
-                    product_id=prod1.id, item_id=item1.id, unit_id=iu1.id, quantity=2
+                    product_id=prod1.id,
+                    item_id=item1.id,
+                    unit_id=iu1.id,
+                    quantity=2,
                 ),
                 ProductRecipeItem(
-                    product_id=prod1.id, item_id=item2.id, unit_id=iu2.id, quantity=1
+                    product_id=prod1.id,
+                    item_id=item2.id,
+                    unit_id=iu2.id,
+                    quantity=1,
                 ),
                 ProductRecipeItem(
-                    product_id=prod2.id, item_id=item1.id, unit_id=iu1.id, quantity=3
+                    product_id=prod2.id,
+                    item_id=item1.id,
+                    unit_id=iu1.id,
+                    quantity=3,
                 ),
             ]
         )
@@ -61,7 +71,11 @@ def test_recipe_report_select_all(client, app):
     assert resp.status_code == 200
     assert b"Cake" in resp.data and b"Pie" in resp.data
     assert b"Flour" in resp.data and b"Sugar" in resp.data
-    assert b"$1.00" in resp.data and b"$0.25" in resp.data and b"$1.50" in resp.data
+    assert (
+        b"$1.00" in resp.data
+        and b"$0.25" in resp.data
+        and b"$1.50" in resp.data
+    )
 
 
 def test_recipe_report_specific_products(client, app):
