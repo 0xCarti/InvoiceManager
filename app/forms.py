@@ -1,5 +1,7 @@
+from zoneinfo import available_timezones
+
 from flask_wtf import FlaskForm
-from flask_wtf.file import FileRequired, FileAllowed
+from flask_wtf.file import FileAllowed, FileRequired
 from wtforms import (
     BooleanField,
     DateField,
@@ -19,25 +21,29 @@ from wtforms import (
 from wtforms.validators import (
     DataRequired,
     Email,
+    EqualTo,
     InputRequired,
     Length,
     NumberRange,
     Optional,
-    EqualTo,
+    ValidationError,
 )
 from wtforms.widgets import CheckboxInput, ListWidget
 
-from zoneinfo import available_timezones
-
-from app.models import Item, Location, Product, Customer, Vendor, ItemUnit, GLCode
-from wtforms.validators import ValidationError
+from app.models import (
+    Customer,
+    GLCode,
+    Item,
+    ItemUnit,
+    Location,
+    Product,
+    Vendor,
+)
 
 
 def load_item_choices():
     """Return a list of active item choices."""
-    return [
-        (i.id, i.name) for i in Item.query.filter_by(archived=False).all()
-    ]
+    return [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
 
 
 def load_unit_choices():
@@ -47,9 +53,11 @@ def load_unit_choices():
 
 TIMEZONE_CHOICES = sorted(available_timezones())
 
+
 class LoginForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField("Password", validators=[DataRequired()])
+
 
 class PasswordResetRequestForm(FlaskForm):
     """Form for requesting a password reset email."""
@@ -99,7 +107,10 @@ class ItemForm(FlaskForm):
         super(ItemForm, self).__init__(*args, **kwargs)
         codes = GLCode.query.filter(GLCode.code.like("5%")).all()
         self.gl_code.choices = [
-            (g.code, f"{g.code} - {g.description}" if g.description else g.code)
+            (
+                g.code,
+                f"{g.code} - {g.description}" if g.description else g.code,
+            )
             for g in codes
         ]
         purchase_codes = [
@@ -136,7 +147,9 @@ class TransferForm(FlaskForm):
     from_location_id = SelectField(
         "From Location", coerce=int, validators=[DataRequired()]
     )
-    to_location_id = SelectField("To Location", coerce=int, validators=[DataRequired()])
+    to_location_id = SelectField(
+        "To Location", coerce=int, validators=[DataRequired()]
+    )
     items = FieldList(FormField(TransferItemForm), min_entries=1)
     submit = SubmitField("Transfer")
 
@@ -144,10 +157,12 @@ class TransferForm(FlaskForm):
         super(TransferForm, self).__init__(*args, **kwargs)
         # Dynamically set choices for from_location_id and to_location_id
         self.from_location_id.choices = [
-            (l.id, l.name) for l in Location.query.filter_by(archived=False).all()
+            (loc.id, loc.name)
+            for loc in Location.query.filter_by(archived=False).all()
         ]
         self.to_location_id.choices = [
-            (l.id, l.name) for l in Location.query.filter_by(archived=False).all()
+            (loc.id, loc.name)
+            for loc in Location.query.filter_by(archived=False).all()
         ]
         items = load_item_choices()
         for item_form in self.items:
@@ -165,7 +180,9 @@ class InviteUserForm(FlaskForm):
 
 
 class ChangePasswordForm(FlaskForm):
-    current_password = PasswordField("Current Password", validators=[DataRequired()])
+    current_password = PasswordField(
+        "Current Password", validators=[DataRequired()]
+    )
     new_password = PasswordField("New Password", validators=[DataRequired()])
     confirm_password = PasswordField(
         "Confirm Password",
@@ -223,20 +240,25 @@ class CustomerForm(FlaskForm):
 class ProductForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired()])
     gl_code = SelectField("GL Code", validators=[Optional()])
-    price = DecimalField("Price", validators=[DataRequired(), NumberRange(min=0.0001)])
+    price = DecimalField(
+        "Price", validators=[DataRequired(), NumberRange(min=0.0001)]
+    )
     cost = DecimalField(
         "Cost", validators=[InputRequired(), NumberRange(min=0)], default=0.0
     )
     gl_code_id = SelectField(
         "GL Code", coerce=int, validators=[Optional()], validate_choice=False
     )
-    sales_gl_code = SelectField("Sales GL Code", coerce=int, validators=[Optional()])
+    sales_gl_code = SelectField(
+        "Sales GL Code", coerce=int, validators=[Optional()]
+    )
     submit = SubmitField("Submit")
 
     def __init__(self, *args, **kwargs):
         super(ProductForm, self).__init__(*args, **kwargs)
         sales_codes = [
-            (g.id, g.code) for g in GLCode.query.filter(GLCode.code.like("4%")).all()
+            (g.id, g.code)
+            for g in GLCode.query.filter(GLCode.code.like("4%")).all()
         ]
         self.gl_code.choices = [(code, code) for _, code in sales_codes]
         self.gl_code_id.choices = sales_codes
@@ -248,7 +270,8 @@ class ProductForm(FlaskForm):
         from app.models import GLCode
 
         sales_codes = [
-            (g.id, g.code) for g in GLCode.query.filter(GLCode.code.like("4%")).all()
+            (g.id, g.code)
+            for g in GLCode.query.filter(GLCode.code.like("4%")).all()
         ]
         self.gl_code_id.choices = sales_codes
         self.sales_gl_code.choices = sales_codes
@@ -291,7 +314,9 @@ class ProductWithRecipeForm(ProductForm):
 
 
 class InvoiceForm(FlaskForm):
-    customer = SelectField("Customer", coerce=float, validators=[DataRequired()])
+    customer = SelectField(
+        "Customer", coerce=float, validators=[DataRequired()]
+    )
     products = HiddenField("Products JSON")
     submit = SubmitField("Add Product")
 
@@ -353,7 +378,8 @@ class ImportForm(FlaskForm):
     """Upload a CSV file for bulk imports."""
 
     file = FileField(
-        "CSV File", validators=[FileRequired(), FileAllowed({"csv"}, "CSV only!")]
+        "CSV File",
+        validators=[FileRequired(), FileAllowed({"csv"}, "CSV only!")],
     )
     submit = SubmitField("Import")
 
@@ -372,7 +398,9 @@ class POItemForm(FlaskForm):
 class PurchaseOrderForm(FlaskForm):
     vendor = SelectField("Vendor", coerce=int, validators=[DataRequired()])
     order_date = DateField("Order Date", validators=[DataRequired()])
-    expected_date = DateField("Expected Delivery Date", validators=[DataRequired()])
+    expected_date = DateField(
+        "Expected Delivery Date", validators=[DataRequired()]
+    )
     delivery_charge = DecimalField(
         "Delivery Charge", validators=[Optional()], default=0
     )
@@ -407,7 +435,9 @@ class InvoiceItemReceiveForm(FlaskForm):
 class ReceiveInvoiceForm(FlaskForm):
     invoice_number = StringField("Invoice Number", validators=[Optional()])
     received_date = DateField("Received Date", validators=[DataRequired()])
-    location_id = SelectField("Location", coerce=int, validators=[DataRequired()])
+    location_id = SelectField(
+        "Location", coerce=int, validators=[DataRequired()]
+    )
     gst = DecimalField("GST Amount", validators=[Optional()], default=0)
     pst = DecimalField("PST Amount", validators=[Optional()], default=0)
     delivery_charge = DecimalField(
@@ -419,7 +449,8 @@ class ReceiveInvoiceForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super(ReceiveInvoiceForm, self).__init__(*args, **kwargs)
         self.location_id.choices = [
-            (l.id, l.name) for l in Location.query.filter_by(archived=False).all()
+            (loc.id, loc.name)
+            for loc in Location.query.filter_by(archived=False).all()
         ]
         items = load_item_choices()
         units = load_unit_choices()
@@ -456,18 +487,23 @@ class EventForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired()])
     start_date = DateField("Start Date", validators=[DataRequired()])
     end_date = DateField("End Date", validators=[DataRequired()])
-    event_type = SelectField("Event Type", choices=EVENT_TYPES, validators=[DataRequired()])
+    event_type = SelectField(
+        "Event Type", choices=EVENT_TYPES, validators=[DataRequired()]
+    )
     submit = SubmitField("Submit")
 
 
 class EventLocationForm(FlaskForm):
-    location_id = SelectField("Location", coerce=int, validators=[DataRequired()])
+    location_id = SelectField(
+        "Location", coerce=int, validators=[DataRequired()]
+    )
     submit = SubmitField("Submit")
 
     def __init__(self, *args, **kwargs):
         super(EventLocationForm, self).__init__(*args, **kwargs)
         self.location_id.choices = [
-            (l.id, l.name) for l in Location.query.filter_by(archived=False).all()
+            (loc.id, loc.name)
+            for loc in Location.query.filter_by(archived=False).all()
         ]
 
 
@@ -482,7 +518,9 @@ class ConfirmForm(FlaskForm):
 
 
 class TerminalSaleForm(FlaskForm):
-    product_id = SelectField("Product", coerce=int, validators=[DataRequired()])
+    product_id = SelectField(
+        "Product", coerce=int, validators=[DataRequired()]
+    )
     quantity = DecimalField("Quantity", validators=[InputRequired()])
     submit = SubmitField("Submit")
 
@@ -498,14 +536,18 @@ class TerminalSalesUploadForm(FlaskForm):
         "Sales File",
         validators=[
             FileRequired(),
-            FileAllowed({"xls", "pdf"}, "Only .xls or .pdf files are allowed."),
+            FileAllowed(
+                {"xls", "pdf"}, "Only .xls or .pdf files are allowed."
+            ),
         ],
     )
     submit = SubmitField("Upload")
 
 
 class SettingsForm(FlaskForm):
-    gst_number = StringField("GST Number", validators=[Optional(), Length(max=50)])
+    gst_number = StringField(
+        "GST Number", validators=[Optional(), Length(max=50)]
+    )
     default_timezone = SelectField(
         "Default Timezone", choices=[(tz, tz) for tz in TIMEZONE_CHOICES]
     )
@@ -522,6 +564,8 @@ class TimezoneForm(FlaskForm):
 
 
 class NotificationForm(FlaskForm):
-    phone_number = StringField("Phone Number", validators=[Optional(), Length(max=20)])
+    phone_number = StringField(
+        "Phone Number", validators=[Optional(), Length(max=20)]
+    )
     notify_transfers = BooleanField("Send text on new transfer")
     submit = SubmitField("Update Notifications")

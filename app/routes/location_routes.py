@@ -1,62 +1,81 @@
 import os
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session, abort
-from flask_login import login_required, current_user
+from datetime import datetime
+
+from flask import (
+    Blueprint,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask_login import current_user, login_required
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
-from app import db, socketio, GST
-from app.utils.activity import log_activity
+from app import GST, db, socketio
 from app.forms import (
-    LocationForm,
-    ItemForm,
-    TransferForm,
-    ImportItemsForm,
-    DateRangeForm,
     CustomerForm,
-    ProductForm,
-    ProductWithRecipeForm,
-    ProductRecipeForm,
-    InvoiceForm,
-    LoginForm,
-    InvoiceFilterForm,
-    PurchaseOrderForm,
-    ReceiveInvoiceForm,
+    DateRangeForm,
     DeleteForm,
     GLCodeForm,
+    ImportItemsForm,
+    InvoiceFilterForm,
+    InvoiceForm,
+    ItemForm,
+    LocationForm,
+    LoginForm,
+    ProductForm,
+    ProductRecipeForm,
+    ProductSalesReportForm,
+    ProductWithRecipeForm,
+    PurchaseOrderForm,
+    ReceiveInvoiceForm,
+    TransferForm,
+    VendorInvoiceReportForm,
 )
 from app.models import (
-    Location,
-    Item,
-    ItemUnit,
-    Transfer,
-    TransferItem,
     Customer,
-    Product,
-    LocationStandItem,
+    GLCode,
     Invoice,
     InvoiceProduct,
+    Item,
+    ItemUnit,
+    Location,
+    LocationStandItem,
+    Product,
     ProductRecipeItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
     PurchaseInvoice,
     PurchaseInvoiceItem,
+    PurchaseOrder,
+    PurchaseOrderItem,
     PurchaseOrderItemArchive,
-    GLCode,
+    Transfer,
+    TransferItem,
 )
-from datetime import datetime
-from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
+from app.utils.activity import log_activity
 
-location = Blueprint('locations', __name__)
+location = Blueprint("locations", __name__)
 
-@location.route('/locations/add', methods=['GET', 'POST'])
+
+@location.route("/locations/add", methods=["GET", "POST"])
 @login_required
 def add_location():
     """Create a new location."""
     form = LocationForm()
     if form.validate_on_submit():
         new_location = Location(name=form.name.data)
-        product_ids = [int(pid) for pid in form.products.data.split(',') if pid] if form.products.data else []
-        selected_products = [db.session.get(Product, pid) for pid in product_ids]
+        product_ids = (
+            [int(pid) for pid in form.products.data.split(",") if pid]
+            if form.products.data
+            else []
+        )
+        selected_products = [
+            db.session.get(Product, pid) for pid in product_ids
+        ]
         new_location.products = selected_products
         db.session.add(new_location)
         db.session.commit()
@@ -67,24 +86,33 @@ def add_location():
                 if recipe_item.countable:
                     exists = LocationStandItem.query.filter_by(
                         location_id=new_location.id,
-                        item_id=recipe_item.item_id
+                        item_id=recipe_item.item_id,
                     ).first()
                     if not exists:
-                        db.session.add(LocationStandItem(location_id=new_location.id, item_id=recipe_item.item_id, expected_count=0))
+                        db.session.add(
+                            LocationStandItem(
+                                location_id=new_location.id,
+                                item_id=recipe_item.item_id,
+                                expected_count=0,
+                            )
+                        )
         db.session.commit()
-        log_activity(f'Added location {new_location.name}')
-        flash('Location added successfully!')
-        return redirect(url_for('locations.view_locations'))
+        log_activity(f"Added location {new_location.name}")
+        flash("Location added successfully!")
+        return redirect(url_for("locations.view_locations"))
     selected_products = []
     if form.products.data:
-        ids = [int(pid) for pid in form.products.data.split(',') if pid]
+        ids = [int(pid) for pid in form.products.data.split(",") if pid]
         selected_products = Product.query.filter(Product.id.in_(ids)).all()
-    selected_data = [{'id': p.id, 'name': p.name} for p in selected_products]
-    return render_template('locations/add_location.html', form=form,
-                           selected_products=selected_data)
+    selected_data = [{"id": p.id, "name": p.name} for p in selected_products]
+    return render_template(
+        "locations/add_location.html",
+        form=form,
+        selected_products=selected_data,
+    )
 
 
-@location.route('/locations/edit/<int:location_id>', methods=['GET', 'POST'])
+@location.route("/locations/edit/<int:location_id>", methods=["GET", "POST"])
 @login_required
 def edit_location(location_id):
     """Edit an existing location."""
@@ -92,13 +120,19 @@ def edit_location(location_id):
     if location is None:
         abort(404)
     form = LocationForm(obj=location)
-    if request.method == 'GET':
-        form.products.data = ','.join(str(p.id) for p in location.products)
+    if request.method == "GET":
+        form.products.data = ",".join(str(p.id) for p in location.products)
 
     if form.validate_on_submit():
         location.name = form.name.data
-        product_ids = [int(pid) for pid in form.products.data.split(',') if pid] if form.products.data else []
-        selected_products = [db.session.get(Product, pid) for pid in product_ids]
+        product_ids = (
+            [int(pid) for pid in form.products.data.split(",") if pid]
+            if form.products.data
+            else []
+        )
+        selected_products = [
+            db.session.get(Product, pid) for pid in product_ids
+        ]
         location.products = selected_products
         db.session.commit()
 
@@ -107,26 +141,39 @@ def edit_location(location_id):
             for recipe_item in product_obj.recipe_items:
                 if recipe_item.countable:
                     exists = LocationStandItem.query.filter_by(
-                        location_id=location.id,
-                        item_id=recipe_item.item_id
+                        location_id=location.id, item_id=recipe_item.item_id
                     ).first()
                     if not exists:
-                        db.session.add(LocationStandItem(location_id=location.id, item_id=recipe_item.item_id, expected_count=0))
+                        db.session.add(
+                            LocationStandItem(
+                                location_id=location.id,
+                                item_id=recipe_item.item_id,
+                                expected_count=0,
+                            )
+                        )
         db.session.commit()
-        log_activity(f'Edited location {location.id}')
-        flash('Location updated successfully.', 'success')
-        return redirect(url_for('locations.edit_location', location_id=location.id))
+        log_activity(f"Edited location {location.id}")
+        flash("Location updated successfully.", "success")
+        return redirect(
+            url_for("locations.edit_location", location_id=location.id)
+        )
 
     # Query for completed transfers to this location
-    transfers_to_location = Transfer.query.filter_by(to_location_id=location_id, completed=True).all()
+    transfers_to_location = Transfer.query.filter_by(
+        to_location_id=location_id, completed=True
+    ).all()
 
-    selected_data = [{'id': p.id, 'name': p.name} for p in location.products]
-    return render_template('locations/edit_location.html', form=form, location=location,
-                           transfers=transfers_to_location,
-                           selected_products=selected_data)
+    selected_data = [{"id": p.id, "name": p.name} for p in location.products]
+    return render_template(
+        "locations/edit_location.html",
+        form=form,
+        location=location,
+        transfers=transfers_to_location,
+        selected_products=selected_data,
+    )
 
 
-@location.route('/locations/<int:location_id>/stand_sheet')
+@location.route("/locations/<int:location_id>/stand_sheet")
 @login_required
 def view_stand_sheet(location_id):
     """Display the expected item counts for a location."""
@@ -144,21 +191,31 @@ def view_stand_sheet(location_id):
                     location_id=location_id, item_id=recipe_item.item_id
                 ).first()
                 expected = record.expected_count if record else 0
-                stand_items.append({'item': recipe_item.item, 'expected': expected})
+                stand_items.append(
+                    {"item": recipe_item.item, "expected": expected}
+                )
 
-    return render_template('locations/stand_sheet.html', location=location, stand_items=stand_items)
+    return render_template(
+        "locations/stand_sheet.html",
+        location=location,
+        stand_items=stand_items,
+    )
 
 
-@location.route('/locations')
+@location.route("/locations")
 @login_required
 def view_locations():
     """List all locations."""
     locations = Location.query.filter_by(archived=False).all()
     delete_form = DeleteForm()
-    return render_template('locations/view_locations.html', locations=locations, delete_form=delete_form)
+    return render_template(
+        "locations/view_locations.html",
+        locations=locations,
+        delete_form=delete_form,
+    )
 
 
-@location.route('/locations/delete/<int:location_id>', methods=['POST'])
+@location.route("/locations/delete/<int:location_id>", methods=["POST"])
 @login_required
 def delete_location(location_id):
     """Remove a location from the database."""
@@ -167,6 +224,6 @@ def delete_location(location_id):
         abort(404)
     location.archived = True
     db.session.commit()
-    log_activity(f'Archived location {location.id}')
-    flash('Location archived successfully!')
-    return redirect(url_for('locations.view_locations'))
+    log_activity(f"Archived location {location.id}")
+    flash("Location archived successfully!")
+    return redirect(url_for("locations.view_locations"))

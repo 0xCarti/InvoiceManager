@@ -1,21 +1,26 @@
 from werkzeug.security import generate_password_hash
+
 from app import db
 from app.models import (
-    User,
-    Location,
+    Event,
     Item,
     ItemUnit,
+    Location,
+    LocationStandItem,
     Product,
     ProductRecipeItem,
-    LocationStandItem,
-    Event,
+    User,
 )
 from tests.utils import login
 
 
 def test_count_sheet_shows_location_items_without_products(client, app):
     with app.app_context():
-        user = User(email="sheet@example.com", password=generate_password_hash("pass"), active=True)
+        user = User(
+            email="sheet@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
         loc = Location(name="Warehouse")
         item = Item(name="Widget", base_unit="each")
         db.session.add_all([user, loc, item])
@@ -27,7 +32,9 @@ def test_count_sheet_shows_location_items_without_products(client, app):
             receiving_default=True,
             transfer_default=True,
         )
-        lsi = LocationStandItem(location_id=loc.id, item_id=item.id, expected_count=5)
+        lsi = LocationStandItem(
+            location_id=loc.id, item_id=item.id, expected_count=5
+        )
         db.session.add_all([iu, lsi])
         db.session.commit()
         loc_id = loc.id
@@ -64,7 +71,11 @@ def test_count_sheet_shows_location_items_without_products(client, app):
 
 def test_close_event_removes_zero_count_items(client, app):
     with app.app_context():
-        user = User(email="zero@example.com", password=generate_password_hash("pass"), active=True)
+        user = User(
+            email="zero@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
         loc = Location(name="ZeroLoc")
         item = Item(name="ZeroItem", base_unit="each")
         product = Product(name="ZeroProd", price=1.0, cost=1.0)
@@ -84,7 +95,9 @@ def test_close_event_removes_zero_count_items(client, app):
             quantity=1,
             countable=True,
         )
-        lsi = LocationStandItem(location_id=loc.id, item_id=item.id, expected_count=5)
+        lsi = LocationStandItem(
+            location_id=loc.id, item_id=item.id, expected_count=5
+        )
         loc.products.append(product)
         db.session.add_all([iu, pri, lsi])
         db.session.commit()
@@ -127,13 +140,19 @@ def test_close_event_removes_zero_count_items(client, app):
         client.get(f"/events/{eid}/close", follow_redirects=True)
 
     with app.app_context():
-        lsi = LocationStandItem.query.filter_by(location_id=loc_id, item_id=item_id).first()
+        lsi = LocationStandItem.query.filter_by(
+            location_id=loc_id, item_id=item_id
+        ).first()
         assert lsi is None
 
 
 def test_close_event_removes_unentered_items(client, app):
     with app.app_context():
-        user = User(email="nocount@example.com", password=generate_password_hash("pass"), active=True)
+        user = User(
+            email="nocount@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
         loc = Location(name="NoCountLoc")
         item = Item(name="NoCountItem", base_unit="each")
         db.session.add_all([user, loc, item])
@@ -145,7 +164,9 @@ def test_close_event_removes_unentered_items(client, app):
             receiving_default=True,
             transfer_default=True,
         )
-        lsi = LocationStandItem(location_id=loc.id, item_id=item.id, expected_count=5)
+        lsi = LocationStandItem(
+            location_id=loc.id, item_id=item.id, expected_count=5
+        )
         db.session.add_all([iu, lsi])
         db.session.commit()
         loc_id = loc.id
@@ -179,13 +200,19 @@ def test_close_event_removes_unentered_items(client, app):
         client.get(f"/events/{eid}/close", follow_redirects=True)
 
     with app.app_context():
-        lsi = LocationStandItem.query.filter_by(location_id=loc_id, item_id=item_id).first()
+        lsi = LocationStandItem.query.filter_by(
+            location_id=loc_id, item_id=item_id
+        ).first()
         assert lsi is None
 
 
 def test_count_sheet_redirects_to_event_view(client, app):
     with app.app_context():
-        user = User(email="redir@example.com", password=generate_password_hash("pass"), active=True)
+        user = User(
+            email="redir@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
         loc = Location(name="RedirLoc")
         item = Item(name="RedirItem", base_unit="each")
         db.session.add_all([user, loc, item])
@@ -197,7 +224,9 @@ def test_count_sheet_redirects_to_event_view(client, app):
             receiving_default=True,
             transfer_default=True,
         )
-        lsi = LocationStandItem(location_id=loc.id, item_id=item.id, expected_count=5)
+        lsi = LocationStandItem(
+            location_id=loc.id, item_id=item.id, expected_count=5
+        )
         db.session.add_all([iu, lsi])
         db.session.commit()
         loc_id = loc.id
