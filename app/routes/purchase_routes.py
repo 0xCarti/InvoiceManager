@@ -85,7 +85,7 @@ def check_negative_invoice_reverse(invoice_obj):
 def view_purchase_orders():
     """Show outstanding purchase orders."""
     delete_form = DeleteForm()
-     page = request.args.get('page', 1, type=int)
+    page = request.args.get('page', 1, type=int)
     orders = (
         PurchaseOrder.query.filter_by(received=False)
         .order_by(PurchaseOrder.order_date.desc())
