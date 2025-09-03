@@ -15,7 +15,9 @@ from app.models import ActivityLog, db
 class _ActivityLogger:
     """Internal helper that buffers and flushes activity logs."""
 
-    def __init__(self, app, flush_interval: float = 0.1, batch_size: int = 20) -> None:
+    def __init__(
+        self, app, flush_interval: float = 0.1, batch_size: int = 20
+    ) -> None:
         self.app = app
         self.flush_interval = flush_interval
         self.batch_size = batch_size
@@ -95,4 +97,3 @@ def log_activity(activity: str, user_id: Optional[int] = None) -> None:
 
     logger = _get_logger()
     logger.log(activity, user_id)
-

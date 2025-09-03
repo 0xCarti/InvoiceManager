@@ -1,26 +1,27 @@
 import os
 from datetime import date
+
 from werkzeug.security import generate_password_hash
 
 from app import db
 from app.models import (
+    Event,
+    EventLocation,
+    EventStandSheetItem,
     GLCode,
     Item,
     ItemUnit,
+    Location,
     Product,
     ProductRecipeItem,
-    Vendor,
-    Location,
-    User,
+    PurchaseInvoice,
+    PurchaseInvoiceItem,
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseOrderItemArchive,
-    PurchaseInvoice,
-    PurchaseInvoiceItem,
-    Event,
-    EventLocation,
     TerminalSale,
-    EventStandSheetItem,
+    User,
+    Vendor,
 )
 from app.utils.backup import create_backup, restore_backup
 
@@ -37,11 +38,17 @@ def populate_data():
     )
     vendor = Vendor(first_name="Back", last_name="Vendor")
     location = Location(name="BackupLoc")
-    user = User(email="backup@example.com", password=generate_password_hash("pass"), active=True)
+    user = User(
+        email="backup@example.com",
+        password=generate_password_hash("pass"),
+        active=True,
+    )
     db.session.add_all([gl, item, unit, vendor, location, user])
     db.session.commit()
 
-    product = Product(name="BackupProduct", price=1.0, cost=0.5, gl_code="6000")
+    product = Product(
+        name="BackupProduct", price=1.0, cost=0.5, gl_code="6000"
+    )
     recipe = ProductRecipeItem(
         product=product,
         item=item,
@@ -61,7 +68,9 @@ def populate_data():
     db.session.add(po)
     db.session.flush()
 
-    poi = PurchaseOrderItem(purchase_order=po, item=item, unit=unit, quantity=1)
+    poi = PurchaseOrderItem(
+        purchase_order=po, item=item, unit=unit, quantity=1
+    )
     archive = PurchaseOrderItemArchive(
         purchase_order_id=po.id,
         item_id=item.id,
@@ -87,21 +96,30 @@ def populate_data():
         quantity=1,
         cost=2.0,
     )
-    event = Event(name="BackupEvent", start_date=date(2023, 2, 1), end_date=date(2023, 2, 2), event_type="inventory")
+    event = Event(
+        name="BackupEvent",
+        start_date=date(2023, 2, 1),
+        end_date=date(2023, 2, 2),
+        event_type="inventory",
+    )
     event_loc = EventLocation(event=event, location=location)
     sale = TerminalSale(event_location=event_loc, product=product, quantity=5)
-    stand_item = EventStandSheetItem(event_location=event_loc, item=item, opening_count=0, closing_count=0)
+    stand_item = EventStandSheetItem(
+        event_location=event_loc, item=item, opening_count=0, closing_count=0
+    )
 
-    db.session.add_all([
-        poi,
-        archive,
-        invoice,
-        pii,
-        event,
-        event_loc,
-        sale,
-        stand_item,
-    ])
+    db.session.add_all(
+        [
+            poi,
+            archive,
+            invoice,
+            pii,
+            event,
+            event_loc,
+            sale,
+            stand_item,
+        ]
+    )
     db.session.commit()
 
     models = [
@@ -129,7 +147,9 @@ def populate_data():
 def test_backup_and_restore(app):
     with app.app_context():
         counts, models = populate_data()
-        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
+            "sqlite:///", "", 1
+        )
         inode_before = os.stat(db_path).st_ino
 
         filename = create_backup()
@@ -153,7 +173,7 @@ def test_restore_backup_file_rejects_path_traversal(client, app):
     with app.app_context():
         admin = User.query.filter_by(is_admin=True).first()
     with client.session_transaction() as sess:
-        sess['_user_id'] = str(admin.id)
-        sess['_fresh'] = True
-    resp = client.post('/controlpanel/backups/restore/../../etc/passwd')
+        sess["_user_id"] = str(admin.id)
+        sess["_fresh"] = True
+    resp = client.post("/controlpanel/backups/restore/../../etc/passwd")
     assert resp.status_code == 404
