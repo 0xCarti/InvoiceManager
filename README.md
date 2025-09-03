@@ -91,6 +91,27 @@ pytest
 
 The tests automatically set the necessary environment variables, so no additional setup is required.
 
+## Code Style
+
+This project uses [pre-commit](https://pre-commit.com/) to run formatting and
+linting via **Black**, **isort**, and **Flake8**.
+
+Install the development dependencies and set up the hooks:
+
+```bash
+pip install -r requirements-dev.txt
+pre-commit install
+```
+
+Run all checks against the entire codebase with:
+
+```bash
+pre-commit run --all-files
+```
+
+A GitHub Actions workflow (`.github/workflows/format.yml`) executes these checks
+for every pull request.
+
 ## Features
 - Manage items, products, and invoices.
 - User authentication and admin features.
