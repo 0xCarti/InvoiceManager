@@ -1,7 +1,14 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h2>Inventory Count Sheets - {{ event.name }}</h2>
+<style>
+    .navbar { display: none; }
+    .page-break { page-break-after: always; }
+    @media print {
+        .no-print { display: none; }
+    }
+</style>
+<h2 class="no-print">Inventory Count Sheets - {{ event.name }}</h2>
 {% for block in data %}
     <h4 class="mt-4">{{ block.location.name }}</h4>
     <div class="table-responsive">
@@ -26,6 +33,6 @@
         </tbody>
     </table>
     </div>
+    {% if not loop.last %}<div class="page-break"></div>{% endif %}
 {% endfor %}
-<button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
 {% endblock %}

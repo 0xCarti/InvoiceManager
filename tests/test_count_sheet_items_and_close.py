@@ -129,3 +129,112 @@ def test_close_event_removes_zero_count_items(client, app):
     with app.app_context():
         lsi = LocationStandItem.query.filter_by(location_id=loc_id, item_id=item_id).first()
         assert lsi is None
+
+
+def test_close_event_removes_unentered_items(client, app):
+    with app.app_context():
+        user = User(email="nocount@example.com", password=generate_password_hash("pass"), active=True)
+        loc = Location(name="NoCountLoc")
+        item = Item(name="NoCountItem", base_unit="each")
+        db.session.add_all([user, loc, item])
+        db.session.commit()
+        iu = ItemUnit(
+            item_id=item.id,
+            name="each",
+            factor=1,
+            receiving_default=True,
+            transfer_default=True,
+        )
+        lsi = LocationStandItem(location_id=loc.id, item_id=item.id, expected_count=5)
+        db.session.add_all([iu, lsi])
+        db.session.commit()
+        loc_id = loc.id
+        item_id = item.id
+
+    with client:
+        login(client, "nocount@example.com", "pass")
+        client.post(
+            "/events/create",
+            data={
+                "name": "NoCountEvent",
+                "start_date": "2023-01-01",
+                "end_date": "2023-01-02",
+                "event_type": "inventory",
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        ev = Event.query.filter_by(name="NoCountEvent").first()
+        eid = ev.id
+
+    with client:
+        login(client, "nocount@example.com", "pass")
+        client.post(
+            f"/events/{eid}/add_location",
+            data={"location_id": loc_id},
+            follow_redirects=True,
+        )
+        # Do not submit a count sheet for this location
+        client.get(f"/events/{eid}/close", follow_redirects=True)
+
+    with app.app_context():
+        lsi = LocationStandItem.query.filter_by(location_id=loc_id, item_id=item_id).first()
+        assert lsi is None
+
+
+def test_count_sheet_redirects_to_event_view(client, app):
+    with app.app_context():
+        user = User(email="redir@example.com", password=generate_password_hash("pass"), active=True)
+        loc = Location(name="RedirLoc")
+        item = Item(name="RedirItem", base_unit="each")
+        db.session.add_all([user, loc, item])
+        db.session.commit()
+        iu = ItemUnit(
+            item_id=item.id,
+            name="each",
+            factor=1,
+            receiving_default=True,
+            transfer_default=True,
+        )
+        lsi = LocationStandItem(location_id=loc.id, item_id=item.id, expected_count=5)
+        db.session.add_all([iu, lsi])
+        db.session.commit()
+        loc_id = loc.id
+        item_id = item.id
+
+    with client:
+        login(client, "redir@example.com", "pass")
+        client.post(
+            "/events/create",
+            data={
+                "name": "RedirEvent",
+                "start_date": "2023-01-01",
+                "end_date": "2023-01-02",
+                "event_type": "inventory",
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        ev = Event.query.filter_by(name="RedirEvent").first()
+        eid = ev.id
+
+    with client:
+        login(client, "redir@example.com", "pass")
+        client.post(
+            f"/events/{eid}/add_location",
+            data={"location_id": loc_id},
+            follow_redirects=True,
+        )
+        resp = client.post(
+            f"/events/{eid}/count_sheet/{loc_id}",
+            data={
+                f"recv_{item_id}": 0,
+                f"trans_{item_id}": 0,
+                f"base_{item_id}": 0,
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith(f"/events/{eid}")
