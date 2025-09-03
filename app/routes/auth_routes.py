@@ -419,10 +419,13 @@ def restore_backup_file(filename):
         abort(403)
     from flask import current_app
     backups_dir = current_app.config['BACKUP_FOLDER']
-    filepath = os.path.join(backups_dir, filename)
-    if not os.path.exists(filepath):
+    # Normalize and validate the user-supplied path to prevent directory traversal
+    candidate_path = os.path.normpath(os.path.join(backups_dir, filename))
+    if not candidate_path.startswith(os.path.abspath(backups_dir) + os.sep):
         abort(404)
-    restore_backup(filepath)
+    if not os.path.exists(candidate_path):
+        abort(404)
+    restore_backup(candidate_path)
     log_activity(f'Restored backup {filename}')
     flash('Backup restored from ' + filename, 'success')
     return redirect(url_for('admin.backups'))
