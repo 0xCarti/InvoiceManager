@@ -1,5 +1,7 @@
 # Invoice Manager
 
+[![Dependencies](https://img.shields.io/librariesio/github/0xCarti/InvoiceManager)](https://libraries.io/github/0xCarti/InvoiceManager)
+
 A Flask-based application for managing invoices, products and vendors. The project comes with a comprehensive test suite using `pytest`.
 
 ## Installation
