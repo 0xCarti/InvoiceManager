@@ -18,5 +18,5 @@ ENV DATABASE_PATH=/app/data/inventory.db
 
 EXPOSE ${PORT}
 
-CMD ["sh", "-c", "flask db upgrade && python run.py"]
+CMD ["sh", "-c", "flask db upgrade && gunicorn -k eventlet -w 1 run:app"]
 

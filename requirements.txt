@@ -10,6 +10,8 @@ WTForms==3.1.2
 pytest==7.4.0
 Flask-Migrate==4.1.0
 Flask-SocketIO==5.5.1
+eventlet==0.36.1
+gunicorn==21.2.0
 
 email_validator==2.2.0
 openpyxl==3.1.5
