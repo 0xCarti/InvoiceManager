@@ -18,7 +18,6 @@ from app.forms import (
     ProductWithRecipeForm,
     ProductRecipeForm,
     InvoiceForm,
-    SignupForm,
     LoginForm,
     InvoiceFilterForm,
     PurchaseOrderForm,
@@ -126,6 +125,7 @@ def view_transfers():
     transfer_id = request.args.get('transfer_id', '', type=int)  # Optional: Search by Transfer ID
     from_location_name = request.args.get('from_location', '')  # Optional: Search by From Location
     to_location_name = request.args.get('to_location', '')  # Optional: Search by To Location
+    page = request.args.get('page', 1, type=int)
 
     query = Transfer.query
     if transfer_id != '':
@@ -140,11 +140,11 @@ def view_transfers():
             Location.name.ilike(f"%{to_location_name}%"))
 
     if filter_option == 'completed':
-        transfers = query.filter(Transfer.completed == True).all()
+        query = query.filter(Transfer.completed == True)
     elif filter_option == 'not_completed':
-        transfers = query.filter(Transfer.completed == False).all()
-    else:
-        transfers = query.all()
+        query = query.filter(Transfer.completed == False)
+
+    transfers = query.paginate(page=page, per_page=20)
 
     form = TransferForm()  # Assuming you're using it for something like a filter form on the page
     return render_template('transfers/view_transfers.html', transfers=transfers, form=form)
@@ -356,6 +356,7 @@ def view_transfer(transfer_id):
 
 
 @transfer.route('/transfers/generate_report', methods=['GET', 'POST'])
+@login_required
 def generate_report():
     """Generate a transfer summary over a date range."""
     form = DateRangeForm()

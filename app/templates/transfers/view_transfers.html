@@ -45,7 +45,8 @@
         </tr>
         </thead>
         <tbody>
-        {% for transfer in transfers %}
+        {% set transfer_items = transfers.items if transfers is defined else [] %}
+        {% for transfer in transfer_items %}
         <tr>
             <th scope="row">{{ transfer.id }}</th>
             <td>{{ transfer.from_location.name }}</td>
@@ -74,6 +75,25 @@
         </tbody>
     </table>
     </div>
+    {% if transfers is defined %}
+    <nav aria-label="Transfer pagination">
+        <ul class="pagination">
+            {% if transfers.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('transfer.view_transfers', page=transfers.prev_num, filter=request.args.get('filter'), transfer_id=request.args.get('transfer_id'), from_location=request.args.get('from_location'), to_location=request.args.get('to_location')) }}">Previous</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">Page {{ transfers.page }} of {{ transfers.pages }}</span>
+            </li>
+            {% if transfers.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('transfer.view_transfers', page=transfers.next_num, filter=request.args.get('filter'), transfer_id=request.args.get('transfer_id'), from_location=request.args.get('from_location'), to_location=request.args.get('to_location')) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
 </div>
 <script>
     var protocol = window.location.protocol;

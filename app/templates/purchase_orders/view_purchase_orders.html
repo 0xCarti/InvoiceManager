@@ -16,7 +16,7 @@
             </tr>
         </thead>
         <tbody>
-        {% for order in orders %}
+        {% for order in orders.items %}
             <tr>
                 <td>{{ order.id }}</td>
                 <td>{{ order.vendor.first_name }} {{ order.vendor.last_name }}</td>
@@ -36,5 +36,22 @@
         </tbody>
     </table>
     </div>
+    <nav aria-label="Purchase order pagination">
+        <ul class="pagination">
+            {% if orders.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('purchase.view_purchase_orders', page=orders.prev_num) }}">Previous</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">Page {{ orders.page }} of {{ orders.pages }}</span>
+            </li>
+            {% if orders.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('purchase.view_purchase_orders', page=orders.next_num) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
 </div>
 {% endblock %}

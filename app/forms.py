@@ -32,25 +32,24 @@ from zoneinfo import available_timezones
 from app.models import Item, Location, Product, Customer, Vendor, ItemUnit, GLCode
 from wtforms.validators import ValidationError
 
+
+def load_item_choices():
+    """Return a list of active item choices."""
+    return [
+        (i.id, i.name) for i in Item.query.filter_by(archived=False).all()
+    ]
+
+
+def load_unit_choices():
+    """Return a list of item unit choices."""
+    return [(u.id, u.name) for u in ItemUnit.query.all()]
+
+
 TIMEZONE_CHOICES = sorted(available_timezones())
 
 class LoginForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField("Password", validators=[DataRequired()])
-
-
-class SignupForm(FlaskForm):
-    email = StringField("Email", validators=[DataRequired(), Email()])
-    password = PasswordField("Password", validators=[DataRequired()])
-    confirm_password = PasswordField(
-        "Confirm Password",
-        validators=[
-            DataRequired(),
-            EqualTo("password", message="Passwords must match"),
-        ],
-    )
-    submit = SubmitField("Sign Up")
-
 
 class PasswordResetRequestForm(FlaskForm):
     """Form for requesting a password reset email."""
@@ -150,17 +149,19 @@ class TransferForm(FlaskForm):
         self.to_location_id.choices = [
             (l.id, l.name) for l in Location.query.filter_by(archived=False).all()
         ]
-        # Here you might need to ensure that item choices are correctly populated
-        # This is just an example and might need adjustment
+        items = load_item_choices()
         for item_form in self.items:
-            item_form.item.choices = [
-                (i.id, i.name) for i in Item.query.filter_by(archived=False).all()
-            ]
+            item_form.item.choices = items
             item_form.unit.choices = []
 
 
 class UserForm(FlaskForm):
     pass
+
+
+class InviteUserForm(FlaskForm):
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    submit = SubmitField("Send Invite")
 
 
 class ChangePasswordForm(FlaskForm):
@@ -268,11 +269,11 @@ class ProductRecipeForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(ProductRecipeForm, self).__init__(*args, **kwargs)
+        items = load_item_choices()
+        units = load_unit_choices()
         for item_form in self.items:
-            item_form.item.choices = [
-                (i.id, i.name) for i in Item.query.filter_by(archived=False).all()
-            ]
-            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
+            item_form.item.choices = items
+            item_form.unit.choices = units
 
 
 class ProductWithRecipeForm(ProductForm):
@@ -282,11 +283,11 @@ class ProductWithRecipeForm(ProductForm):
 
     def __init__(self, *args, **kwargs):
         super(ProductWithRecipeForm, self).__init__(*args, **kwargs)
+        items = load_item_choices()
+        units = load_unit_choices()
         for item_form in self.items:
-            item_form.item.choices = [
-                (i.id, i.name) for i in Item.query.filter_by(archived=False).all()
-            ]
-            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
+            item_form.item.choices = items
+            item_form.unit.choices = units
 
 
 class InvoiceForm(FlaskForm):
@@ -384,12 +385,13 @@ class PurchaseOrderForm(FlaskForm):
             (v.id, f"{v.first_name} {v.last_name}")
             for v in Vendor.query.filter_by(archived=False).all()
         ]
+        items = load_item_choices()
+        units = load_unit_choices()
+        products = [(p.id, p.name) for p in Product.query.all()]
         for item_form in self.items:
-            item_form.item.choices = [
-                (i.id, i.name) for i in Item.query.filter_by(archived=False).all()
-            ]
-            item_form.product.choices = [(p.id, p.name) for p in Product.query.all()]
-            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
+            item_form.item.choices = items
+            item_form.product.choices = products
+            item_form.unit.choices = units
 
 
 class InvoiceItemReceiveForm(FlaskForm):
@@ -419,11 +421,11 @@ class ReceiveInvoiceForm(FlaskForm):
         self.location_id.choices = [
             (l.id, l.name) for l in Location.query.filter_by(archived=False).all()
         ]
+        items = load_item_choices()
+        units = load_unit_choices()
         for item_form in self.items:
-            item_form.item.choices = [
-                (i.id, i.name) for i in Item.query.filter_by(archived=False).all()
-            ]
-            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
+            item_form.item.choices = items
+            item_form.unit.choices = units
 
 
 class DeleteForm(FlaskForm):

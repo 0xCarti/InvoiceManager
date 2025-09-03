@@ -17,7 +17,6 @@ from app.forms import (
     ProductWithRecipeForm,
     ProductRecipeForm,
     InvoiceForm,
-    SignupForm,
     LoginForm,
     InvoiceFilterForm,
     PurchaseOrderForm,
@@ -85,8 +84,13 @@ def check_negative_invoice_reverse(invoice_obj):
 @login_required
 def view_purchase_orders():
     """Show outstanding purchase orders."""
-    orders = PurchaseOrder.query.filter_by(received=False).order_by(PurchaseOrder.order_date.desc()).all()
     delete_form = DeleteForm()
+     page = request.args.get('page', 1, type=int)
+    orders = (
+        PurchaseOrder.query.filter_by(received=False)
+        .order_by(PurchaseOrder.order_date.desc())
+        .paginate(page=page, per_page=20)
+    )
     return render_template('purchase_orders/view_purchase_orders.html', orders=orders, delete_form=delete_form)
 
 
@@ -300,7 +304,11 @@ def receive_invoice(po_id):
 @login_required
 def view_purchase_invoices():
     """List all received purchase invoices."""
-    invoices = PurchaseInvoice.query.order_by(PurchaseInvoice.received_date.desc()).all()
+    page = request.args.get('page', 1, type=int)
+    invoices = (
+        PurchaseInvoice.query.order_by(PurchaseInvoice.received_date.desc())
+        .paginate(page=page, per_page=20)
+    )
     return render_template('purchase_invoices/view_purchase_invoices.html', invoices=invoices)
 
 

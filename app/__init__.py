@@ -9,11 +9,14 @@ from flask_wtf import CSRFProtect
 from werkzeug.security import generate_password_hash
 from datetime import timedelta, datetime, timezone as dt_timezone
 from zoneinfo import ZoneInfo
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 load_dotenv()
 db = SQLAlchemy()
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
+limiter = Limiter(key_func=get_remote_address)
 socketio = None
 GST = ''
 DEFAULT_TIMEZONE = 'UTC'
@@ -114,6 +117,9 @@ def create_app(args: list):
     from flask_migrate import Migrate
     Migrate(app, db)
     login_manager.init_app(app)
+    if app.config.get('TESTING'):
+        app.config['RATELIMIT_ENABLED'] = False
+    limiter.init_app(app)
     Bootstrap(app)
     socketio = SocketIO(app)
 
