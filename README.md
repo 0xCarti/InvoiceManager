@@ -1,5 +1,7 @@
 # Invoice Manager
 [![Coverage](https://codecov.io/gh/<OWNER>/InvoiceManager/branch/main/graph/badge.svg)](https://codecov.io/gh/<OWNER>/InvoiceManager)
+[![Build status](https://github.com/0xCarti/InvoiceManager/actions/workflows/build-main.yml/badge.svg?branch=main)](https://github.com/0xCarti/InvoiceManager/actions/workflows/build-main.yml)
+[![Dependencies](https://img.shields.io/librariesio/github/0xCarti/InvoiceManager)](https://libraries.io/github/0xCarti/InvoiceManager)
 
 A Flask-based application for managing invoices, products and vendors. The project comes with a comprehensive test suite using `pytest`.
 
