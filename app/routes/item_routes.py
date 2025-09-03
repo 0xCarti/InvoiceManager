@@ -63,6 +63,18 @@ def view_items():
     return render_template('items/view_items.html', items=items, form=form)
 
 
+@item.route('/items/<int:item_id>/locations')
+@login_required
+def item_locations(item_id):
+    """Show all locations holding a specific item and their quantities."""
+    item_obj = db.session.get(Item, item_id)
+    if item_obj is None:
+        abort(404)
+    entries = LocationStandItem.query.filter_by(item_id=item_id).all()
+    total = sum(e.expected_count for e in entries)
+    return render_template('items/item_locations.html', item=item_obj, entries=entries, total=total)
+
+
 @item.route('/items/add', methods=['GET', 'POST'])
 @login_required
 def add_item():

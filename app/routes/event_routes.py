@@ -16,6 +16,7 @@ from app.forms import (
     EventLocationForm,
     EventLocationConfirmForm,
     TerminalSalesUploadForm,
+    EVENT_TYPES,
 )
 from werkzeug.utils import secure_filename
 import os
@@ -29,8 +30,18 @@ event = Blueprint("event", __name__)
 @event.route("/events")
 @login_required
 def view_events():
-    events = Event.query.all()
-    return render_template("events/view_events.html", events=events)
+    event_type = request.args.get("type")
+    query = Event.query
+    if event_type:
+        query = query.filter_by(event_type=event_type)
+    events = query.all()
+    return render_template(
+        "events/view_events.html",
+        events=events,
+        event_type=event_type,
+        event_types=EVENT_TYPES,
+        type_labels=dict(EVENT_TYPES),
+    )
 
 
 @event.route("/events/create", methods=["GET", "POST"])
@@ -42,6 +53,7 @@ def create_event():
             name=form.name.data,
             start_date=form.start_date.data,
             end_date=form.end_date.data,
+            event_type=form.event_type.data,
         )
         db.session.add(ev)
         db.session.commit()
@@ -61,6 +73,7 @@ def edit_event(event_id):
         ev.name = form.name.data
         ev.start_date = form.start_date.data
         ev.end_date = form.end_date.data
+        ev.event_type = form.event_type.data
         db.session.commit()
         flash("Event updated")
         return redirect(url_for("event.view_events"))

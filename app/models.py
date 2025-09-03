@@ -337,6 +337,7 @@ class Event(db.Model):
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
     closed = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    event_type = db.Column(db.String(20), nullable=False, default='other', server_default='other')
 
     locations = relationship('EventLocation', back_populates='event', cascade='all, delete-orphan')
 

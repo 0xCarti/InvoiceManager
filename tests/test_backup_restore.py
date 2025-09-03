@@ -87,7 +87,7 @@ def populate_data():
         quantity=1,
         cost=2.0,
     )
-    event = Event(name="BackupEvent", start_date=date(2023, 2, 1), end_date=date(2023, 2, 2))
+    event = Event(name="BackupEvent", start_date=date(2023, 2, 1), end_date=date(2023, 2, 2), event_type="inventory")
     event_loc = EventLocation(event=event, location=location)
     sale = TerminalSale(event_location=event_loc, product=product, quantity=5)
     stand_item = EventStandSheetItem(event_location=event_loc, item=item, opening_count=0, closing_count=0)

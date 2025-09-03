@@ -411,6 +411,23 @@ def restore_backup_route():
     return redirect(url_for('admin.backups'))
 
 
+@admin.route('/controlpanel/backups/restore/<path:filename>', methods=['POST'])
+@login_required
+def restore_backup_file(filename):
+    """Restore the database from an existing backup file."""
+    if not current_user.is_admin:
+        abort(403)
+    from flask import current_app
+    backups_dir = current_app.config['BACKUP_FOLDER']
+    filepath = os.path.join(backups_dir, filename)
+    if not os.path.exists(filepath):
+        abort(404)
+    restore_backup(filepath)
+    log_activity(f'Restored backup {filename}')
+    flash('Backup restored from ' + filename, 'success')
+    return redirect(url_for('admin.backups'))
+
+
 @admin.route('/controlpanel/backups/download/<path:filename>', methods=['GET'])
 @login_required
 def download_backup(filename):
