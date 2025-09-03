@@ -144,10 +144,10 @@ class TransferForm(FlaskForm):
         super(TransferForm, self).__init__(*args, **kwargs)
         # Dynamically set choices for from_location_id and to_location_id
         self.from_location_id.choices = [
-            (l.id, l.name) for l in Location.query.filter_by(archived=False).all()
+            (location.id, location.name) for location in Location.query.filter_by(archived=False).all()
         ]
         self.to_location_id.choices = [
-            (l.id, l.name) for l in Location.query.filter_by(archived=False).all()
+            (location.id, location.name) for location in Location.query.filter_by(archived=False).all()
         ]
         items = load_item_choices()
         for item_form in self.items:
@@ -419,7 +419,7 @@ class ReceiveInvoiceForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super(ReceiveInvoiceForm, self).__init__(*args, **kwargs)
         self.location_id.choices = [
-            (l.id, l.name) for l in Location.query.filter_by(archived=False).all()
+            (location.id, location.name) for location in Location.query.filter_by(archived=False).all()
         ]
         items = load_item_choices()
         units = load_unit_choices()
@@ -467,7 +467,7 @@ class EventLocationForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super(EventLocationForm, self).__init__(*args, **kwargs)
         self.location_id.choices = [
-            (l.id, l.name) for l in Location.query.filter_by(archived=False).all()
+            (location.id, location.name) for location in Location.query.filter_by(archived=False).all()
         ]
 
 
