@@ -431,7 +431,7 @@ def count_sheet(event_id, location_id):
             sheet.closing_count = total
         db.session.commit()
         flash('Count sheet saved')
-        location, stand_items = _get_stand_items(location_id, event_id)
+        return redirect(url_for('event.view_event', event_id=event_id))
 
     return render_template(
         'events/count_sheet.html',
@@ -474,11 +474,13 @@ def close_event(event_id):
     if ev is None:
         abort(404)
     for el in ev.locations:
+        counted_item_ids = set()
         for sheet in el.stand_sheet_items:
+            counted_item_ids.add(sheet.item_id)
             lsi = LocationStandItem.query.filter_by(
                 location_id=el.location_id, item_id=sheet.item_id
             ).first()
-            if sheet.closing_count == 0:
+            if not sheet.closing_count:
                 if lsi:
                     db.session.delete(lsi)
                 continue
@@ -488,6 +490,15 @@ def close_event(event_id):
                 )
                 db.session.add(lsi)
             lsi.expected_count = sheet.closing_count
+
+        if counted_item_ids:
+            LocationStandItem.query.filter(
+                LocationStandItem.location_id == el.location_id,
+                ~LocationStandItem.item_id.in_(counted_item_ids),
+            ).delete(synchronize_session=False)
+        else:
+            LocationStandItem.query.filter_by(location_id=el.location_id).delete()
+
         TerminalSale.query.filter_by(event_location_id=el.id).delete()
     ev.closed = True
     db.session.commit()
