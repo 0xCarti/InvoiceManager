@@ -12,7 +12,8 @@ product = Blueprint('product', __name__)
 @login_required
 def view_products():
     """List available products."""
-    products = Product.query.all()
+    page = request.args.get('page', 1, type=int)
+    products = Product.query.paginate(page=page, per_page=20)
     return render_template('products/view_products.html', products=products)
 
 
