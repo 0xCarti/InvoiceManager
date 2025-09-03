@@ -1,63 +1,25 @@
-import os
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session, abort
-from flask_login import login_required, current_user
-from sqlalchemy import func
-from werkzeug.utils import secure_filename
+from flask import Blueprint, abort, flash, redirect, render_template, url_for
+from flask_login import login_required
 
-from app import db, socketio, GST
-from app.utils.activity import log_activity
-from app.forms import (
-    LocationForm,
-    ItemForm,
-    TransferForm,
-    ImportItemsForm,
-    DateRangeForm,
-    CustomerForm,
-    ProductForm,
-    ProductWithRecipeForm,
-    ProductRecipeForm,
-    InvoiceForm,
-    LoginForm,
-    InvoiceFilterForm,
-    PurchaseOrderForm,
-    ReceiveInvoiceForm,
-    DeleteForm,
-    GLCodeForm,
-)
-from app.models import (
-    Location,
-    Item,
-    ItemUnit,
-    Transfer,
-    TransferItem,
-    Customer,
-    Product,
-    LocationStandItem,
-    Invoice,
-    InvoiceProduct,
-    ProductRecipeItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
-    PurchaseInvoice,
-    PurchaseInvoiceItem,
-    PurchaseOrderItemArchive,
-    GLCode,
-)
-from datetime import datetime
-from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
+from app import db
+from app.forms import DeleteForm, GLCodeForm
+from app.models import GLCode
 
-glcode_bp = Blueprint('glcode', __name__)
+glcode_bp = Blueprint("glcode", __name__)
 
-@glcode_bp.route('/gl_codes')
+
+@glcode_bp.route("/gl_codes")
 @login_required
 def view_gl_codes():
     """List GL codes."""
     codes = GLCode.query.all()
     delete_form = DeleteForm()
-    return render_template('gl_codes/view_gl_codes.html', codes=codes, delete_form=delete_form)
+    return render_template(
+        "gl_codes/view_gl_codes.html", codes=codes, delete_form=delete_form
+    )
 
 
-@glcode_bp.route('/gl_codes/create', methods=['GET', 'POST'])
+@glcode_bp.route("/gl_codes/create", methods=["GET", "POST"])
 @login_required
 def create_gl_code():
     """Create a new GL code."""
@@ -66,12 +28,12 @@ def create_gl_code():
         code = GLCode(code=form.code.data, description=form.description.data)
         db.session.add(code)
         db.session.commit()
-        flash('GL Code created successfully!', 'success')
-        return redirect(url_for('glcode.view_gl_codes'))
-    return render_template('gl_codes/add_gl_code.html', form=form)
+        flash("GL Code created successfully!", "success")
+        return redirect(url_for("glcode.view_gl_codes"))
+    return render_template("gl_codes/add_gl_code.html", form=form)
 
 
-@glcode_bp.route('/gl_codes/<int:code_id>/edit', methods=['GET', 'POST'])
+@glcode_bp.route("/gl_codes/<int:code_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_gl_code(code_id):
     """Edit an existing GL code."""
@@ -83,12 +45,12 @@ def edit_gl_code(code_id):
         code.code = form.code.data
         code.description = form.description.data
         db.session.commit()
-        flash('GL Code updated successfully!', 'success')
-        return redirect(url_for('glcode.view_gl_codes'))
-    return render_template('gl_codes/edit_gl_code.html', form=form)
+        flash("GL Code updated successfully!", "success")
+        return redirect(url_for("glcode.view_gl_codes"))
+    return render_template("gl_codes/edit_gl_code.html", form=form)
 
 
-@glcode_bp.route('/gl_codes/<int:code_id>/delete', methods=['POST'])
+@glcode_bp.route("/gl_codes/<int:code_id>/delete", methods=["POST"])
 @login_required
 def delete_gl_code(code_id):
     """Delete a GL code."""
@@ -100,5 +62,5 @@ def delete_gl_code(code_id):
         abort(404)
     db.session.delete(code)
     db.session.commit()
-    flash('GL Code deleted successfully!', 'success')
-    return redirect(url_for('glcode.view_gl_codes'))
+    flash("GL Code deleted successfully!", "success")
+    return redirect(url_for("glcode.view_gl_codes"))

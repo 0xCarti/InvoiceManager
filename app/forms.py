@@ -1,43 +1,22 @@
-from flask_wtf import FlaskForm
-from flask_wtf.file import FileRequired, FileAllowed
-from wtforms import (
-    BooleanField,
-    DateField,
-    DateTimeLocalField,
-    DecimalField,
-    FieldList,
-    FileField,
-    FormField,
-    HiddenField,
-    IntegerField,
-    PasswordField,
-    SelectField,
-    SelectMultipleField,
-    StringField,
-    SubmitField,
-)
-from wtforms.validators import (
-    DataRequired,
-    Email,
-    InputRequired,
-    Length,
-    NumberRange,
-    Optional,
-    EqualTo,
-)
-from wtforms.widgets import CheckboxInput, ListWidget
-
+# flake8: noqa
 from zoneinfo import available_timezones
 
-from app.models import Item, Location, Product, Customer, Vendor, ItemUnit, GLCode
-from wtforms.validators import ValidationError
+from flask_wtf import FlaskForm
+from flask_wtf.file import FileAllowed, FileRequired
+from wtforms import (BooleanField, DateField, DateTimeLocalField, DecimalField,
+                     FieldList, FileField, FormField, HiddenField,
+                     PasswordField, SelectField, SelectMultipleField,
+                     StringField, SubmitField)
+from wtforms.validators import (DataRequired, Email, EqualTo, InputRequired,
+                                Length, NumberRange, Optional, ValidationError)
+from wtforms.widgets import CheckboxInput, ListWidget
+
+from app.models import GLCode, Item, ItemUnit, Location, Product, Vendor
 
 
 def load_item_choices():
     """Return a list of active item choices."""
-    return [
-        (i.id, i.name) for i in Item.query.filter_by(archived=False).all()
-    ]
+    return [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
 
 
 def load_unit_choices():
@@ -47,9 +26,11 @@ def load_unit_choices():
 
 TIMEZONE_CHOICES = sorted(available_timezones())
 
+
 class LoginForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField("Password", validators=[DataRequired()])
+
 
 class PasswordResetRequestForm(FlaskForm):
     """Form for requesting a password reset email."""
@@ -456,7 +437,9 @@ class EventForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired()])
     start_date = DateField("Start Date", validators=[DataRequired()])
     end_date = DateField("End Date", validators=[DataRequired()])
-    event_type = SelectField("Event Type", choices=EVENT_TYPES, validators=[DataRequired()])
+    event_type = SelectField(
+        "Event Type", choices=EVENT_TYPES, validators=[DataRequired()]
+    )
     submit = SubmitField("Submit")
 
 

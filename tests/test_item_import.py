@@ -1,10 +1,14 @@
-from app.models import Item, ItemUnit, GLCode
+from app.models import GLCode, Item
 from app.utils.imports import _import_items
 
 
 def test_import_items_with_cost_and_units(tmp_path, app):
     csv_path = tmp_path / "items.csv"
-    csv_path.write_text("name,base_unit,gl_code,cost,units\nBuns,each,5000,0.25,\"each:1;case:12\"\n")
+    csv_path.write_text(
+        """name,base_unit,gl_code,cost,units
+Buns,each,5000,0.25,"each:1;case:12"
+"""
+    )
 
     with app.app_context():
         count = _import_items(str(csv_path))
@@ -18,7 +22,9 @@ def test_import_items_with_cost_and_units(tmp_path, app):
         assert len(item.units) == 2
         names = {u.name for u in item.units}
         assert names == {"each", "case"}
-        defaults = [u for u in item.units if u.receiving_default and u.transfer_default]
+        defaults = [
+            u for u in item.units if u.receiving_default and u.transfer_default
+        ]  # noqa: E501
         assert len(defaults) == 1
         assert defaults[0].name == "each"
 
@@ -48,4 +54,3 @@ def test_import_items_csv_with_bom(tmp_path, app):
         item = Item.query.filter_by(name="Widget").first()
         assert item is not None
         assert item.base_unit == "each"
-
