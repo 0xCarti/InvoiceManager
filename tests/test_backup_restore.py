@@ -14,6 +14,7 @@ from app.models import (
     User,
     PurchaseOrder,
     PurchaseOrderItem,
+    PurchaseOrderItemArchive,
     PurchaseInvoice,
     PurchaseInvoiceItem,
     Event,
@@ -48,6 +49,8 @@ def populate_data():
         quantity=1,
         countable=True,
     )
+    db.session.add_all([product, recipe])
+
     po = PurchaseOrder(
         vendor_id=vendor.id,
         user_id=user.id,
@@ -55,7 +58,16 @@ def populate_data():
         expected_date=date(2023, 1, 2),
         delivery_charge=0,
     )
+    db.session.add(po)
+    db.session.flush()
+
     poi = PurchaseOrderItem(purchase_order=po, item=item, unit=unit, quantity=1)
+    archive = PurchaseOrderItemArchive(
+        purchase_order_id=po.id,
+        item_id=item.id,
+        unit_id=unit.id,
+        quantity=1,
+    )
     invoice = PurchaseInvoice(
         purchase_order=po,
         user_id=user.id,
@@ -81,16 +93,8 @@ def populate_data():
     stand_item = EventStandSheetItem(event_location=event_loc, item=item, opening_count=0, closing_count=0)
 
     db.session.add_all([
-        gl,
-        item,
-        unit,
-        product,
-        recipe,
-        vendor,
-        location,
-        user,
-        po,
         poi,
+        archive,
         invoice,
         pii,
         event,
@@ -111,6 +115,7 @@ def populate_data():
         User,
         PurchaseOrder,
         PurchaseOrderItem,
+        PurchaseOrderItemArchive,
         PurchaseInvoice,
         PurchaseInvoiceItem,
         Event,
