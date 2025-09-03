@@ -1,7 +1,7 @@
 """Data import helper functions used by admin routes and tests."""
 
-import csv
 import os
+import csv
 from werkzeug.security import generate_password_hash
 
 from app.models import (
