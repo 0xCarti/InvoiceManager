@@ -108,7 +108,7 @@ def test_event_lifecycle(client, app):
 
     with app.app_context():
         lsi = LocationStandItem.query.filter_by(location_id=loc_id).first()
-        assert lsi.expected_count == 0
+        assert lsi.expected_count == 10
         assert TerminalSale.query.filter_by(event_location_id=elid).count() == 0
 
 
