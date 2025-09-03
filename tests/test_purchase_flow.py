@@ -290,6 +290,7 @@ def test_invoice_moves_and_reverse(client, app):
         assert f'>{po_id}<'.encode() not in resp.data
         resp = client.get('/purchase_invoices')
         assert str(inv_id).encode() in resp.data
+        assert b'Main' in resp.data
 
     with client:
         login(client, email, 'pass')

@@ -62,6 +62,7 @@ def test_inventory_report_variance(client, app):
                 "name": "InvEvent",
                 "start_date": "2023-01-01",
                 "end_date": "2023-01-02",
+                "event_type": "inventory",
             },
             follow_redirects=True,
         )
@@ -140,6 +141,7 @@ def test_inventory_close_updates_counts(client, app):
                 "name": "CloseEvent",
                 "start_date": "2023-02-01",
                 "end_date": "2023-02-02",
+                "event_type": "inventory",
             },
             follow_redirects=True,
         )

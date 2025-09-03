@@ -87,7 +87,7 @@ def populate_data():
         quantity=1,
         cost=2.0,
     )
-    event = Event(name="BackupEvent", start_date=date(2023, 2, 1), end_date=date(2023, 2, 2))
+    event = Event(name="BackupEvent", start_date=date(2023, 2, 1), end_date=date(2023, 2, 2), event_type="inventory")
     event_loc = EventLocation(event=event, location=location)
     sale = TerminalSale(event_location=event_loc, product=product, quantity=5)
     stand_item = EventStandSheetItem(event_location=event_loc, item=item, opening_count=0, closing_count=0)
@@ -147,3 +147,13 @@ def test_backup_and_restore(app):
 
         for m, count in counts.items():
             assert m.query.count() == count
+
+
+def test_restore_backup_file_rejects_path_traversal(client, app):
+    with app.app_context():
+        admin = User.query.filter_by(is_admin=True).first()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(admin.id)
+        sess['_fresh'] = True
+    resp = client.post('/controlpanel/backups/restore/../../etc/passwd')
+    assert resp.status_code == 404

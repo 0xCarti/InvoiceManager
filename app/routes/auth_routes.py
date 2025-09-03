@@ -10,7 +10,8 @@ from flask import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
-from werkzeug.utils import secure_filename
+from werkzeug.utils import secure_filename, safe_join
+from werkzeug.exceptions import NotFound
 import os
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from datetime import datetime
@@ -408,6 +409,27 @@ def restore_backup_route():
         restore_backup(filepath)
         log_activity(f'Restored backup {filename}')
         flash('Backup restored from ' + filename, 'success')
+    return redirect(url_for('admin.backups'))
+
+
+@admin.route('/controlpanel/backups/restore/<path:filename>', methods=['POST'])
+@login_required
+def restore_backup_file(filename):
+    """Restore the database from an existing backup file."""
+    if not current_user.is_admin:
+        abort(403)
+    from flask import current_app
+    backups_dir = current_app.config['BACKUP_FOLDER']
+    try:
+        filepath = safe_join(backups_dir, filename)
+    except NotFound:
+        abort(404)
+    if filepath is None or not os.path.isfile(filepath):
+        abort(404)
+    restore_backup(filepath)
+    fname = os.path.basename(filepath)
+    log_activity(f'Restored backup {fname}')
+    flash('Backup restored from ' + fname, 'success')
     return redirect(url_for('admin.backups'))
 
 

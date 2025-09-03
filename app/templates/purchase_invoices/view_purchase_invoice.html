@@ -4,6 +4,7 @@
     <h2>Invoice {{ invoice.id }}</h2>
     <p>Purchase Order: {{ invoice.purchase_order_id }}</p>
     <p>Vendor: {{ invoice.purchase_order.vendor.first_name }} {{ invoice.purchase_order.vendor.last_name }}</p>
+    <p>Location: {{ invoice.location_name }}</p>
     <p>Invoice Number: {{ invoice.invoice_number }}</p>
     <p>Received: {{ invoice.received_date }}</p>
     <div class="table-responsive">

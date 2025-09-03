@@ -438,10 +438,23 @@ class GLCodeForm(FlaskForm):
     submit = SubmitField("Submit")
 
 
+EVENT_TYPES = [
+    ("catering", "Catering"),
+    ("hockey", "Hockey"),
+    ("concert", "Concert"),
+    ("RMWF", "RMWF"),
+    ("tournament", "Tournament"),
+    ("curling", "Curling"),
+    ("inventory", "Inventory"),
+    ("other", "Other"),
+]
+
+
 class EventForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired()])
     start_date = DateField("Start Date", validators=[DataRequired()])
     end_date = DateField("End Date", validators=[DataRequired()])
+    event_type = SelectField("Event Type", choices=EVENT_TYPES, validators=[DataRequired()])
     submit = SubmitField("Submit")
 
 
