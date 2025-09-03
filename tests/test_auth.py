@@ -1,6 +1,3 @@
-import os
-
-import pytest
 from flask import url_for
 from werkzeug.security import generate_password_hash
 

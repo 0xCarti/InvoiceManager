@@ -11,7 +11,6 @@ from wtforms import (
     FileField,
     FormField,
     HiddenField,
-    IntegerField,
     PasswordField,
     SelectField,
     SelectMultipleField,
@@ -30,15 +29,7 @@ from wtforms.validators import (
 )
 from wtforms.widgets import CheckboxInput, ListWidget
 
-from app.models import (
-    Customer,
-    GLCode,
-    Item,
-    ItemUnit,
-    Location,
-    Product,
-    Vendor,
-)
+from app.models import GLCode, Item, ItemUnit, Location, Product, Vendor
 
 
 def load_item_choices():
