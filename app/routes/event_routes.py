@@ -301,12 +301,17 @@ def _get_stand_items(location_id, event_id=None):
                 ).first()
                 expected = record.expected_count if record else 0
                 sales = sales_by_item.get(recipe_item.item_id, 0)
+                item = recipe_item.item
+                recv_unit = next((u for u in item.units if u.receiving_default), None)
+                trans_unit = next((u for u in item.units if u.transfer_default), None)
                 stand_items.append(
                     {
-                        "item": recipe_item.item,
+                        "item": item,
                         "expected": expected,
                         "sales": sales,
                         "sheet": sheet_map.get(recipe_item.item_id),
+                        "recv_unit": recv_unit,
+                        "trans_unit": trans_unit,
                     }
                 )
 
@@ -356,6 +361,53 @@ def stand_sheet(event_id, location_id):
     )
 
 
+@event.route('/events/<int:event_id>/count_sheet/<int:location_id>', methods=['GET', 'POST'])
+@login_required
+def count_sheet(event_id, location_id):
+    ev = db.session.get(Event, event_id)
+    if ev is None:
+        abort(404)
+    el = EventLocation.query.filter_by(event_id=event_id, location_id=location_id).first()
+    if el is None:
+        abort(404)
+    if ev.closed:
+        flash('This event is closed and cannot be modified.')
+        return redirect(url_for('event.view_event', event_id=event_id))
+
+    location, stand_items = _get_stand_items(location_id, event_id)
+
+    if request.method == 'POST':
+        for entry in stand_items:
+            item_id = entry['item'].id
+            sheet = EventStandSheetItem.query.filter_by(
+                event_location_id=el.id,
+                item_id=item_id,
+            ).first()
+            if not sheet:
+                sheet = EventStandSheetItem(event_location_id=el.id, item_id=item_id)
+                db.session.add(sheet)
+            recv_qty = request.form.get(f'recv_{item_id}', type=float, default=0) or 0
+            trans_qty = request.form.get(f'trans_{item_id}', type=float, default=0) or 0
+            base_qty = request.form.get(f'base_{item_id}', type=float, default=0) or 0
+            recv_factor = entry['recv_unit'].factor if entry['recv_unit'] else 0
+            trans_factor = entry['trans_unit'].factor if entry['trans_unit'] else 0
+            total = recv_qty * recv_factor + trans_qty * trans_factor + base_qty
+            sheet.opening_count = recv_qty
+            sheet.transferred_in = trans_qty
+            sheet.transferred_out = base_qty
+            sheet.closing_count = total
+        db.session.commit()
+        flash('Count sheet saved')
+        location, stand_items = _get_stand_items(location_id, event_id)
+
+    return render_template(
+        'events/count_sheet.html',
+        event=ev,
+        location=location,
+        stand_items=stand_items,
+    )
+
+
 @event.route("/events/<int:event_id>/stand_sheets")
 @login_required
 def bulk_stand_sheets(event_id):
@@ -369,6 +421,19 @@ def bulk_stand_sheets(event_id):
     return render_template("events/bulk_stand_sheets.html", event=ev, data=data)
 
 
+@event.route("/events/<int:event_id>/count_sheets")
+@login_required
+def bulk_count_sheets(event_id):
+    ev = db.session.get(Event, event_id)
+    if ev is None:
+        abort(404)
+    data = []
+    for el in ev.locations:
+        loc, items = _get_stand_items(el.location_id, event_id)
+        data.append({"location": loc, "stand_items": items})
+    return render_template("events/bulk_count_sheets.html", event=ev, data=data)
+
+
 @event.route("/events/<int:event_id>/close")
 @login_required
 def close_event(event_id):
@@ -376,11 +441,64 @@ def close_event(event_id):
     if ev is None:
         abort(404)
     for el in ev.locations:
-        lsi = LocationStandItem.query.filter_by(location_id=el.location_id).all()
-        for record in lsi:
-            record.expected_count = el.closing_count
+        for sheet in el.stand_sheet_items:
+            lsi = LocationStandItem.query.filter_by(
+                location_id=el.location_id, item_id=sheet.item_id
+            ).first()
+            if not lsi:
+                lsi = LocationStandItem(
+                    location_id=el.location_id, item_id=sheet.item_id
+                )
+                db.session.add(lsi)
+            lsi.expected_count = sheet.closing_count
         TerminalSale.query.filter_by(event_location_id=el.id).delete()
     ev.closed = True
     db.session.commit()
     flash("Event closed")
     return redirect(url_for("event.view_events"))
+
+
+@event.route("/events/<int:event_id>/inventory_report")
+@login_required
+def inventory_report(event_id):
+    """Display inventory variances and GL code totals for an event."""
+    ev = db.session.get(Event, event_id)
+    if ev is None:
+        abort(404)
+
+    rows = []
+    gl_totals = {}
+    grand_total = 0.0
+
+    for el in ev.locations:
+        loc = el.location
+        for sheet in el.stand_sheet_items:
+            item = sheet.item
+            lsi = LocationStandItem.query.filter_by(
+                location_id=loc.id, item_id=item.id
+            ).first()
+            expected = lsi.expected_count if lsi else 0
+            variance = sheet.closing_count - expected
+            cost_total = sheet.closing_count * item.cost
+            gl_code = item.gl_code_rel.code if item.gl_code_rel else "Unassigned"
+            rows.append(
+                {
+                    "location": loc,
+                    "item": item,
+                    "expected": expected,
+                    "actual": sheet.closing_count,
+                    "variance": variance,
+                    "gl_code": gl_code,
+                    "cost_total": cost_total,
+                }
+            )
+            gl_totals[gl_code] = gl_totals.get(gl_code, 0.0) + cost_total
+            grand_total += cost_total
+
+    return render_template(
+        "events/inventory_report.html",
+        event=ev,
+        rows=rows,
+        gl_totals=gl_totals,
+        grand_total=grand_total,
+    )
