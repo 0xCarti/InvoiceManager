@@ -2,15 +2,15 @@ from werkzeug.security import generate_password_hash
 
 from app import db
 from app.models import (
-    User,
-    Location,
+    Event,
+    GLCode,
     Item,
     ItemUnit,
+    Location,
+    LocationStandItem,
     Product,
     ProductRecipeItem,
-    LocationStandItem,
-    GLCode,
-    Event,
+    User,
 )
 from tests.utils import login
 
@@ -52,7 +52,6 @@ def test_inventory_report_variance(client, app):
         db.session.commit()
         loc_id = loc.id
         item_id = item.id
-
 
     with client:
         login(client, "inv@example.com", "pass")
@@ -169,6 +168,7 @@ def test_inventory_close_updates_counts(client, app):
         client.get(f"/events/{eid}/close", follow_redirects=True)
 
     with app.app_context():
-        lsi = LocationStandItem.query.filter_by(location_id=loc_id, item_id=item_id).first()
+        lsi = LocationStandItem.query.filter_by(
+            location_id=loc_id, item_id=item_id
+        ).first()
         assert lsi.expected_count == 7
-

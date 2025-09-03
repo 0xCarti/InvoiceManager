@@ -1,20 +1,21 @@
 """Data import helper functions used by admin routes and tests."""
 
-import os
 import csv
+import os
+
 from werkzeug.security import generate_password_hash
 
 from app.models import (
-    db,
-    User,
+    Customer,
     GLCode,
-    Location,
     Item,
+    ItemUnit,
+    Location,
     Product,
     ProductRecipeItem,
-    ItemUnit,
-    Customer,
+    User,
     Vendor,
+    db,
 )
 
 
@@ -23,7 +24,7 @@ def _import_csv(path, model, mappings):
     created = 0
     if not os.path.exists(path):
         return 0
-    with open(path, newline='', encoding='utf-8-sig') as csvfile:
+    with open(path, newline="", encoding="utf-8-sig") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             obj_kwargs = {
@@ -32,13 +33,15 @@ def _import_csv(path, model, mappings):
                 if row.get(col) is not None
             }
             if model == User:
-                if User.query.filter_by(email=obj_kwargs['email']).first():
+                if User.query.filter_by(email=obj_kwargs["email"]).first():
                     continue
-                obj_kwargs['password'] = generate_password_hash(obj_kwargs['password'])
-                obj_kwargs['is_admin'] = row.get('is_admin', '0') == '1'
-                obj_kwargs['active'] = row.get('active', '0') == '1'
+                obj_kwargs["password"] = generate_password_hash(
+                    obj_kwargs["password"]
+                )
+                obj_kwargs["is_admin"] = row.get("is_admin", "0") == "1"
+                obj_kwargs["active"] = row.get("active", "0") == "1"
             if model == GLCode:
-                if GLCode.query.filter_by(code=obj_kwargs['code']).first():
+                if GLCode.query.filter_by(code=obj_kwargs["code"]).first():
                     continue
             obj = model(**obj_kwargs)
             db.session.add(obj)
@@ -54,33 +57,43 @@ def _import_items(path):
 
     created = 0
     ext = os.path.splitext(path)[1].lower()
-    if ext == '.csv':
-        with open(path, newline='', encoding='utf-8-sig') as csvfile:
+    if ext == ".csv":
+        with open(path, newline="", encoding="utf-8-sig") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                name = row.get('name', '').strip()
-                if not name or Item.query.filter_by(name=name, archived=False).first():
+                name = row.get("name", "").strip()
+                if (
+                    not name
+                    or Item.query.filter_by(name=name, archived=False).first()
+                ):
                     continue
-                base_unit = row.get('base_unit', 'each').strip().lower() or 'each'
-                cost = float(row.get('cost') or 0)
+                base_unit = (
+                    row.get("base_unit", "each").strip().lower() or "each"
+                )
+                cost = float(row.get("cost") or 0)
                 gl_code_id = None
-                if row.get('gl_code'):
-                    gl = GLCode.query.filter_by(code=row['gl_code']).first()
+                if row.get("gl_code"):
+                    gl = GLCode.query.filter_by(code=row["gl_code"]).first()
                     if gl:
                         gl_code_id = gl.id
-                item = Item(name=name, base_unit=base_unit, cost=cost, gl_code_id=gl_code_id)
+                item = Item(
+                    name=name,
+                    base_unit=base_unit,
+                    cost=cost,
+                    gl_code_id=gl_code_id,
+                )
                 db.session.add(item)
                 db.session.flush()
 
-                units_spec = row.get('units', '')
+                units_spec = row.get("units", "")
                 units = []
                 if units_spec:
-                    for idx, spec in enumerate(units_spec.split(';')):
+                    for idx, spec in enumerate(units_spec.split(";")):
                         spec = spec.strip()
                         if not spec:
                             continue
-                        if ':' in spec:
-                            unit_name, factor_str = spec.split(':', 1)
+                        if ":" in spec:
+                            unit_name, factor_str = spec.split(":", 1)
                             try:
                                 factor = float(factor_str)
                             except ValueError:
@@ -110,17 +123,22 @@ def _import_items(path):
                 db.session.add_all(units)
                 created += 1
     else:
-        with open(path, encoding='utf-8-sig') as f:
+        with open(path, encoding="utf-8-sig") as f:
             for line in f:
                 name = line.strip()
-                if name and not Item.query.filter_by(name=name, archived=False).first():
-                    item = Item(name=name, base_unit='each')
+                if (
+                    name
+                    and not Item.query.filter_by(
+                        name=name, archived=False
+                    ).first()
+                ):
+                    item = Item(name=name, base_unit="each")
                     db.session.add(item)
                     db.session.flush()
                     db.session.add(
                         ItemUnit(
                             item_id=item.id,
-                            name='each',
+                            name="each",
                             factor=1.0,
                             receiving_default=True,
                             transfer_default=True,
@@ -137,26 +155,26 @@ def _import_locations(path):
         return 0
 
     pending = []
-    with open(path, newline='', encoding='utf-8-sig') as csvfile:
+    with open(path, newline="", encoding="utf-8-sig") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            name = row.get('name', '').strip()
+            name = row.get("name", "").strip()
             if not name:
                 continue
             if Location.query.filter_by(name=name).first():
                 continue
 
             products = []
-            prod_field = row.get('products', '')
+            prod_field = row.get("products", "")
             if prod_field:
-                for pname in prod_field.split(';'):
+                for pname in prod_field.split(";"):
                     pname = pname.strip()
                     if not pname:
                         continue
                     product = Product.query.filter_by(name=pname).first()
                     if not product:
                         db.session.rollback()
-                        raise ValueError(f'Unknown product: {pname}')
+                        raise ValueError(f"Unknown product: {pname}")
                     products.append(product)
 
             pending.append((name, products))
@@ -176,33 +194,33 @@ def _import_products(path):
         return 0
 
     pending = []
-    with open(path, newline='', encoding='utf-8-sig') as csvfile:
+    with open(path, newline="", encoding="utf-8-sig") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            name = row.get('name', '').strip()
+            name = row.get("name", "").strip()
             if not name:
                 continue
             if Product.query.filter_by(name=name).first():
                 continue
 
             gl_code_id = None
-            if row.get('gl_code'):
-                gl = GLCode.query.filter_by(code=row['gl_code']).first()
+            if row.get("gl_code"):
+                gl = GLCode.query.filter_by(code=row["gl_code"]).first()
                 if gl:
                     gl_code_id = gl.id
 
             recipe_items = []
-            recipe_field = row.get('recipe', '')
+            recipe_field = row.get("recipe", "")
             if recipe_field:
-                for spec in recipe_field.split(';'):
+                for spec in recipe_field.split(";"):
                     spec = spec.strip()
                     if not spec:
                         continue
-                    parts = spec.split(':')
+                    parts = spec.split(":")
                     item_name = parts[0]
                     qty = 1.0
                     unit_name = None
-                    if len(parts) >= 2 and parts[1] != '':
+                    if len(parts) >= 2 and parts[1] != "":
                         try:
                             qty = float(parts[1])
                         except ValueError:
@@ -212,23 +230,35 @@ def _import_products(path):
                     item = Item.query.filter_by(name=item_name.strip()).first()
                     if not item:
                         db.session.rollback()
-                        raise ValueError(f'Unknown item: {item_name.strip()}')
+                        raise ValueError(f"Unknown item: {item_name.strip()}")
                     unit_id = None
                     if unit_name:
-                        unit = ItemUnit.query.filter_by(item_id=item.id, name=unit_name).first()
+                        unit = ItemUnit.query.filter_by(
+                            item_id=item.id, name=unit_name
+                        ).first()
                         if not unit:
                             db.session.rollback()
                             raise ValueError(
-                                f'Unknown unit {unit_name} for item {item_name.strip()}'
+                                f"Unknown unit {unit_name} for item {item_name.strip()}"
                             )
                         unit_id = unit.id
                     recipe_items.append((item.id, qty, unit_id))
 
-            pending.append((name, float(row['price']), float(row.get('cost', 0) or 0), gl_code_id, recipe_items))
+            pending.append(
+                (
+                    name,
+                    float(row["price"]),
+                    float(row.get("cost", 0) or 0),
+                    gl_code_id,
+                    recipe_items,
+                )
+            )
 
     created = 0
     for name, price, cost, gl_code_id, recipe_items in pending:
-        product = Product(name=name, price=price, cost=cost, gl_code_id=gl_code_id)
+        product = Product(
+            name=name, price=price, cost=cost, gl_code_id=gl_code_id
+        )
         db.session.add(product)
         db.session.flush()
         for item_id, qty, unit_id in recipe_items:
