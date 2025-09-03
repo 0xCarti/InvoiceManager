@@ -3,6 +3,13 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Manage Users</h2>
+    <form action="{{ url_for('admin.users') }}" method="post" class="mb-3">
+        {{ invite_form.hidden_tag() }}
+        <div class="input-group">
+            {{ invite_form.email(class_='form-control', placeholder='Email') }}
+            <button type="submit" class="btn btn-success">{{ invite_form.submit.label.text }}</button>
+        </div>
+    </form>
     <div class="table-responsive">
     <table class="table">
         <thead>
