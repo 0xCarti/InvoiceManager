@@ -124,6 +124,9 @@ def populate_data():
 def test_backup_and_restore(app):
     with app.app_context():
         counts, models = populate_data()
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
+        inode_before = os.stat(db_path).st_ino
+
         filename = create_backup()
         backup_path = os.path.join(app.config["BACKUP_FOLDER"], filename)
         assert os.path.exists(backup_path)
@@ -133,6 +136,9 @@ def test_backup_and_restore(app):
         db.session.commit()
 
         restore_backup(backup_path)
+
+        # Ensure the database file was not replaced during restore
+        assert os.stat(db_path).st_ino == inode_before
 
         for m, count in counts.items():
             assert m.query.count() == count
