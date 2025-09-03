@@ -1,5 +1,5 @@
 # Invoice Manager
-[![Coverage](https://codecov.io/gh/<OWNER>/InvoiceManager/branch/main/graph/badge.svg)](https://codecov.io/gh/<OWNER>/InvoiceManager)
+[![codecov](https://codecov.io/github/0xCarti/InvoiceManager/branch/main/graph/badge.svg?token=GDFIVY6JX6)](https://codecov.io/github/0xCarti/InvoiceManager)
 [![Build status](https://github.com/0xCarti/InvoiceManager/actions/workflows/build-main.yml/badge.svg?branch=main)](https://github.com/0xCarti/InvoiceManager/actions/workflows/build-main.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
