@@ -46,7 +46,7 @@ def test_sales_invoice_create_view_delete(client, app):
 
     with client:
         login(client, email, 'pass')
-        resp = client.get(f'/delete_invoice/{invoice_id}', follow_redirects=True)
+        resp = client.post(f'/delete_invoice/{invoice_id}', follow_redirects=True)
         assert resp.status_code == 200
 
     with app.app_context():
@@ -71,7 +71,7 @@ def test_invoice_survives_product_deletion(client, app):
 
     with client:
         login(client, email, 'pass')
-        resp = client.get(f'/products/{prod_id}/delete', follow_redirects=True)
+        resp = client.post(f'/products/{prod_id}/delete', follow_redirects=True)
         assert resp.status_code == 200
 
     with client:

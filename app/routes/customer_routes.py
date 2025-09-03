@@ -3,7 +3,7 @@ from flask_login import login_required
 
 from app import db
 from app.utils.activity import log_activity
-from app.forms import CustomerForm
+from app.forms import CustomerForm, DeleteForm
 from app.models import Customer
 
 customer = Blueprint('customer', __name__)
@@ -13,7 +13,8 @@ customer = Blueprint('customer', __name__)
 def view_customers():
     """Display all customers."""
     customers = Customer.query.filter_by(archived=False).all()
-    return render_template('customers/view_customers.html', customers=customers)
+    delete_form = DeleteForm()
+    return render_template('customers/view_customers.html', customers=customers, delete_form=delete_form)
 
 
 @customer.route('/customers/create', methods=['GET', 'POST'])
@@ -67,10 +68,13 @@ def edit_customer(customer_id):
     return render_template('customers/customer_form.html', form=form, title='Edit Customer')
 
 
-@customer.route('/customers/<int:customer_id>/delete', methods=['GET'])
+@customer.route('/customers/<int:customer_id>/delete', methods=['POST'])
 @login_required
 def delete_customer(customer_id):
     """Delete a customer."""
+    form = DeleteForm()
+    if not form.validate_on_submit():
+        abort(400)
     customer = db.session.get(Customer, customer_id)
     if customer is None:
         abort(404)

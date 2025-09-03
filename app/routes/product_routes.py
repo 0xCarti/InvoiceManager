@@ -3,7 +3,7 @@ from flask_login import login_required
 
 from app import db
 from app.utils.activity import log_activity
-from app.forms import ProductWithRecipeForm, ProductRecipeForm
+from app.forms import ProductWithRecipeForm, ProductRecipeForm, DeleteForm
 from app.models import Product, Item, ItemUnit, ProductRecipeItem, GLCode
 
 product = Blueprint('product', __name__)
@@ -12,9 +12,10 @@ product = Blueprint('product', __name__)
 @login_required
 def view_products():
     """List available products."""
+    delete_form = DeleteForm()
     page = request.args.get('page', 1, type=int)
     products = Product.query.paginate(page=page, per_page=20)
-    return render_template('products/view_products.html', products=products)
+    return render_template('products/view_products.html', products=products, delete_form=delete_form)
 
 
 @product.route('/products/create', methods=['GET', 'POST'])
@@ -188,10 +189,13 @@ def calculate_product_cost(product_id):
     return jsonify({'cost': total})
 
 
-@product.route('/products/<int:product_id>/delete', methods=['GET'])
+@product.route('/products/<int:product_id>/delete', methods=['POST'])
 @login_required
 def delete_product(product_id):
     """Delete a product and its recipe."""
+    form = DeleteForm()
+    if not form.validate_on_submit():
+        abort(400)
     product = db.session.get(Product, product_id)
     if product is None:
         abort(404)
