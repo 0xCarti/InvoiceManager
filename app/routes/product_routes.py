@@ -1,24 +1,38 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort
+from flask import (
+    Blueprint,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import login_required
 
 from app import db
+from app.forms import DeleteForm, ProductRecipeForm, ProductWithRecipeForm
+from app.models import GLCode, Item, ItemUnit, Product, ProductRecipeItem
 from app.utils.activity import log_activity
-from app.forms import ProductWithRecipeForm, ProductRecipeForm, DeleteForm
-from app.models import Product, Item, ItemUnit, ProductRecipeItem, GLCode
 
-product = Blueprint('product', __name__)
+product = Blueprint("product", __name__)
 
-@product.route('/products')
+
+@product.route("/products")
 @login_required
 def view_products():
     """List available products."""
     delete_form = DeleteForm()
-    page = request.args.get('page', 1, type=int)
+    page = request.args.get("page", 1, type=int)
     products = Product.query.paginate(page=page, per_page=20)
-    return render_template('products/view_products.html', products=products, delete_form=delete_form)
+    return render_template(
+        "products/view_products.html",
+        products=products,
+        delete_form=delete_form,
+    )
 
 
-@product.route('/products/create', methods=['GET', 'POST'])
+@product.route("/products/create", methods=["GET", "POST"])
 @login_required
 def create_product():
     """Add a new product definition."""
@@ -55,13 +69,15 @@ def create_product():
                     )
                 )
         db.session.commit()
-        log_activity(f'Created product {product.name}')
-        flash('Product created successfully!', 'success')
-        return redirect(url_for('product.view_products'))
-    return render_template('products/create_product.html', form=form, product_id=None)
+        log_activity(f"Created product {product.name}")
+        flash("Product created successfully!", "success")
+        return redirect(url_for("product.view_products"))
+    return render_template(
+        "products/create_product.html", form=form, product_id=None
+    )
 
 
-@product.route('/products/<int:product_id>/edit', methods=['GET', 'POST'])
+@product.route("/products/<int:product_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_product(product_id):
     """Edit product details and recipe."""
@@ -98,10 +114,10 @@ def edit_product(product_id):
                     )
                 )
         db.session.commit()
-        log_activity(f'Edited product {product.id}')
-        flash('Product updated successfully!', 'success')
-        return redirect(url_for('product.view_products'))
-    elif request.method == 'GET':
+        log_activity(f"Edited product {product.id}")
+        flash("Product updated successfully!", "success")
+        return redirect(url_for("product.view_products"))
+    elif request.method == "GET":
         form.name.data = product.name
         form.price.data = product.price
         form.cost.data = product.cost or 0.0  # 👈 Pre-fill cost
@@ -109,7 +125,10 @@ def edit_product(product_id):
         form.gl_code_id.data = product.gl_code_id
         form.sales_gl_code.data = product.sales_gl_code_id
         form.items.min_entries = max(1, len(product.recipe_items))
-        item_choices = [(itm.id, itm.name) for itm in Item.query.filter_by(archived=False).all()]
+        item_choices = [
+            (itm.id, itm.name)
+            for itm in Item.query.filter_by(archived=False).all()
+        ]
         unit_choices = [(u.id, u.name) for u in ItemUnit.query.all()]
         for i, recipe_item in enumerate(product.recipe_items):
             if len(form.items) <= i:
@@ -126,10 +145,12 @@ def edit_product(product_id):
     else:
         print(form.errors)
         print(form.cost.data)
-    return render_template('products/edit_product.html', form=form, product_id=product.id)
+    return render_template(
+        "products/edit_product.html", form=form, product_id=product.id
+    )
 
 
-@product.route('/products/<int:product_id>/recipe', methods=['GET', 'POST'])
+@product.route("/products/<int:product_id>/recipe", methods=["GET", "POST"])
 @login_required
 def edit_product_recipe(product_id):
     """Edit the recipe for a product."""
@@ -139,21 +160,36 @@ def edit_product_recipe(product_id):
     form = ProductRecipeForm()
     if form.validate_on_submit():
         ProductRecipeItem.query.filter_by(product_id=product.id).delete()
-        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
+        items = [
+            key
+            for key in request.form.keys()
+            if key.startswith("items-") and key.endswith("-item")
+        ]
         for field in items:
-            index = field.split('-')[1]
-            item_id = request.form.get(f'items-{index}-item', type=int)
-            unit_id = request.form.get(f'items-{index}-unit', type=int)
-            quantity = request.form.get(f'items-{index}-quantity', type=float)
-            countable = request.form.get(f'items-{index}-countable') == 'y'
+            index = field.split("-")[1]
+            item_id = request.form.get(f"items-{index}-item", type=int)
+            unit_id = request.form.get(f"items-{index}-unit", type=int)
+            quantity = request.form.get(f"items-{index}-quantity", type=float)
+            countable = request.form.get(f"items-{index}-countable") == "y"
             if item_id and quantity is not None:
-                db.session.add(ProductRecipeItem(product_id=product.id, item_id=item_id, unit_id=unit_id, quantity=quantity, countable=countable))
+                db.session.add(
+                    ProductRecipeItem(
+                        product_id=product.id,
+                        item_id=item_id,
+                        unit_id=unit_id,
+                        quantity=quantity,
+                        countable=countable,
+                    )
+                )
         db.session.commit()
-        flash('Recipe updated successfully!', 'success')
-        return redirect(url_for('product.view_products'))
-    elif request.method == 'GET':
+        flash("Recipe updated successfully!", "success")
+        return redirect(url_for("product.view_products"))
+    elif request.method == "GET":
         form.items.min_entries = max(1, len(product.recipe_items))
-        item_choices = [(itm.id, itm.name) for itm in Item.query.filter_by(archived=False).all()]
+        item_choices = [
+            (itm.id, itm.name)
+            for itm in Item.query.filter_by(archived=False).all()
+        ]
         unit_choices = [(u.id, u.name) for u in ItemUnit.query.all()]
         for i, recipe_item in enumerate(product.recipe_items):
             if len(form.items) <= i:
@@ -167,10 +203,12 @@ def edit_product_recipe(product_id):
             form.items[i].unit.data = recipe_item.unit_id
             form.items[i].quantity.data = recipe_item.quantity
             form.items[i].countable.data = recipe_item.countable
-    return render_template('products/edit_product_recipe.html', form=form, product=product)
+    return render_template(
+        "products/edit_product_recipe.html", form=form, product=product
+    )
 
 
-@product.route('/products/<int:product_id>/calculate_cost')
+@product.route("/products/<int:product_id>/calculate_cost")
 @login_required
 def calculate_product_cost(product_id):
     """Calculate the total recipe cost for a product."""
@@ -179,17 +217,17 @@ def calculate_product_cost(product_id):
         abort(404)
     total = 0.0
     for ri in product.recipe_items:
-        item_cost = getattr(ri.item, 'cost', 0.0)
+        item_cost = getattr(ri.item, "cost", 0.0)
         try:
             qty = float(ri.quantity or 0)
         except (TypeError, ValueError):
             qty = 0
         factor = ri.unit.factor if ri.unit else 1
         total += (item_cost or 0) * qty * factor
-    return jsonify({'cost': total})
+    return jsonify({"cost": total})
 
 
-@product.route('/products/<int:product_id>/delete', methods=['POST'])
+@product.route("/products/<int:product_id>/delete", methods=["POST"])
 @login_required
 def delete_product(product_id):
     """Delete a product and its recipe."""
@@ -201,20 +239,23 @@ def delete_product(product_id):
         abort(404)
     db.session.delete(product)
     db.session.commit()
-    log_activity(f'Deleted product {product.id}')
-    flash('Product deleted successfully!', 'success')
-    return redirect(url_for('product.view_products'))
+    log_activity(f"Deleted product {product.id}")
+    flash("Product deleted successfully!", "success")
+    return redirect(url_for("product.view_products"))
 
-@product.route('/search_products')
+
+@product.route("/search_products")
 def search_products():
     """Return products matching a search query."""
     # Retrieve query parameter from the URL
-    query = request.args.get('query', '').lower()
+    query = request.args.get("query", "").lower()
     # Query the database for products that match the search query
-    matched_products = Product.query.filter(Product.name.ilike(f'%{query}%')).all()
+    matched_products = Product.query.filter(
+        Product.name.ilike(f"%{query}%")
+    ).all()
     # Include id so that search results can be referenced elsewhere
     product_data = [
-        {'id': product.id, 'name': product.name, 'price': product.price}
+        {"id": product.id, "name": product.name, "price": product.price}
         for product in matched_products
     ]
     # Return matched product names and prices as JSON

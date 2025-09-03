@@ -1,54 +1,66 @@
 import os
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session, abort
-from flask_login import login_required, current_user
+from datetime import datetime
+
+from flask import (
+    Blueprint,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask_login import current_user, login_required
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
-from app import db, socketio, GST
-from app.utils.activity import log_activity
+from app import GST, db, socketio
 from app.forms import (
-    LocationForm,
-    ItemForm,
-    TransferForm,
-    ImportItemsForm,
-    DateRangeForm,
+    ConfirmForm,
     CustomerForm,
-    ProductForm,
-    ProductWithRecipeForm,
-    ProductRecipeForm,
-    InvoiceForm,
-    LoginForm,
+    DateRangeForm,
+    DeleteForm,
+    GLCodeForm,
+    ImportItemsForm,
     InvoiceFilterForm,
+    InvoiceForm,
+    ItemForm,
+    LocationForm,
+    LoginForm,
+    ProductForm,
+    ProductRecipeForm,
+    ProductSalesReportForm,
+    ProductWithRecipeForm,
     PurchaseOrderForm,
     ReceiveInvoiceForm,
-    DeleteForm,
-    ConfirmForm,
-    GLCodeForm,
+    TransferForm,
+    VendorInvoiceReportForm,
 )
 from app.models import (
-    Location,
-    Item,
-    ItemUnit,
-    Transfer,
-    TransferItem,
     Customer,
-    Vendor,
-    Product,
-    LocationStandItem,
+    GLCode,
     Invoice,
     InvoiceProduct,
+    Item,
+    ItemUnit,
+    Location,
+    LocationStandItem,
+    Product,
     ProductRecipeItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
     PurchaseInvoice,
     PurchaseInvoiceItem,
+    PurchaseOrder,
+    PurchaseOrderItem,
     PurchaseOrderItemArchive,
-    GLCode,
+    Transfer,
+    TransferItem,
+    Vendor,
 )
-from datetime import datetime
-from app.forms import VendorInvoiceReportForm, ProductSalesReportForm
+from app.utils.activity import log_activity
 
-purchase = Blueprint('purchase', __name__)
+purchase = Blueprint("purchase", __name__)
 
 
 def check_negative_invoice_reverse(invoice_obj):
@@ -69,7 +81,11 @@ def check_negative_invoice_reverse(invoice_obj):
             current = record.expected_count if record else 0
             new_count = current - inv_item.quantity * factor
             if new_count < 0:
-                loc = record.location if record else db.session.get(Location, invoice_obj.location_id)
+                loc = (
+                    record.location
+                    if record
+                    else db.session.get(Location, invoice_obj.location_id)
+                )
                 location_name = loc.name if loc else invoice_obj.location_name
                 warnings.append(
                     f"Reversing this invoice will result in negative inventory for {itm.name} at {location_name}"
@@ -80,21 +96,26 @@ def check_negative_invoice_reverse(invoice_obj):
             )
     return warnings
 
-@purchase.route('/purchase_orders', methods=['GET'])
+
+@purchase.route("/purchase_orders", methods=["GET"])
 @login_required
 def view_purchase_orders():
     """Show outstanding purchase orders."""
     delete_form = DeleteForm()
-    page = request.args.get('page', 1, type=int)
+    page = request.args.get("page", 1, type=int)
     orders = (
         PurchaseOrder.query.filter_by(received=False)
         .order_by(PurchaseOrder.order_date.desc())
         .paginate(page=page, per_page=20)
     )
-    return render_template('purchase_orders/view_purchase_orders.html', orders=orders, delete_form=delete_form)
+    return render_template(
+        "purchase_orders/view_purchase_orders.html",
+        orders=orders,
+        delete_form=delete_form,
+    )
 
 
-@purchase.route('/purchase_orders/create', methods=['GET', 'POST'])
+@purchase.route("/purchase_orders/create", methods=["GET", "POST"])
 @login_required
 def create_purchase_order():
     """Create a purchase order."""
@@ -111,29 +132,37 @@ def create_purchase_order():
         db.session.add(po)
         db.session.commit()
 
-        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
+        items = [
+            key
+            for key in request.form.keys()
+            if key.startswith("items-") and key.endswith("-item")
+        ]
         for field in items:
-            index = field.split('-')[1]
-            item_id = request.form.get(f'items-{index}-item', type=int)
-            unit_id = request.form.get(f'items-{index}-unit', type=int)
-            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            index = field.split("-")[1]
+            item_id = request.form.get(f"items-{index}-item", type=int)
+            unit_id = request.form.get(f"items-{index}-unit", type=int)
+            quantity = request.form.get(f"items-{index}-quantity", type=float)
             if item_id and quantity is not None:
-                db.session.add(PurchaseOrderItem(
-                    purchase_order_id=po.id,
-                    item_id=item_id,
-                    unit_id=unit_id,
-                    quantity=quantity
-                ))
+                db.session.add(
+                    PurchaseOrderItem(
+                        purchase_order_id=po.id,
+                        item_id=item_id,
+                        unit_id=unit_id,
+                        quantity=quantity,
+                    )
+                )
 
         db.session.commit()
-        log_activity(f'Created purchase order {po.id}')
-        flash('Purchase order created successfully!', 'success')
-        return redirect(url_for('purchase.view_purchase_orders'))
+        log_activity(f"Created purchase order {po.id}")
+        flash("Purchase order created successfully!", "success")
+        return redirect(url_for("purchase.view_purchase_orders"))
 
-    return render_template('purchase_orders/create_purchase_order.html', form=form)
+    return render_template(
+        "purchase_orders/create_purchase_order.html", form=form
+    )
 
 
-@purchase.route('/purchase_orders/edit/<int:po_id>', methods=['GET', 'POST'])
+@purchase.route("/purchase_orders/edit/<int:po_id>", methods=["GET", "POST"])
 @login_required
 def edit_purchase_order(po_id):
     """Modify a pending purchase order."""
@@ -150,21 +179,32 @@ def edit_purchase_order(po_id):
 
         PurchaseOrderItem.query.filter_by(purchase_order_id=po.id).delete()
 
-        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
+        items = [
+            key
+            for key in request.form.keys()
+            if key.startswith("items-") and key.endswith("-item")
+        ]
         for field in items:
-            index = field.split('-')[1]
-            item_id = request.form.get(f'items-{index}-item', type=int)
-            unit_id = request.form.get(f'items-{index}-unit', type=int)
-            quantity = request.form.get(f'items-{index}-quantity', type=float)
+            index = field.split("-")[1]
+            item_id = request.form.get(f"items-{index}-item", type=int)
+            unit_id = request.form.get(f"items-{index}-unit", type=int)
+            quantity = request.form.get(f"items-{index}-quantity", type=float)
             if item_id and quantity is not None:
-                db.session.add(PurchaseOrderItem(purchase_order_id=po.id, item_id=item_id, unit_id=unit_id, quantity=quantity))
+                db.session.add(
+                    PurchaseOrderItem(
+                        purchase_order_id=po.id,
+                        item_id=item_id,
+                        unit_id=unit_id,
+                        quantity=quantity,
+                    )
+                )
 
         db.session.commit()
-        log_activity(f'Edited purchase order {po.id}')
-        flash('Purchase order updated successfully!', 'success')
-        return redirect(url_for('purchase.view_purchase_orders'))
+        log_activity(f"Edited purchase order {po.id}")
+        flash("Purchase order updated successfully!", "success")
+        return redirect(url_for("purchase.view_purchase_orders"))
 
-    if request.method == 'GET':
+    if request.method == "GET":
         form.vendor.data = po.vendor_id
         form.order_date.data = po.order_date
         form.expected_date.data = po.expected_date
@@ -174,16 +214,21 @@ def edit_purchase_order(po_id):
             if len(form.items) <= i:
                 form.items.append_entry()
         for item_form in form.items:
-            item_form.item.choices = [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
+            item_form.item.choices = [
+                (i.id, i.name)
+                for i in Item.query.filter_by(archived=False).all()
+            ]
         for i, poi in enumerate(po.items):
             form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
 
-    return render_template('purchase_orders/edit_purchase_order.html', form=form, po=po)
+    return render_template(
+        "purchase_orders/edit_purchase_order.html", form=form, po=po
+    )
 
 
-@purchase.route('/purchase_orders/<int:po_id>/delete', methods=['POST'])
+@purchase.route("/purchase_orders/<int:po_id>/delete", methods=["POST"])
 @login_required
 def delete_purchase_order(po_id):
     """Delete an unreceived purchase order."""
@@ -194,16 +239,20 @@ def delete_purchase_order(po_id):
     if po is None:
         abort(404)
     if po.received:
-        flash('Cannot delete a purchase order that has been received.', 'error')
-        return redirect(url_for('purchase.view_purchase_orders'))
+        flash(
+            "Cannot delete a purchase order that has been received.", "error"
+        )
+        return redirect(url_for("purchase.view_purchase_orders"))
     db.session.delete(po)
     db.session.commit()
-    log_activity(f'Deleted purchase order {po.id}')
-    flash('Purchase order deleted successfully!', 'success')
-    return redirect(url_for('purchase.view_purchase_orders'))
+    log_activity(f"Deleted purchase order {po.id}")
+    flash("Purchase order deleted successfully!", "success")
+    return redirect(url_for("purchase.view_purchase_orders"))
 
 
-@purchase.route('/purchase_orders/<int:po_id>/receive', methods=['GET', 'POST'])
+@purchase.route(
+    "/purchase_orders/<int:po_id>/receive", methods=["GET", "POST"]
+)
 @login_required
 def receive_invoice(po_id):
     """Receive a purchase order and create an invoice."""
@@ -211,27 +260,36 @@ def receive_invoice(po_id):
     if po is None:
         abort(404)
     form = ReceiveInvoiceForm()
-    if request.method == 'GET':
+    if request.method == "GET":
         form.delivery_charge.data = po.delivery_charge
         form.items.min_entries = max(1, len(po.items))
         while len(form.items) < len(po.items):
             form.items.append_entry()
         for item_form in form.items:
-            item_form.item.choices = [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
-            item_form.unit.choices = [(u.id, u.name) for u in ItemUnit.query.all()]
+            item_form.item.choices = [
+                (i.id, i.name)
+                for i in Item.query.filter_by(archived=False).all()
+            ]
+            item_form.unit.choices = [
+                (u.id, u.name) for u in ItemUnit.query.all()
+            ]
         for i, poi in enumerate(po.items):
             form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
     if form.validate_on_submit():
-        if not PurchaseOrderItemArchive.query.filter_by(purchase_order_id=po.id).first():
+        if not PurchaseOrderItemArchive.query.filter_by(
+            purchase_order_id=po.id
+        ).first():
             for poi in po.items:
-                db.session.add(PurchaseOrderItemArchive(
-                    purchase_order_id=po.id,
-                    item_id=poi.item_id,
-                    unit_id=poi.unit_id,
-                    quantity=poi.quantity
-                ))
+                db.session.add(
+                    PurchaseOrderItemArchive(
+                        purchase_order_id=po.id,
+                        item_id=poi.item_id,
+                        unit_id=poi.unit_id,
+                        quantity=poi.quantity,
+                    )
+                )
             db.session.commit()
         invoice = PurchaseInvoice(
             purchase_order_id=po.id,
@@ -248,28 +306,36 @@ def receive_invoice(po_id):
         db.session.add(invoice)
         db.session.commit()
 
-        items = [key for key in request.form.keys() if key.startswith('items-') and key.endswith('-item')]
+        items = [
+            key
+            for key in request.form.keys()
+            if key.startswith("items-") and key.endswith("-item")
+        ]
         for field in items:
-            index = field.split('-')[1]
-            item_id = request.form.get(f'items-{index}-item', type=int)
-            unit_id = request.form.get(f'items-{index}-unit', type=int)
-            quantity = request.form.get(f'items-{index}-quantity', type=float)
-            cost = request.form.get(f'items-{index}-cost', type=float)
-            is_return = request.form.get(f'items-{index}-return_item') is not None
+            index = field.split("-")[1]
+            item_id = request.form.get(f"items-{index}-item", type=int)
+            unit_id = request.form.get(f"items-{index}-unit", type=int)
+            quantity = request.form.get(f"items-{index}-quantity", type=float)
+            cost = request.form.get(f"items-{index}-cost", type=float)
+            is_return = (
+                request.form.get(f"items-{index}-return_item") is not None
+            )
             if item_id and quantity is not None and cost is not None:
                 if is_return:
                     quantity = -abs(quantity)
                     cost = -abs(cost)
 
                 item_obj = db.session.get(Item, item_id)
-                unit_obj = db.session.get(ItemUnit, unit_id) if unit_id else None
+                unit_obj = (
+                    db.session.get(ItemUnit, unit_id) if unit_id else None
+                )
 
                 db.session.add(
                     PurchaseInvoiceItem(
                         invoice_id=invoice.id,
                         item_id=item_obj.id if item_obj else None,
                         unit_id=unit_obj.id if unit_obj else None,
-                        item_name=item_obj.name if item_obj else '',
+                        item_name=item_obj.name if item_obj else "",
                         unit_name=unit_obj.name if unit_obj else None,
                         quantity=quantity,
                         cost=cost,
@@ -280,12 +346,20 @@ def receive_invoice(po_id):
                     factor = 1
                     if unit_obj:
                         factor = unit_obj.factor
-                    item_obj.quantity = (item_obj.quantity or 0) + quantity * factor
+                    item_obj.quantity = (
+                        item_obj.quantity or 0
+                    ) + quantity * factor
                     # store cost per base unit (always positive)
                     item_obj.cost = abs(cost) / factor if factor else abs(cost)
-                    record = LocationStandItem.query.filter_by(location_id=invoice.location_id, item_id=item_obj.id).first()
+                    record = LocationStandItem.query.filter_by(
+                        location_id=invoice.location_id, item_id=item_obj.id
+                    ).first()
                     if not record:
-                        record = LocationStandItem(location_id=invoice.location_id, item_id=item_obj.id, expected_count=0)
+                        record = LocationStandItem(
+                            location_id=invoice.location_id,
+                            item_id=item_obj.id,
+                            expected_count=0,
+                        )
                         db.session.add(record)
                     record.expected_count += quantity * factor
 
@@ -293,36 +367,41 @@ def receive_invoice(po_id):
         po.received = True
         db.session.add(po)
         db.session.commit()
-        log_activity(f'Received invoice {invoice.id} for PO {po.id}')
-        flash('Invoice received successfully!', 'success')
-        return redirect(url_for('purchase.view_purchase_invoices'))
+        log_activity(f"Received invoice {invoice.id} for PO {po.id}")
+        flash("Invoice received successfully!", "success")
+        return redirect(url_for("purchase.view_purchase_invoices"))
 
-    return render_template('purchase_orders/receive_invoice.html', form=form, po=po)
+    return render_template(
+        "purchase_orders/receive_invoice.html", form=form, po=po
+    )
 
 
-@purchase.route('/purchase_invoices', methods=['GET'])
+@purchase.route("/purchase_invoices", methods=["GET"])
 @login_required
 def view_purchase_invoices():
     """List all received purchase invoices."""
-    page = request.args.get('page', 1, type=int)
-    invoices = (
-        PurchaseInvoice.query.order_by(PurchaseInvoice.received_date.desc())
-        .paginate(page=page, per_page=20)
+    page = request.args.get("page", 1, type=int)
+    invoices = PurchaseInvoice.query.order_by(
+        PurchaseInvoice.received_date.desc()
+    ).paginate(page=page, per_page=20)
+    return render_template(
+        "purchase_invoices/view_purchase_invoices.html", invoices=invoices
     )
-    return render_template('purchase_invoices/view_purchase_invoices.html', invoices=invoices)
 
 
-@purchase.route('/purchase_invoices/<int:invoice_id>')
+@purchase.route("/purchase_invoices/<int:invoice_id>")
 @login_required
 def view_purchase_invoice(invoice_id):
     """Display a purchase invoice."""
     invoice = db.session.get(PurchaseInvoice, invoice_id)
     if invoice is None:
         abort(404)
-    return render_template('purchase_invoices/view_purchase_invoice.html', invoice=invoice)
+    return render_template(
+        "purchase_invoices/view_purchase_invoice.html", invoice=invoice
+    )
 
 
-@purchase.route('/purchase_invoices/<int:invoice_id>/report')
+@purchase.route("/purchase_invoices/<int:invoice_id>/report")
 @login_required
 def purchase_invoice_report(invoice_id):
     """Generate a GL code summary for a purchase invoice."""
@@ -342,22 +421,30 @@ def purchase_invoice_report(invoice_id):
             gl = db.session.get(GLCode, it.item.purchase_gl_code_id)
             code = gl.code if gl else None
         if not code:
-            code = 'Unassigned'
+            code = "Unassigned"
         gl_totals[code] = gl_totals.get(code, 0) + line_total
 
     if item_total:
         for code, value in list(gl_totals.items()):
             share = value / item_total
-            gl_totals[code] = value + share * invoice.pst + share * invoice.delivery_charge
+            gl_totals[code] = (
+                value + share * invoice.pst + share * invoice.delivery_charge
+            )
 
     if invoice.gst:
-        gl_totals['102702'] = gl_totals.get('102702', 0) + invoice.gst
+        gl_totals["102702"] = gl_totals.get("102702", 0) + invoice.gst
 
     report = sorted(gl_totals.items())
-    return render_template('purchase_invoices/invoice_gl_report.html', invoice=invoice, report=report)
+    return render_template(
+        "purchase_invoices/invoice_gl_report.html",
+        invoice=invoice,
+        report=report,
+    )
 
 
-@purchase.route('/purchase_invoices/<int:invoice_id>/reverse', methods=['GET', 'POST'])
+@purchase.route(
+    "/purchase_invoices/<int:invoice_id>/reverse", methods=["GET", "POST"]
+)
 @login_required
 def reverse_purchase_invoice(invoice_id):
     """Undo receipt of a purchase invoice."""
@@ -369,23 +456,27 @@ def reverse_purchase_invoice(invoice_id):
         abort(404)
     warnings = check_negative_invoice_reverse(invoice)
     form = ConfirmForm()
-    if warnings and request.method == 'GET':
+    if warnings and request.method == "GET":
         return render_template(
-            'confirm_action.html',
+            "confirm_action.html",
             form=form,
             warnings=warnings,
-            action_url=url_for('purchase.reverse_purchase_invoice', invoice_id=invoice_id),
-            cancel_url=url_for('purchase.view_purchase_invoices'),
-            title='Confirm Invoice Reversal',
+            action_url=url_for(
+                "purchase.reverse_purchase_invoice", invoice_id=invoice_id
+            ),
+            cancel_url=url_for("purchase.view_purchase_invoices"),
+            title="Confirm Invoice Reversal",
         )
     if warnings and not form.validate_on_submit():
         return render_template(
-            'confirm_action.html',
+            "confirm_action.html",
             form=form,
             warnings=warnings,
-            action_url=url_for('purchase.reverse_purchase_invoice', invoice_id=invoice_id),
-            cancel_url=url_for('purchase.view_purchase_invoices'),
-            title='Confirm Invoice Reversal',
+            action_url=url_for(
+                "purchase.reverse_purchase_invoice", invoice_id=invoice_id
+            ),
+            cancel_url=url_for("purchase.view_purchase_invoices"),
+            title="Confirm Invoice Reversal",
         )
     for inv_item in invoice.items:
         factor = 1
@@ -395,8 +486,11 @@ def reverse_purchase_invoice(invoice_id):
                 factor = unit.factor
         itm = db.session.get(Item, inv_item.item_id)
         if not itm:
-            flash(f"Cannot reverse invoice because item '{inv_item.item_name}' no longer exists.", 'error')
-            return redirect(url_for('purchase.view_purchase_invoices'))
+            flash(
+                f"Cannot reverse invoice because item '{inv_item.item_name}' no longer exists.",
+                "error",
+            )
+            return redirect(url_for("purchase.view_purchase_invoices"))
 
         itm.quantity -= inv_item.quantity * factor
 
@@ -408,7 +502,9 @@ def reverse_purchase_invoice(invoice_id):
                 PurchaseInvoiceItem.item_id == itm.id,
                 PurchaseInvoiceItem.invoice_id != invoice.id,
             )
-            .order_by(PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc())
+            .order_by(
+                PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc()
+            )
             .first()
         )
         if last_item:
@@ -417,7 +513,11 @@ def reverse_purchase_invoice(invoice_id):
                 last_unit = db.session.get(ItemUnit, last_item.unit_id)
                 if last_unit:
                     last_factor = last_unit.factor
-            itm.cost = abs(last_item.cost) / last_factor if last_factor else abs(last_item.cost)
+            itm.cost = (
+                abs(last_item.cost) / last_factor
+                if last_factor
+                else abs(last_item.cost)
+            )
         else:
             itm.cost = 0.0
 
@@ -438,12 +538,15 @@ def reverse_purchase_invoice(invoice_id):
 
     loc = db.session.get(Location, invoice.location_id)
     if not loc:
-        flash('Cannot reverse invoice because location no longer exists.', 'error')
-        return redirect(url_for('purchase.view_purchase_invoices'))
+        flash(
+            "Cannot reverse invoice because location no longer exists.",
+            "error",
+        )
+        return redirect(url_for("purchase.view_purchase_invoices"))
 
     PurchaseInvoiceItem.query.filter_by(invoice_id=invoice.id).delete()
     db.session.delete(invoice)
     po.received = False
     db.session.commit()
-    flash('Invoice reversed successfully', 'success')
-    return redirect(url_for('purchase.view_purchase_orders'))
+    flash("Invoice reversed successfully", "success")
+    return redirect(url_for("purchase.view_purchase_orders"))
