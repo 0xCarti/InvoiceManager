@@ -1,4 +1,5 @@
 # Invoice Manager
+[![Build status](https://github.com/0xCarti/InvoiceManager/actions/workflows/build-main.yml/badge.svg?branch=main)](https://github.com/0xCarti/InvoiceManager/actions/workflows/build-main.yml)
 
 A Flask-based application for managing invoices, products and vendors. The project comes with a comprehensive test suite using `pytest`.
 
