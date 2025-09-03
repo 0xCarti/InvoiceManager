@@ -3,7 +3,7 @@ from flask_login import login_required
 
 from app import db
 from app.utils.activity import log_activity
-from app.forms import CustomerForm
+from app.forms import CustomerForm, DeleteForm
 from app.models import Vendor
 
 vendor = Blueprint('vendor', __name__)
@@ -13,7 +13,8 @@ vendor = Blueprint('vendor', __name__)
 def view_vendors():
     """Display all vendors."""
     vendors = Vendor.query.filter_by(archived=False).all()
-    return render_template('vendors/view_vendors.html', vendors=vendors)
+    delete_form = DeleteForm()
+    return render_template('vendors/view_vendors.html', vendors=vendors, delete_form=delete_form)
 
 
 @vendor.route('/vendors/create', methods=['GET', 'POST'])
@@ -67,10 +68,13 @@ def edit_vendor(vendor_id):
     return render_template('vendors/vendor_form.html', form=form, title='Edit Vendor')
 
 
-@vendor.route('/vendors/<int:vendor_id>/delete', methods=['GET'])
+@vendor.route('/vendors/<int:vendor_id>/delete', methods=['POST'])
 @login_required
 def delete_vendor(vendor_id):
     """Remove a vendor from the system."""
+    form = DeleteForm()
+    if not form.validate_on_submit():
+        abort(400)
     vendor = db.session.get(Vendor, vendor_id)
     if vendor is None:
         abort(404)

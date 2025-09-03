@@ -86,7 +86,8 @@ def check_negative_invoice_reverse(invoice_obj):
 def view_purchase_orders():
     """Show outstanding purchase orders."""
     orders = PurchaseOrder.query.filter_by(received=False).order_by(PurchaseOrder.order_date.desc()).all()
-    return render_template('purchase_orders/view_purchase_orders.html', orders=orders)
+    delete_form = DeleteForm()
+    return render_template('purchase_orders/view_purchase_orders.html', orders=orders, delete_form=delete_form)
 
 
 @purchase.route('/purchase_orders/create', methods=['GET', 'POST'])
@@ -178,10 +179,13 @@ def edit_purchase_order(po_id):
     return render_template('purchase_orders/edit_purchase_order.html', form=form, po=po)
 
 
-@purchase.route('/purchase_orders/<int:po_id>/delete', methods=['GET'])
+@purchase.route('/purchase_orders/<int:po_id>/delete', methods=['POST'])
 @login_required
 def delete_purchase_order(po_id):
     """Delete an unreceived purchase order."""
+    form = DeleteForm()
+    if not form.validate_on_submit():
+        abort(400)
     po = db.session.get(PurchaseOrder, po_id)
     if po is None:
         abort(404)

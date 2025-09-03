@@ -369,7 +369,7 @@ def test_delete_unreceived_purchase_order(client, app):
 
     with client:
         login(client, email, 'pass')
-        resp = client.get(f'/purchase_orders/{po_id}/delete', follow_redirects=True)
+        resp = client.post(f'/purchase_orders/{po_id}/delete', follow_redirects=True)
         assert resp.status_code == 200
 
     with app.app_context():

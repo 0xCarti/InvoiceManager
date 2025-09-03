@@ -20,7 +20,10 @@
                 <td>{{ code.description or '' }}</td>
                 <td>
                     <a href="{{ url_for('glcode.edit_gl_code', code_id=code.id) }}" class="btn btn-secondary btn-sm">Edit</a>
-                    <a href="{{ url_for('glcode.delete_gl_code', code_id=code.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?');">Delete</a>
+                    <form action="{{ url_for('glcode.delete_gl_code', code_id=code.id) }}" method="post" class="d-inline">
+                        {{ delete_form.hidden_tag() }}
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?');">Delete</button>
+                    </form>
                 </td>
             </tr>
             {% endfor %}

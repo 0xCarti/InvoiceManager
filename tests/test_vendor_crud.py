@@ -50,7 +50,7 @@ def test_vendor_crud_flow(client, app):
 
     with client:
         login(client, email, 'pass')
-        resp = client.get(f'/vendors/{vid}/delete', follow_redirects=True)
+        resp = client.post(f'/vendors/{vid}/delete', follow_redirects=True)
         assert resp.status_code == 200
 
     with app.app_context():

@@ -133,10 +133,13 @@ def create_invoice():
     return render_template('invoices/create_invoice.html', form=form)
 
 
-@invoice.route('/delete_invoice/<invoice_id>', methods=['GET'])
+@invoice.route('/delete_invoice/<invoice_id>', methods=['POST'])
 @login_required
 def delete_invoice(invoice_id):
     """Delete an invoice and its lines."""
+    form = DeleteForm()
+    if not form.validate_on_submit():
+        abort(400)
     # Retrieve the invoice object from the database
     invoice = db.session.get(Invoice, invoice_id)
     if invoice is None:
@@ -239,4 +242,5 @@ def view_invoices():
         query = query.filter(Invoice.date_created <= datetime.combine(end_date, datetime.max.time()))
 
     invoices = query.order_by(Invoice.date_created.desc()).all()
-    return render_template('invoices/view_invoices.html', invoices=invoices, form=form)
+    delete_form = DeleteForm()
+    return render_template('invoices/view_invoices.html', invoices=invoices, form=form, delete_form=delete_form)

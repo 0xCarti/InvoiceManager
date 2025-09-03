@@ -54,7 +54,8 @@ glcode_bp = Blueprint('glcode', __name__)
 def view_gl_codes():
     """List GL codes."""
     codes = GLCode.query.all()
-    return render_template('gl_codes/view_gl_codes.html', codes=codes)
+    delete_form = DeleteForm()
+    return render_template('gl_codes/view_gl_codes.html', codes=codes, delete_form=delete_form)
 
 
 @glcode_bp.route('/gl_codes/create', methods=['GET', 'POST'])
@@ -88,10 +89,13 @@ def edit_gl_code(code_id):
     return render_template('gl_codes/edit_gl_code.html', form=form)
 
 
-@glcode_bp.route('/gl_codes/<int:code_id>/delete', methods=['GET'])
+@glcode_bp.route('/gl_codes/<int:code_id>/delete', methods=['POST'])
 @login_required
 def delete_gl_code(code_id):
     """Delete a GL code."""
+    form = DeleteForm()
+    if not form.validate_on_submit():
+        abort(400)
     code = db.session.get(GLCode, code_id)
     if code is None:
         abort(404)
