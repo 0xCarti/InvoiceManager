@@ -100,9 +100,8 @@ def create_app(args: list):
     # variable.  This is useful for container deployments where the database
     # may reside in a mounted volume.  If the provided path is a directory,
     # store the SQLite file inside that directory.
-    db_path = os.getenv(
-        "DATABASE_PATH", os.path.join(base_dir, "inventory.db")
-    )
+    default_db_path = os.path.join(base_dir, "inventory.db")
+    db_path = os.getenv("DATABASE_PATH", default_db_path)
     if os.path.isdir(db_path):
         db_path = os.path.join(db_path, "inventory.db")
 
@@ -135,11 +134,9 @@ def create_app(args: list):
     def format_datetime(value, fmt="%Y-%m-%d %H:%M:%S"):
         if value is None:
             return ""
-        tz_name = (
-            getattr(current_user, "timezone", None)
-            or DEFAULT_TIMEZONE
-            or "UTC"
-        )
+        tz_name = getattr(current_user, "timezone", None)
+        if not tz_name:
+            tz_name = DEFAULT_TIMEZONE or "UTC"
         try:
             tz = ZoneInfo(tz_name)
         except Exception:
@@ -161,8 +158,6 @@ def create_app(args: list):
         return dict(NAV_LINKS=NAV_LINKS)
 
     with app.app_context():
-        from app.models import User
-        from app.routes import auth_routes
         from app.routes.auth_routes import admin, auth
         from app.routes.customer_routes import customer
         from app.routes.event_routes import event

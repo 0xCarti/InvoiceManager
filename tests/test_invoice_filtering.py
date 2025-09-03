@@ -48,7 +48,8 @@ def test_filter_by_invoice_id(client, app):
     with client:
         login(client, user_email, "pass")
         response = client.get(
-            "/view_invoices?invoice_id=INV2", follow_redirects=True
+            "/view_invoices?invoice_id=INV2",
+            follow_redirects=True,
         )
         assert b"INV2" in response.data
         assert b"INV1" not in response.data
@@ -60,7 +61,8 @@ def test_filter_by_customer(client, app):
     with client:
         login(client, user_email, "pass")
         response = client.get(
-            f"/view_invoices?customer_id={c1_id}", follow_redirects=True
+            f"/view_invoices?customer_id={c1_id}",
+            follow_redirects=True,
         )
         assert b"INV1" in response.data
         assert b"INV3" in response.data
