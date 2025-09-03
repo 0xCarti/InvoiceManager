@@ -66,6 +66,7 @@ def test_event_lifecycle(client, app):
                 "name": "Test Event",
                 "start_date": "2023-01-01",
                 "end_date": "2023-01-02",
+                "event_type": "inventory",
             },
             follow_redirects=True,
         )
@@ -133,6 +134,7 @@ def test_bulk_stand_sheet(client, app):
                 "name": "BulkEvent",
                 "start_date": "2023-02-01",
                 "end_date": "2023-02-02",
+                "event_type": "inventory",
             },
             follow_redirects=True,
         )
@@ -172,6 +174,7 @@ def test_no_sales_after_confirmation(client, app):
                 "name": "ConfirmEvent",
                 "start_date": "2023-03-01",
                 "end_date": "2023-03-02",
+                "event_type": "inventory",
             },
             follow_redirects=True,
         )
@@ -212,7 +215,8 @@ def test_save_stand_sheet(client, app):
         client.post('/events/create', data={
             'name': 'SheetEvent',
             'start_date': '2023-03-01',
-            'end_date': '2023-03-02'
+            'end_date': '2023-03-02',
+            'event_type': 'inventory'
         }, follow_redirects=True)
 
     with app.app_context():
@@ -253,7 +257,8 @@ def test_terminal_sales_prefill(client, app):
         client.post('/events/create', data={
             'name': 'PrefillEvent',
             'start_date': '2023-04-01',
-            'end_date': '2023-04-02'
+            'end_date': '2023-04-02',
+            'event_type': 'inventory'
         }, follow_redirects=True)
 
     with app.app_context():
@@ -287,7 +292,8 @@ def test_upload_sales_xls(client, app):
         client.post('/events/create', data={
             'name': 'UploadXLS',
             'start_date': '2025-06-20',
-            'end_date': '2025-06-21'
+            'end_date': '2025-06-21',
+            'event_type': 'inventory'
         }, follow_redirects=True)
 
     with app.app_context():
@@ -341,7 +347,8 @@ def test_upload_sales_pdf(client, app):
         client.post('/events/create', data={
             'name': 'UploadPDF',
             'start_date': '2025-06-20',
-            'end_date': '2025-06-21'
+            'end_date': '2025-06-21',
+            'event_type': 'inventory'
         }, follow_redirects=True)
 
     with app.app_context():

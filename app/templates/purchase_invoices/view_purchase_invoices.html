@@ -9,6 +9,7 @@
                 <th>ID</th>
                 <th>PO</th>
                 <th>Vendor</th>
+                <th>Location</th>
                 <th>Date</th>
                 <th>Invoice #</th>
                 <th>Total</th>
@@ -21,6 +22,7 @@
                 <td>{{ inv.id }}</td>
                 <td>{{ inv.purchase_order_id }}</td>
                 <td>{{ inv.purchase_order.vendor.first_name }} {{ inv.purchase_order.vendor.last_name }}</td>
+                <td>{{ inv.location_name }}</td>
                 <td>{{ inv.received_date }}</td>
                 <td>{{ inv.invoice_number or '' }}</td>
                 <td>{{ '%.2f'|format(inv.total) }}</td>
