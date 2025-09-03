@@ -356,6 +356,7 @@ def view_transfer(transfer_id):
 
 
 @transfer.route('/transfers/generate_report', methods=['GET', 'POST'])
+@login_required
 def generate_report():
     """Generate a transfer summary over a date range."""
     form = DateRangeForm()
