@@ -1,4 +1,5 @@
 # Invoice Manager
+[![Coverage](https://codecov.io/gh/<OWNER>/InvoiceManager/branch/main/graph/badge.svg)](https://codecov.io/gh/<OWNER>/InvoiceManager)
 
 A Flask-based application for managing invoices, products and vendors. The project comes with a comprehensive test suite using `pytest`.
 
