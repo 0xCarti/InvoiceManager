@@ -3,6 +3,8 @@
 
 [![Dependencies](https://img.shields.io/librariesio/github/0xCarti/InvoiceManager)](https://libraries.io/github/0xCarti/InvoiceManager)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A Flask-based application for managing invoices, products and vendors. The project comes with a comprehensive test suite using `pytest`.
 
 ## Installation
