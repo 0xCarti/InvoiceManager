@@ -1,5 +1,4 @@
 import os
-from datetime import datetime
 
 from flask import (
     Blueprint,
@@ -9,53 +8,14 @@ from flask import (
     redirect,
     render_template,
     request,
-    session,
     url_for,
 )
-from flask_login import current_user, login_required
-from sqlalchemy import func
+from flask_login import login_required
 from werkzeug.utils import secure_filename
 
-from app import GST, db, socketio
-from app.forms import (
-    CustomerForm,
-    DateRangeForm,
-    DeleteForm,
-    GLCodeForm,
-    ImportItemsForm,
-    InvoiceFilterForm,
-    InvoiceForm,
-    ItemForm,
-    LocationForm,
-    LoginForm,
-    ProductForm,
-    ProductRecipeForm,
-    ProductSalesReportForm,
-    ProductWithRecipeForm,
-    PurchaseOrderForm,
-    ReceiveInvoiceForm,
-    TransferForm,
-    VendorInvoiceReportForm,
-)
-from app.models import (
-    Customer,
-    GLCode,
-    Invoice,
-    InvoiceProduct,
-    Item,
-    ItemUnit,
-    Location,
-    LocationStandItem,
-    Product,
-    ProductRecipeItem,
-    PurchaseInvoice,
-    PurchaseInvoiceItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
-    PurchaseOrderItemArchive,
-    Transfer,
-    TransferItem,
-)
+from app import db
+from app.forms import ImportItemsForm, ItemForm
+from app.models import Item, ItemUnit, LocationStandItem
 from app.utils.activity import log_activity
 
 item = Blueprint("item", __name__)

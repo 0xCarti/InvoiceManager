@@ -1,62 +1,9 @@
-import os
-from datetime import datetime
+from flask import Blueprint, abort, flash, redirect, render_template, url_for
+from flask_login import login_required
 
-from flask import (
-    Blueprint,
-    abort,
-    flash,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    session,
-    url_for,
-)
-from flask_login import current_user, login_required
-from sqlalchemy import func
-from werkzeug.utils import secure_filename
-
-from app import GST, db, socketio
-from app.forms import (
-    CustomerForm,
-    DateRangeForm,
-    DeleteForm,
-    GLCodeForm,
-    ImportItemsForm,
-    InvoiceFilterForm,
-    InvoiceForm,
-    ItemForm,
-    LocationForm,
-    LoginForm,
-    ProductForm,
-    ProductRecipeForm,
-    ProductSalesReportForm,
-    ProductWithRecipeForm,
-    PurchaseOrderForm,
-    ReceiveInvoiceForm,
-    TransferForm,
-    VendorInvoiceReportForm,
-)
-from app.models import (
-    Customer,
-    GLCode,
-    Invoice,
-    InvoiceProduct,
-    Item,
-    ItemUnit,
-    Location,
-    LocationStandItem,
-    Product,
-    ProductRecipeItem,
-    PurchaseInvoice,
-    PurchaseInvoiceItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
-    PurchaseOrderItemArchive,
-    Transfer,
-    TransferItem,
-)
-from app.utils.activity import log_activity
+from app import db
+from app.forms import DeleteForm, GLCodeForm
+from app.models import GLCode
 
 glcode_bp = Blueprint("glcode", __name__)
 

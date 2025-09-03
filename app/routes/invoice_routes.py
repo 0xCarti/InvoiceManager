@@ -1,61 +1,20 @@
-import os
 from datetime import datetime
 
 from flask import (
     Blueprint,
     abort,
     flash,
-    jsonify,
     redirect,
     render_template,
     request,
-    session,
     url_for,
 )
 from flask_login import current_user, login_required
 from sqlalchemy import func
-from werkzeug.utils import secure_filename
 
-from app import GST, db, socketio
-from app.forms import (
-    CustomerForm,
-    DateRangeForm,
-    DeleteForm,
-    GLCodeForm,
-    ImportItemsForm,
-    InvoiceFilterForm,
-    InvoiceForm,
-    ItemForm,
-    LocationForm,
-    LoginForm,
-    ProductForm,
-    ProductRecipeForm,
-    ProductSalesReportForm,
-    ProductWithRecipeForm,
-    PurchaseOrderForm,
-    ReceiveInvoiceForm,
-    TransferForm,
-    VendorInvoiceReportForm,
-)
-from app.models import (
-    Customer,
-    GLCode,
-    Invoice,
-    InvoiceProduct,
-    Item,
-    ItemUnit,
-    Location,
-    LocationStandItem,
-    Product,
-    ProductRecipeItem,
-    PurchaseInvoice,
-    PurchaseInvoiceItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
-    PurchaseOrderItemArchive,
-    Transfer,
-    TransferItem,
-)
+from app import GST, db
+from app.forms import DeleteForm, InvoiceFilterForm, InvoiceForm
+from app.models import Customer, Invoice, InvoiceProduct, Product
 from app.utils.activity import log_activity
 
 invoice = Blueprint("invoice", __name__)

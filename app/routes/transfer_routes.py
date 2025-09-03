@@ -2,14 +2,11 @@
 
 # flake8: noqa
 
-import os
-from datetime import datetime
 
 from flask import (
     Blueprint,
     abort,
     flash,
-    jsonify,
     redirect,
     render_template,
     request,
@@ -18,46 +15,14 @@ from flask import (
 )
 from flask_login import current_user, login_required
 from sqlalchemy import func
-from werkzeug.utils import secure_filename
 
-from app import GST, db, socketio
-from app.forms import (
-    ConfirmForm,
-    CustomerForm,
-    DateRangeForm,
-    DeleteForm,
-    GLCodeForm,
-    ImportItemsForm,
-    InvoiceFilterForm,
-    InvoiceForm,
-    ItemForm,
-    LocationForm,
-    LoginForm,
-    ProductForm,
-    ProductRecipeForm,
-    ProductSalesReportForm,
-    ProductWithRecipeForm,
-    PurchaseOrderForm,
-    ReceiveInvoiceForm,
-    TransferForm,
-    VendorInvoiceReportForm,
-)
+from app import db, socketio
+from app.forms import ConfirmForm, DateRangeForm, TransferForm
 from app.models import (
-    Customer,
-    GLCode,
-    Invoice,
-    InvoiceProduct,
     Item,
     ItemUnit,
     Location,
     LocationStandItem,
-    Product,
-    ProductRecipeItem,
-    PurchaseInvoice,
-    PurchaseInvoiceItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
-    PurchaseOrderItemArchive,
     Transfer,
     TransferItem,
     User,
@@ -159,14 +124,14 @@ def view_transfers():
         query = query.filter(Transfer.id == transfer_id)
 
     if from_location_name != "":
-        query = query.join(Location, Transfer.from_location_id == Location.id).filter(
-            Location.name.ilike(f"%{from_location_name}%")
-        )
+        query = query.join(
+            Location, Transfer.from_location_id == Location.id
+        ).filter(Location.name.ilike(f"%{from_location_name}%"))
 
     if to_location_name != "":
-        query = query.join(Location, Transfer.to_location_id == Location.id).filter(
-            Location.name.ilike(f"%{to_location_name}%")
-        )
+        query = query.join(
+            Location, Transfer.to_location_id == Location.id
+        ).filter(Location.name.ilike(f"%{to_location_name}%"))
 
     if filter_option == "completed":
         query = query.filter(Transfer.completed)
@@ -338,7 +303,6 @@ def delete_transfer(transfer_id):
 @transfer.route(
     "/transfers/complete/<int:transfer_id>", methods=["GET", "POST"]
 )
-
 @login_required
 def complete_transfer(transfer_id):
     """Mark a transfer as completed."""
@@ -380,7 +344,6 @@ def complete_transfer(transfer_id):
 @transfer.route(
     "/transfers/uncomplete/<int:transfer_id>", methods=["GET", "POST"]
 )
-
 @login_required
 def uncomplete_transfer(transfer_id):
     """Revert a transfer to not completed."""
