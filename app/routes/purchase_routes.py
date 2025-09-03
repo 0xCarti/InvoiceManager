@@ -17,7 +17,6 @@ from app.forms import (
     ProductWithRecipeForm,
     ProductRecipeForm,
     InvoiceForm,
-    SignupForm,
     LoginForm,
     InvoiceFilterForm,
     PurchaseOrderForm,

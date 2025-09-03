@@ -23,7 +23,6 @@ from urllib.parse import urlparse
 from app.forms import (
     LoginForm,
     UserForm,
-    SignupForm,
     PasswordResetRequestForm,
     CreateBackupForm,
     RestoreBackupForm,
@@ -33,6 +32,7 @@ from app.forms import (
     SettingsForm,
     TimezoneForm,
     NotificationForm,
+    InviteUserForm,
 )
 
 from app.models import (
@@ -60,6 +60,7 @@ from app.utils.imports import (
     _import_locations,
     _import_products,
 )
+from app import limiter
 
 auth = Blueprint('auth', __name__)
 admin = Blueprint('admin', __name__)
@@ -93,6 +94,7 @@ def verify_reset_token(token: str, max_age: int = 3600):
 
 
 @auth.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
 def login():
     """Authenticate a user and start their session."""
     form = LoginForm()
@@ -129,6 +131,7 @@ def logout():
 
 
 @auth.route('/reset', methods=['GET', 'POST'])
+@limiter.limit("3 per hour")
 def reset_request():
     """Request a password reset email."""
     form = PasswordResetRequestForm()
@@ -293,7 +296,27 @@ def users():
 
     users = User.query.all()  # Fetch all users from the database
 
-    if request.method == 'POST':
+    form = UserForm()
+    invite_form = InviteUserForm()
+
+    if invite_form.submit.data and invite_form.validate_on_submit():
+        email = invite_form.email.data
+        existing = User.query.filter_by(email=email).first()
+        if existing:
+            flash('User already exists.', 'danger')
+        else:
+            temp_password = generate_password_hash(os.urandom(16).hex())
+            new_user = User(email=email, password=temp_password, active=False, is_admin=False)
+            db.session.add(new_user)
+            db.session.commit()
+            token = generate_reset_token(new_user.id)
+            invite_url = url_for('auth.reset_token', token=token, _external=True)
+            send_email(email, 'You are invited to InvoiceManager',
+                       f'Click the link to set your password: {invite_url}')
+            flash('Invitation sent.', 'success')
+        return redirect(url_for('admin.users'))
+
+    if request.method == 'POST' and form.validate_on_submit():
         user_id = request.args.get('user_id')
         action = request.form.get('action')
 
@@ -311,37 +334,8 @@ def users():
             flash('User not found', 'danger')
 
         return redirect(url_for('admin.users'))
-    form = UserForm()
-    return render_template('admin/view_users.html', users=users, form=form)
 
-
-@auth.route('/signup', methods=['GET', 'POST'])
-def signup():
-    """Register a new user account."""
-    form = SignupForm()
-    if form.validate_on_submit():
-        if form.password.data != form.confirm_password.data:
-            flash('Passwords must match.', 'danger')
-            return redirect(url_for('auth.signup'))
-        # Check if email already exists
-        existing_user = User.query.filter_by(email=form.email.data).first()
-        if existing_user:
-            flash('Email already in use.', 'danger')
-            return redirect(url_for('auth.signup'))
-
-        # Create a new user instance
-        new_user = User(
-            email=form.email.data,
-            password=generate_password_hash(form.password.data),
-            active=False,
-            is_admin=False
-        )
-        db.session.add(new_user)
-        db.session.commit()
-        log_activity('Signed up', new_user.id)
-        flash('Account created successfully! Please wait for account activation.', 'success')
-        return redirect(url_for('auth.login'))
-    return render_template('auth/signup.html', form=form)
+    return render_template('admin/view_users.html', users=users, form=form, invite_form=invite_form)
 
 
 @admin.route('/delete_user/<int:user_id>', methods=['POST'])

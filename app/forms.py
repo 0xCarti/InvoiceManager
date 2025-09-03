@@ -38,20 +38,6 @@ class LoginForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField("Password", validators=[DataRequired()])
 
-
-class SignupForm(FlaskForm):
-    email = StringField("Email", validators=[DataRequired(), Email()])
-    password = PasswordField("Password", validators=[DataRequired()])
-    confirm_password = PasswordField(
-        "Confirm Password",
-        validators=[
-            DataRequired(),
-            EqualTo("password", message="Passwords must match"),
-        ],
-    )
-    submit = SubmitField("Sign Up")
-
-
 class PasswordResetRequestForm(FlaskForm):
     """Form for requesting a password reset email."""
 
@@ -161,6 +147,11 @@ class TransferForm(FlaskForm):
 
 class UserForm(FlaskForm):
     pass
+
+
+class InviteUserForm(FlaskForm):
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    submit = SubmitField("Send Invite")
 
 
 class ChangePasswordForm(FlaskForm):
