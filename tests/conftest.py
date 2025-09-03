@@ -1,16 +1,14 @@
 import os
 import sys
-
 import pytest
-
-# Ensure the app package is importable when tests change directories
-sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-)
 
 from app import create_app, db
 from app.models import GLCode
 
+
+# Ensure the app package is importable when tests change directories
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, BASE_DIR)
 
 @pytest.fixture
 def app(tmp_path):
