@@ -328,6 +328,26 @@ def _get_stand_items(location_id, event_id=None):
                     }
                 )
 
+    # Include any items directly assigned to the location that may not be
+    # part of a product recipe (e.g. items received via purchase invoices).
+    for record in LocationStandItem.query.filter_by(location_id=location_id).all():
+        if record.item_id in seen:
+            continue
+        item = record.item
+        recv_unit = next((u for u in item.units if u.receiving_default), None)
+        trans_unit = next((u for u in item.units if u.transfer_default), None)
+        stand_items.append(
+            {
+                "item": item,
+                "expected": record.expected_count,
+                "sales": sales_by_item.get(record.item_id, 0),
+                "sheet": sheet_map.get(record.item_id),
+                "recv_unit": recv_unit,
+                "trans_unit": trans_unit,
+            }
+        )
+        seen.add(record.item_id)
+
     return location, stand_items
 
 
@@ -458,6 +478,10 @@ def close_event(event_id):
             lsi = LocationStandItem.query.filter_by(
                 location_id=el.location_id, item_id=sheet.item_id
             ).first()
+            if sheet.closing_count == 0:
+                if lsi:
+                    db.session.delete(lsi)
+                continue
             if not lsi:
                 lsi = LocationStandItem(
                     location_id=el.location_id, item_id=sheet.item_id
