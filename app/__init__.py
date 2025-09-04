@@ -27,6 +27,7 @@ NAV_LINKS = {
     "item.view_items": "Items",
     "locations.view_locations": "Locations",
     "product.view_products": "Products",
+    "spoilage.view_spoilage": "Spoilage",
     "glcode.view_gl_codes": "GL Codes",
     "purchase.view_purchase_orders": "Purchase Orders",
     "purchase.view_purchase_invoices": "Purchase Invoices",
@@ -170,6 +171,7 @@ def create_app(args: list):
         from app.routes.purchase_routes import purchase
         from app.routes.report_routes import report
         from app.routes.transfer_routes import transfer
+        from app.routes.spoilage_routes import spoilage
         from app.routes.vendor_routes import vendor
 
         app.register_blueprint(auth, url_prefix="/auth")
@@ -177,6 +179,7 @@ def create_app(args: list):
         app.register_blueprint(location)
         app.register_blueprint(item)
         app.register_blueprint(transfer)
+        app.register_blueprint(spoilage)
         app.register_blueprint(admin)
         app.register_blueprint(customer)
         app.register_blueprint(invoice)

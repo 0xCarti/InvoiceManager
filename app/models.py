@@ -87,6 +87,9 @@ class Location(db.Model):
     archived = db.Column(
         db.Boolean, default=False, nullable=False, server_default="0"
     )
+    is_spoilage = db.Column(
+        db.Boolean, default=False, nullable=False, server_default="0"
+    )
     products = db.relationship(
         "Product", secondary=location_products, backref="locations"
     )
