@@ -128,8 +128,11 @@ def create_purchase_order():
         flash("Purchase order created successfully!", "success")
         return redirect(url_for("purchase.view_purchase_orders"))
 
+    codes = GLCode.query.filter(GLCode.code.like("5%"))
     return render_template(
-        "purchase_orders/create_purchase_order.html", form=form
+        "purchase_orders/create_purchase_order.html",
+        form=form,
+        gl_codes=codes,
     )
 
 

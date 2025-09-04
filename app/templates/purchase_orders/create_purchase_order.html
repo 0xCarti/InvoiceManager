@@ -51,6 +51,14 @@
                         <input type="text" id="new-item-name" class="form-control">
                     </div>
                     <div class="mb-3">
+                        <label for="new-item-gl-code" class="form-label">Purchase GL Code</label>
+                        <select id="new-item-gl-code" class="form-select">
+                            {% for code in gl_codes %}
+                                <option value="{{ code.id }}">{{ code.code }}{% if code.description %} - {{ code.description }}{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label for="new-item-base-unit" class="form-label">Base Unit</label>
                         <select id="new-item-base-unit" class="form-select">
                             <option value="ounce">Ounce</option>
@@ -58,6 +66,14 @@
                             <option value="each" selected>Each</option>
                             <option value="millilitre">Millilitre</option>
                         </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="new-item-receiving-unit" class="form-label">Receiving Unit</label>
+                        <input type="text" id="new-item-receiving-unit" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label for="new-item-transfer-unit" class="form-label">Transfer Unit</label>
+                        <input type="text" id="new-item-transfer-unit" class="form-control">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -126,12 +142,16 @@
 
     document.getElementById('save-new-item').addEventListener('click', function() {
         const name = document.getElementById('new-item-name').value.trim();
+        const glCode = document.getElementById('new-item-gl-code').value;
         const baseUnit = document.getElementById('new-item-base-unit').value;
-        if (!name) return;
+        const recvUnit = document.getElementById('new-item-receiving-unit').value.trim();
+        const transUnit = document.getElementById('new-item-transfer-unit').value.trim();
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        if (!name || !recvUnit || !transUnit) return;
         fetch('/items/quick_add', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: name, base_unit: baseUnit})
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({name: name, purchase_gl_code: glCode, base_unit: baseUnit, receiving_unit: recvUnit, transfer_unit: transUnit})
         }).then(r => r.json()).then(data => {
             if (data.id) {
                 itemOptions += `<option value="${data.id}">${data.name}</option>`;
@@ -139,6 +159,8 @@
                     sel.insertAdjacentHTML('beforeend', `<option value="${data.id}">${data.name}</option>`);
                 });
                 document.getElementById('new-item-name').value = '';
+                document.getElementById('new-item-receiving-unit').value = '';
+                document.getElementById('new-item-transfer-unit').value = '';
                 bootstrap.Modal.getInstance(document.getElementById('newItemModal')).hide();
             }
         });

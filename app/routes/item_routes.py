@@ -240,22 +240,53 @@ def quick_add_item():
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
     base_unit = data.get("base_unit")
+    purchase_gl_code = data.get("purchase_gl_code")
+    try:
+        purchase_gl_code = int(purchase_gl_code)
+    except (TypeError, ValueError):
+        purchase_gl_code = None
+    recv_unit = (data.get("receiving_unit") or "").strip()
+    trans_unit = (data.get("transfer_unit") or "").strip()
     valid_units = {"ounce", "gram", "each", "millilitre"}
-    if not name or base_unit not in valid_units:
+    if (
+        not name
+        or base_unit not in valid_units
+        or not purchase_gl_code
+        or not recv_unit
+        or not trans_unit
+    ):
         return jsonify({"error": "Invalid data"}), 400
     if Item.query.filter_by(name=name, archived=False).first():
         return jsonify({"error": "Item exists"}), 400
-    item = Item(name=name, base_unit=base_unit)
+    item = Item(
+        name=name,
+        base_unit=base_unit,
+        purchase_gl_code_id=purchase_gl_code,
+    )
     db.session.add(item)
     db.session.commit()
-    unit = ItemUnit(
-        item_id=item.id,
-        name=base_unit,
-        factor=1,
-        receiving_default=True,
-        transfer_default=True,
-    )
-    db.session.add(unit)
+    units = {}
+
+    def add_unit(name, receiving=False, transfer=False):
+        unit = units.get(name)
+        if unit:
+            if receiving:
+                unit.receiving_default = True
+            if transfer:
+                unit.transfer_default = True
+        else:
+            units[name] = ItemUnit(
+                item_id=item.id,
+                name=name,
+                factor=1,
+                receiving_default=receiving,
+                transfer_default=transfer,
+            )
+
+    add_unit(base_unit)
+    add_unit(recv_unit, receiving=True)
+    add_unit(trans_unit, transfer=True)
+    db.session.add_all(units.values())
     db.session.commit()
     log_activity(f"Added item {item.name}")
     return jsonify({"id": item.id, "name": item.name})

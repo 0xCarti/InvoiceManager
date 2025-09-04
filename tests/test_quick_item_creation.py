@@ -1,7 +1,7 @@
 from werkzeug.security import generate_password_hash
 
 from app import db
-from app.models import Item, ItemUnit, User, Vendor
+from app.models import GLCode, Item, ItemUnit, User, Vendor
 from tests.utils import login
 
 
@@ -30,11 +30,20 @@ def test_quick_add_item_endpoint(client, app):
             active=True,
         )
         db.session.add(user)
+        gl = GLCode.query.filter_by(code="5000").first()
+        gl_id = gl.id
         db.session.commit()
     with client:
         login(client, "apiquick@example.com", "pass")
         resp = client.post(
-            "/items/quick_add", json={"name": "FastItem", "base_unit": "each"}
+            "/items/quick_add",
+            json={
+                "name": "FastItem",
+                "purchase_gl_code": gl_id,
+                "base_unit": "each",
+                "receiving_unit": "case",
+                "transfer_unit": "each",
+            },
         )
         assert resp.status_code == 200
         data = resp.get_json()
@@ -44,6 +53,10 @@ def test_quick_add_item_endpoint(client, app):
         item = db.session.get(Item, item_id)
         assert item is not None
         assert item.base_unit == "each"
-        unit = ItemUnit.query.filter_by(item_id=item_id).first()
-        assert unit is not None
-        assert unit.name == "each"
+        assert item.purchase_gl_code_id == gl_id
+        units = ItemUnit.query.filter_by(item_id=item_id).all()
+        assert len(units) == 2
+        each_unit = next(u for u in units if u.name == "each")
+        case_unit = next(u for u in units if u.name == "case")
+        assert case_unit.receiving_default is True
+        assert each_unit.transfer_default is True
