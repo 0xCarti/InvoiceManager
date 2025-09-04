@@ -31,4 +31,3 @@ USER app
 
 ENTRYPOINT ["./entrypoint.sh"]
 CMD ["gunicorn", "run:app"]
-

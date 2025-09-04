@@ -157,4 +157,3 @@ These defaults are provided for convenience during testing, but you can override
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-
