@@ -1,7 +1,7 @@
 """add purchase gl code to location stand item"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 
 def _has_column(table_name: str, column_name: str, bind) -> bool:
@@ -28,34 +28,47 @@ depends_on = None
 def upgrade():
     bind = op.get_bind()
 
-    if not _has_column("location_stand_item", "purchase_gl_code_id", bind):
-        op.add_column(
-            "location_stand_item",
-            sa.Column("purchase_gl_code_id", sa.Integer(), nullable=True),
-        )
-
-    if not _has_fk(
+    has_column = _has_column(
+        "location_stand_item", "purchase_gl_code_id", bind
+    )
+    has_fk = _has_fk(
         "location_stand_item", "fk_location_stand_item_purchase_gl_code", bind
-    ):
-        op.create_foreign_key(
-            "fk_location_stand_item_purchase_gl_code",
-            "location_stand_item",
-            "gl_code",
-            ["purchase_gl_code_id"],
-            ["id"],
-        )
+    )
+
+    with op.batch_alter_table(
+        "location_stand_item", recreate="always"
+    ) as batch_op:
+        if not has_column:
+            batch_op.add_column(
+                sa.Column("purchase_gl_code_id", sa.Integer(), nullable=True)
+            )
+
+        if not has_fk:
+            batch_op.create_foreign_key(
+                "fk_location_stand_item_purchase_gl_code",
+                "gl_code",
+                ["purchase_gl_code_id"],
+                ["id"],
+            )
 
 
 def downgrade():
     bind = op.get_bind()
 
-    if _has_fk("location_stand_item", "fk_location_stand_item_purchase_gl_code", bind):
-        op.drop_constraint(
-            "fk_location_stand_item_purchase_gl_code",
-            "location_stand_item",
-            type_="foreignkey",
-        )
+    has_fk = _has_fk(
+        "location_stand_item", "fk_location_stand_item_purchase_gl_code", bind
+    )
+    has_column = _has_column(
+        "location_stand_item", "purchase_gl_code_id", bind
+    )
 
-    if _has_column("location_stand_item", "purchase_gl_code_id", bind):
-        op.drop_column("location_stand_item", "purchase_gl_code_id")
+    with op.batch_alter_table(
+        "location_stand_item", recreate="always"
+    ) as batch_op:
+        if has_fk:
+            batch_op.drop_constraint(
+                "fk_location_stand_item_purchase_gl_code", type_="foreignkey"
+            )
 
+        if has_column:
+            batch_op.drop_column("purchase_gl_code_id")
