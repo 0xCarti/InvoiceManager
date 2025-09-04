@@ -23,6 +23,10 @@ def create_backup():
     """Create a timestamped copy of the database."""
     backups_dir = current_app.config["BACKUP_FOLDER"]
     os.makedirs(backups_dir, exist_ok=True)
+    try:
+        os.chmod(backups_dir, 0o777)
+    except OSError:
+        pass
     db_path = _get_db_path()
     filename = f"backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.db"
     backup_path = os.path.join(backups_dir, filename)

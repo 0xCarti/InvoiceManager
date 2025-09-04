@@ -247,13 +247,23 @@ def quick_add_item():
         purchase_gl_code = None
     recv_unit = (data.get("receiving_unit") or "").strip()
     trans_unit = (data.get("transfer_unit") or "").strip()
+    try:
+        recv_factor = float(data.get("receiving_factor", 0))
+    except (TypeError, ValueError):
+        recv_factor = 0
+    try:
+        trans_factor = float(data.get("transfer_factor", 0))
+    except (TypeError, ValueError):
+        trans_factor = 0
     valid_units = {"ounce", "gram", "each", "millilitre"}
     if (
         not name
         or base_unit not in valid_units
         or not purchase_gl_code
         or not recv_unit
+        or recv_factor <= 0
         or not trans_unit
+        or trans_factor <= 0
     ):
         return jsonify({"error": "Invalid data"}), 400
     if Item.query.filter_by(name=name, archived=False).first():
@@ -267,25 +277,27 @@ def quick_add_item():
     db.session.commit()
     units = {}
 
-    def add_unit(name, receiving=False, transfer=False):
+    def add_unit(name, factor, receiving=False, transfer=False):
         unit = units.get(name)
         if unit:
             if receiving:
                 unit.receiving_default = True
             if transfer:
                 unit.transfer_default = True
+            # If the unit already exists but a different factor is provided,
+            # do not override the original to avoid inconsistencies.
         else:
             units[name] = ItemUnit(
                 item_id=item.id,
                 name=name,
-                factor=1,
+                factor=float(factor),
                 receiving_default=receiving,
                 transfer_default=transfer,
             )
 
-    add_unit(base_unit)
-    add_unit(recv_unit, receiving=True)
-    add_unit(trans_unit, transfer=True)
+    add_unit(base_unit, 1)
+    add_unit(recv_unit, recv_factor, receiving=True)
+    add_unit(trans_unit, trans_factor, transfer=True)
     db.session.add_all(units.values())
     db.session.commit()
     log_activity(f"Added item {item.name}")
