@@ -21,6 +21,8 @@ def test_vendor_crud_flow(client, app):
     email = setup_user(app)
     with client:
         login(client, email, "pass")
+        assert client.get("/vendors").status_code == 200
+        assert client.get("/vendors/create").status_code == 200
         resp = client.post(
             "/vendors/create",
             data={
@@ -43,6 +45,7 @@ def test_vendor_crud_flow(client, app):
 
     with client:
         login(client, email, "pass")
+        assert client.get(f"/vendors/{vid}/edit").status_code == 200
         resp = client.post(
             f"/vendors/{vid}/edit",
             data={
@@ -64,9 +67,18 @@ def test_vendor_crud_flow(client, app):
 
     with client:
         login(client, email, "pass")
+        assert client.get("/vendors/999/edit").status_code == 404
         resp = client.post(f"/vendors/{vid}/delete", follow_redirects=True)
         assert resp.status_code == 200
 
     with app.app_context():
         vendor = db.session.get(Vendor, vid)
         assert vendor.archived
+
+
+def test_view_vendors(client, app):
+    email = setup_user(app)
+    with client:
+        login(client, email, "pass")
+        resp = client.get("/vendors")
+        assert resp.status_code == 200
