@@ -570,9 +570,16 @@ def close_event(event_id):
                 continue
             if not lsi:
                 lsi = LocationStandItem(
-                    location_id=el.location_id, item_id=sheet.item_id
+                    location_id=el.location_id,
+                    item_id=sheet.item_id,
+                    purchase_gl_code_id=sheet.item.purchase_gl_code_id,
                 )
                 db.session.add(lsi)
+            elif (
+                lsi.purchase_gl_code_id is None
+                and sheet.item.purchase_gl_code_id is not None
+            ):
+                lsi.purchase_gl_code_id = sheet.item.purchase_gl_code_id
             lsi.expected_count = sheet.closing_count
 
         if counted_item_ids:
@@ -614,9 +621,8 @@ def inventory_report(event_id):
             expected = lsi.expected_count if lsi else 0
             variance = sheet.closing_count - expected
             cost_total = sheet.closing_count * item.cost
-            gl_code = (
-                item.gl_code_rel.code if item.gl_code_rel else "Unassigned"
-            )
+            gl_obj = item.purchase_gl_code_for_location(loc.id)
+            gl_code = gl_obj.code if gl_obj else "Unassigned"
             rows.append(
                 {
                     "location": loc,

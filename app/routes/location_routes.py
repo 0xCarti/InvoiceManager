@@ -50,6 +50,7 @@ def add_location():
                                 location_id=new_location.id,
                                 item_id=recipe_item.item_id,
                                 expected_count=0,
+                                purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
                             )
                         )
         db.session.commit()
@@ -105,6 +106,7 @@ def edit_location(location_id):
                                 location_id=location.id,
                                 item_id=recipe_item.item_id,
                                 expected_count=0,
+                                purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
                             )
                         )
         db.session.commit()

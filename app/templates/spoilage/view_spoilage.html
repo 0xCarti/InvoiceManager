@@ -40,13 +40,19 @@
             </tr>
         </thead>
         <tbody>
-            {% for ti, tr, item, from_loc in results %}
+            {% for ti, tr, item, from_loc, lsi in results %}
             <tr>
                 <td>{{ tr.date_created.date() }}</td>
                 <td>{{ from_loc.name }}</td>
                 <td>{{ item.name }}</td>
                 <td>{{ ti.quantity }}</td>
-                <td>{{ item.purchase_gl_code.code if item.purchase_gl_code else '' }}</td>
+                <td>
+                    {{
+                        lsi.purchase_gl_code.code
+                        if lsi and lsi.purchase_gl_code
+                        else (item.purchase_gl_code.code if item.purchase_gl_code else '')
+                    }}
+                </td>
             </tr>
             {% endfor %}
         </tbody>

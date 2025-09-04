@@ -45,6 +45,13 @@ class LocationStandItem(db.Model):
     expected_count = db.Column(
         db.Float, nullable=False, default=0.0, server_default="0.0"
     )
+    purchase_gl_code_id = db.Column(
+        db.Integer, db.ForeignKey("gl_code.id"), nullable=True
+    )
+
+    purchase_gl_code = relationship(
+        "GLCode", foreign_keys=[purchase_gl_code_id]
+    )
 
     location = relationship("Location", back_populates="stand_items")
     item = relationship("Item")
@@ -144,6 +151,15 @@ class Item(db.Model):
     archived = db.Column(
         db.Boolean, default=False, nullable=False, server_default="0"
     )
+
+    def purchase_gl_code_for_location(self, location_id: int):
+        """Return the purchase GL code for this item at a specific location."""
+        lsi = LocationStandItem.query.filter_by(
+            location_id=location_id, item_id=self.id
+        ).first()
+        if lsi and lsi.purchase_gl_code:
+            return lsi.purchase_gl_code
+        return self.purchase_gl_code
 
     __table_args__ = (
         db.Index(

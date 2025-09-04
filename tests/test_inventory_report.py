@@ -23,10 +23,15 @@ def test_inventory_report_variance(client, app):
             active=True,
         )
         loc = Location(name="InvLoc")
-        gl = GLCode(code="7000", description="Beverage")
+        gl = GLCode(code="500000", description="Beverage")
         db.session.add_all([user, loc, gl])
         db.session.commit()
-        item = Item(name="Pepsi", base_unit="each", cost=1.0, gl_code_id=gl.id)
+        item = Item(
+            name="Pepsi",
+            base_unit="each",
+            cost=1.0,
+            purchase_gl_code_id=gl.id,
+        )
         product = Product(name="Pepsi Product", price=1.0, cost=1.0)
         db.session.add_all([item, product])
         db.session.commit()
@@ -89,7 +94,7 @@ def test_inventory_report_variance(client, app):
         resp = client.get(f"/events/{eid}/inventory_report")
         assert resp.status_code == 200
         assert b"-1" in resp.data
-        assert b"7000" in resp.data
+        assert b"500000" in resp.data
 
 
 def test_inventory_close_updates_counts(client, app):
