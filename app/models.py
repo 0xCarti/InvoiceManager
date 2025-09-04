@@ -489,7 +489,7 @@ class PurchaseInvoiceItem(db.Model):
 
     @property
     def line_total(self):
-        return self.quantity * self.cost
+        return self.quantity * abs(self.cost)
 
 
 class PurchaseOrderItemArchive(db.Model):

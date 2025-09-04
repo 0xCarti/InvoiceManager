@@ -168,7 +168,9 @@
             const nextRow = e.target.closest('.item-row').nextElementSibling;
             if (nextRow && nextRow.querySelector('.cost')) {
                 e.preventDefault();
-                nextRow.querySelector('.cost').focus();
+                const nextCost = nextRow.querySelector('.cost');
+                nextCost.focus();
+                nextCost.select();
             }
         }
     });

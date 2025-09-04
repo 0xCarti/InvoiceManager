@@ -27,7 +27,7 @@
         <div class="row g-2 mt-2 item-row align-items-center">
             <div class="col">{{ item.item(class="form-control item-select") }}</div>
             <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select"></select></div>
-            <div class="col">{{ item.quantity(class="form-control") }}</div>
+            <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col-auto">
                 <button type="button" class="btn btn-danger remove-item">Remove</button>
             </div>
@@ -103,7 +103,7 @@
         row.innerHTML = `
             <div class="col"><select name="items-${index}-item" class="form-control item-select">${itemOptions}</select></div>
             <div class="col"><select name="items-${index}-unit" class="form-control unit-select"></select></div>
-            <div class="col"><input type="number" step="any" name="items-${index}-quantity" class="form-control"></div>
+            <div class="col"><input type="number" step="any" name="items-${index}-quantity" class="form-control quantity"></div>
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
         `;
         return row;
@@ -141,6 +141,21 @@
     document.getElementById('items').addEventListener('change', function(e) {
         if (e.target && e.target.classList.contains('item-select')) {
             fetchUnits(e.target);
+        }
+    });
+
+    document.getElementById('items').addEventListener('keydown', function(e) {
+        if (
+            e.target &&
+            e.target.classList.contains('quantity') &&
+            e.key === 'Tab' &&
+            !e.shiftKey
+        ) {
+            const nextRow = e.target.closest('.item-row').nextElementSibling;
+            if (nextRow && nextRow.querySelector('.quantity')) {
+                e.preventDefault();
+                nextRow.querySelector('.quantity').focus();
+            }
         }
     });
 

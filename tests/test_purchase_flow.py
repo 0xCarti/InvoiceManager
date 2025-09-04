@@ -287,9 +287,10 @@ def test_receive_prefills_items_and_return(client, app):
 
     with app.app_context():
         inv_item = PurchaseInvoiceItem.query.first()
-        assert inv_item.cost == -1.5
+        assert inv_item.cost == 1.5
         assert inv_item.quantity == -3
         assert inv_item.unit_id == unit_id
+        assert inv_item.line_total == -4.5
 
 
 def test_edit_purchase_order_updates(client, app):
