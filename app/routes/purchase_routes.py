@@ -197,8 +197,12 @@ def edit_purchase_order(po_id):
             form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
 
+    codes = GLCode.query.filter(GLCode.code.like("5%"))
     return render_template(
-        "purchase_orders/edit_purchase_order.html", form=form, po=po
+        "purchase_orders/edit_purchase_order.html",
+        form=form,
+        po=po,
+        gl_codes=codes,
     )
 
 
