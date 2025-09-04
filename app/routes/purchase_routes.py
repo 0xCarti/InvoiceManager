@@ -299,9 +299,10 @@ def receive_invoice(po_id):
                 request.form.get(f"items-{index}-return_item") is not None
             )
             if item_id and quantity is not None and cost is not None:
+                quantity = abs(quantity)
+                cost = abs(cost)
                 if is_return:
-                    quantity = -abs(quantity)
-                    cost = -abs(cost)
+                    quantity = -quantity
 
                 item_obj = db.session.get(Item, item_id)
                 unit_obj = (
@@ -328,7 +329,7 @@ def receive_invoice(po_id):
                         item_obj.quantity or 0
                     ) + quantity * factor
                     # store cost per base unit (always positive)
-                    item_obj.cost = abs(cost) / factor if factor else abs(cost)
+                    item_obj.cost = cost / factor if factor else cost
                     record = LocationStandItem.query.filter_by(
                         location_id=invoice.location_id, item_id=item_obj.id
                     ).first()
@@ -368,7 +369,7 @@ def view_purchase_invoices():
     """List all received purchase invoices."""
     page = request.args.get("page", 1, type=int)
     invoices = PurchaseInvoice.query.order_by(
-        PurchaseInvoice.received_date.desc()
+        PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc()
     ).paginate(page=page, per_page=20)
     return render_template(
         "purchase_invoices/view_purchase_invoices.html", invoices=invoices
