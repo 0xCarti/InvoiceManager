@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Spoilage</h2>
+    <form method="get" class="row g-3 mb-4">
+        <div class="col-auto">
+            {{ form.start_date.label }}
+            {{ form.start_date(class='form-control') }}
+        </div>
+        <div class="col-auto">
+            {{ form.end_date.label }}
+            {{ form.end_date(class='form-control') }}
+        </div>
+        <div class="col-auto">
+            {{ form.purchase_gl_code.label }}
+            {{ form.purchase_gl_code(class='form-select') }}
+        </div>
+        <div class="col-auto">
+            {{ form.items.label }}
+            {{ form.items(class='form-select', multiple=True) }}
+        </div>
+        <div class="col-auto align-self-end">
+            <button type="submit" class="btn btn-primary">Filter</button>
+        </div>
+    </form>
+    {% if results %}
+    <div class="mb-3">
+        <button onclick="window.print()" class="btn btn-secondary">Print</button>
+    </div>
+    <div class="table-responsive">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>From Location</th>
+                <th>Item</th>
+                <th>Quantity</th>
+                <th>Purchase GL Code</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ti, tr, item, from_loc in results %}
+            <tr>
+                <td>{{ tr.date_created.date() }}</td>
+                <td>{{ from_loc.name }}</td>
+                <td>{{ item.name }}</td>
+                <td>{{ ti.quantity }}</td>
+                <td>{{ item.purchase_gl_code.code if item.purchase_gl_code else '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p>No spoilage records found.</p>
+    {% endif %}
+</div>
+{% endblock %}

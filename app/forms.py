@@ -217,6 +217,27 @@ class DateRangeForm(FlaskForm):
     )
 
 
+class SpoilageFilterForm(FlaskForm):
+    start_date = DateField("Start Date", validators=[Optional()])
+    end_date = DateField("End Date", validators=[Optional()])
+    purchase_gl_code = SelectField(
+        "Purchase GL Code", coerce=int, validators=[Optional()], validate_choice=False
+    )
+    items = SelectMultipleField(
+        "Items", coerce=int, validators=[Optional()], validate_choice=False
+    )
+    submit = SubmitField("Filter")
+
+    def __init__(self, *args, **kwargs):
+        super(SpoilageFilterForm, self).__init__(*args, **kwargs)
+        gl_codes = GLCode.query.filter(GLCode.code.like("5%"))
+        self.purchase_gl_code.choices = [
+            (g.id, f"{g.code} - {g.description}" if g.description else g.code)
+            for g in gl_codes
+        ]
+        self.items.choices = load_item_choices()
+
+
 class CustomerForm(FlaskForm):
     first_name = StringField("First Name", validators=[DataRequired()])
     last_name = StringField("Last Name", validators=[DataRequired()])

@@ -134,6 +134,12 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('spoilage.view_spoilage') }}">Spoilage</a>
+                            <a href="{{ url_for('auth.toggle_favorite', link='spoilage.view_spoilage') }}" class="ms-1">
+                                {% if 'spoilage.view_spoilage' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('item.view_items') }}">Items</a>
                             <a href="{{ url_for('auth.toggle_favorite', link='item.view_items') }}" class="ms-1">
                                 {% if 'item.view_items' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{%
