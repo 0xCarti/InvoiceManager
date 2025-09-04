@@ -158,6 +158,21 @@
         }
     });
 
+    document.getElementById('items').addEventListener('keydown', function(e) {
+        if (
+            e.target &&
+            e.target.classList.contains('cost') &&
+            e.key === 'Tab' &&
+            !e.shiftKey
+        ) {
+            const nextRow = e.target.closest('.item-row').nextElementSibling;
+            if (nextRow && nextRow.querySelector('.cost')) {
+                e.preventDefault();
+                nextRow.querySelector('.cost').focus();
+            }
+        }
+    });
+
     document.querySelectorAll('.item-select').forEach(sel => fetchUnits(sel));
     document.getElementById('gst').addEventListener('input', updateTotals);
     document.getElementById('pst').addEventListener('input', updateTotals);
