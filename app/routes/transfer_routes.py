@@ -76,6 +76,7 @@ def check_negative_transfer(transfer_obj, multiplier=1):
 def update_expected_counts(transfer_obj, multiplier=1):
     """Update expected counts for locations involved in a transfer."""
     for ti in transfer_obj.transfer_items:
+        item_obj = db.session.get(Item, ti.item_id)
         from_record = LocationStandItem.query.filter_by(
             location_id=transfer_obj.from_location_id, item_id=ti.item_id
         ).first()
@@ -84,6 +85,7 @@ def update_expected_counts(transfer_obj, multiplier=1):
                 location_id=transfer_obj.from_location_id,
                 item_id=ti.item_id,
                 expected_count=0,
+                purchase_gl_code_id=item_obj.purchase_gl_code_id if item_obj else None,
             )
             db.session.add(from_record)
         new_from = from_record.expected_count - multiplier * ti.quantity
@@ -97,6 +99,7 @@ def update_expected_counts(transfer_obj, multiplier=1):
                 location_id=transfer_obj.to_location_id,
                 item_id=ti.item_id,
                 expected_count=0,
+                purchase_gl_code_id=item_obj.purchase_gl_code_id if item_obj else None,
             )
             db.session.add(to_record)
         new_to = to_record.expected_count + multiplier * ti.quantity

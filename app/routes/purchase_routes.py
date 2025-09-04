@@ -337,8 +337,16 @@ def receive_invoice(po_id):
                             location_id=invoice.location_id,
                             item_id=item_obj.id,
                             expected_count=0,
+                            purchase_gl_code_id=item_obj.purchase_gl_code_id,
                         )
                         db.session.add(record)
+                    elif (
+                        record.purchase_gl_code_id is None
+                        and item_obj.purchase_gl_code_id is not None
+                    ):
+                        record.purchase_gl_code_id = (
+                            item_obj.purchase_gl_code_id
+                        )
                     record.expected_count += quantity * factor
 
         db.session.commit()
@@ -393,10 +401,8 @@ def purchase_invoice_report(invoice_id):
         line_total = it.line_total
         item_total += line_total
         code = None
-        if it.item and it.item.purchase_gl_code:
-            code = it.item.purchase_gl_code.code
-        elif it.item and it.item.purchase_gl_code_id:
-            gl = db.session.get(GLCode, it.item.purchase_gl_code_id)
+        if it.item:
+            gl = it.item.purchase_gl_code_for_location(invoice.location_id)
             code = gl.code if gl else None
         if not code:
             code = "Unassigned"
@@ -509,8 +515,14 @@ def reverse_purchase_invoice(invoice_id):
                 location_id=invoice.location_id,
                 item_id=itm.id,
                 expected_count=0,
+                purchase_gl_code_id=itm.purchase_gl_code_id,
             )
             db.session.add(record)
+        elif (
+            record.purchase_gl_code_id is None
+            and itm.purchase_gl_code_id is not None
+        ):
+            record.purchase_gl_code_id = itm.purchase_gl_code_id
         new_count = record.expected_count - inv_item.quantity * factor
         record.expected_count = new_count
 

@@ -4,15 +4,20 @@
 <div class="table-responsive">
 <table class="table">
     <thead>
-        <tr><th>Location</th><th>Quantity</th></tr>
+        <tr><th>Location</th><th>Quantity</th><th>Purchase GL Code</th></tr>
     </thead>
     <tbody>
     {% for e in entries %}
-        <tr><td>{{ e.location.name }}</td><td>{{ e.expected_count }}</td></tr>
+        <tr>
+            <td>{{ e.location.name }}</td>
+            <td>{{ e.expected_count }}</td>
+            <td>{{ e.purchase_gl_code.code if e.purchase_gl_code else '' }}</td>
+        </tr>
     {% endfor %}
         <tr>
             <td><strong>Total</strong></td>
             <td><strong>{{ total }}</strong></td>
+            <td></td>
         </tr>
     </tbody>
 </table>
