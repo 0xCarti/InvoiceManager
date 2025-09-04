@@ -42,7 +42,9 @@ def test_quick_add_item_endpoint(client, app):
                 "purchase_gl_code": gl_id,
                 "base_unit": "each",
                 "receiving_unit": "case",
+                "receiving_factor": 12,
                 "transfer_unit": "each",
+                "transfer_factor": 1,
             },
         )
         assert resp.status_code == 200
@@ -59,4 +61,6 @@ def test_quick_add_item_endpoint(client, app):
         each_unit = next(u for u in units if u.name == "each")
         case_unit = next(u for u in units if u.name == "case")
         assert case_unit.receiving_default is True
+        assert case_unit.factor == 12
         assert each_unit.transfer_default is True
+        assert each_unit.factor == 1

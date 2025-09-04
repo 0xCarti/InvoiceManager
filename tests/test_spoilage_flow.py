@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import os
 
 from app import db
 from app.models import GLCode, Item, Location, Transfer, TransferItem
@@ -38,7 +39,9 @@ def test_spoilage_page_filters(client, app):
         db.session.add(ti)
         db.session.commit()
 
-    login(client, "admin@example.com", "adminpass")
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+    login(client, admin_email, admin_pass)
 
     # unfiltered should show item
     resp = client.get("/spoilage")

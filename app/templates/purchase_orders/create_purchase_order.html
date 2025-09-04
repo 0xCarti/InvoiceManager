@@ -72,8 +72,16 @@
                         <input type="text" id="new-item-receiving-unit" class="form-control">
                     </div>
                     <div class="mb-3">
+                        <label for="new-item-receiving-factor" class="form-label">Receiving Ratio to Base Unit</label>
+                        <input type="number" step="any" id="new-item-receiving-factor" class="form-control" value="1">
+                    </div>
+                    <div class="mb-3">
                         <label for="new-item-transfer-unit" class="form-label">Transfer Unit</label>
                         <input type="text" id="new-item-transfer-unit" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label for="new-item-transfer-factor" class="form-label">Transfer Ratio to Base Unit</label>
+                        <input type="number" step="any" id="new-item-transfer-factor" class="form-control" value="1">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -86,7 +94,7 @@
 </div>
 
 <script>
-    const itemOptions = `<option value="">Select Item</option>{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
+    let itemOptions = `<option value="">Select Item</option>{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
     let itemIndex = {{ form.items|length }};
 
     function createRow(index) {
@@ -145,13 +153,23 @@
         const glCode = document.getElementById('new-item-gl-code').value;
         const baseUnit = document.getElementById('new-item-base-unit').value;
         const recvUnit = document.getElementById('new-item-receiving-unit').value.trim();
+        const recvFactor = parseFloat(document.getElementById('new-item-receiving-factor').value) || 0;
         const transUnit = document.getElementById('new-item-transfer-unit').value.trim();
+        const transFactor = parseFloat(document.getElementById('new-item-transfer-factor').value) || 0;
         const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-        if (!name || !recvUnit || !transUnit) return;
+        if (!name || !recvUnit || !transUnit || recvFactor <= 0 || transFactor <= 0) return;
         fetch('/items/quick_add', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-            body: JSON.stringify({name: name, purchase_gl_code: glCode, base_unit: baseUnit, receiving_unit: recvUnit, transfer_unit: transUnit})
+            body: JSON.stringify({
+                name: name,
+                purchase_gl_code: glCode,
+                base_unit: baseUnit,
+                receiving_unit: recvUnit,
+                receiving_factor: recvFactor,
+                transfer_unit: transUnit,
+                transfer_factor: transFactor
+            })
         }).then(r => r.json()).then(data => {
             if (data.id) {
                 itemOptions += `<option value="${data.id}">${data.name}</option>`;
@@ -160,7 +178,9 @@
                 });
                 document.getElementById('new-item-name').value = '';
                 document.getElementById('new-item-receiving-unit').value = '';
+                document.getElementById('new-item-receiving-factor').value = '1';
                 document.getElementById('new-item-transfer-unit').value = '';
+                document.getElementById('new-item-transfer-factor').value = '1';
                 bootstrap.Modal.getInstance(document.getElementById('newItemModal')).hide();
             }
         });
