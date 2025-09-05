@@ -4,9 +4,17 @@ import sqlalchemy as sa
 from alembic import op
 
 
+def _has_table(table_name: str, bind) -> bool:
+    """Return True if the database has the given table."""
+    inspector = sa.inspect(bind)
+    return inspector.has_table(table_name)
+
+
 def _has_column(table_name: str, column_name: str, bind) -> bool:
     """Return True if the given table already has the specified column."""
     inspector = sa.inspect(bind)
+    if not inspector.has_table(table_name):
+        return False
     columns = [c["name"] for c in inspector.get_columns(table_name)]
     return column_name in columns
 
@@ -14,6 +22,8 @@ def _has_column(table_name: str, column_name: str, bind) -> bool:
 def _has_fk(table_name: str, fk_name: str, bind) -> bool:
     """Return True if the given table already has the specified foreign key."""
     inspector = sa.inspect(bind)
+    if not inspector.has_table(table_name):
+        return False
     fks = [fk["name"] for fk in inspector.get_foreign_keys(table_name)]
     return fk_name in fks
 
@@ -27,6 +37,8 @@ depends_on = None
 
 def upgrade():
     bind = op.get_bind()
+    if not _has_table("location_stand_item", bind):
+        return
 
     has_column = _has_column(
         "location_stand_item", "purchase_gl_code_id", bind
@@ -54,6 +66,8 @@ def upgrade():
 
 def downgrade():
     bind = op.get_bind()
+    if not _has_table("location_stand_item", bind):
+        return
 
     has_fk = _has_fk(
         "location_stand_item", "fk_location_stand_item_purchase_gl_code", bind
