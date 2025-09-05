@@ -295,14 +295,8 @@ def receive_invoice(po_id):
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             quantity = request.form.get(f"items-{index}-quantity", type=float)
             cost = request.form.get(f"items-{index}-cost", type=float)
-            is_return = (
-                request.form.get(f"items-{index}-return_item") is not None
-            )
             if item_id and quantity is not None and cost is not None:
-                quantity = abs(quantity)
                 cost = abs(cost)
-                if is_return:
-                    quantity = -quantity
 
                 item_obj = db.session.get(Item, item_id)
                 unit_obj = (

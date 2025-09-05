@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 
+import pytest
 from werkzeug.security import generate_password_hash
 
 from app import db
@@ -90,3 +91,24 @@ def test_invoice_survives_product_deletion(client, app):
         resp = client.get(f"/view_invoice/{invoice_id}")
         assert resp.status_code == 200
         assert prod_name.encode() in resp.data
+
+
+def test_sales_invoice_returns(client, app):
+    email, cust_id, prod_name, prod_id = setup_sales(app)
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            "/create_invoice",
+            data={"customer": float(cust_id), "products": f"{prod_name}?-2??"},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        invoice = Invoice.query.filter_by(customer_id=cust_id).first()
+        assert invoice is not None
+        assert invoice.products[0].quantity == -2
+        assert invoice.total == pytest.approx(-22.4)
+        product = Product.query.get(prod_id)
+        assert product.quantity == 7

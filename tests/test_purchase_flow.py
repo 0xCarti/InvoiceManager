@@ -277,9 +277,8 @@ def test_receive_prefills_items_and_return(client, app):
                 "delivery_charge": 0,
                 "items-0-item": item_id,
                 "items-0-unit": unit_id,
-                "items-0-quantity": 3,
+                "items-0-quantity": -3,
                 "items-0-cost": 1.5,
-                "items-0-return_item": "y",
             },
             follow_redirects=True,
         )
@@ -291,6 +290,8 @@ def test_receive_prefills_items_and_return(client, app):
         assert inv_item.quantity == -3
         assert inv_item.unit_id == unit_id
         assert inv_item.line_total == -4.5
+        invoice = PurchaseInvoice.query.first()
+        assert invoice.total == -4.5
 
 
 def test_edit_purchase_order_updates(client, app):

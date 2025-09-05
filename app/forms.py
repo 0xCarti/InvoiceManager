@@ -441,7 +441,6 @@ class InvoiceItemReceiveForm(FlaskForm):
     )
     quantity = DecimalField("Quantity", validators=[InputRequired()])
     cost = DecimalField("Cost", validators=[InputRequired()])
-    return_item = BooleanField("Return")
 
 
 class ReceiveInvoiceForm(FlaskForm):
