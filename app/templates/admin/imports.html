@@ -9,6 +9,7 @@
         <div class="mb-2">
             {{ forms[key].file(class="form-control") }}
         </div>
+        <a href="{{ url_for('admin.download_example', data_type=key) }}" class="btn btn-secondary me-2">Download Example</a>
         <button type="submit" class="btn btn-primary">{{ label }}</button>
     </form>
     {% endfor %}
