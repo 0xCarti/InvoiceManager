@@ -23,7 +23,9 @@ def add_location():
     """Create a new location."""
     form = LocationForm()
     if form.validate_on_submit():
-        new_location = Location(name=form.name.data)
+        new_location = Location(
+            name=form.name.data, is_spoilage=form.is_spoilage.data
+        )
         product_ids = (
             [int(pid) for pid in form.products.data.split(",") if pid]
             if form.products.data
@@ -82,6 +84,7 @@ def edit_location(location_id):
 
     if form.validate_on_submit():
         location.name = form.name.data
+        location.is_spoilage = form.is_spoilage.data
         product_ids = (
             [int(pid) for pid in form.products.data.split(",") if pid]
             if form.products.data

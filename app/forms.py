@@ -62,6 +62,7 @@ class LocationForm(FlaskForm):
         "Location Name", validators=[DataRequired(), Length(min=2, max=100)]
     )
     products = HiddenField("Products")
+    is_spoilage = BooleanField("Spoilage Location")
     submit = SubmitField("Submit")
 
 

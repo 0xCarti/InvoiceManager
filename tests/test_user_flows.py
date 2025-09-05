@@ -84,10 +84,13 @@ def test_add_location(client, app):
     with client:
         login(client, "loc@example.com", "pass")
         response = client.post(
-            "/locations/add", data={"name": "Warehouse"}, follow_redirects=True
+            "/locations/add",
+            data={"name": "Warehouse", "is_spoilage": "y"},
+            follow_redirects=True,
         )
         assert response.status_code == 200
 
     with app.app_context():
         location = Location.query.filter_by(name="Warehouse").first()
         assert location is not None
+        assert location.is_spoilage
