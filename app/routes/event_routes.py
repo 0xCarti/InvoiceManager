@@ -1,7 +1,5 @@
 import os
 
-import pandas as pd
-import pdfplumber
 from flask import (
     Blueprint,
     abort,
@@ -204,6 +202,8 @@ def upload_terminal_sales(event_id):
             rows.append((loc, name.strip(), qty))
 
         if ext == ".xls" or ext == ".xlsx":
+            import pandas as pd
+
             # Use openpyxl for reading Excel files regardless of extension.
             # This avoids reliance on the deprecated xlrd/xlwt packages and
             # allows test fixtures to rename .xlsx files with a .xls suffix.
@@ -218,6 +218,8 @@ def upload_terminal_sales(event_id):
                     if current_loc and isinstance(second, str):
                         add_row(current_loc, second, r.iloc[4])
         elif ext == ".pdf":
+            import pdfplumber
+
             with pdfplumber.open(filepath) as pdf:
                 text = "\n".join(
                     page.extract_text() or "" for page in pdf.pages
