@@ -1,3 +1,4 @@
+from functools import lru_cache
 from zoneinfo import available_timezones
 
 from flask import g
@@ -46,8 +47,14 @@ def load_unit_choices():
     """Return a list of item unit choices."""
     return [(u.id, u.name) for u in ItemUnit.query.all()]
 
+@lru_cache(maxsize=1)
+def get_timezone_choices():
+    """Return a sorted list of available time zones.
 
-TIMEZONE_CHOICES = sorted(available_timezones())
+    The list is computed only once and cached for subsequent calls to
+    avoid the cost of generating it at import time.
+    """
+    return sorted(available_timezones())
 
 
 class LoginForm(FlaskForm):
@@ -563,19 +570,25 @@ class SettingsForm(FlaskForm):
     gst_number = StringField(
         "GST Number", validators=[Optional(), Length(max=50)]
     )
-    default_timezone = SelectField(
-        "Default Timezone", choices=[(tz, tz) for tz in TIMEZONE_CHOICES]
-    )
+    default_timezone = SelectField("Default Timezone")
     submit = SubmitField("Update")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.default_timezone.choices = [
+            (tz, tz) for tz in get_timezone_choices()
+        ]
 
 
 class TimezoneForm(FlaskForm):
-    timezone = SelectField(
-        "Timezone",
-        choices=[("", "Use Default")] + [(tz, tz) for tz in TIMEZONE_CHOICES],
-        validators=[Optional()],
-    )
+    timezone = SelectField("Timezone", validators=[Optional()])
     submit = SubmitField("Update Timezone")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.timezone.choices = [
+            ("", "Use Default")
+        ] + [(tz, tz) for tz in get_timezone_choices()]
 
 
 class NotificationForm(FlaskForm):
