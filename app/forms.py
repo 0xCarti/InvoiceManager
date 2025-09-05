@@ -1,5 +1,6 @@
 from zoneinfo import available_timezones
 
+from flask import g
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileRequired
 from wtforms import (
@@ -33,8 +34,12 @@ from app.models import GLCode, Item, ItemUnit, Location, Product, Vendor
 
 
 def load_item_choices():
-    """Return a list of active item choices."""
-    return [(i.id, i.name) for i in Item.query.filter_by(archived=False).all()]
+    """Return a list of active item choices, cached per request."""
+    if "item_choices" not in g:
+        g.item_choices = [
+            (i.id, i.name) for i in Item.query.filter_by(archived=False).all()
+        ]
+    return g.item_choices
 
 
 def load_unit_choices():
@@ -148,14 +153,12 @@ class TransferForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super(TransferForm, self).__init__(*args, **kwargs)
         # Dynamically set choices for from_location_id and to_location_id
-        self.from_location_id.choices = [
+        locations = [
             (loc.id, loc.name)
             for loc in Location.query.filter_by(archived=False).all()
         ]
-        self.to_location_id.choices = [
-            (loc.id, loc.name)
-            for loc in Location.query.filter_by(archived=False).all()
-        ]
+        self.from_location_id.choices = locations
+        self.to_location_id.choices = locations
         items = load_item_choices()
         for item_form in self.items:
             item_form.item.choices = items
@@ -365,9 +368,9 @@ class ProductRecipeReportForm(FlaskForm):
     select_all = BooleanField("Select All Products")
     submit = SubmitField("Generate Report")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, product_choices=None, **kwargs):
         super(ProductRecipeReportForm, self).__init__(*args, **kwargs)
-        self.products.choices = [(p.id, p.name) for p in Product.query.all()]
+        self.products.choices = product_choices or []
 
 
 class InvoiceFilterForm(FlaskForm):

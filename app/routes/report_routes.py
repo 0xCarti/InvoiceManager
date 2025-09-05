@@ -142,8 +142,26 @@ def product_sales_report():
 @report.route("/reports/product-recipes", methods=["GET", "POST"])
 def product_recipe_report():
     """List products with their recipe items, price and cost."""
-    form = ProductRecipeReportForm()
-    form.products.choices = [(p.id, p.name) for p in Product.query.all()]
+    search = request.args.get("search")
+    selected_ids = request.form.getlist("products", type=int)
+    product_choices = []
+
+    if selected_ids:
+        selected_products = Product.query.filter(Product.id.in_(selected_ids)).all()
+        product_choices.extend([(p.id, p.name) for p in selected_products])
+
+    if search:
+        search_products = (
+            Product.query.filter(Product.name.ilike(f"%{search}%"))
+            .order_by(Product.name)
+            .limit(50)
+            .all()
+        )
+        for p in search_products:
+            if (p.id, p.name) not in product_choices:
+                product_choices.append((p.id, p.name))
+
+    form = ProductRecipeReportForm(product_choices=product_choices)
     report_data = []
 
     if form.validate_on_submit():
@@ -182,4 +200,4 @@ def product_recipe_report():
             "report_product_recipe_results.html", form=form, report=report_data
         )
 
-    return render_template("report_product_recipe.html", form=form)
+    return render_template("report_product_recipe.html", form=form, search=search)
