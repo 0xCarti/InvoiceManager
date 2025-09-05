@@ -14,7 +14,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
-from sqlalchemy import func
+from sqlalchemy import func, tuple_
 
 from app import db, socketio
 from app.forms import ConfirmForm, DateRangeForm, TransferForm
@@ -36,10 +36,20 @@ transfer = Blueprint("transfer", __name__)
 def check_negative_transfer(transfer_obj, multiplier=1):
     """Return warnings if a transfer would cause negative inventory."""
     warnings = []
+    pairs = {
+        (transfer_obj.from_location_id, ti.item_id)
+        for ti in transfer_obj.transfer_items
+    } | {
+        (transfer_obj.to_location_id, ti.item_id)
+        for ti in transfer_obj.transfer_items
+    }
+    records = LocationStandItem.query.filter(
+        tuple_(LocationStandItem.location_id, LocationStandItem.item_id).in_(pairs)
+    ).all()
+    indexed = {(r.location_id, r.item_id): r for r in records}
+
     for ti in transfer_obj.transfer_items:
-        from_record = LocationStandItem.query.filter_by(
-            location_id=transfer_obj.from_location_id, item_id=ti.item_id
-        ).first()
+        from_record = indexed.get((transfer_obj.from_location_id, ti.item_id))
         current_from = from_record.expected_count if from_record else 0
         new_from = current_from - multiplier * ti.quantity
         if new_from < 0:
@@ -54,9 +64,7 @@ def check_negative_transfer(transfer_obj, multiplier=1):
                 f"Transfer will result in negative inventory for {item_name} at {from_name}"
             )
 
-        to_record = LocationStandItem.query.filter_by(
-            location_id=transfer_obj.to_location_id, item_id=ti.item_id
-        ).first()
+        to_record = indexed.get((transfer_obj.to_location_id, ti.item_id))
         current_to = to_record.expected_count if to_record else 0
         new_to = current_to + multiplier * ti.quantity
         if new_to < 0:
@@ -75,11 +83,23 @@ def check_negative_transfer(transfer_obj, multiplier=1):
 
 def update_expected_counts(transfer_obj, multiplier=1):
     """Update expected counts for locations involved in a transfer."""
+    pairs = {
+        (transfer_obj.from_location_id, ti.item_id)
+        for ti in transfer_obj.transfer_items
+    } | {
+        (transfer_obj.to_location_id, ti.item_id)
+        for ti in transfer_obj.transfer_items
+    }
+    records = LocationStandItem.query.filter(
+        tuple_(LocationStandItem.location_id, LocationStandItem.item_id).in_(pairs)
+    ).all()
+    indexed = {(r.location_id, r.item_id): r for r in records}
+
     for ti in transfer_obj.transfer_items:
         item_obj = db.session.get(Item, ti.item_id)
-        from_record = LocationStandItem.query.filter_by(
-            location_id=transfer_obj.from_location_id, item_id=ti.item_id
-        ).first()
+
+        from_key = (transfer_obj.from_location_id, ti.item_id)
+        from_record = indexed.get(from_key)
         if not from_record:
             from_record = LocationStandItem(
                 location_id=transfer_obj.from_location_id,
@@ -88,12 +108,11 @@ def update_expected_counts(transfer_obj, multiplier=1):
                 purchase_gl_code_id=item_obj.purchase_gl_code_id if item_obj else None,
             )
             db.session.add(from_record)
-        new_from = from_record.expected_count - multiplier * ti.quantity
-        from_record.expected_count = new_from
+            indexed[from_key] = from_record
+        from_record.expected_count = from_record.expected_count - multiplier * ti.quantity
 
-        to_record = LocationStandItem.query.filter_by(
-            location_id=transfer_obj.to_location_id, item_id=ti.item_id
-        ).first()
+        to_key = (transfer_obj.to_location_id, ti.item_id)
+        to_record = indexed.get(to_key)
         if not to_record:
             to_record = LocationStandItem(
                 location_id=transfer_obj.to_location_id,
@@ -102,8 +121,8 @@ def update_expected_counts(transfer_obj, multiplier=1):
                 purchase_gl_code_id=item_obj.purchase_gl_code_id if item_obj else None,
             )
             db.session.add(to_record)
-        new_to = to_record.expected_count + multiplier * ti.quantity
-        to_record.expected_count = new_to
+            indexed[to_key] = to_record
+        to_record.expected_count = to_record.expected_count + multiplier * ti.quantity
 
 
 @transfer.route("/transfers", methods=["GET"])
