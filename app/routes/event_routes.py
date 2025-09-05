@@ -246,6 +246,11 @@ def upload_terminal_sales(event_id):
                     qty = parts[idx + 2]
                     add_row(current_loc, name, qty)
 
+        product_names = {prod_name for _, prod_name, _ in rows}
+        product_lookup = {
+            p.name: p for p in Product.query.filter(Product.name.in_(product_names)).all()
+        }
+
         for loc_name, prod_name, qty in rows:
             loc = (
                 Location.query.join(EventLocation)
@@ -266,7 +271,7 @@ def upload_terminal_sales(event_id):
                 if loc_name not in unmatched:
                     unmatched.append(loc_name)
                 continue
-            product = Product.query.filter_by(name=prod_name).first()
+            product = product_lookup.get(prod_name)
             if not product:
                 continue
             sale = TerminalSale.query.filter_by(

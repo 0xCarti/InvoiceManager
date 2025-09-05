@@ -155,6 +155,8 @@ def _import_locations(path):
         return 0
 
     pending = []
+    rows = []
+    product_names = set()
     with open(path, newline="", encoding="utf-8-sig") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
@@ -164,20 +166,31 @@ def _import_locations(path):
             if Location.query.filter_by(name=name).first():
                 continue
 
-            products = []
+            prod_names = []
             prod_field = row.get("products", "")
             if prod_field:
                 for pname in prod_field.split(";"):
                     pname = pname.strip()
                     if not pname:
                         continue
-                    product = Product.query.filter_by(name=pname).first()
-                    if not product:
-                        db.session.rollback()
-                        raise ValueError(f"Unknown product: {pname}")
-                    products.append(product)
+                    prod_names.append(pname)
+                    product_names.add(pname)
 
-            pending.append((name, products))
+            rows.append((name, prod_names))
+
+    products = {
+        p.name: p for p in Product.query.filter(Product.name.in_(product_names)).all()
+    }
+
+    for name, prod_names in rows:
+        products_list = []
+        for pname in prod_names:
+            product = products.get(pname)
+            if not product:
+                db.session.rollback()
+                raise ValueError(f"Unknown product: {pname}")
+            products_list.append(product)
+        pending.append((name, products_list))
 
     for name, products in pending:
         loc = Location(name=name)

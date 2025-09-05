@@ -50,72 +50,77 @@ def create_invoice():
 
         product_data = form.products.data.removesuffix(":").split(":")
 
+        parsed_entries = []
+        product_names = set()
         for entry in product_data:
             try:
-                product_name, quantity, override_gst, override_pst = (
-                    entry.split("?")
-                )
-                product = Product.query.filter_by(name=product_name).first()
-
-                if product:
-                    quantity = float(quantity)
-                    unit_price = product.price
-                    line_subtotal = quantity * unit_price
-
-                    # Parse overrides correctly (can be 0, 1, or empty string)
-                    override_gst = (
-                        None if override_gst == "" else bool(int(override_gst))
-                    )
-                    override_pst = (
-                        None if override_pst == "" else bool(int(override_pst))
-                    )
-
-                    # Apply tax rules
-                    apply_gst = (
-                        override_gst
-                        if override_gst is not None
-                        else not customer.gst_exempt
-                    )
-                    apply_pst = (
-                        override_pst
-                        if override_pst is not None
-                        else not customer.pst_exempt
-                    )
-
-                    line_gst = line_subtotal * 0.05 if apply_gst else 0
-                    line_pst = line_subtotal * 0.07 if apply_pst else 0
-
-                    invoice_product = InvoiceProduct(
-                        invoice_id=invoice.id,
-                        product_id=product.id,
-                        product_name=product.name,
-                        quantity=quantity,
-                        override_gst=override_gst,
-                        override_pst=override_pst,
-                        unit_price=unit_price,
-                        line_subtotal=line_subtotal,
-                        line_gst=line_gst,
-                        line_pst=line_pst,
-                    )
-                    db.session.add(invoice_product)
-
-                    # Reduce product inventory
-                    product.quantity = (product.quantity or 0) - quantity
-
-                    # Reduce item inventories based on recipe
-                    for recipe_item in product.recipe_items:
-                        item = recipe_item.item
-                        factor = (
-                            recipe_item.unit.factor if recipe_item.unit else 1
-                        )
-                        item.quantity = (item.quantity or 0) - (
-                            recipe_item.quantity * factor * quantity
-                        )
-                else:
-                    flash(f"Product '{product_name}' not found.", "danger")
-
+                product_name, quantity, override_gst, override_pst = entry.split("?")
             except ValueError:
                 flash(f"Invalid product data format: '{entry}'", "danger")
+                continue
+            parsed_entries.append((product_name, quantity, override_gst, override_pst))
+            product_names.add(product_name)
+
+        products = (
+            Product.query.filter(Product.name.in_(product_names)).all()
+            if product_names
+            else []
+        )
+        product_lookup = {p.name: p for p in products}
+
+        for product_name, quantity, override_gst, override_pst in parsed_entries:
+            product = product_lookup.get(product_name)
+
+            if product:
+                quantity = float(quantity)
+                unit_price = product.price
+                line_subtotal = quantity * unit_price
+
+                # Parse overrides correctly (can be 0, 1, or empty string)
+                override_gst = (
+                    None if override_gst == "" else bool(int(override_gst))
+                )
+                override_pst = (
+                    None if override_pst == "" else bool(int(override_pst))
+                )
+
+                # Apply tax rules
+                apply_gst = (
+                    override_gst if override_gst is not None else not customer.gst_exempt
+                )
+                apply_pst = (
+                    override_pst if override_pst is not None else not customer.pst_exempt
+                )
+
+                line_gst = line_subtotal * 0.05 if apply_gst else 0
+                line_pst = line_subtotal * 0.07 if apply_pst else 0
+
+                invoice_product = InvoiceProduct(
+                    invoice_id=invoice.id,
+                    product_id=product.id,
+                    product_name=product.name,
+                    quantity=quantity,
+                    override_gst=override_gst,
+                    override_pst=override_pst,
+                    unit_price=unit_price,
+                    line_subtotal=line_subtotal,
+                    line_gst=line_gst,
+                    line_pst=line_pst,
+                )
+                db.session.add(invoice_product)
+
+                # Reduce product inventory
+                product.quantity = (product.quantity or 0) - quantity
+
+                # Reduce item inventories based on recipe
+                for recipe_item in product.recipe_items:
+                    item = recipe_item.item
+                    factor = recipe_item.unit.factor if recipe_item.unit else 1
+                    item.quantity = (item.quantity or 0) - (
+                        recipe_item.quantity * factor * quantity
+                    )
+            else:
+                flash(f"Product '{product_name}' not found.", "danger")
 
         db.session.commit()
         log_activity(f"Created invoice {invoice.id}")
