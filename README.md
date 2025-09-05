@@ -46,6 +46,21 @@ The GST number can now be set from the application control panel after installat
 
 These can be placed in a `.env` file or exported in your shell before starting the app.
 
+## Database Setup
+
+Run the database migrations to create the tables:
+
+```bash
+flask db upgrade
+```
+
+After the migration, seed the initial administrator account and default
+settings (GST number and timezone) using the provided script:
+
+```bash
+python seed_data.py
+```
+
 ## Running the Application
 
 After installing the dependencies and setting the environment variables, start the development server with:
