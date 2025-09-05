@@ -5,34 +5,33 @@
     <h2>Add New Transfer</h2>
     <form method="POST">
         {{ form.hidden_tag() }}
-        <div class="form-group">
-            {{ form.from_location_id.label(class="form-label") }}
-            {{ form.from_location_id(class="form-control narrow-field") }}
-            {% if form.from_location_id.errors %}
-            {% for error in form.from_location_id.errors %}
-            <div class="alert alert-danger">{{ error }}</div>
-            {% endfor %}
-            {% endif %}
-        </div>
-        <div class="form-group">
-            {{ form.to_location_id.label(class="form-label") }}
-            {{ form.to_location_id(class="form-control narrow-field") }}
-            {% if form.to_location_id.errors %}
-            {% for error in form.to_location_id.errors %}
-            <div class="alert alert-danger">{{ error }}</div>
-            {% endfor %}
-            {% endif %}
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group">
+                    {{ form.from_location_id.label(class="form-label") }}
+                    {{ form.from_location_id(class="form-control") }}
+                    {% for error in form.from_location_id.errors %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-group">
+                    {{ form.to_location_id.label(class="form-label") }}
+                    {{ form.to_location_id(class="form-control") }}
+                    {% for error in form.to_location_id.errors %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
         <h3>Add Items</h3>
         <div class="form-group">
             <label for="item-name" class="form-label">Item Name</label>
-            <input type="text" id="item-name" class="form-control narrow-field" name="item-name" autocomplete="off">
+            <input type="text" id="item-name" class="form-control" name="item-name" autocomplete="off">
             <div id="suggestions"></div>
         </div>
-        <div id="item-list" class="mb-3">
-            <!-- Item list will be dynamically populated -->
-        </div>
-        <br>
+        <div id="item-list" class="mb-3"></div>
         {{ form.submit(class="btn btn-success") }}
     </form>
 </div>
@@ -73,10 +72,13 @@
     });
 
     function addItemToList(item) {
-        fetch(`/items/${item.id}/units`).then(r => r.json()).then(units => {
+        fetch(`/items/${item.id}/units`).then(r => r.json()).then(data => {
+            const base = data.base_unit;
+            const units = data.units;
             var options = '';
             units.forEach(u => {
-                options += `<option value="${u.id}">${u.name}</option>`;
+                const label = `${u.name} of ${u.factor} ${base}${u.factor != 1 ? 's' : ''}`;
+                options += `<option value="${u.id}" data-factor="${u.factor}" ${u.transfer_default ? 'selected' : ''}>${label}</option>`;
             });
             var listItem = document.createElement('div');
             listItem.classList.add('item-container', 'd-flex', 'justify-content-between', 'align-items-center', 'mb-2');
@@ -84,11 +86,22 @@
                 <div style="padding-left: 15px; font-weight: bold;">${item.name}</div>
                 <div class="d-flex align-items-center">
                     <input type="hidden" name="items-${itemIndex}-item" value="${item.id}">
-                    <select name="items-${itemIndex}-unit" class="form-control me-2" style="max-width: 120px;">${options}</select>
-                    <input type="number" step="any" class="form-control quantity" name="items-${itemIndex}-quantity" placeholder="Qty" style="max-width: 120px;">
+                    <select name="items-${itemIndex}-unit" class="form-control me-2" style="max-width: 160px;">${options}</select>
+                    <input type="number" step="any" class="form-control quantity" name="items-${itemIndex}-quantity" placeholder="Qty" style="max-width: 120px;" data-base-qty="0">
                     <button type="button" class="btn btn-danger delete-item ml-2">Delete</button>
                 </div>
             `;
+            const qtyInput = listItem.querySelector('.quantity');
+            const unitSelect = listItem.querySelector('select');
+            qtyInput.addEventListener('input', function(){
+                const factor = parseFloat(unitSelect.selectedOptions[0].dataset.factor);
+                this.dataset.baseQty = (parseFloat(this.value) || 0) * factor;
+            });
+            unitSelect.addEventListener('change', function(){
+                const factor = parseFloat(this.selectedOptions[0].dataset.factor);
+                const qty = listItem.querySelector('.quantity');
+                qty.value = (parseFloat(qty.dataset.baseQty) || 0) / factor;
+            });
             document.getElementById('item-list').appendChild(listItem);
             document.getElementById('suggestions').innerHTML = '';
             document.getElementById('item-name').value = '';

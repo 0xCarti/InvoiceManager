@@ -432,7 +432,14 @@ def generate_report():
                 Transfer.date_created >= start_datetime,
                 Transfer.date_created <= end_datetime,
             )
-            .group_by(from_location.name, to_location.name, Item.name)
+            .group_by(
+                from_location.id,
+                to_location.id,
+                Item.id,
+                from_location.name,
+                to_location.name,
+                Item.name,
+            )
             .order_by(from_location.name, to_location.name, Item.name)
             .all()
         )
