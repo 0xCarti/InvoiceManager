@@ -535,6 +535,22 @@ def import_page():
     return render_template("admin/imports.html", forms=forms, labels=labels)
 
 
+@admin.route("/controlpanel/import/<string:data_type>/example", methods=["GET"])
+@login_required
+def download_example(data_type):
+    """Download an example CSV file for the given data type."""
+    from flask import current_app, send_from_directory
+
+    if not current_user.is_admin:
+        abort(403)
+    if data_type not in IMPORT_FILES:
+        abort(404)
+    directory = current_app.config["IMPORT_FILES_FOLDER"]
+    filename = IMPORT_FILES[data_type]
+    log_activity(f"Downloaded example import file for {data_type}")
+    return send_from_directory(directory, filename, as_attachment=True)
+
+
 @admin.route("/controlpanel/import/<string:data_type>", methods=["POST"])
 @login_required
 def import_data(data_type):

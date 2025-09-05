@@ -97,6 +97,7 @@ def create_app(args: list):
     # always point to the intended location.
 
     base_dir = os.getcwd()
+    repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     # Allow overriding the database location via the DATABASE_PATH environment
     # variable.  This is useful for container deployments where the database
     # may reside in a mounted volume.  If the provided path is a directory,
@@ -110,9 +111,11 @@ def create_app(args: list):
     app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     app.config["UPLOAD_FOLDER"] = os.path.join(base_dir, "uploads")
     app.config["BACKUP_FOLDER"] = os.path.join(base_dir, "backups")
+    app.config["IMPORT_FILES_FOLDER"] = os.path.join(repo_dir, "import_files")
 
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
     os.makedirs(app.config["BACKUP_FOLDER"], exist_ok=True)
+    os.makedirs(app.config["IMPORT_FILES_FOLDER"], exist_ok=True)
 
     if "--demo" in args:
         app.config["DEMO"] = True
