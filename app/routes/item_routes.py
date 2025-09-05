@@ -311,16 +311,19 @@ def item_units(item_id):
     item = db.session.get(Item, item_id)
     if item is None:
         abort(404)
-    data = [
-        {
-            "id": u.id,
-            "name": u.name,
-            "factor": u.factor,
-            "receiving_default": u.receiving_default,
-            "transfer_default": u.transfer_default,
-        }
-        for u in item.units
-    ]
+    data = {
+        "base_unit": item.base_unit,
+        "units": [
+            {
+                "id": u.id,
+                "name": u.name,
+                "factor": u.factor,
+                "receiving_default": u.receiving_default,
+                "transfer_default": u.transfer_default,
+            }
+            for u in item.units
+        ],
+    }
     return jsonify(data)
 
 
