@@ -192,23 +192,20 @@ def create_app(args: list):
         app.register_blueprint(vendor)
         app.register_blueprint(event)
         app.register_blueprint(glcode_bp)
-
-        db.create_all()
-        create_admin_user()
         from app.models import Setting
+        from sqlalchemy.exc import OperationalError
 
-        setting = Setting.query.filter_by(name="GST").first()
-        if setting is None:
-            setting = Setting(name="GST", value="")
-            db.session.add(setting)
+        try:
+            setting = Setting.query.filter_by(name="GST").first()
+            if setting is not None:
+                GST = setting.value
 
-        tz_setting = Setting.query.filter_by(name="DEFAULT_TIMEZONE").first()
-        if tz_setting is None:
-            tz_setting = Setting(name="DEFAULT_TIMEZONE", value="UTC")
-            db.session.add(tz_setting)
-        db.session.commit()
-        GST = setting.value
-        DEFAULT_TIMEZONE = tz_setting.value or "UTC"
+            tz_setting = Setting.query.filter_by(name="DEFAULT_TIMEZONE").first()
+            if tz_setting is not None and tz_setting.value:
+                DEFAULT_TIMEZONE = tz_setting.value
+        except OperationalError:
+            pass
+
         CSRFProtect(app)
 
     return app, socketio
