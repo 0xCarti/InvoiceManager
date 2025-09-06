@@ -32,6 +32,13 @@
                 {% endfor %}
             </select>
         </div>
+        <div class="col">
+            <select name="archived" class="form-select">
+                <option value="active" {% if archived == 'active' %}selected{% endif %}>Active</option>
+                <option value="archived" {% if archived == 'archived' %}selected{% endif %}>Archived</option>
+                <option value="all" {% if archived == 'all' %}selected{% endif %}>All</option>
+            </select>
+        </div>
         <div class="col-auto">
             <button type="submit" class="btn btn-secondary">Search</button>
         </div>
@@ -73,7 +80,7 @@
         <ul class="pagination">
             {% if items.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, archived=archived) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -81,7 +88,7 @@
             </li>
             {% if items.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Next</a>
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, archived=archived) }}">Next</a>
             </li>
             {% endif %}
         </ul>

@@ -34,8 +34,13 @@ def view_items():
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
     gl_code_id = request.args.get("gl_code_id", type=int)
+    archived = request.args.get("archived", "active")
 
-    query = Item.query.filter_by(archived=False)
+    query = Item.query
+    if archived == "active":
+        query = query.filter(Item.archived.is_(False))
+    elif archived == "archived":
+        query = query.filter(Item.archived.is_(True))
     if name_query:
         if match_mode == "exact":
             query = query.filter(Item.name == name_query)
@@ -64,6 +69,7 @@ def view_items():
         gl_codes=gl_codes,
         gl_code_id=gl_code_id,
         active_gl_code=active_gl_code,
+        archived=archived,
     )
 
 
