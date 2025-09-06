@@ -113,22 +113,25 @@ def test_additional_product_routes(client, app):
         assert client.get("/products/999/recipe").status_code == 404
 
 
-def test_view_products_gl_code_filter(client, app):
+def test_view_products_sales_gl_code_filter(client, app):
     email, item_id, unit_id = setup_data(app)
     with app.app_context():
         gl1 = GLCode.query.filter_by(code="4000").first()
         gl2 = GLCode.query.filter_by(code="5000").first()
         gl1_id, gl2_id = gl1.id, gl2.id
-        db.session.add_all(
-            [
-                Product(name="P1", price=1, cost=1, gl_code_id=gl1_id),
-                Product(name="P2", price=1, cost=1, gl_code_id=gl2_id),
-            ]
+        products = [
+            Product(name=f"P{i}", price=1, cost=1, sales_gl_code_id=gl1_id)
+            for i in range(21)
+        ]
+        products.append(
+            Product(name="Other", price=1, cost=1, sales_gl_code_id=gl2_id)
         )
+        db.session.add_all(products)
         db.session.commit()
     with client:
         login(client, email, "pass")
-        resp = client.get(f"/products?gl_code_id={gl1_id}")
+        resp = client.get(f"/products?sales_gl_code_id={gl1_id}")
         assert resp.status_code == 200
-        assert b"P1" in resp.data
-        assert b"P2" not in resp.data
+        assert b"P0" in resp.data
+        assert b"Other" not in resp.data
+        assert f"sales_gl_code_id={gl1_id}".encode() in resp.data

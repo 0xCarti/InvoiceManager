@@ -26,6 +26,7 @@ def view_products():
     page = request.args.get("page", 1, type=int)
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
+    sales_gl_code_id = request.args.get("sales_gl_code_id", type=int)
     gl_code_id = request.args.get("gl_code_id", type=int)
     cost_min = request.args.get("cost_min", type=float)
     cost_max = request.args.get("cost_max", type=float)
@@ -45,6 +46,8 @@ def view_products():
         else:
             query = query.filter(Product.name.like(f"%{name_query}%"))
 
+    if sales_gl_code_id:
+        query = query.filter(Product.sales_gl_code_id == sales_gl_code_id)
     if gl_code_id:
         query = query.filter(Product.gl_code_id == gl_code_id)
 
@@ -68,9 +71,11 @@ def view_products():
         query = query.filter(Product.price <= price_max)
 
     products = query.paginate(page=page, per_page=20)
-    gl_codes = GLCode.query.order_by(GLCode.code).all()
-    selected_gl_code = (
-        db.session.get(GLCode, gl_code_id) if gl_code_id else None
+    sales_gl_codes = (
+        GLCode.query.filter(GLCode.code.like("4%")).order_by(GLCode.code).all()
+    )
+    selected_sales_gl_code = (
+        db.session.get(GLCode, sales_gl_code_id) if sales_gl_code_id else None
     )
     return render_template(
         "products/view_products.html",
@@ -78,6 +83,9 @@ def view_products():
         delete_form=delete_form,
         name_query=name_query,
         match_mode=match_mode,
+        sales_gl_code_id=sales_gl_code_id,
+        sales_gl_codes=sales_gl_codes,
+        selected_sales_gl_code=selected_sales_gl_code,
         gl_code_id=gl_code_id,
         cost_min=cost_min,
         cost_max=cost_max,
