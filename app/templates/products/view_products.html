@@ -27,6 +27,18 @@
                 {% endfor %}
             </select>
         </div>
+        <div class="col">
+            <input type="number" step="0.01" name="cost_min" class="form-control" placeholder="Cost ≥" value="{{ cost_min if cost_min is not none else '' }}">
+        </div>
+        <div class="col">
+            <input type="number" step="0.01" name="cost_max" class="form-control" placeholder="Cost ≤" value="{{ cost_max if cost_max is not none else '' }}">
+        </div>
+        <div class="col">
+            <input type="number" step="0.01" name="price_min" class="form-control" placeholder="Price ≥" value="{{ price_min if price_min is not none else '' }}">
+        </div>
+        <div class="col">
+            <input type="number" step="0.01" name="price_max" class="form-control" placeholder="Price ≤" value="{{ price_max if price_max is not none else '' }}">
+        </div>
         <div class="col-auto">
             <button type="submit" class="btn btn-secondary">Search</button>
         </div>
@@ -68,7 +80,7 @@
         <ul class="pagination">
             {% if products.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('product.view_products', page=products.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('product.view_products', page=products.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, cost_min=cost_min, cost_max=cost_max, price_min=price_min, price_max=price_max) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -76,7 +88,7 @@
             </li>
             {% if products.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('product.view_products', page=products.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Next</a>
+                <a class="page-link" href="{{ url_for('product.view_products', page=products.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, cost_min=cost_min, cost_max=cost_max, price_min=price_min, price_max=price_max) }}">Next</a>
             </li>
             {% endif %}
         </ul>
