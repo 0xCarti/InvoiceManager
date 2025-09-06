@@ -56,6 +56,11 @@ def create_admin_user():
     """Ensure an admin user exists for the application."""
     from app.models import User
 
+    # Ensure all tables are created before querying. This guards against
+    # OperationalError exceptions when the database has not been
+    # initialised yet (e.g. during first run or tests).
+    db.create_all()
+
     # Check if any admin exists
     admin_exists = User.query.filter_by(is_admin=True).first()
     if not admin_exists:
@@ -162,6 +167,12 @@ def create_app(args: list):
         return dict(NAV_LINKS=NAV_LINKS)
 
     with app.app_context():
+        # Ensure models are imported and the database schema is created on
+        # application start.  This allows the app to run even if migrations
+        # have not been executed yet, avoiding "no such table" errors.
+        from . import models  # noqa: F401
+        db.create_all()
+
         from app.routes.auth_routes import admin, auth
         from app.routes.customer_routes import customer
         from app.routes.event_routes import event
