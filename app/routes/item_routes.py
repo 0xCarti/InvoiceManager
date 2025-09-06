@@ -48,9 +48,8 @@ def item_locations(item_id):
     if item_obj is None:
         abort(404)
     page = request.args.get("page", 1, type=int)
-    entries = (
-        LocationStandItem.query.filter_by(item_id=item_id)
-        .paginate(page=page, per_page=20)
+    entries = LocationStandItem.query.filter_by(item_id=item_id).paginate(
+        page=page, per_page=20
     )
     total = (
         db.session.query(db.func.sum(LocationStandItem.expected_count))
@@ -240,10 +239,13 @@ def bulk_delete_items():
 def search_items():
     """Search items by name for autocomplete fields."""
     search_term = request.args.get("term", "")
-    items = Item.query.filter(Item.name.ilike(f"%{search_term}%")).all()
-    items_data = [
-        {"id": item.id, "name": item.name} for item in items
-    ]  # Create a list of dicts
+    items = (
+        Item.query.filter(Item.name.ilike(f"%{search_term}%"))
+        .order_by(Item.name)
+        .limit(20)
+        .all()
+    )
+    items_data = [{"id": item.id, "name": item.name} for item in items]
     return jsonify(items_data)
 
 
