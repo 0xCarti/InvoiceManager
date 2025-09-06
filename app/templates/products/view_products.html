@@ -7,6 +7,22 @@
     <h2>Products</h2>
     <a href="{{ url_for('product.create_product') }}" class="btn btn-primary mb-3">Create Product</a>
     <a href="{{ url_for('report.product_recipe_report') }}" class="btn btn-secondary mb-3">Recipe Report</a>
+    <form method="get" class="row g-2 mb-3">
+        <div class="col">
+            <input type="text" name="name_query" class="form-control" placeholder="Search name" value="{{ name_query or '' }}">
+        </div>
+        <div class="col">
+            <select name="match_mode" class="form-select">
+                <option value="exact" {% if match_mode == 'exact' %}selected{% endif %}>Exact</option>
+                <option value="startswith" {% if match_mode == 'startswith' %}selected{% endif %}>Starts with</option>
+                <option value="contains" {% if match_mode == 'contains' %}selected{% endif %}>Contains</option>
+                <option value="not_contains" {% if match_mode == 'not_contains' %}selected{% endif %}>Does not contain</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-secondary">Search</button>
+        </div>
+    </form>
     <div class="table-responsive">
     <table class="table">
         <thead>
@@ -41,7 +57,7 @@
         <ul class="pagination">
             {% if products.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('product.view_products', page=products.prev_num) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('product.view_products', page=products.prev_num, name_query=name_query, match_mode=match_mode) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -49,7 +65,7 @@
             </li>
             {% if products.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('product.view_products', page=products.next_num) }}">Next</a>
+                <a class="page-link" href="{{ url_for('product.view_products', page=products.next_num, name_query=name_query, match_mode=match_mode) }}">Next</a>
             </li>
             {% endif %}
         </ul>
