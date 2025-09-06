@@ -25,7 +25,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for item in items %}
+                {% for item in items.items %}
                 <tr>
                     <td><input type="checkbox" name="item_ids" value="{{ item.id }}" style="transform: scale(1.5);"></td>
                     <td>{{ item.name }}</td>
@@ -40,6 +40,23 @@
         </table>
         </div>
     </form>
+    <nav aria-label="Item pagination">
+        <ul class="pagination">
+            {% if items.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num) }}">Previous</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">Page {{ items.page }} of {{ items.pages }}</span>
+            </li>
+            {% if items.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
 </div>
 <script>
 document.getElementById('select-all').onclick = function() {
