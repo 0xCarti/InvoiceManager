@@ -35,6 +35,8 @@ def view_items():
     match_mode = request.args.get("match_mode", "contains")
     gl_code_id = request.args.get("gl_code_id", type=int)
     base_unit = request.args.get("base_unit")
+    cost_min = request.args.get("cost_min", type=float)
+    cost_max = request.args.get("cost_max", type=float)
 
     query = Item.query.filter_by(archived=False)
     if name_query:
@@ -54,6 +56,14 @@ def view_items():
 
     if base_unit:
         query = query.filter(Item.base_unit == base_unit)
+    if cost_min is not None and cost_max is not None and cost_min > cost_max:
+        flash("Invalid cost range: min cannot be greater than max.", "error")
+        return redirect(url_for("item.view_items"))
+    if cost_min is not None:
+        query = query.filter(Item.cost >= cost_min)
+    if cost_max is not None:
+        query = query.filter(Item.cost <= cost_max)
+
     items = query.order_by(Item.name).paginate(page=page, per_page=20)
     form = ItemForm()
     gl_codes = GLCode.query.order_by(GLCode.code).all()
@@ -74,6 +84,8 @@ def view_items():
         gl_code_id=gl_code_id,
         base_units=base_units,
         base_unit=base_unit,
+        cost_min=cost_min,
+        cost_max=cost_max,
         active_gl_code=active_gl_code,
     )
 
