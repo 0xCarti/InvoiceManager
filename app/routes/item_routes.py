@@ -31,13 +31,31 @@ MAX_IMPORT_SIZE = 1 * 1024 * 1024  # 1 MB
 def view_items():
     """Display the inventory item list."""
     page = request.args.get("page", 1, type=int)
-    items = (
-        Item.query.filter_by(archived=False)
-        .order_by(Item.name)
-        .paginate(page=page, per_page=20)
-    )
+    name_query = request.args.get("name_query", "")
+    match_mode = request.args.get("match_mode", "contains")
+
+    query = Item.query.filter_by(archived=False)
+    if name_query:
+        if match_mode == "exact":
+            query = query.filter(Item.name == name_query)
+        elif match_mode == "startswith":
+            query = query.filter(Item.name.like(f"{name_query}%"))
+        elif match_mode == "contains":
+            query = query.filter(Item.name.like(f"%{name_query}%"))
+        elif match_mode == "not_contains":
+            query = query.filter(Item.name.notlike(f"%{name_query}%"))
+        else:
+            query = query.filter(Item.name.like(f"%{name_query}%"))
+
+    items = query.order_by(Item.name).paginate(page=page, per_page=20)
     form = ItemForm()
-    return render_template("items/view_items.html", items=items, form=form)
+    return render_template(
+        "items/view_items.html",
+        items=items,
+        form=form,
+        name_query=name_query,
+        match_mode=match_mode,
+    )
 
 
 @item.route("/items/<int:item_id>/locations")
@@ -393,7 +411,9 @@ def import_items():
         existing_lookup = {item.name for item in existing_items}
 
         # Bulk create only the missing items
-        new_items = [Item(name=name) for name in names if name not in existing_lookup]
+        new_items = [
+            Item(name=name) for name in names if name not in existing_lookup
+        ]
         if new_items:
             db.session.bulk_save_objects(new_items)
         db.session.commit()

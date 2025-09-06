@@ -24,11 +24,29 @@ def view_products():
     """List available products."""
     delete_form = DeleteForm()
     page = request.args.get("page", 1, type=int)
-    products = Product.query.paginate(page=page, per_page=20)
+    name_query = request.args.get("name_query", "")
+    match_mode = request.args.get("match_mode", "contains")
+
+    query = Product.query
+    if name_query:
+        if match_mode == "exact":
+            query = query.filter(Product.name == name_query)
+        elif match_mode == "startswith":
+            query = query.filter(Product.name.like(f"{name_query}%"))
+        elif match_mode == "contains":
+            query = query.filter(Product.name.like(f"%{name_query}%"))
+        elif match_mode == "not_contains":
+            query = query.filter(Product.name.notlike(f"%{name_query}%"))
+        else:
+            query = query.filter(Product.name.like(f"%{name_query}%"))
+
+    products = query.paginate(page=page, per_page=20)
     return render_template(
         "products/view_products.html",
         products=products,
         delete_form=delete_form,
+        name_query=name_query,
+        match_mode=match_mode,
     )
 
 

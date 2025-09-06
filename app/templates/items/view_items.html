@@ -12,6 +12,22 @@
             <button type="submit" form="bulk-delete-form" class="btn btn-warning mb-3" onclick="return confirm('Are you sure?');">Delete Items</button>
         </div>
     </div>
+    <form method="get" class="row g-2 mb-3">
+        <div class="col">
+            <input type="text" name="name_query" class="form-control" placeholder="Search name" value="{{ name_query or '' }}">
+        </div>
+        <div class="col">
+            <select name="match_mode" class="form-select">
+                <option value="exact" {% if match_mode == 'exact' %}selected{% endif %}>Exact</option>
+                <option value="startswith" {% if match_mode == 'startswith' %}selected{% endif %}>Starts with</option>
+                <option value="contains" {% if match_mode == 'contains' %}selected{% endif %}>Contains</option>
+                <option value="not_contains" {% if match_mode == 'not_contains' %}selected{% endif %}>Does not contain</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-secondary">Search</button>
+        </div>
+    </form>
     <form id="bulk-delete-form" action="{{ url_for('item.bulk_delete_items') }}" method="post">
         {{ form.hidden_tag() }}
         <div class="table-responsive">
@@ -44,7 +60,7 @@
         <ul class="pagination">
             {% if items.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -52,7 +68,7 @@
             </li>
             {% if items.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num) }}">Next</a>
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode) }}">Next</a>
             </li>
             {% endif %}
         </ul>
