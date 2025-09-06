@@ -334,10 +334,10 @@ class Invoice(db.Model):
         db.Integer, db.ForeignKey("user.id"), nullable=False
     )  # Reference to the user who created the invoice
     customer_id = db.Column(
-        db.Integer, db.ForeignKey("customer.id"), nullable=False
+        db.Integer, db.ForeignKey("customer.id"), nullable=False, index=True
     )
     date_created = db.Column(
-        db.DateTime, nullable=False, default=datetime.utcnow
+        db.DateTime, nullable=False, default=datetime.utcnow, index=True
     )
 
     # Define a ForeignKeyConstraint to ensure referential integrity with InvoiceProduct
@@ -347,8 +347,6 @@ class Invoice(db.Model):
             ["invoice_product.invoice_id"],
             use_alter=True,
         ),
-        db.Index("ix_invoice_date_created", "date_created"),
-        db.Index("ix_invoice_customer_id", "customer_id"),
         db.Index("ix_invoice_user_id", "user_id"),
     )
 
