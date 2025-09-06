@@ -34,8 +34,16 @@ def view_items():
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
     gl_code_id = request.args.get("gl_code_id", type=int)
+    archived = request.args.get("archived", "active")
+    base_unit = request.args.get("base_unit")
+    cost_min = request.args.get("cost_min", type=float)
+    cost_max = request.args.get("cost_max", type=float)
 
-    query = Item.query.filter_by(archived=False)
+    query = Item.query
+    if archived == "active":
+        query = query.filter(Item.archived.is_(False))
+    elif archived == "archived":
+        query = query.filter(Item.archived.is_(True))
     if name_query:
         if match_mode == "exact":
             query = query.filter(Item.name == name_query)
@@ -54,6 +62,25 @@ def view_items():
     items = query.order_by(Item.name).paginate(page=page, per_page=20)
     form = ItemForm()
     gl_codes = GLCode.query.order_by(GLCode.code).all()
+    if base_unit:
+        query = query.filter(Item.base_unit == base_unit)
+    if cost_min is not None and cost_max is not None and cost_min > cost_max:
+        flash("Invalid cost range: min cannot be greater than max.", "error")
+        return redirect(url_for("item.view_items"))
+    if cost_min is not None:
+        query = query.filter(Item.cost >= cost_min)
+    if cost_max is not None:
+        query = query.filter(Item.cost <= cost_max)
+
+    items = query.order_by(Item.name).paginate(page=page, per_page=20)
+    form = ItemForm()
+    gl_codes = GLCode.query.order_by(GLCode.code).all()
+    base_units = [
+        u
+        for (u,) in db.session.query(Item.base_unit)
+        .distinct()
+        .order_by(Item.base_unit)
+    ]
     active_gl_code = db.session.get(GLCode, gl_code_id) if gl_code_id else None
     return render_template(
         "items/view_items.html",
@@ -63,7 +90,12 @@ def view_items():
         match_mode=match_mode,
         gl_codes=gl_codes,
         gl_code_id=gl_code_id,
+        base_units=base_units,
+        base_unit=base_unit,
+        cost_min=cost_min,
+        cost_max=cost_max,
         active_gl_code=active_gl_code,
+        archived=archived,
     )
 
 
