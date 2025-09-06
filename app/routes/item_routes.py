@@ -34,6 +34,7 @@ def view_items():
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
     gl_code_id = request.args.get("gl_code_id", type=int)
+    base_unit = request.args.get("base_unit")
 
     query = Item.query.filter_by(archived=False)
     if name_query:
@@ -51,9 +52,17 @@ def view_items():
     if gl_code_id is not None:
         query = query.filter(Item.gl_code_id == gl_code_id)
 
+    if base_unit:
+        query = query.filter(Item.base_unit == base_unit)
     items = query.order_by(Item.name).paginate(page=page, per_page=20)
     form = ItemForm()
     gl_codes = GLCode.query.order_by(GLCode.code).all()
+    base_units = [
+        u
+        for (u,) in db.session.query(Item.base_unit)
+        .distinct()
+        .order_by(Item.base_unit)
+    ]
     active_gl_code = db.session.get(GLCode, gl_code_id) if gl_code_id else None
     return render_template(
         "items/view_items.html",
@@ -63,6 +72,8 @@ def view_items():
         match_mode=match_mode,
         gl_codes=gl_codes,
         gl_code_id=gl_code_id,
+        base_units=base_units,
+        base_unit=base_unit,
         active_gl_code=active_gl_code,
     )
 

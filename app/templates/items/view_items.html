@@ -32,6 +32,14 @@
                 {% endfor %}
             </select>
         </div>
+        <div class="col">
+            <select name="base_unit" class="form-select">
+                <option value="">All Base Units</option>
+                {% for unit in base_units %}
+                <option value="{{ unit }}" {% if base_unit == unit %}selected{% endif %}>{{ unit|capitalize }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <div class="col-auto">
             <button type="submit" class="btn btn-secondary">Search</button>
         </div>
@@ -39,6 +47,11 @@
     {% if active_gl_code %}
     <div class="mb-3">
         <strong>Filtering by GL Code:</strong> {{ active_gl_code.code }} - {{ active_gl_code.description }}
+    </div>
+    {% endif %}
+    {% if base_unit %}
+    <div class="mb-3">
+        <strong>Filtering by Base Unit:</strong> {{ base_unit|capitalize }}
     </div>
     {% endif %}
     <form id="bulk-delete-form" action="{{ url_for('item.bulk_delete_items') }}" method="post">
@@ -73,7 +86,7 @@
         <ul class="pagination">
             {% if items.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, base_unit=base_unit) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -81,7 +94,7 @@
             </li>
             {% if items.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Next</a>
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, base_unit=base_unit) }}">Next</a>
             </li>
             {% endif %}
         </ul>
