@@ -27,6 +27,10 @@ def view_products():
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
     gl_code_id = request.args.get("gl_code_id", type=int)
+    cost_min = request.args.get("cost_min", type=float)
+    cost_max = request.args.get("cost_max", type=float)
+    price_min = request.args.get("price_min", type=float)
+    price_max = request.args.get("price_max", type=float)
 
     query = Product.query
     if name_query:
@@ -44,6 +48,25 @@ def view_products():
     if gl_code_id:
         query = query.filter(Product.gl_code_id == gl_code_id)
 
+    if cost_min is not None and cost_max is not None and cost_min > cost_max:
+        flash("Invalid cost range: min cannot be greater than max.", "error")
+        return redirect(url_for("product.view_products"))
+    if (
+        price_min is not None
+        and price_max is not None
+        and price_min > price_max
+    ):
+        flash("Invalid price range: min cannot be greater than max.", "error")
+        return redirect(url_for("product.view_products"))
+    if cost_min is not None:
+        query = query.filter(Product.cost >= cost_min)
+    if cost_max is not None:
+        query = query.filter(Product.cost <= cost_max)
+    if price_min is not None:
+        query = query.filter(Product.price >= price_min)
+    if price_max is not None:
+        query = query.filter(Product.price <= price_max)
+
     products = query.paginate(page=page, per_page=20)
     gl_codes = GLCode.query.order_by(GLCode.code).all()
     selected_gl_code = (
@@ -56,6 +79,10 @@ def view_products():
         name_query=name_query,
         match_mode=match_mode,
         gl_code_id=gl_code_id,
+        cost_min=cost_min,
+        cost_max=cost_max,
+        price_min=price_min,
+        price_max=price_max,
         gl_codes=gl_codes,
         selected_gl_code=selected_gl_code,
     )
