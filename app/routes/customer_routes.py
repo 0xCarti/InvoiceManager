@@ -21,7 +21,10 @@ customer = Blueprint("customer", __name__)
 @login_required
 def view_customers():
     """Display all customers."""
-    customers = Customer.query.filter_by(archived=False).all()
+    page = request.args.get("page", 1, type=int)
+    customers = (
+        Customer.query.filter_by(archived=False).paginate(page=page, per_page=20)
+    )
     delete_form = DeleteForm()
     return render_template(
         "customers/view_customers.html",

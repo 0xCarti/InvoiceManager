@@ -252,8 +252,10 @@ def view_invoices():
             Invoice.date_created
             <= datetime.combine(end_date, datetime.max.time())
         )
-
-    invoices = query.order_by(Invoice.date_created.desc()).all()
+    page = request.args.get("page", 1, type=int)
+    invoices = query.order_by(Invoice.date_created.desc()).paginate(
+        page=page, per_page=20
+    )
     delete_form = DeleteForm()
     return render_template(
         "invoices/view_invoices.html",
