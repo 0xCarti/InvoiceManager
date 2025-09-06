@@ -380,19 +380,20 @@ def import_items():
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(filepath)
 
-        # Parse the file
+        # Read all unique item names from the uploaded file
         with open(filepath, "r") as file:
-            for line in file:
-                item_name = line.strip()
-                if item_name:
-                    # Check if an active item already exists to avoid duplicates
-                    existing_item = Item.query.filter_by(
-                        name=item_name, archived=False
-                    ).first()
-                    if not existing_item:
-                        # Create a new item instance and add it to the database
-                        new_item = Item(name=item_name)
-                        db.session.add(new_item)
+            names = {line.strip() for line in file if line.strip()}
+
+        # Fetch existing active items in a single query and build a lookup
+        existing_items = Item.query.filter(
+            Item.name.in_(names), Item.archived.is_(False)
+        ).all()
+        existing_lookup = {item.name for item in existing_items}
+
+        # Bulk create only the missing items
+        new_items = [Item(name=name) for name in names if name not in existing_lookup]
+        if new_items:
+            db.session.bulk_save_objects(new_items)
         db.session.commit()
         log_activity("Imported items from file")
 
