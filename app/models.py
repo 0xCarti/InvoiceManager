@@ -111,6 +111,8 @@ class Location(db.Model):
         cascade="all, delete-orphan",
     )
 
+    __table_args__ = (db.Index("ix_location_archived", "archived"),)
+
 
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -168,6 +170,7 @@ class Item(db.Model):
             unique=True,
             sqlite_where=db.text("archived = 0"),
         ),
+        db.Index("ix_item_archived", "archived"),
     )
 
 
@@ -217,6 +220,16 @@ class Transfer(db.Model):
         "TransferItem", backref="transfer", cascade="all, delete-orphan"
     )
 
+    __table_args__ = (
+        db.Index(
+            "ix_transfer_to_location_completed",
+            "to_location_id",
+            "completed",
+        ),
+        db.Index("ix_transfer_date_created", "date_created"),
+        db.Index("ix_transfer_user_id", "user_id"),
+    )
+
 
 class TransferItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -242,7 +255,10 @@ class Customer(db.Model):
     archived = db.Column(
         db.Boolean, default=False, nullable=False, server_default="0"
     )
+
     invoices = db.relationship("Invoice", backref="customer", lazy=True)
+
+    __table_args__ = (db.Index("ix_customer_archived", "archived"),)
 
 
 class Vendor(db.Model):
@@ -258,6 +274,8 @@ class Vendor(db.Model):
     archived = db.Column(
         db.Boolean, default=False, nullable=False, server_default="0"
     )
+
+    __table_args__ = (db.Index("ix_vendor_archived", "archived"),)
 
 
 class GLCode(db.Model):
@@ -329,6 +347,9 @@ class Invoice(db.Model):
             ["invoice_product.invoice_id"],
             use_alter=True,
         ),
+        db.Index("ix_invoice_date_created", "date_created"),
+        db.Index("ix_invoice_customer_id", "customer_id"),
+        db.Index("ix_invoice_user_id", "user_id"),
     )
 
     # Define the relationship with InvoiceProduct, specifying the foreign_keys argument
