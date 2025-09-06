@@ -151,15 +151,22 @@ def view_stand_sheet(location_id):
     if location is None:
         abort(404)
 
+    # Preload all stand sheet records for the location to avoid querying for
+    # each individual item when building the stand sheet. Mapping the records by
+    # ``item_id`` lets us perform fast dictionary lookups inside the loop
+    # below.
+    stand_records = LocationStandItem.query.filter_by(
+        location_id=location_id
+    ).all()
+    stand_by_item_id = {record.item_id: record for record in stand_records}
+
     stand_items = []
     seen = set()
     for product_obj in location.products:
         for recipe_item in product_obj.recipe_items:
             if recipe_item.countable and recipe_item.item_id not in seen:
                 seen.add(recipe_item.item_id)
-                record = LocationStandItem.query.filter_by(
-                    location_id=location_id, item_id=recipe_item.item_id
-                ).first()
+                record = stand_by_item_id.get(recipe_item.item_id)
                 expected = record.expected_count if record else 0
                 stand_items.append(
                     {"item": recipe_item.item, "expected": expected}
