@@ -54,6 +54,9 @@ def view_items():
     if gl_code_id is not None:
         query = query.filter(Item.gl_code_id == gl_code_id)
 
+    items = query.order_by(Item.name).paginate(page=page, per_page=20)
+    form = ItemForm()
+    gl_codes = GLCode.query.order_by(GLCode.code).all()
     if base_unit:
         query = query.filter(Item.base_unit == base_unit)
     if cost_min is not None and cost_max is not None and cost_min > cost_max:
