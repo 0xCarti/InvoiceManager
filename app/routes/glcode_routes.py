@@ -1,4 +1,4 @@
-from flask import Blueprint, abort, flash, redirect, render_template, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import login_required
 
 from app import db
@@ -12,7 +12,8 @@ glcode_bp = Blueprint("glcode", __name__)
 @login_required
 def view_gl_codes():
     """List GL codes."""
-    codes = GLCode.query.all()
+    page = request.args.get("page", 1, type=int)
+    codes = GLCode.query.order_by(GLCode.code).paginate(page, per_page=20)
     delete_form = DeleteForm()
     return render_template(
         "gl_codes/view_gl_codes.html", codes=codes, delete_form=delete_form

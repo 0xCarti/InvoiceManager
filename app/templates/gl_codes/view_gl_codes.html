@@ -14,7 +14,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for code in codes %}
+            {% for code in codes.items %}
             <tr>
                 <td>{{ code.code }}</td>
                 <td>{{ code.description or '' }}</td>
@@ -30,5 +30,22 @@
         </tbody>
     </table>
     </div>
+    <nav aria-label="GL code pagination">
+        <ul class="pagination">
+            {% if codes.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('glcode.view_gl_codes', page=codes.prev_num) }}">Previous</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">Page {{ codes.page }} of {{ codes.pages }}</span>
+            </li>
+            {% if codes.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('glcode.view_gl_codes', page=codes.next_num) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
 </div>
 {% endblock %}
