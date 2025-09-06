@@ -13,7 +13,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for location in locations %}
+            {% for location in locations.items %}
             <tr>
                 <td>{{ location.name }}</td>
                 <td>
@@ -29,5 +29,22 @@
         </tbody>
     </table>
     </div>
+    <nav aria-label="Location pagination">
+        <ul class="pagination">
+            {% if locations.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('locations.view_locations', page=locations.prev_num) }}">Previous</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">Page {{ locations.page }} of {{ locations.pages }}</span>
+            </li>
+            {% if locations.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('locations.view_locations', page=locations.next_num) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
 </div>
 {% endblock %}
