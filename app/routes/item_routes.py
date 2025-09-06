@@ -15,7 +15,7 @@ from werkzeug.utils import secure_filename
 
 from app import db
 from app.forms import ImportItemsForm, ItemForm
-from app.models import Item, ItemUnit, LocationStandItem
+from app.models import GLCode, Item, ItemUnit, LocationStandItem
 from app.utils.activity import log_activity
 
 item = Blueprint("item", __name__)
@@ -33,6 +33,7 @@ def view_items():
     page = request.args.get("page", 1, type=int)
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
+    gl_code_id = request.args.get("gl_code_id", type=int)
 
     query = Item.query.filter_by(archived=False)
     if name_query:
@@ -47,14 +48,22 @@ def view_items():
         else:
             query = query.filter(Item.name.like(f"%{name_query}%"))
 
+    if gl_code_id is not None:
+        query = query.filter(Item.gl_code_id == gl_code_id)
+
     items = query.order_by(Item.name).paginate(page=page, per_page=20)
     form = ItemForm()
+    gl_codes = GLCode.query.order_by(GLCode.code).all()
+    active_gl_code = db.session.get(GLCode, gl_code_id) if gl_code_id else None
     return render_template(
         "items/view_items.html",
         items=items,
         form=form,
         name_query=name_query,
         match_mode=match_mode,
+        gl_codes=gl_codes,
+        gl_code_id=gl_code_id,
+        active_gl_code=active_gl_code,
     )
 
 
