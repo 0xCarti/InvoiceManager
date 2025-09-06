@@ -7,7 +7,7 @@
         <tr><th>Location</th><th>Quantity</th><th>Purchase GL Code</th></tr>
     </thead>
     <tbody>
-    {% for e in entries %}
+    {% for e in entries.items %}
         <tr>
             <td>{{ e.location.name }}</td>
             <td>{{ e.expected_count }}</td>
@@ -22,4 +22,21 @@
     </tbody>
 </table>
 </div>
+<nav aria-label="Location pagination">
+    <ul class="pagination">
+        {% if entries.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('item.item_locations', item_id=item.id, page=entries.prev_num) }}">Previous</a>
+        </li>
+        {% endif %}
+        <li class="page-item disabled">
+            <span class="page-link">Page {{ entries.page }} of {{ entries.pages }}</span>
+        </li>
+        {% if entries.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('item.item_locations', item_id=item.id, page=entries.next_num) }}">Next</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
 {% endblock %}

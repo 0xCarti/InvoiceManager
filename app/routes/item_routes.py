@@ -30,7 +30,12 @@ MAX_IMPORT_SIZE = 1 * 1024 * 1024  # 1 MB
 @login_required
 def view_items():
     """Display the inventory item list."""
-    items = Item.query.filter_by(archived=False).all()
+    page = request.args.get("page", 1, type=int)
+    items = (
+        Item.query.filter_by(archived=False)
+        .order_by(Item.name)
+        .paginate(page=page, per_page=20)
+    )
     form = ItemForm()
     return render_template("items/view_items.html", items=items, form=form)
 
@@ -42,8 +47,17 @@ def item_locations(item_id):
     item_obj = db.session.get(Item, item_id)
     if item_obj is None:
         abort(404)
-    entries = LocationStandItem.query.filter_by(item_id=item_id).all()
-    total = sum(e.expected_count for e in entries)
+    page = request.args.get("page", 1, type=int)
+    entries = (
+        LocationStandItem.query.filter_by(item_id=item_id)
+        .paginate(page=page, per_page=20)
+    )
+    total = (
+        db.session.query(db.func.sum(LocationStandItem.expected_count))
+        .filter_by(item_id=item_id)
+        .scalar()
+        or 0
+    )
     return render_template(
         "items/item_locations.html",
         item=item_obj,
