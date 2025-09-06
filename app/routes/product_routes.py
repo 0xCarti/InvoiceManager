@@ -26,6 +26,7 @@ def view_products():
     page = request.args.get("page", 1, type=int)
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
+    gl_code_id = request.args.get("gl_code_id", type=int)
 
     query = Product.query
     if name_query:
@@ -40,13 +41,23 @@ def view_products():
         else:
             query = query.filter(Product.name.like(f"%{name_query}%"))
 
+    if gl_code_id:
+        query = query.filter(Product.gl_code_id == gl_code_id)
+
     products = query.paginate(page=page, per_page=20)
+    gl_codes = GLCode.query.order_by(GLCode.code).all()
+    selected_gl_code = (
+        db.session.get(GLCode, gl_code_id) if gl_code_id else None
+    )
     return render_template(
         "products/view_products.html",
         products=products,
         delete_form=delete_form,
         name_query=name_query,
         match_mode=match_mode,
+        gl_code_id=gl_code_id,
+        gl_codes=gl_codes,
+        selected_gl_code=selected_gl_code,
     )
 
 

@@ -19,10 +19,21 @@
                 <option value="not_contains" {% if match_mode == 'not_contains' %}selected{% endif %}>Does not contain</option>
             </select>
         </div>
+        <div class="col">
+            <select name="gl_code_id" class="form-select">
+                <option value="">All GL Codes</option>
+                {% for gl in gl_codes %}
+                <option value="{{ gl.id }}" {% if gl_code_id == gl.id %}selected{% endif %}>{{ gl.code }} - {{ gl.description }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <div class="col-auto">
             <button type="submit" class="btn btn-secondary">Search</button>
         </div>
     </form>
+    {% if selected_gl_code %}
+    <p>Filtering by GL Code: {{ selected_gl_code.code }}{% if selected_gl_code.description %} - {{ selected_gl_code.description }}{% endif %}</p>
+    {% endif %}
     <div class="table-responsive">
     <table class="table">
         <thead>
@@ -57,7 +68,7 @@
         <ul class="pagination">
             {% if products.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('product.view_products', page=products.prev_num, name_query=name_query, match_mode=match_mode) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('product.view_products', page=products.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -65,7 +76,7 @@
             </li>
             {% if products.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('product.view_products', page=products.next_num, name_query=name_query, match_mode=match_mode) }}">Next</a>
+                <a class="page-link" href="{{ url_for('product.view_products', page=products.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Next</a>
             </li>
             {% endif %}
         </ul>
