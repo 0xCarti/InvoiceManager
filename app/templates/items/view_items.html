@@ -33,6 +33,11 @@
             </select>
         </div>
         <div class="col">
+            <select name="archived" class="form-select">
+                <option value="active" {% if archived == 'active' %}selected{% endif %}>Active</option>
+                <option value="archived" {% if archived == 'archived' %}selected{% endif %}>Archived</option>
+                <option value="all" {% if archived == 'all' %}selected{% endif %}>All</option>
+            </select>
             <select name="base_unit" class="form-select">
                 <option value="">All Base Units</option>
                 {% for unit in base_units %}
@@ -90,6 +95,7 @@
         <ul class="pagination">
             {% if items.has_prev %}
             <li class="page-item">
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, archived=archived) }}">Previous</a>
                 <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Previous</a>
             <li class="page-item"
                 <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, base_unit=base_unit) }}">Previous</a>
@@ -101,6 +107,8 @@
             </li>
             {% if items.has_next %}
             <li class="page-item">
+
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, archived=archived) }}">Next</a>
                 <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Next</a>
                 <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, base_unit=base_unit) }}">Next</a>
                 <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, cost_min=cost_min, cost_max=cost_max) }}">Next</a>

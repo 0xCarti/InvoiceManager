@@ -34,11 +34,16 @@ def view_items():
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
     gl_code_id = request.args.get("gl_code_id", type=int)
+    archived = request.args.get("archived", "active")
     base_unit = request.args.get("base_unit")
     cost_min = request.args.get("cost_min", type=float)
     cost_max = request.args.get("cost_max", type=float)
 
-    query = Item.query.filter_by(archived=False)
+    query = Item.query
+    if archived == "active":
+        query = query.filter(Item.archived.is_(False))
+    elif archived == "archived":
+        query = query.filter(Item.archived.is_(True))
     if name_query:
         if match_mode == "exact":
             query = query.filter(Item.name == name_query)
@@ -90,6 +95,7 @@ def view_items():
         cost_min=cost_min,
         cost_max=cost_max,
         active_gl_code=active_gl_code,
+        archived=archived,
     )
 
 
