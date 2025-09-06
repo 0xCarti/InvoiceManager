@@ -129,9 +129,12 @@ def edit_location(location_id):
         )
 
     # Query for completed transfers to this location
-    transfers_to_location = Transfer.query.filter_by(
-        to_location_id=location_id, completed=True
-    ).all()
+    page = request.args.get("page", 1, type=int)
+    transfers_to_location = (
+        Transfer.query.filter_by(to_location_id=location_id, completed=True)
+        .order_by(Transfer.date_created.desc())
+        .paginate(page=page, per_page=20)
+    )
 
     selected_data = [{"id": p.id, "name": p.name} for p in location.products]
     return render_template(
