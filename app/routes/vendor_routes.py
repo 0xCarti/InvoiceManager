@@ -21,7 +21,8 @@ vendor = Blueprint("vendor", __name__)
 @login_required
 def view_vendors():
     """Display all vendors."""
-    vendors = Vendor.query.filter_by(archived=False).all()
+    page = request.args.get("page", 1, type=int)
+    vendors = Vendor.query.filter_by(archived=False).paginate(page=page, per_page=20)
     delete_form = DeleteForm()
     return render_template(
         "vendors/view_vendors.html", vendors=vendors, delete_form=delete_form

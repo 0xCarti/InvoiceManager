@@ -36,7 +36,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for invoice in invoices %}
+            {% for invoice in invoices.items %}
             <tr>
                 <td>{{ invoice.id }}</td>
                 <td>{{ invoice.date_created|format_datetime('%Y-%m-%d') }}</td>
@@ -54,5 +54,22 @@
         </tbody>
     </table>
     </div>
+    <nav aria-label="Invoice pagination">
+        <ul class="pagination">
+            {% if invoices.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('invoice.view_invoices', page=invoices.prev_num, invoice_id=request.args.get('invoice_id'), customer_id=request.args.get('customer_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}">Previous</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">Page {{ invoices.page }} of {{ invoices.pages }}</span>
+            </li>
+            {% if invoices.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('invoice.view_invoices', page=invoices.next_num, invoice_id=request.args.get('invoice_id'), customer_id=request.args.get('customer_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
 </div>
 {% endblock %}
