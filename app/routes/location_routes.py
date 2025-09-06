@@ -39,22 +39,26 @@ def add_location():
         db.session.commit()
 
         # Add stand sheet items for countable recipe items
+        existing_items = {
+            item.item_id: item
+            for item in LocationStandItem.query.filter_by(
+                location_id=new_location.id
+            ).all()
+        }
         for product_obj in selected_products:
             for recipe_item in product_obj.recipe_items:
-                if recipe_item.countable:
-                    exists = LocationStandItem.query.filter_by(
+                if (
+                    recipe_item.countable
+                    and recipe_item.item_id not in existing_items
+                ):
+                    new_item = LocationStandItem(
                         location_id=new_location.id,
                         item_id=recipe_item.item_id,
-                    ).first()
-                    if not exists:
-                        db.session.add(
-                            LocationStandItem(
-                                location_id=new_location.id,
-                                item_id=recipe_item.item_id,
-                                expected_count=0,
-                                purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
-                            )
-                        )
+                        expected_count=0,
+                        purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+                    )
+                    db.session.add(new_item)
+                    existing_items[recipe_item.item_id] = new_item
         db.session.commit()
         log_activity(f"Added location {new_location.name}")
         flash("Location added successfully!")
@@ -97,21 +101,26 @@ def edit_location(location_id):
         db.session.commit()
 
         # Ensure stand sheet items exist for new products
+        existing_items = {
+            item.item_id: item
+            for item in LocationStandItem.query.filter_by(
+                location_id=location.id
+            ).all()
+        }
         for product_obj in selected_products:
             for recipe_item in product_obj.recipe_items:
-                if recipe_item.countable:
-                    exists = LocationStandItem.query.filter_by(
-                        location_id=location.id, item_id=recipe_item.item_id
-                    ).first()
-                    if not exists:
-                        db.session.add(
-                            LocationStandItem(
-                                location_id=location.id,
-                                item_id=recipe_item.item_id,
-                                expected_count=0,
-                                purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
-                            )
-                        )
+                if (
+                    recipe_item.countable
+                    and recipe_item.item_id not in existing_items
+                ):
+                    new_item = LocationStandItem(
+                        location_id=location.id,
+                        item_id=recipe_item.item_id,
+                        expected_count=0,
+                        purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+                    )
+                    db.session.add(new_item)
+                    existing_items[recipe_item.item_id] = new_item
         db.session.commit()
         log_activity(f"Edited location {location.id}")
         flash("Location updated successfully.", "success")
