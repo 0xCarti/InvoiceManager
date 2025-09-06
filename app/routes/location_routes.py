@@ -167,7 +167,12 @@ def view_stand_sheet(location_id):
 @login_required
 def view_locations():
     """List all locations."""
-    locations = Location.query.filter_by(archived=False).all()
+    page = request.args.get("page", 1, type=int)
+    locations = (
+        Location.query.filter_by(archived=False)
+        .order_by(Location.name)
+        .paginate(page=page, per_page=20)
+    )
     delete_form = DeleteForm()
     return render_template(
         "locations/view_locations.html",
