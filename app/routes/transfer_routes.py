@@ -7,6 +7,7 @@ from flask import (
     Blueprint,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -162,11 +163,15 @@ def view_transfers():
 
     transfers = query.paginate(page=page, per_page=20)
 
-    form = (
-        TransferForm()
-    )  # Assuming you're using it for something like a filter form on the page
+    form = TransferForm()
+    add_form = TransferForm(prefix="add")
+    edit_form = TransferForm(prefix="edit")
     return render_template(
-        "transfers/view_transfers.html", transfers=transfers, form=form
+        "transfers/view_transfers.html",
+        transfers=transfers,
+        form=form,
+        add_form=add_form,
+        edit_form=edit_form,
     )
 
 
@@ -237,6 +242,57 @@ def add_transfer():
     return render_template("transfers/add_transfer.html", form=form)
 
 
+@transfer.route("/transfers/ajax_add", methods=["POST"])
+@login_required
+def ajax_add_transfer():
+    form = TransferForm(prefix="add")
+    if form.validate_on_submit():
+        transfer = Transfer(
+            from_location_id=form.from_location_id.data,
+            to_location_id=form.to_location_id.data,
+            user_id=current_user.id,
+            from_location_name=db.session.get(Location, form.from_location_id.data).name,
+            to_location_name=db.session.get(Location, form.to_location_id.data).name,
+        )
+        db.session.add(transfer)
+        items = [key for key in request.form.keys() if key.startswith("items-") and key.endswith("-item")]
+        for item_field in items:
+            index = item_field.split("-")[1]
+            item_id = request.form.get(f"items-{index}-item")
+            quantity = request.form.get(f"items-{index}-quantity", type=float)
+            unit_id = request.form.get(f"items-{index}-unit", type=int)
+            if item_id:
+                item = db.session.get(Item, item_id)
+                if item and quantity is not None:
+                    factor = 1
+                    if unit_id:
+                        unit = db.session.get(ItemUnit, unit_id)
+                        if unit:
+                            factor = unit.factor
+                    transfer_item = TransferItem(
+                        transfer_id=transfer.id,
+                        item_id=item.id,
+                        quantity=quantity * factor,
+                        item_name=item.name,
+                    )
+                    db.session.add(transfer_item)
+        db.session.commit()
+        log_activity(f"Added transfer {transfer.id}")
+        socketio.emit("new_transfer", {"message": "New transfer added"})
+        try:
+            notify_users = User.query.filter_by(notify_transfers=True).all()
+            for user in notify_users:
+                if user.phone_number:
+                    send_sms(user.phone_number, f"Transfer {transfer.id} created")
+        except Exception:
+            pass
+        row_html = render_template(
+            "transfers/_transfer_row.html", transfer=transfer, form=TransferForm()
+        )
+        return jsonify(success=True, html=row_html)
+    return jsonify(success=False, errors=form.errors), 400
+
+
 @transfer.route("/transfers/edit/<int:transfer_id>", methods=["GET", "POST"])
 @login_required
 def edit_transfer(transfer_id):
@@ -304,6 +360,71 @@ def edit_transfer(transfer_id):
         transfer=transfer,
         items=items,
     )
+
+
+@transfer.route("/transfers/<int:transfer_id>/json")
+@login_required
+def transfer_json(transfer_id):
+    transfer = db.session.get(Transfer, transfer_id)
+    if transfer is None:
+        abort(404)
+    items = [
+        {
+            "id": ti.item_id,
+            "name": ti.item.name if ti.item else ti.item_name,
+            "quantity": ti.quantity,
+        }
+        for ti in transfer.transfer_items
+    ]
+    return jsonify(
+        {
+            "id": transfer.id,
+            "from_location_id": transfer.from_location_id,
+            "to_location_id": transfer.to_location_id,
+            "items": items,
+        }
+    )
+
+
+@transfer.route("/transfers/ajax_edit/<int:transfer_id>", methods=["POST"])
+@login_required
+def ajax_edit_transfer(transfer_id):
+    transfer = db.session.get(Transfer, transfer_id)
+    if transfer is None:
+        abort(404)
+    form = TransferForm(prefix="edit")
+    if form.validate_on_submit():
+        transfer.from_location_id = form.from_location_id.data
+        transfer.to_location_id = form.to_location_id.data
+        transfer.from_location_name = db.session.get(Location, form.from_location_id.data).name
+        transfer.to_location_name = db.session.get(Location, form.to_location_id.data).name
+        TransferItem.query.filter_by(transfer_id=transfer.id).delete()
+        items = [key for key in request.form.keys() if key.startswith("items-") and key.endswith("-item")]
+        for item_field in items:
+            index = item_field.split("-")[1]
+            item_id = request.form.get(f"items-{index}-item")
+            quantity = request.form.get(f"items-{index}-quantity", type=float)
+            unit_id = request.form.get(f"items-{index}-unit", type=int)
+            if item_id and quantity is not None:
+                factor = 1
+                if unit_id:
+                    unit = db.session.get(ItemUnit, unit_id)
+                    if unit:
+                        factor = unit.factor
+                new_transfer_item = TransferItem(
+                    transfer_id=transfer.id,
+                    item_id=int(item_id),
+                    quantity=quantity * factor,
+                    item_name=db.session.get(Item, int(item_id)).name,
+                )
+                db.session.add(new_transfer_item)
+        db.session.commit()
+        log_activity(f"Edited transfer {transfer.id}")
+        row_html = render_template(
+            "transfers/_transfer_row.html", transfer=transfer, form=TransferForm()
+        )
+        return jsonify(success=True, html=row_html, id=transfer.id)
+    return jsonify(success=False, errors=form.errors), 400
 
 
 @transfer.route("/transfers/delete/<int:transfer_id>", methods=["POST"])

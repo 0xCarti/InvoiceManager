@@ -5,37 +5,18 @@
     <h2>Transfers List</h2>
     <div class="row mb-3 align-items-center">
         <div class="col-12 col-lg-auto mb-2 mb-lg-0 d-flex align-items-center">
-            <a href="{{ url_for('transfer.add_transfer') }}" class="btn btn-primary me-2">Add New Transfer</a>
+            <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addTransferModal">Add New Transfer</button>
             <button id="new-transfer-alert" class="btn btn-warning me-2" onclick="window.location.reload();"
                     style="display: none;">
                 <img src="{{ url_for('static', filename='img/alert_icon.png') }}" alt="Reload"
                      style="width: 20px; height: 20px;"/>
             </button>
             <a href="{{ url_for('transfer.generate_report') }}" class="btn btn-info me-2">Generate Report</a>
-        </div>
-    </div>
-    <div class="row mb-3 align-items-center">
-        <div class="col-12 col-lg d-flex">
-            <form action="" method="get" class="d-flex flex-wrap align-items-end flex-grow-1">
-                <select name="filter" class="form-control me-2 mt-1 narrow-field" onchange="this.form.submit()">
-                    <option value="not_completed">Not Completed</option>
-                    <option value="completed" {% if request.args.get(
-                    'filter') == 'completed' %}selected{% endif %}>Completed</option>
-                    <option value="all" {% if request.args.get(
-                    'filter') == 'all' %}selected{% endif %}>All Transfers</option>
-                </select>
-                <input type="text" name="transfer_id" class="form-control me-2 mt-1 narrow-field" placeholder="Transfer ID"
-                       value="{{ request.args.get('transfer_id', '') }}">
-                <input type="text" name="from_location" class="form-control me-2 mt-1 narrow-field" placeholder="From Location"
-                       value="{{ request.args.get('from_location', '') }}">
-                <input type="text" name="to_location" class="form-control me-2 mt-1 narrow-field" placeholder="To Location"
-                       value="{{ request.args.get('to_location', '') }}">
-                <button type="submit" class="btn btn-info mt-2">Search</button>
-            </form>
+            <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#searchModal">Search/Filter</button>
         </div>
     </div>
     <div class="table-responsive">
-    <table class="table">
+    <table class="table" id="transfer-table">
         <thead>
         <tr>
             <th scope="col">#</th>
@@ -44,33 +25,10 @@
             <th scope="col">Actions</th>
         </tr>
         </thead>
-        <tbody>
+        <tbody id="transfer-table-body">
         {% set transfer_items = transfers.items if transfers is defined else [] %}
         {% for transfer in transfer_items %}
-        <tr>
-            <th scope="row">{{ transfer.id }}</th>
-            <td>{{ transfer.from_location.name }}</td>
-            <td>{{ transfer.to_location.name }}</td>
-            <td>
-                <a href="{{ url_for('transfer.view_transfer', transfer_id=transfer.id) }}" class="btn btn-primary"
-                   target="_blank">View</a>
-                <a href="{{ url_for('transfer.edit_transfer', transfer_id=transfer.id) }}"
-                   class="btn btn-secondary">Edit</a>
-                {% if transfer.completed %}
-                <a href="{{ url_for('transfer.uncomplete_transfer', transfer_id=transfer.id) }}"
-                   class="btn btn-success">Incomplete</a>
-                {% elif not transfer.completed %}
-                <a href="{{ url_for('transfer.complete_transfer', transfer_id=transfer.id) }}"
-                   class="btn btn-success">Complete</a>
-                {% endif %}
-                <form action="{{ url_for('transfer.delete_transfer', transfer_id=transfer.id) }}" method="post"
-                      class="d-inline">
-                    {{ form.hidden_tag() }}
-                    <input type="submit" value="Delete" class="btn btn-danger"
-                           onclick="return confirm('Are you sure?');">
-                </form>
-            </td>
-        </tr>
+            {% include 'transfers/_transfer_row.html' %}
         {% endfor %}
         </tbody>
     </table>
@@ -94,7 +52,111 @@
         </ul>
     </nav>
     {% endif %}
+    </div>
+<!-- Add Transfer Modal -->
+<div class="modal fade" id="addTransferModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Transfer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="add-transfer-form">
+          {{ add_form.hidden_tag() }}
+          <div class="row">
+            <div class="col-md-6">
+              <div class="form-group">
+                {{ add_form.from_location_id.label(class="form-label") }}
+                {{ add_form.from_location_id(class="form-control") }}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-group">
+                {{ add_form.to_location_id.label(class="form-label") }}
+                {{ add_form.to_location_id(class="form-control") }}
+              </div>
+            </div>
+          </div>
+          <h3>Add Items</h3>
+          <div class="form-group">
+            <label for="add-item-name" class="form-label">Item Name</label>
+            <input type="text" id="add-item-name" class="form-control" autocomplete="off">
+            <div id="add-suggestions"></div>
+          </div>
+          <div id="add-item-list" class="mb-3"></div>
+          <button type="submit" class="btn btn-success">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
+
+<!-- Edit Transfer Modal -->
+<div class="modal fade" id="editTransferModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit Transfer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-transfer-form">
+          {{ edit_form.hidden_tag() }}
+          <input type="hidden" id="edit-transfer-id" name="transfer_id">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="form-group">
+                {{ edit_form.from_location_id.label(class="form-label") }}
+                {{ edit_form.from_location_id(class="form-control") }}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-group">
+                {{ edit_form.to_location_id.label(class="form-label") }}
+                {{ edit_form.to_location_id(class="form-control") }}
+              </div>
+            </div>
+          </div>
+          <h3>Edit Items</h3>
+          <div class="form-group">
+            <label for="edit-item-name" class="form-label">Item Name</label>
+            <input type="text" id="edit-item-name" class="form-control" autocomplete="off">
+            <div id="edit-suggestions"></div>
+          </div>
+          <div id="edit-item-list" class="mb-3"></div>
+          <button type="submit" class="btn btn-success">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Search Modal -->
+<div class="modal fade" id="searchModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Search Transfers</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form action="{{ url_for('transfer.view_transfers') }}" method="get" class="d-flex flex-wrap align-items-end flex-grow-1">
+          <select name="filter" class="form-control me-2 mt-1 narrow-field">
+            <option value="not_completed">Not Completed</option>
+            <option value="completed" {% if request.args.get('filter') == 'completed' %}selected{% endif %}>Completed</option>
+            <option value="all" {% if request.args.get('filter') == 'all' %}selected{% endif %}>All Transfers</option>
+          </select>
+          <input type="text" name="transfer_id" class="form-control me-2 mt-1 narrow-field" placeholder="Transfer ID" value="{{ request.args.get('transfer_id', '') }}">
+          <input type="text" name="from_location" class="form-control me-2 mt-1 narrow-field" placeholder="From Location" value="{{ request.args.get('from_location', '') }}">
+          <input type="text" name="to_location" class="form-control me-2 mt-1 narrow-field" placeholder="To Location" value="{{ request.args.get('to_location', '') }}">
+          <button type="submit" class="btn btn-info mt-2">Search</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
     var protocol = window.location.protocol;
     var socket = io.connect(protocol + '//' + document.domain + ':' + location.port);
@@ -104,8 +166,216 @@
     });
 
     socket.on('new_transfer', function(data) {
-        //alert(data.message);
         document.getElementById('new-transfer-alert').style.display = 'inline-block';
+    });
+
+    let addItemIndex = 0;
+    document.getElementById('add-item-name').addEventListener('input', function() {
+        var input = this.value;
+        if (input === ''){
+            document.getElementById('add-suggestions').innerHTML = '';
+            return;
+        }
+        fetch('/items/search?term=' + input)
+            .then(response => response.json())
+            .then(data => {
+                var suggestionsDiv = document.getElementById('add-suggestions');
+                suggestionsDiv.innerHTML = '';
+                data.forEach(function(item) {
+                    var suggestion = document.createElement('div');
+                    suggestion.textContent = item.name;
+                    suggestion.dataset.id = item.id;
+                    suggestion.classList.add('suggestion');
+                    suggestionsDiv.appendChild(suggestion);
+                });
+            });
+    });
+
+    document.addEventListener('click', function(event) {
+        if (event.target && event.target.classList.contains('suggestion') && event.target.parentElement.id === 'add-suggestions') {
+            var itemName = event.target.textContent;
+            var itemId = event.target.dataset.id;
+            addItemToList(itemId, itemName);
+        }
+    });
+
+    function addItemToList(id, name) {
+        fetch(`/items/${id}/units`).then(r => r.json()).then(data => {
+            const base = data.base_unit;
+            const units = data.units;
+            var options = '';
+            units.forEach(u => {
+                const label = `${u.name} of ${u.factor} ${base}${u.factor != 1 ? 's' : ''}`;
+                options += `<option value="${u.id}" data-factor="${u.factor}" ${u.transfer_default ? 'selected' : ''}>${label}</option>`;
+            });
+            var listItem = document.createElement('div');
+            listItem.classList.add('item-container','d-flex','justify-content-between','align-items-center','mb-2');
+            listItem.innerHTML = `
+                <div style="padding-left: 15px; font-weight: bold;">${name}</div>
+                <div class="d-flex align-items-center">
+                    <input type="hidden" name="items-${addItemIndex}-item" value="${id}">
+                    <select name="items-${addItemIndex}-unit" class="form-control me-2" style="max-width: 160px;">${options}</select>
+                    <input type="number" step="any" class="form-control quantity" name="items-${addItemIndex}-quantity" placeholder="Qty" style="max-width: 120px;" data-base-qty="0">
+                    <button type="button" class="btn btn-danger delete-item ms-2">Delete</button>
+                </div>`;
+            const qtyInput = listItem.querySelector('.quantity');
+            const unitSelect = listItem.querySelector('select');
+            qtyInput.addEventListener('input', function(){
+                const factor = parseFloat(unitSelect.selectedOptions[0].dataset.factor);
+                this.dataset.baseQty = (parseFloat(this.value) || 0) * factor;
+            });
+            unitSelect.addEventListener('change', function(){
+                const factor = parseFloat(this.selectedOptions[0].dataset.factor);
+                const qty = listItem.querySelector('.quantity');
+                qty.value = (parseFloat(qty.dataset.baseQty) || 0) / factor;
+            });
+            document.getElementById('add-item-list').appendChild(listItem);
+            document.getElementById('add-suggestions').innerHTML = '';
+            document.getElementById('add-item-name').value = '';
+            addItemIndex++;
+        });
+    }
+
+    document.getElementById('add-item-list').addEventListener('click', function(event) {
+        if (event.target && event.target.classList.contains('delete-item')) {
+            event.target.closest('.item-container').remove();
+        }
+    });
+
+    document.getElementById('add-transfer-form').addEventListener('submit', function(e){
+        e.preventDefault();
+        fetch('/transfers/ajax_add', {
+            method: 'POST',
+            body: new FormData(this)
+        }).then(r => r.json()).then(data => {
+            if(data.success){
+                document.querySelector('#transfer-table-body').insertAdjacentHTML('afterbegin', data.html);
+                attachEditEvents();
+                var modal = bootstrap.Modal.getInstance(document.getElementById('addTransferModal'));
+                modal.hide();
+                this.reset();
+                document.getElementById('add-item-list').innerHTML = '';
+                addItemIndex = 0;
+            }else{
+                alert('Error adding transfer');
+            }
+        });
+    });
+
+    // Edit form functionality
+    let editItemIndex = 0;
+    document.getElementById('edit-item-name').addEventListener('input', function() {
+        var input = this.value;
+        if (input === ''){
+            document.getElementById('edit-suggestions').innerHTML = '';
+            return;
+        }
+        fetch('/items/search?term=' + input)
+            .then(response => response.json())
+            .then(data => {
+                var suggestionsDiv = document.getElementById('edit-suggestions');
+                suggestionsDiv.innerHTML = '';
+                data.forEach(function(item) {
+                    var suggestion = document.createElement('div');
+                    suggestion.textContent = item.name;
+                    suggestion.dataset.id = item.id;
+                    suggestion.classList.add('suggestion');
+                    suggestionsDiv.appendChild(suggestion);
+                });
+            });
+    });
+
+    document.addEventListener('click', function(event) {
+        if (event.target && event.target.classList.contains('suggestion') && event.target.parentElement.id === 'edit-suggestions') {
+            var itemName = event.target.textContent;
+            var itemId = event.target.dataset.id;
+            addEditItem({id: itemId, name: itemName, quantity: 0});
+            editItemIndex++;
+        }
+    });
+
+    function addEditItem(item){
+        fetch(`/items/${item.id}/units`).then(r => r.json()).then(data => {
+            const base = data.base_unit;
+            const units = data.units;
+            var options = '';
+            let defaultUnit = units.find(u => u.transfer_default) || units[0];
+            units.forEach(u => {
+                const label = `${u.name} of ${u.factor} ${base}${u.factor != 1 ? 's' : ''}`;
+                const selected = u.id === defaultUnit.id ? 'selected' : '';
+                options += `<option value="${u.id}" data-factor="${u.factor}" ${selected}>${label}</option>`;
+            });
+            var listItem = document.createElement('div');
+            listItem.classList.add('item-container','d-flex','justify-content-between','align-items-center','mb-2');
+            const displayQty = item.quantity ? item.quantity / defaultUnit.factor : 0;
+            listItem.innerHTML = `
+                <div style="padding-left: 15px; font-weight: bold;">${item.name}</div>
+                <div class="d-flex align-items-center">
+                    <input type="hidden" name="items-${editItemIndex}-item" value="${item.id}">
+                    <select name="items-${editItemIndex}-unit" class="form-control me-2" style="max-width: 160px;">${options}</select>
+                    <input type="number" step="any" class="form-control quantity" name="items-${editItemIndex}-quantity" value="${displayQty}" placeholder="Qty" style="max-width: 120px;" data-base-qty="${item.quantity}">
+                    <button type="button" class="btn btn-danger delete-item ms-2">Delete</button>
+                </div>`;
+            const qtyInput = listItem.querySelector('.quantity');
+            const unitSelect = listItem.querySelector('select');
+            qtyInput.addEventListener('input', function(){
+                const factor = parseFloat(unitSelect.selectedOptions[0].dataset.factor);
+                this.dataset.baseQty = (parseFloat(this.value) || 0) * factor;
+            });
+            unitSelect.addEventListener('change', function(){
+                const factor = parseFloat(this.selectedOptions[0].dataset.factor);
+                const qty = listItem.querySelector('.quantity');
+                qty.value = (parseFloat(qty.dataset.baseQty) || 0) / factor;
+            });
+            document.getElementById('edit-item-list').appendChild(listItem);
+        });
+    }
+
+    document.getElementById('edit-item-list').addEventListener('click', function(event) {
+        if (event.target && event.target.classList.contains('delete-item')) {
+            event.target.closest('.item-container').remove();
+        }
+    });
+
+    function loadEditTransfer(id){
+        fetch(`/transfers/${id}/json`).then(r => r.json()).then(data => {
+            document.getElementById('edit-transfer-id').value = data.id;
+            document.getElementById('edit-from_location_id').value = data.from_location_id;
+            document.getElementById('edit-to_location_id').value = data.to_location_id;
+            document.getElementById('edit-item-list').innerHTML = '';
+            editItemIndex = 0;
+            data.items.forEach(function(it){ addEditItem(it); editItemIndex++; });
+            var modal = new bootstrap.Modal(document.getElementById('editTransferModal'));
+            modal.show();
+        });
+    }
+
+    function attachEditEvents(){
+        document.querySelectorAll('.edit-transfer-btn').forEach(btn => {
+            btn.addEventListener('click', function(){
+                loadEditTransfer(this.dataset.id);
+            });
+        });
+    }
+    attachEditEvents();
+
+    document.getElementById('edit-transfer-form').addEventListener('submit', function(e){
+        e.preventDefault();
+        var id = document.getElementById('edit-transfer-id').value;
+        fetch(`/transfers/ajax_edit/${id}`, {
+            method: 'POST',
+            body: new FormData(this)
+        }).then(r => r.json()).then(data => {
+            if(data.success){
+                var row = document.getElementById(`transfer-row-${data.id}`);
+                row.outerHTML = data.html;
+                attachEditEvents();
+                var modal = bootstrap.Modal.getInstance(document.getElementById('editTransferModal'));
+                modal.hide();
+            } else {
+                alert('Error updating transfer');
+            }
+        });
     });
 </script>
 {% endblock %}
