@@ -26,8 +26,12 @@ def view_products():
     page = request.args.get("page", 1, type=int)
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
-    sales_gl_code_id = request.args.get("sales_gl_code_id", type=int)
-    gl_code_id = request.args.get("gl_code_id", type=int)
+    sales_gl_code_ids = [
+        int(x) for x in request.args.getlist("sales_gl_code_id") if x.isdigit()
+    ]
+    gl_code_ids = [
+        int(x) for x in request.args.getlist("gl_code_id") if x.isdigit()
+    ]
     cost_min = request.args.get("cost_min", type=float)
     cost_max = request.args.get("cost_max", type=float)
     price_min = request.args.get("price_min", type=float)
@@ -46,10 +50,10 @@ def view_products():
         else:
             query = query.filter(Product.name.like(f"%{name_query}%"))
 
-    if sales_gl_code_id:
-        query = query.filter(Product.sales_gl_code_id == sales_gl_code_id)
-    if gl_code_id:
-        query = query.filter(Product.gl_code_id == gl_code_id)
+    if sales_gl_code_ids:
+        query = query.filter(Product.sales_gl_code_id.in_(sales_gl_code_ids))
+    if gl_code_ids:
+        query = query.filter(Product.gl_code_id.in_(gl_code_ids))
 
     if cost_min is not None and cost_max is not None and cost_min > cost_max:
         flash("Invalid cost range: min cannot be greater than max.", "error")
@@ -74,12 +78,16 @@ def view_products():
     sales_gl_codes = (
         GLCode.query.filter(GLCode.code.like("4%")).order_by(GLCode.code).all()
     )
-    selected_sales_gl_code = (
-        db.session.get(GLCode, sales_gl_code_id) if sales_gl_code_id else None
+    selected_sales_gl_codes = (
+        GLCode.query.filter(GLCode.id.in_(sales_gl_code_ids)).all()
+        if sales_gl_code_ids
+        else []
     )
     gl_codes = GLCode.query.order_by(GLCode.code).all()
-    selected_gl_code = (
-        db.session.get(GLCode, gl_code_id) if gl_code_id else None
+    selected_gl_codes = (
+        GLCode.query.filter(GLCode.id.in_(gl_code_ids)).all()
+        if gl_code_ids
+        else []
     )
     return render_template(
         "products/view_products.html",
@@ -87,16 +95,16 @@ def view_products():
         delete_form=delete_form,
         name_query=name_query,
         match_mode=match_mode,
-        sales_gl_code_id=sales_gl_code_id,
+        sales_gl_code_ids=sales_gl_code_ids,
         sales_gl_codes=sales_gl_codes,
-        selected_sales_gl_code=selected_sales_gl_code,
-        gl_code_id=gl_code_id,
+        selected_sales_gl_codes=selected_sales_gl_codes,
+        gl_code_ids=gl_code_ids,
         cost_min=cost_min,
         cost_max=cost_max,
         price_min=price_min,
         price_max=price_max,
         gl_codes=gl_codes,
-        selected_gl_code=selected_gl_code,
+        selected_gl_codes=selected_gl_codes,
     )
 
 
