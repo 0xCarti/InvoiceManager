@@ -15,7 +15,15 @@ from werkzeug.utils import secure_filename
 
 from app import db
 from app.forms import ImportItemsForm, ItemForm
-from app.models import GLCode, Item, ItemUnit, LocationStandItem
+from app.models import (
+    GLCode,
+    Item,
+    ItemUnit,
+    LocationStandItem,
+    Vendor,
+    PurchaseOrder,
+    PurchaseOrderItem,
+)
 from app.utils.activity import log_activity
 
 item = Blueprint("item", __name__)
@@ -38,6 +46,7 @@ def view_items():
     base_unit = request.args.get("base_unit")
     cost_min = request.args.get("cost_min", type=float)
     cost_max = request.args.get("cost_max", type=float)
+    vendor_id = request.args.get("vendor_id", type=int)
 
     query = Item.query
     if archived == "active":
@@ -59,9 +68,18 @@ def view_items():
     if gl_code_id is not None:
         query = query.filter(Item.gl_code_id == gl_code_id)
 
-    items = query.order_by(Item.name).paginate(page=page, per_page=20)
-    form = ItemForm()
-    gl_codes = GLCode.query.order_by(GLCode.code).all()
+    if vendor_id is not None:
+        query = (
+            query.join(
+                PurchaseOrderItem, PurchaseOrderItem.item_id == Item.id
+            )
+            .join(
+                PurchaseOrder,
+                PurchaseOrderItem.purchase_order_id == PurchaseOrder.id,
+            )
+            .filter(PurchaseOrder.vendor_id == vendor_id)
+            .distinct()
+        )
     if base_unit:
         query = query.filter(Item.base_unit == base_unit)
     if cost_min is not None and cost_max is not None and cost_min > cost_max:
@@ -81,7 +99,9 @@ def view_items():
         .distinct()
         .order_by(Item.base_unit)
     ]
+    vendors = Vendor.query.order_by(Vendor.first_name, Vendor.last_name).all()
     active_gl_code = db.session.get(GLCode, gl_code_id) if gl_code_id else None
+    active_vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
     return render_template(
         "items/view_items.html",
         items=items,
@@ -96,6 +116,9 @@ def view_items():
         cost_max=cost_max,
         active_gl_code=active_gl_code,
         archived=archived,
+        vendors=vendors,
+        vendor_id=vendor_id,
+        active_vendor=active_vendor,
     )
 
 
