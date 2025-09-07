@@ -12,7 +12,16 @@ from flask_login import login_required
 
 from app import db
 from app.forms import DeleteForm, ProductRecipeForm, ProductWithRecipeForm
-from app.models import GLCode, Item, ItemUnit, Product, ProductRecipeItem
+from app.models import (
+    GLCode,
+    Item,
+    ItemUnit,
+    Product,
+    ProductRecipeItem,
+    Customer,
+    Invoice,
+    InvoiceProduct,
+)
 from app.utils.activity import log_activity
 
 product = Blueprint("product", __name__)
@@ -29,9 +38,7 @@ def view_products():
     sales_gl_code_ids = [
         int(x) for x in request.args.getlist("sales_gl_code_id") if x.isdigit()
     ]
-    gl_code_ids = [
-        int(x) for x in request.args.getlist("gl_code_id") if x.isdigit()
-    ]
+    customer_id = request.args.get("customer_id", type=int)
     cost_min = request.args.get("cost_min", type=float)
     cost_max = request.args.get("cost_max", type=float)
     price_min = request.args.get("price_min", type=float)
@@ -52,8 +59,13 @@ def view_products():
 
     if sales_gl_code_ids:
         query = query.filter(Product.sales_gl_code_id.in_(sales_gl_code_ids))
-    if gl_code_ids:
-        query = query.filter(Product.gl_code_id.in_(gl_code_ids))
+    if customer_id:
+        query = (
+            query.join(InvoiceProduct, Product.invoice_products)
+            .join(Invoice, InvoiceProduct.invoice_id == Invoice.id)
+            .filter(Invoice.customer_id == customer_id)
+            .distinct()
+        )
 
     if cost_min is not None and cost_max is not None and cost_min > cost_max:
         flash("Invalid cost range: min cannot be greater than max.", "error")
@@ -83,12 +95,8 @@ def view_products():
         if sales_gl_code_ids
         else []
     )
-    gl_codes = GLCode.query.order_by(GLCode.code).all()
-    selected_gl_codes = (
-        GLCode.query.filter(GLCode.id.in_(gl_code_ids)).all()
-        if gl_code_ids
-        else []
-    )
+    customers = Customer.query.order_by(Customer.last_name, Customer.first_name).all()
+    selected_customer = Customer.query.get(customer_id) if customer_id else None
     return render_template(
         "products/view_products.html",
         products=products,
@@ -98,13 +106,13 @@ def view_products():
         sales_gl_code_ids=sales_gl_code_ids,
         sales_gl_codes=sales_gl_codes,
         selected_sales_gl_codes=selected_sales_gl_codes,
-        gl_code_ids=gl_code_ids,
+        customer_id=customer_id,
+        customers=customers,
+        selected_customer=selected_customer,
         cost_min=cost_min,
         cost_max=cost_max,
         price_min=price_min,
         price_max=price_max,
-        gl_codes=gl_codes,
-        selected_gl_codes=selected_gl_codes,
     )
 
 
