@@ -11,8 +11,4 @@ app.debug = debug
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
-    # Run using eventlet's production WSGI server
-    import eventlet
-    from eventlet import wsgi
-
-    wsgi.server(eventlet.listen(("0.0.0.0", port)), app)
+    socketio.run(app, host="0.0.0.0", port=port, debug=debug)

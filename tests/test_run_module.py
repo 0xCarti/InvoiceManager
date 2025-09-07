@@ -20,23 +20,25 @@ def test_run_import_sets_debug(monkeypatch):
 
 
 def test_run_main_executes_server(monkeypatch):
+    class FakeSocketIO:
+        def __init__(self):
+            self.called_with = None
+
+        def run(self, app, host, port, debug):
+            self.called_with = (app, host, port, debug)
+
+    sock = FakeSocketIO()
+
     def fake_create_app(argv):
-        return SimpleNamespace(debug=False), "sock"
+        return SimpleNamespace(debug=False), sock
 
     monkeypatch.setattr("app.create_app", fake_create_app)
-    called = {}
-
-    def fake_server(listener, app):
-        called["listener"] = listener
-        called["app"] = app
-
-    monkeypatch.setattr("eventlet.wsgi.server", fake_server)
-    monkeypatch.setattr("eventlet.listen", lambda addr: ("listener", addr))
     monkeypatch.setenv("PORT", "6000")
     runpy.run_module("run", run_name="__main__")
     try:
-        assert called["listener"] == ("listener", ("0.0.0.0", 6000))
-        assert called["app"] is not None
+        assert sock.called_with[0] is not None
+        assert sock.called_with[1] == "0.0.0.0"
+        assert sock.called_with[2] == 6000
     finally:
         monkeypatch.undo()
         importlib.reload(importlib.import_module("run"))
