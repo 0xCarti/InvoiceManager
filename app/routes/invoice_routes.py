@@ -20,6 +20,106 @@ from app.utils.activity import log_activity
 invoice = Blueprint("invoice", __name__)
 
 
+def _create_invoice_from_form(form):
+    customer = db.session.get(Customer, form.customer.data)
+    if customer is None:
+        abort(404)
+    today = datetime.now().strftime("%d%m%y")
+    count = (
+        Invoice.query.filter(
+            func.date(Invoice.date_created) == func.current_date(),
+            Invoice.customer_id == customer.id,
+        ).count()
+        + 1
+    )
+    invoice_id = f"{customer.first_name[0]}{customer.last_name[0]}{customer.id}{today}{count:02}"
+
+    invoice = Invoice(
+        id=invoice_id, customer_id=customer.id, user_id=current_user.id
+    )
+    db.session.add(invoice)
+
+    product_data = form.products.data.removesuffix(":").split(":")
+
+    parsed_entries = []
+    product_names = set()
+    for entry in product_data:
+        try:
+            product_name, quantity, override_gst, override_pst = entry.split(
+                "?"
+            )
+        except ValueError:
+            flash(f"Invalid product data format: '{entry}'", "danger")
+            continue
+        parsed_entries.append(
+            (product_name, quantity, override_gst, override_pst)
+        )
+        product_names.add(product_name)
+
+    products = (
+        Product.query.filter(Product.name.in_(product_names)).all()
+        if product_names
+        else []
+    )
+    product_lookup = {p.name: p for p in products}
+
+    for product_name, quantity, override_gst, override_pst in parsed_entries:
+        product = product_lookup.get(product_name)
+
+        if product:
+            quantity = float(quantity)
+            unit_price = product.price
+            line_subtotal = quantity * unit_price
+
+            override_gst = (
+                None if override_gst == "" else bool(int(override_gst))
+            )
+            override_pst = (
+                None if override_pst == "" else bool(int(override_pst))
+            )
+
+            apply_gst = (
+                override_gst
+                if override_gst is not None
+                else not customer.gst_exempt
+            )
+            apply_pst = (
+                override_pst
+                if override_pst is not None
+                else not customer.pst_exempt
+            )
+
+            line_gst = line_subtotal * 0.05 if apply_gst else 0
+            line_pst = line_subtotal * 0.07 if apply_pst else 0
+
+            invoice_product = InvoiceProduct(
+                invoice_id=invoice.id,
+                product_id=product.id,
+                product_name=product.name,
+                quantity=quantity,
+                override_gst=override_gst,
+                override_pst=override_pst,
+                unit_price=unit_price,
+                line_subtotal=line_subtotal,
+                line_gst=line_gst,
+                line_pst=line_pst,
+            )
+            db.session.add(invoice_product)
+
+            product.quantity = (product.quantity or 0) - quantity
+
+            for recipe_item in product.recipe_items:
+                item = recipe_item.item
+                factor = recipe_item.unit.factor if recipe_item.unit else 1
+                item.quantity = (item.quantity or 0) - (
+                    recipe_item.quantity * factor * quantity
+                )
+
+    db.session.commit()
+    log_activity(f"Created invoice {invoice.id}")
+    return invoice
+
+
 @invoice.route("/create_invoice", methods=["GET", "POST"])
 @login_required
 def create_invoice():
@@ -30,100 +130,7 @@ def create_invoice():
     ]
 
     if form.validate_on_submit():
-        customer = db.session.get(Customer, form.customer.data)
-        if customer is None:
-            abort(404)
-        today = datetime.now().strftime("%d%m%y")
-        count = (
-            Invoice.query.filter(
-                func.date(Invoice.date_created) == func.current_date(),
-                Invoice.customer_id == customer.id,
-            ).count()
-            + 1
-        )
-        invoice_id = f"{customer.first_name[0]}{customer.last_name[0]}{customer.id}{today}{count:02}"
-
-        invoice = Invoice(
-            id=invoice_id, customer_id=customer.id, user_id=current_user.id
-        )
-        db.session.add(invoice)
-
-        product_data = form.products.data.removesuffix(":").split(":")
-
-        parsed_entries = []
-        product_names = set()
-        for entry in product_data:
-            try:
-                product_name, quantity, override_gst, override_pst = entry.split("?")
-            except ValueError:
-                flash(f"Invalid product data format: '{entry}'", "danger")
-                continue
-            parsed_entries.append((product_name, quantity, override_gst, override_pst))
-            product_names.add(product_name)
-
-        products = (
-            Product.query.filter(Product.name.in_(product_names)).all()
-            if product_names
-            else []
-        )
-        product_lookup = {p.name: p for p in products}
-
-        for product_name, quantity, override_gst, override_pst in parsed_entries:
-            product = product_lookup.get(product_name)
-
-            if product:
-                quantity = float(quantity)
-                unit_price = product.price
-                line_subtotal = quantity * unit_price
-
-                # Parse overrides correctly (can be 0, 1, or empty string)
-                override_gst = (
-                    None if override_gst == "" else bool(int(override_gst))
-                )
-                override_pst = (
-                    None if override_pst == "" else bool(int(override_pst))
-                )
-
-                # Apply tax rules
-                apply_gst = (
-                    override_gst if override_gst is not None else not customer.gst_exempt
-                )
-                apply_pst = (
-                    override_pst if override_pst is not None else not customer.pst_exempt
-                )
-
-                line_gst = line_subtotal * 0.05 if apply_gst else 0
-                line_pst = line_subtotal * 0.07 if apply_pst else 0
-
-                invoice_product = InvoiceProduct(
-                    invoice_id=invoice.id,
-                    product_id=product.id,
-                    product_name=product.name,
-                    quantity=quantity,
-                    override_gst=override_gst,
-                    override_pst=override_pst,
-                    unit_price=unit_price,
-                    line_subtotal=line_subtotal,
-                    line_gst=line_gst,
-                    line_pst=line_pst,
-                )
-                db.session.add(invoice_product)
-
-                # Reduce product inventory
-                product.quantity = (product.quantity or 0) - quantity
-
-                # Reduce item inventories based on recipe
-                for recipe_item in product.recipe_items:
-                    item = recipe_item.item
-                    factor = recipe_item.unit.factor if recipe_item.unit else 1
-                    item.quantity = (item.quantity or 0) - (
-                        recipe_item.quantity * factor * quantity
-                    )
-            else:
-                flash(f"Product '{product_name}' not found.", "danger")
-
-        db.session.commit()
-        log_activity(f"Created invoice {invoice.id}")
+        _create_invoice_from_form(form)
         flash("Invoice created successfully!", "success")
         return redirect(url_for("invoice.view_invoices"))
 
@@ -203,6 +210,69 @@ def get_customer_tax_status(customer_id):
     }
 
 
+@invoice.route("/api/filter_invoices")
+@login_required
+def filter_invoices_api():
+    """Return invoices matching filters as JSON."""
+    invoice_id = request.args.get("invoice_id", "")
+    customer_id = request.args.get("customer_id", type=int)
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
+
+    start_date = (
+        datetime.fromisoformat(start_date_str) if start_date_str else None
+    )
+    end_date = datetime.fromisoformat(end_date_str) if end_date_str else None
+
+    query = Invoice.query
+    if invoice_id:
+        query = query.filter(Invoice.id.ilike(f"%{invoice_id}%"))
+    if customer_id and customer_id != -1:
+        query = query.filter(Invoice.customer_id == customer_id)
+    if start_date:
+        query = query.filter(
+            Invoice.date_created
+            >= datetime.combine(start_date, datetime.min.time())
+        )
+    if end_date:
+        query = query.filter(
+            Invoice.date_created
+            <= datetime.combine(end_date, datetime.max.time())
+        )
+
+    invoices = query.order_by(Invoice.date_created.desc()).all()
+    data = [
+        {
+            "id": inv.id,
+            "date": inv.date_created.strftime("%Y-%m-%d"),
+            "customer": f"{inv.customer.first_name} {inv.customer.last_name}",
+        }
+        for inv in invoices
+    ]
+    return {"invoices": data}
+
+
+@invoice.route("/api/create_invoice", methods=["POST"])
+@login_required
+def create_invoice_api():
+    """Create an invoice via AJAX and return JSON."""
+    form = InvoiceForm()
+    form.customer.choices = [
+        (c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()
+    ]
+    if form.validate_on_submit():
+        invoice = _create_invoice_from_form(form)
+        customer = invoice.customer
+        return {
+            "invoice": {
+                "id": invoice.id,
+                "date": invoice.date_created.strftime("%Y-%m-%d"),
+                "customer": f"{customer.first_name} {customer.last_name}",
+            }
+        }
+    return {"errors": form.errors}, 400
+
+
 @invoice.route("/view_invoices", methods=["GET", "POST"])
 @login_required
 def view_invoices():
@@ -258,9 +328,14 @@ def view_invoices():
         page=page, per_page=20
     )
     delete_form = DeleteForm()
+    create_form = InvoiceForm()
+    create_form.customer.choices = [
+        (c.id, f"{c.first_name} {c.last_name}") for c in Customer.query.all()
+    ]
     return render_template(
         "invoices/view_invoices.html",
         invoices=invoices,
         form=form,
         delete_form=delete_form,
+        create_form=create_form,
     )
