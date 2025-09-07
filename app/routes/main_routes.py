@@ -8,4 +8,6 @@ main = Blueprint("main", __name__)
 @login_required
 def home():
     """Render the transfers dashboard."""
-    return render_template("transfers/view_transfers.html", user=current_user)
+    from .transfer_routes import view_transfers
+
+    return view_transfers()

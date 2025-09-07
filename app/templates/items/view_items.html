@@ -5,7 +5,7 @@
     <h2>Items List</h2>
     <div class="row justify-content-between">
         <div class="col-auto">
-            <a href="{{ url_for('item.add_item') }}" class="btn btn-primary mb-3">Add New Item</a>
+            <button type="button" class="btn btn-primary mb-3" id="createItemBtn">Add New Item</button>
         </div>
         <div class="col-auto">
             <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
@@ -121,7 +121,7 @@
     <form id="bulk-delete-form" action="{{ url_for('item.bulk_delete_items') }}" method="post">
         {{ form.hidden_tag() }}
         <div class="table-responsive">
-        <table class="table">
+        <table class="table" id="itemsTable">
             <thead>
                 <tr>
                     <th scope="col"><input type="checkbox" id="select-all" style="transform: scale(1.5);"></th>
@@ -132,15 +132,7 @@
             </thead>
             <tbody>
                 {% for item in items.items %}
-                <tr>
-                    <td><input type="checkbox" name="item_ids" value="{{ item.id }}" style="transform: scale(1.5);"></td>
-                    <td>{{ item.name }}</td>
-                    <td>{{ item.cost }}</td>
-                    <td>
-                        <a href="{{ url_for('item.edit_item', item_id=item.id) }}" class="btn btn-secondary">Edit</a>
-                        <a href="{{ url_for('item.item_locations', item_id=item.id) }}" class="btn btn-info ms-1">Locations</a>
-                    </td>
-                </tr>
+                {% include 'items/_item_row.html' %}
                 {% endfor %}
             </tbody>
         </table>
@@ -171,5 +163,84 @@ document.getElementById('select-all').onclick = function() {
         checkbox.checked = this.checked;
     }
 }
+</script>
+<!-- Item Modal -->
+<div class="modal fade" id="itemModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const itemModalEl = document.getElementById('itemModal');
+
+function bindItemForm(actionUrl) {
+    const form = itemModalEl.querySelector('form');
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(form);
+        fetch(actionUrl, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': formData.get('csrf_token')
+            },
+            body: formData
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                if (data.row_html) {
+                    if (data.item_id && document.getElementById('item-row-' + data.item_id)) {
+                        document.getElementById('item-row-' + data.item_id).outerHTML = data.row_html;
+                    } else {
+                        document.querySelector('#itemsTable tbody').insertAdjacentHTML('beforeend', data.row_html);
+                    }
+                }
+                bootstrap.Modal.getInstance(itemModalEl).hide();
+            } else if (data.form_html) {
+                itemModalEl.querySelector('.modal-body').innerHTML = data.form_html;
+                itemModalEl.querySelectorAll('script').forEach(s => eval(s.textContent));
+                bindItemForm(actionUrl);
+            }
+        });
+    });
+}
+
+document.getElementById('createItemBtn').addEventListener('click', function() {
+    const url = '{{ url_for('item.add_item') }}';
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.text())
+        .then(html => {
+            itemModalEl.querySelector('.modal-title').textContent = 'Add Item';
+            itemModalEl.querySelector('.modal-body').innerHTML = html;
+            itemModalEl.querySelectorAll('script').forEach(s => eval(s.textContent));
+            const modal = new bootstrap.Modal(itemModalEl);
+            modal.show();
+            bindItemForm(url);
+        });
+});
+
+document.querySelector('#itemsTable').addEventListener('click', function(e) {
+    if (e.target.classList.contains('edit-item-btn')) {
+        const itemId = e.target.getAttribute('data-item-id');
+        const url = '{{ url_for('item.edit_item', item_id=0) }}'.replace('0', itemId);
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.text())
+            .then(html => {
+                itemModalEl.querySelector('.modal-title').textContent = 'Edit Item';
+                itemModalEl.querySelector('.modal-body').innerHTML = html;
+                itemModalEl.querySelectorAll('script').forEach(s => eval(s.textContent));
+                const modal = new bootstrap.Modal(itemModalEl);
+                modal.show();
+                bindItemForm(url);
+            });
+    }
+});
 </script>
 {% endblock %}
