@@ -8,11 +8,12 @@
             <a href="{{ url_for('item.add_item') }}" class="btn btn-primary mb-3">Add New Item</a>
         </div>
         <div class="col-auto">
+            <button id="toggle-filters" type="button" class="btn btn-secondary mb-3">Filters</button>
             <a href="{{ url_for('item.import_items') }}" class="btn btn-info mb-3">Import Items</a>
             <button type="submit" form="bulk-delete-form" class="btn btn-warning mb-3" onclick="return confirm('Are you sure?');">Delete Items</button>
         </div>
     </div>
-    <form method="get" class="row g-2 mb-3">
+    <form id="filter-form" method="get" class="row g-2 mb-3 d-none">
         <div class="col">
             <input type="text" name="name_query" class="form-control" placeholder="Search name" value="{{ name_query or '' }}">
         </div>
@@ -29,6 +30,14 @@
                 <option value="">All GL Codes</option>
                 {% for gl in gl_codes %}
                 <option value="{{ gl.id }}" {% if gl_code_id == gl.id %}selected{% endif %}>{{ gl.code }} - {{ gl.description }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col">
+            <select name="vendor_id" class="form-select">
+                <option value="">All Suppliers</option>
+                {% for v in vendors %}
+                <option value="{{ v.id }}" {% if vendor_id == v.id %}selected{% endif %}>{{ v.first_name }} {{ v.last_name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -63,6 +72,11 @@
         <strong>Filtering by Base Unit:</strong> {{ base_unit|capitalize }}
     </div>
     {% endif %}
+    {% if active_vendor %}
+    <div class="mb-3">
+        <strong>Filtering by Supplier:</strong> {{ active_vendor.first_name }} {{ active_vendor.last_name }}
+    </div>
+    {% endif %}
     <form id="bulk-delete-form" action="{{ url_for('item.bulk_delete_items') }}" method="post">
         {{ form.hidden_tag() }}
         <div class="table-responsive">
@@ -95,11 +109,7 @@
         <ul class="pagination">
             {% if items.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, archived=archived) }}">Previous</a>
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Previous</a>
-            <li class="page-item"
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, base_unit=base_unit) }}">Previous</a>
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, cost_min=cost_min, cost_max=cost_max) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, base_unit=base_unit, cost_min=cost_min, cost_max=cost_max, archived=archived, vendor_id=vendor_id) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -107,11 +117,7 @@
             </li>
             {% if items.has_next %}
             <li class="page-item">
-
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, archived=archived) }}">Next</a>
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id) }}">Next</a>
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, base_unit=base_unit) }}">Next</a>
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, cost_min=cost_min, cost_max=cost_max) }}">Next</a>
+                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_id, base_unit=base_unit, cost_min=cost_min, cost_max=cost_max, archived=archived, vendor_id=vendor_id) }}">Next</a>
             </li>
             {% endif %}
         </ul>
@@ -123,6 +129,9 @@ document.getElementById('select-all').onclick = function() {
     for (var checkbox of checkboxes) {
         checkbox.checked = this.checked;
     }
+}
+document.getElementById('toggle-filters').onclick = function() {
+    document.getElementById('filter-form').classList.toggle('d-none');
 }
 </script>
 {% endblock %}
