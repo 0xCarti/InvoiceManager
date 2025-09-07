@@ -78,7 +78,9 @@ def view_products():
         db.session.get(GLCode, sales_gl_code_id) if sales_gl_code_id else None
     )
     gl_codes = GLCode.query.order_by(GLCode.code).all()
-    selected_gl_code = db.session.get(GLCode, gl_code_id) if gl_code_id else None
+    selected_gl_code = (
+        db.session.get(GLCode, gl_code_id) if gl_code_id else None
+    )
     return render_template(
         "products/view_products.html",
         products=products,
