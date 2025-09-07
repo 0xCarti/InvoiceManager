@@ -2,6 +2,7 @@ from flask import (
     Blueprint,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -45,10 +46,21 @@ def create_vendor():
         db.session.add(vendor)
         db.session.commit()
         log_activity(f"Created vendor {vendor.id}")
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            delete_form = DeleteForm()
+            row_html = render_template(
+                "vendors/_vendor_row.html", vendor=vendor, delete_form=delete_form
+            )
+            return jsonify({"success": True, "row_html": row_html})
         flash("Vendor created successfully!", "success")
         return redirect(url_for("vendor.view_vendors"))
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        if request.method == "POST":
+            form_html = render_template("vendors/vendor_form.html", form=form)
+            return jsonify({"success": False, "form_html": form_html})
+        return render_template("vendors/vendor_form.html", form=form)
     return render_template(
-        "vendors/vendor_form.html", form=form, title="Create Vendor"
+        "vendors/vendor_form_page.html", form=form, title="Create Vendor"
     )
 
 
@@ -80,7 +92,7 @@ def edit_vendor(vendor_id):
         form.pst_exempt.data = not vendor.pst_exempt
 
     return render_template(
-        "vendors/vendor_form.html", form=form, title="Edit Vendor"
+        "vendors/vendor_form_page.html", form=form, title="Edit Vendor"
     )
 
 
