@@ -10,7 +10,14 @@ from sqlalchemy import and_, or_
 
 from app import db
 from app.forms import SpoilageFilterForm
-from app.models import GLCode, Item, Location, LocationStandItem, Transfer, TransferItem
+from app.models import (
+    GLCode,
+    Item,
+    Location,
+    LocationStandItem,
+    Transfer,
+    TransferItem,
+)
 
 spoilage = Blueprint("spoilage", __name__)
 
@@ -48,14 +55,16 @@ def view_spoilage():
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
         form.start_date.data = start_date
         query = query.filter(
-            Transfer.date_created >= datetime.combine(start_date, datetime.min.time())
+            Transfer.date_created
+            >= datetime.combine(start_date, datetime.min.time())
         )
     end_date_str = request.args.get("end_date")
     if end_date_str:
         end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
         form.end_date.data = end_date
         query = query.filter(
-            Transfer.date_created <= datetime.combine(end_date, datetime.max.time())
+            Transfer.date_created
+            <= datetime.combine(end_date, datetime.max.time())
         )
     if form.purchase_gl_code.data:
         code_id = form.purchase_gl_code.data
@@ -73,5 +82,9 @@ def view_spoilage():
 
     results = query.order_by(Transfer.date_created.desc()).all()
 
-    return render_template("spoilage/view_spoilage.html", form=form, results=results)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return render_template("spoilage/_table.html", results=results)
 
+    return render_template(
+        "spoilage/view_spoilage.html", form=form, results=results
+    )
