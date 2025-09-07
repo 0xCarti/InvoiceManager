@@ -94,6 +94,7 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
     let itemOptions = `<option value="">Select Item</option>{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
     let itemIndex = {{ form.items|length }};
 
@@ -210,5 +211,6 @@
     });
 
     document.querySelectorAll('.item-select').forEach(sel => fetchUnits(sel));
+});
 </script>
 {% endblock %}
