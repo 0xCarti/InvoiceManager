@@ -3,6 +3,7 @@
 <h2>{{ event.name }} - Stand Sheets</h2>
 {% for entry in data %}
     <h3>{{ entry.location.name }}</h3>
+    <img src="data:image/png;base64,{{ entry.qr }}" alt="QR Code" class="mb-2"/>
     <div class="table-responsive">
     <table class="table table-bordered">
         <thead>
