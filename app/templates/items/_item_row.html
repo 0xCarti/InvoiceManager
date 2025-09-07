@@ -1,0 +1,9 @@
+<tr id="item-row-{{ item.id }}">
+    <td><input type="checkbox" name="item_ids" value="{{ item.id }}" style="transform: scale(1.5);"></td>
+    <td>{{ item.name }}</td>
+    <td>{{ item.cost }}</td>
+    <td>
+        <button class="btn btn-secondary edit-item-btn" data-item-id="{{ item.id }}">Edit</button>
+        <a href="{{ url_for('item.item_locations', item_id=item.id) }}" class="btn btn-info ms-1">Locations</a>
+    </td>
+</tr>

@@ -172,12 +172,15 @@ def add_item():
             if uf.form.name.data and uf.form.transfer_default.data
         )
         if recv_count > 1 or trans_count > 1:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                form_html = render_template("items/item_form.html", form=form)
+                return jsonify({"success": False, "form_html": form_html})
             flash(
                 "Only one unit can be set as receiving and transfer default.",
                 "error",
             )
             return render_template(
-                "items/item_form.html", form=form, title="Add Item"
+                "items/item_form_page.html", form=form, title="Add Item"
             )
         item = Item(
             name=form.name.data,
@@ -216,9 +219,17 @@ def add_item():
                     transfer_set = True
         db.session.commit()
         log_activity(f"Added item {item.name}")
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            row_html = render_template("items/_item_row.html", item=item)
+            return jsonify({"success": True, "row_html": row_html, "item_id": item.id})
         flash("Item added successfully!")
         return redirect(url_for("item.view_items"))
-    return render_template("items/item_form.html", form=form, title="Add Item")
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        if request.method == "POST":
+            form_html = render_template("items/item_form.html", form=form)
+            return jsonify({"success": False, "form_html": form_html})
+        return render_template("items/item_form.html", form=form)
+    return render_template("items/item_form_page.html", form=form, title="Add Item")
 
 
 @item.route("/items/edit/<int:item_id>", methods=["GET", "POST"])
@@ -245,12 +256,17 @@ def edit_item(item_id):
             if uf.form.name.data and uf.form.transfer_default.data
         )
         if recv_count > 1 or trans_count > 1:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                form_html = render_template(
+                    "items/item_form.html", form=form, item=item
+                )
+                return jsonify({"success": False, "form_html": form_html})
             flash(
                 "Only one unit can be set as receiving and transfer default.",
                 "error",
             )
             return render_template(
-                "items/item_form.html", form=form, item=item, title="Edit Item"
+                "items/item_form_page.html", form=form, item=item, title="Edit Item"
             )
         item.name = form.name.data
         item.base_unit = form.base_unit.data
@@ -286,10 +302,18 @@ def edit_item(item_id):
                     transfer_set = True
         db.session.commit()
         log_activity(f"Edited item {item.id}")
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            row_html = render_template("items/_item_row.html", item=item)
+            return jsonify({"success": True, "row_html": row_html, "item_id": item.id})
         flash("Item updated successfully!")
         return redirect(url_for("item.view_items"))
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        if request.method == "POST":
+            form_html = render_template("items/item_form.html", form=form, item=item)
+            return jsonify({"success": False, "form_html": form_html})
+        return render_template("items/item_form.html", form=form, item=item)
     return render_template(
-        "items/item_form.html", form=form, item=item, title="Edit Item"
+        "items/item_form_page.html", form=form, item=item, title="Edit Item"
     )
 
 
