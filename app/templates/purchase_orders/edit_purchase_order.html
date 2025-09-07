@@ -117,9 +117,9 @@ document.addEventListener('DOMContentLoaded', function() {
             unitSelect.innerHTML = '';
             return;
         }
-        fetch(`/items/${itemId}/units`).then(r => r.json()).then(units => {
+        fetch(`/items/${itemId}/units`).then(r => r.json()).then(data => {
             let opts = '';
-            units.forEach(u => {
+            data.units.forEach(u => {
                 opts += `<option value="${u.id}" ${u.receiving_default ? 'selected' : ''}>${u.name}</option>`;
             });
             unitSelect.innerHTML = opts;
