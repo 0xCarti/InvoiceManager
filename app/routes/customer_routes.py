@@ -6,6 +6,7 @@ from flask import (
     render_template,
     request,
     url_for,
+    jsonify,
 )
 from flask_login import login_required
 
@@ -26,10 +27,12 @@ def view_customers():
         Customer.query.filter_by(archived=False).paginate(page=page, per_page=20)
     )
     delete_form = DeleteForm()
+    form = CustomerForm()
     return render_template(
         "customers/view_customers.html",
         customers=customers,
         delete_form=delete_form,
+        form=form,
     )
 
 
@@ -52,7 +55,7 @@ def create_customer():
         flash("Customer created successfully!", "success")
         return redirect(url_for("customer.view_customers"))
     return render_template(
-        "customers/customer_form.html", form=form, title="Create Customer"
+        "customers/customer_form_page.html", form=form, title="Create Customer"
     )
 
 
@@ -84,8 +87,41 @@ def edit_customer(customer_id):
         form.pst_exempt.data = not customer.pst_exempt
 
     return render_template(
-        "customers/customer_form.html", form=form, title="Edit Customer"
+        "customers/customer_form_page.html", form=form, title="Edit Customer"
     )
+
+
+@customer.route("/customers/create-modal", methods=["POST"])
+@login_required
+def create_customer_modal():
+    """Create a customer via AJAX and return JSON."""
+    form = CustomerForm()
+    if form.validate_on_submit():
+        customer = Customer(
+            first_name=form.first_name.data,
+            last_name=form.last_name.data,
+            # Checkbox checked means charge tax, so exemption is the inverse
+            gst_exempt=not form.gst_exempt.data,
+            pst_exempt=not form.pst_exempt.data,
+        )
+        db.session.add(customer)
+        db.session.commit()
+        log_activity(f"Created customer {customer.id}")
+        delete_form = DeleteForm()
+        return jsonify(
+            {
+                "success": True,
+                "customer": {
+                    "id": customer.id,
+                    "first_name": customer.first_name,
+                    "last_name": customer.last_name,
+                    "gst_exempt": customer.gst_exempt,
+                    "pst_exempt": customer.pst_exempt,
+                },
+                "delete_csrf_token": delete_form.csrf_token.current_token,
+            }
+        )
+    return jsonify({"success": False, "errors": form.errors}), 400
 
 
 @customer.route("/customers/<int:customer_id>/delete", methods=["POST"])
