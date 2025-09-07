@@ -1,7 +1,17 @@
 from werkzeug.security import generate_password_hash
 
 from app import db
-from app.models import GLCode, Item, ItemUnit, Product, ProductRecipeItem, User
+from app.models import (
+    GLCode,
+    Item,
+    ItemUnit,
+    Product,
+    ProductRecipeItem,
+    User,
+    Customer,
+    Invoice,
+    InvoiceProduct,
+)
 from tests.utils import login
 
 
@@ -137,24 +147,46 @@ def test_view_products_sales_gl_code_filter(client, app):
         assert f"sales_gl_code_id={gl1_id}".encode() in resp.data
 
 
-def test_view_products_multiple_gl_code_filter(client, app):
+def test_view_products_customer_filter(client, app):
     email, item_id, unit_id = setup_data(app)
     with app.app_context():
-        gl1 = GLCode(code="7000", description="Food")
-        gl2 = GLCode(code="8000", description="Drink")
-        db.session.add_all([gl1, gl2])
+        user = User.query.filter_by(email=email).first()
+        cust1 = Customer(first_name="Alice", last_name="Smith")
+        cust2 = Customer(first_name="Bob", last_name="Jones")
+        prod1 = Product(name="ProdX", price=1, cost=1)
+        prod2 = Product(name="ProdY", price=1, cost=1)
+        db.session.add_all([cust1, cust2, prod1, prod2])
         db.session.commit()
-        gl1_id, gl2_id = gl1.id, gl2.id
-        products = [
-            Product(name="X", price=1, cost=1, gl_code_id=gl1_id),
-            Product(name="Y", price=1, cost=1, gl_code_id=gl2_id),
-        ]
-        db.session.add_all(products)
+        cust1_id = cust1.id
+        inv1 = Invoice(id="INV1", user_id=user.id, customer_id=cust1_id)
+        inv2 = Invoice(id="INV2", user_id=user.id, customer_id=cust2.id)
+        db.session.add_all([inv1, inv2])
+        db.session.commit()
+        ip1 = InvoiceProduct(
+            invoice_id=inv1.id,
+            quantity=1,
+            product_id=prod1.id,
+            product_name=prod1.name,
+            unit_price=1,
+            line_subtotal=1,
+            line_gst=0,
+            line_pst=0,
+        )
+        ip2 = InvoiceProduct(
+            invoice_id=inv2.id,
+            quantity=1,
+            product_id=prod2.id,
+            product_name=prod2.name,
+            unit_price=1,
+            line_subtotal=1,
+            line_gst=0,
+            line_pst=0,
+        )
+        db.session.add_all([ip1, ip2])
         db.session.commit()
     with client:
         login(client, email, "pass")
-        resp = client.get(f"/products?gl_code_id={gl1_id}&gl_code_id={gl2_id}")
+        resp = client.get(f"/products?customer_id={cust1_id}")
         assert resp.status_code == 200
-        assert b"X" in resp.data
-        assert b"Y" in resp.data
-        assert b"Filtering by GL Code" in resp.data
+        assert b"ProdX" in resp.data
+        assert b"ProdY" not in resp.data

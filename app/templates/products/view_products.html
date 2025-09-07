@@ -53,11 +53,11 @@
                                 </select>
                             </div>
                             <div class="col-md-6">
-                                <label for="gl_code_id" class="form-label">GL Code</label>
-                                <select id="gl_code_id" name="gl_code_id" class="form-select" multiple>
-                                    <option value="" {% if not gl_code_ids %}selected{% endif %}>All GL Codes</option>
-                                    {% for gl in gl_codes %}
-                                    <option value="{{ gl.id }}" {% if gl.id in gl_code_ids %}selected{% endif %}>{{ gl.code }} - {{ gl.description }}</option>
+                                <label for="customer_id" class="form-label">Customer</label>
+                                <select id="customer_id" name="customer_id" class="form-select">
+                                    <option value="" {% if not customer_id %}selected{% endif %}>All Customers</option>
+                                    {% for cust in customers %}
+                                    <option value="{{ cust.id }}" {% if cust.id == customer_id %}selected{% endif %}>{{ cust.first_name }} {{ cust.last_name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -95,8 +95,8 @@
     {% if selected_sales_gl_codes %}
     <p>Filtering by Sales GL Code: {{ selected_sales_gl_codes | map(attribute='code') | join(', ') }}</p>
     {% endif %}
-    {% if selected_gl_codes %}
-    <p>Filtering by GL Code: {{ selected_gl_codes | map(attribute='code') | join(', ') }}</p>
+    {% if selected_customer %}
+    <p>Filtering by Customer: {{ selected_customer.first_name }} {{ selected_customer.last_name }}</p>
     {% endif %}
     <div class="table-responsive">
     <table class="table">
@@ -132,7 +132,7 @@
         <ul class="pagination">
             {% if products.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('product.view_products', page=products.prev_num, name_query=name_query, match_mode=match_mode, sales_gl_code_id=sales_gl_code_ids, gl_code_id=gl_code_ids, cost_min=cost_min, cost_max=cost_max, price_min=price_min, price_max=price_max) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('product.view_products', page=products.prev_num, name_query=name_query, match_mode=match_mode, sales_gl_code_id=sales_gl_code_ids, customer_id=customer_id, cost_min=cost_min, cost_max=cost_max, price_min=price_min, price_max=price_max) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -140,7 +140,7 @@
             </li>
             {% if products.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('product.view_products', page=products.next_num, name_query=name_query, match_mode=match_mode, sales_gl_code_id=sales_gl_code_ids, gl_code_id=gl_code_ids, cost_min=cost_min, cost_max=cost_max, price_min=price_min, price_max=price_max) }}">Next</a>
+                <a class="page-link" href="{{ url_for('product.view_products', page=products.next_num, name_query=name_query, match_mode=match_mode, sales_gl_code_id=sales_gl_code_ids, customer_id=customer_id, cost_min=cost_min, cost_max=cost_max, price_min=price_min, price_max=price_max) }}">Next</a>
             </li>
             {% endif %}
         </ul>
