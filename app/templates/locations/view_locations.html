@@ -3,7 +3,8 @@
 {% block content %}
 <div class="container mt-5">
     <h2>Locations</h2>
-    <a href="{{ url_for('locations.add_location') }}" class="btn btn-primary mb-3">Add New Location</a>
+    <button id="addLocationBtn" class="btn btn-primary mb-3" type="button">Add New Location</button>
+    <input type="hidden" id="csrf_token" value="{{ csrf_token() }}" />
     <div class="table-responsive">
     <table class="table">
         <thead>
@@ -14,10 +15,10 @@
         </thead>
         <tbody>
             {% for location in locations.items %}
-            <tr>
+            <tr data-id="{{ location.id }}">
                 <td>{{ location.name }}</td>
                 <td>
-                    <a href="{{ url_for('locations.edit_location', location_id=location.id) }}" class="btn btn-info">Edit</a>
+                    <button type="button" class="btn btn-info edit-location-btn" data-id="{{ location.id }}">Edit</button>
                     <a href="{{ url_for('locations.view_stand_sheet', location_id=location.id) }}" class="btn btn-secondary">Stand Sheet</a>
                     <form action="{{ url_for('locations.delete_location', location_id=location.id) }}" method="post" class="d-inline">
                         {{ delete_form.hidden_tag() }}
@@ -47,4 +48,65 @@
         </ul>
     </nav>
 </div>
+<div class="modal fade" id="locationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content"></div>
+    </div>
+</div>
+<script>
+const csrfToken = document.getElementById('csrf_token').value;
+const locationModal = new bootstrap.Modal(document.getElementById('locationModal'));
+
+$('#addLocationBtn').on('click', function() {
+    $.get('{{ url_for('locations.add_location') }}', function(data) {
+        $('#locationModal .modal-content').html(data);
+        locationModal.show();
+    });
+});
+
+$(document).on('click', '.edit-location-btn', function() {
+    const id = $(this).data('id');
+    $.get(`/locations/edit/${id}`, function(data) {
+        $('#locationModal .modal-content').html(data);
+        locationModal.show();
+    });
+});
+
+$(document).on('submit', '#locationForm', function(e) {
+    e.preventDefault();
+    const form = $(this);
+    $.post(form.attr('action'), form.serialize(), function(response) {
+        if (response.success) {
+            if (response.action === 'create') {
+                addRow(response.location);
+            } else {
+                updateRow(response.location);
+            }
+            locationModal.hide();
+        }
+    }).fail(function(xhr) {
+        alert('Error: ' + (xhr.responseJSON?.errors ? JSON.stringify(xhr.responseJSON.errors) : 'Unknown error'));
+    });
+});
+
+function addRow(loc) {
+    const row = `<tr data-id="${loc.id}">
+        <td>${loc.name}</td>
+        <td>
+            <button type="button" class="btn btn-info edit-location-btn" data-id="${loc.id}">Edit</button>
+            <a href="/locations/${loc.id}/stand_sheet" class="btn btn-secondary">Stand Sheet</a>
+            <form action="/locations/delete/${loc.id}" method="post" class="d-inline">
+                <input type="hidden" name="csrf_token" value="${csrfToken}">
+                <button type="submit" class="btn btn-danger">Delete</button>
+            </form>
+        </td>
+    </tr>`;
+    $('table tbody').append(row);
+}
+
+function updateRow(loc) {
+    const row = $(`tr[data-id='${loc.id}']`);
+    row.find('td:first').text(loc.name);
+}
+</script>
 {% endblock %}
