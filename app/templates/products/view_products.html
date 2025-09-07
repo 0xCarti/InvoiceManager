@@ -7,7 +7,7 @@
     <h2>Products</h2>
     <div class="row justify-content-between">
         <div class="col-auto">
-            <a href="{{ url_for('product.create_product') }}" class="btn btn-primary mb-3">Create Product</a>
+            <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createProductModal">Create Product</button>
             <a href="{{ url_for('report.product_recipe_report') }}" class="btn btn-secondary mb-3">Recipe Report</a>
         </div>
         <div class="col-auto">
@@ -92,6 +92,22 @@
             </div>
         </div>
     </div>
+
+    <!-- Create Product Modal -->
+    <div class="modal fade" id="createProductModal" tabindex="-1" aria-labelledby="createProductModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createProductModalLabel">Create Product</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% set form_action = url_for('product.ajax_create_product') %}
+                    {% include 'products/_create_product_form.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
     {% if selected_sales_gl_codes %}
     <p>Filtering by Sales GL Code: {{ selected_sales_gl_codes | map(attribute='code') | join(', ') }}</p>
     {% endif %}
@@ -99,31 +115,19 @@
     <p>Filtering by Customer: {{ selected_customer.first_name }} {{ selected_customer.last_name }}</p>
     {% endif %}
     <div class="table-responsive">
-    <table class="table">
+    <table class="table" id="product-table">
         <thead>
             <tr>
                 <th>Name</th>
                 <th>Price</th>
-                <th>Cost</th> <!-- New column -->
+                <th>Cost</th>
                 <th>Food Cost %</th>
                 <th>Action</th>
             </tr>
         </thead>
         <tbody>
             {% for product in products.items %}
-            <tr>
-                <td>{{ product.name }}</td>
-                <td>{{ product.price }}</td>
-                <td>{{ product.cost }}</td> <!-- Display cost -->
-                <td>{{ '{:.2f}%'.format(product.food_cost_percentage) }}</td>
-                <td>
-                    <a href="{{ url_for('product.edit_product', product_id=product.id) }}" class="btn btn-primary mr-2">Edit</a>
-                    <form action="{{ url_for('product.delete_product', product_id=product.id) }}" method="post" class="d-inline">
-                        {{ delete_form.hidden_tag() }}
-                        <button type="submit" class="btn btn-danger">Delete</button>
-                    </form>
-                </td>
-            </tr>
+            {% include 'products/_product_row.html' %}
             {% endfor %}
         </tbody>
     </table>
@@ -146,4 +150,39 @@
         </ul>
     </nav>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('create-product-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(form);
+            fetch('{{ url_for('product.validate_product_form') }}', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            }).then(resp => resp.json()).then(data => {
+                if (data.success) {
+                    fetch('{{ url_for('product.ajax_create_product') }}', {
+                        method: 'POST',
+                        body: new FormData(form),
+                        credentials: 'same-origin'
+                    }).then(r => r.json()).then(res => {
+                        if (res.success) {
+                            document.querySelector('#product-table tbody').insertAdjacentHTML('beforeend', res.html);
+                            form.reset();
+                            const modalEl = document.getElementById('createProductModal');
+                            bootstrap.Modal.getInstance(modalEl).hide();
+                        } else {
+                            alert(JSON.stringify(res.errors));
+                        }
+                    });
+                } else {
+                    alert(JSON.stringify(data.errors));
+                }
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

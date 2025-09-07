@@ -1,0 +1,81 @@
+<form id="create-product-form" method="POST" action="{{ form_action }}">
+    {{ form.hidden_tag() }}
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control") }}
+        </div>
+        <div class="col-md-6 mb-3">
+            {{ form.price.label(class="form-label") }}
+            {{ form.price(class="form-control") }}
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            {{ form.cost.label(class="form-label") }}
+            {{ form.cost(class="form-control", id="cost") }}
+        </div>
+        <div class="col-md-6 mb-3">
+            {{ form.gl_code_id.label(class="form-label") }}
+            {{ form.gl_code_id(class="form-control") }}
+        </div>
+    </div>
+    <div id="item-list">
+        {% for item in form.items %}
+        <div class="row mb-2 align-items-center">
+            <div class="col">{{ item.item(class="form-control") }}</div>
+            <div class="col">{{ item.unit(class="form-control") }}</div>
+            <div class="col">{{ item.quantity(class="form-control") }}</div>
+            <div class="col-auto">
+                {{ item.countable() }}
+                {{ item.countable.label(class="form-check-label ms-1") }}
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-danger remove-item">Remove</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <button id="add-item" type="button" class="btn btn-secondary">Add Item</button>
+    <button type="button" class="btn btn-secondary" id="calc-cost" disabled>Set Cost From Recipe</button>
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btn = document.getElementById('calc-cost');
+    if (btn) {
+        btn.addEventListener('click', function() {
+            alert('Product must be saved before cost can be calculated from recipe.');
+        });
+    }
+
+    const itemOptions = `{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
+    const unitOptions = `{% for val, label in form.items[0].unit.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
+    const countableLabel = "{{ form.items[0].countable.label.text }}";
+    let itemIndex = {{ form.items|length }};
+
+    document.getElementById('add-item').addEventListener('click', function(e) {
+        e.preventDefault();
+        const row = document.createElement('div');
+        row.classList.add('row', 'mb-2', 'align-items-center');
+        row.innerHTML = `
+            <div class="col"><select name="items-${itemIndex}-item" class="form-control">${itemOptions}</select></div>
+            <div class="col"><select name="items-${itemIndex}-unit" class="form-control">${unitOptions}</select></div>
+            <div class="col"><input type="number" step="any" name="items-${itemIndex}-quantity" class="form-control"></div>
+            <div class="col-auto form-check d-flex align-items-center">
+                <input type="checkbox" name="items-${itemIndex}-countable" class="form-check-input" id="items-${itemIndex}-countable">
+                <label class="form-check-label ms-1" for="items-${itemIndex}-countable">${countableLabel}</label>
+            </div>
+            <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
+        `;
+        document.getElementById('item-list').appendChild(row);
+        itemIndex++;
+    });
+
+    document.getElementById('item-list').addEventListener('click', function(e) {
+        if (e.target && e.target.classList.contains('remove-item')) {
+            e.target.closest('.row').remove();
+        }
+    });
+});
+</script>
