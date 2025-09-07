@@ -18,7 +18,7 @@ load_dotenv()
 db = SQLAlchemy()
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
 socketio = None
 GST = ""
 DEFAULT_TIMEZONE = "UTC"
@@ -102,7 +102,9 @@ def create_app(args: list):
     # always point to the intended location.
 
     base_dir = os.getcwd()
-    repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+    repo_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), os.pardir)
+    )
     # Allow overriding the database location via the DATABASE_PATH environment
     # variable.  This is useful for container deployments where the database
     # may reside in a mounted volume.  If the provided path is a directory,
@@ -171,6 +173,7 @@ def create_app(args: list):
         # application start.  This allows the app to run even if migrations
         # have not been executed yet, avoiding "no such table" errors.
         from . import models  # noqa: F401
+
         db.create_all()
 
         from app.routes.auth_routes import admin, auth
@@ -184,8 +187,8 @@ def create_app(args: list):
         from app.routes.product_routes import product
         from app.routes.purchase_routes import purchase
         from app.routes.report_routes import report
-        from app.routes.transfer_routes import transfer
         from app.routes.spoilage_routes import spoilage
+        from app.routes.transfer_routes import transfer
         from app.routes.vendor_routes import vendor
 
         app.register_blueprint(auth, url_prefix="/auth")
@@ -203,15 +206,18 @@ def create_app(args: list):
         app.register_blueprint(vendor)
         app.register_blueprint(event)
         app.register_blueprint(glcode_bp)
-        from app.models import Setting
         from sqlalchemy.exc import OperationalError
+
+        from app.models import Setting
 
         try:
             setting = Setting.query.filter_by(name="GST").first()
             if setting is not None:
                 GST = setting.value
 
-            tz_setting = Setting.query.filter_by(name="DEFAULT_TIMEZONE").first()
+            tz_setting = Setting.query.filter_by(
+                name="DEFAULT_TIMEZONE"
+            ).first()
             if tz_setting is not None and tz_setting.value:
                 DEFAULT_TIMEZONE = tz_setting.value
         except OperationalError:
