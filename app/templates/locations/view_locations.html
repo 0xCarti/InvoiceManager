@@ -54,59 +54,61 @@
     </div>
 </div>
 <script>
-const csrfToken = document.getElementById('csrf_token').value;
-const locationModal = new bootstrap.Modal(document.getElementById('locationModal'));
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.getElementById('csrf_token').value;
+    const locationModal = new bootstrap.Modal(document.getElementById('locationModal'));
 
-$('#addLocationBtn').on('click', function() {
-    $.get('{{ url_for('locations.add_location') }}', function(data) {
-        $('#locationModal .modal-content').html(data);
-        locationModal.show();
+    $('#addLocationBtn').on('click', function() {
+        $.get('{{ url_for('locations.add_location') }}', function(data) {
+            $('#locationModal .modal-content').html(data);
+            locationModal.show();
+        });
     });
-});
 
-$(document).on('click', '.edit-location-btn', function() {
-    const id = $(this).data('id');
-    $.get(`/locations/edit/${id}`, function(data) {
-        $('#locationModal .modal-content').html(data);
-        locationModal.show();
+    $(document).on('click', '.edit-location-btn', function() {
+        const id = $(this).data('id');
+        $.get(`/locations/edit/${id}`, function(data) {
+            $('#locationModal .modal-content').html(data);
+            locationModal.show();
+        });
     });
-});
 
-$(document).on('submit', '#locationForm', function(e) {
-    e.preventDefault();
-    const form = $(this);
-    $.post(form.attr('action'), form.serialize(), function(response) {
-        if (response.success) {
-            if (response.action === 'create') {
-                addRow(response.location);
-            } else {
-                updateRow(response.location);
+    $(document).on('submit', '#locationForm', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        $.post(form.attr('action'), form.serialize(), function(response) {
+            if (response.success) {
+                if (response.action === 'create') {
+                    addRow(response.location);
+                } else {
+                    updateRow(response.location);
+                }
+                locationModal.hide();
             }
-            locationModal.hide();
-        }
-    }).fail(function(xhr) {
-        alert('Error: ' + (xhr.responseJSON?.errors ? JSON.stringify(xhr.responseJSON.errors) : 'Unknown error'));
+        }).fail(function(xhr) {
+            alert('Error: ' + (xhr.responseJSON?.errors ? JSON.stringify(xhr.responseJSON.errors) : 'Unknown error'));
+        });
     });
+
+    function addRow(loc) {
+        const row = `<tr data-id="${loc.id}">
+            <td>${loc.name}</td>
+            <td>
+                <button type="button" class="btn btn-info edit-location-btn" data-id="${loc.id}">Edit</button>
+                <a href="/locations/${loc.id}/stand_sheet" class="btn btn-secondary">Stand Sheet</a>
+                <form action="/locations/delete/${loc.id}" method="post" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="${csrfToken}">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>`;
+        $('table tbody').append(row);
+    }
+
+    function updateRow(loc) {
+        const row = $(`tr[data-id='${loc.id}']`);
+        row.find('td:first').text(loc.name);
+    }
 });
-
-function addRow(loc) {
-    const row = `<tr data-id="${loc.id}">
-        <td>${loc.name}</td>
-        <td>
-            <button type="button" class="btn btn-info edit-location-btn" data-id="${loc.id}">Edit</button>
-            <a href="/locations/${loc.id}/stand_sheet" class="btn btn-secondary">Stand Sheet</a>
-            <form action="/locations/delete/${loc.id}" method="post" class="d-inline">
-                <input type="hidden" name="csrf_token" value="${csrfToken}">
-                <button type="submit" class="btn btn-danger">Delete</button>
-            </form>
-        </td>
-    </tr>`;
-    $('table tbody').append(row);
-}
-
-function updateRow(loc) {
-    const row = $(`tr[data-id='${loc.id}']`);
-    row.find('td:first').text(loc.name);
-}
 </script>
 {% endblock %}
