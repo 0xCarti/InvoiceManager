@@ -1,5 +1,8 @@
 import os
+import re
+import tempfile
 
+import pytesseract
 from flask import (
     Blueprint,
     abort,
@@ -11,6 +14,7 @@ from flask import (
     url_for,
 )
 from flask_login import login_required
+from PIL import Image
 from werkzeug.utils import secure_filename
 
 from app import db
@@ -30,6 +34,7 @@ from app.models import (
     Product,
     TerminalSale,
 )
+from app.utils import decode_qr, generate_qr_code
 
 event = Blueprint("event", __name__)
 
@@ -80,7 +85,9 @@ def filter_events_ajax():
         query = query.filter_by(event_type=event_type)
     events = query.all()
     return render_template(
-        "events/_events_table.html", events=events, type_labels=dict(EVENT_TYPES)
+        "events/_events_table.html",
+        events=events,
+        type_labels=dict(EVENT_TYPES),
     )
 
 
@@ -282,7 +289,10 @@ def upload_terminal_sales(event_id):
 
         product_names = {prod_name for _, prod_name, _ in rows}
         product_lookup = {
-            p.name: p for p in Product.query.filter(Product.name.in_(product_names)).all()
+            p.name: p
+            for p in Product.query.filter(
+                Product.name.in_(product_names)
+            ).all()
         }
 
         for loc_name, prod_name, qty in rows:
@@ -571,7 +581,8 @@ def bulk_stand_sheets(event_id):
     data = []
     for el in ev.locations:
         loc, items = _get_stand_items(el.location_id, event_id)
-        data.append({"location": loc, "stand_items": items})
+        qr = generate_qr_code({"event_id": event_id, "location_id": loc.id})
+        data.append({"location": loc, "stand_items": items, "qr": qr})
     return render_template(
         "events/bulk_stand_sheets.html", event=ev, data=data
     )
@@ -590,6 +601,79 @@ def bulk_count_sheets(event_id):
     return render_template(
         "events/bulk_count_sheets.html", event=ev, data=data
     )
+
+
+def _parse_scanned_sheet(text, event_location):
+    """Populate stand sheet items from OCR text for the given event location."""
+    _, stand_items = _get_stand_items(
+        event_location.location_id, event_location.event_id
+    )
+    item_map = {
+        entry["item"].name.lower(): entry["item"] for entry in stand_items
+    }
+    for line in text.splitlines():
+        tokens = line.split()
+        if not tokens:
+            continue
+        numbers = [t for t in tokens if re.match(r"^-?\d+(?:\.\d+)?$", t)]
+        name_tokens = [t for t in tokens if t not in numbers]
+        name = " ".join(name_tokens).lower()
+        if name in item_map and len(numbers) >= 8:
+            opening = float(numbers[1])
+            tin = float(numbers[2])
+            tout = float(numbers[3])
+            eaten = float(numbers[4])
+            spoiled = float(numbers[5])
+            closing = float(numbers[7])
+            sheet = EventStandSheetItem.query.filter_by(
+                event_location_id=event_location.id, item_id=item_map[name].id
+            ).first()
+            if not sheet:
+                sheet = EventStandSheetItem(
+                    event_location_id=event_location.id,
+                    item_id=item_map[name].id,
+                )
+                db.session.add(sheet)
+            sheet.opening_count = opening
+            sheet.transferred_in = tin
+            sheet.transferred_out = tout
+            sheet.eaten = eaten
+            sheet.spoiled = spoiled
+            sheet.closing_count = closing
+
+
+@event.route("/events/scan_stand_sheet", methods=["GET", "POST"])
+@login_required
+def scan_stand_sheet():
+    if request.method == "POST":
+        file = request.files.get("file")
+        if not file:
+            flash("No file uploaded")
+            return redirect(request.url)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+            file.save(tmp.name)
+            path = tmp.name
+        meta = decode_qr(path)
+        event_id = meta.get("event_id")
+        location_id = meta.get("location_id")
+        if not event_id or not location_id:
+            os.remove(path)
+            flash("Invalid or missing QR code")
+            return redirect(request.url)
+        el = EventLocation.query.filter_by(
+            event_id=event_id, location_id=location_id
+        ).first()
+        if not el:
+            os.remove(path)
+            flash("Stand sheet not recognized")
+            return redirect(request.url)
+        text = pytesseract.image_to_string(Image.open(path))
+        _parse_scanned_sheet(text, el)
+        db.session.commit()
+        os.remove(path)
+        flash("Stand sheet imported")
+        return redirect(url_for("event.view_event", event_id=event_id))
+    return render_template("events/scan_stand_sheet.html")
 
 
 @event.route("/events/<int:event_id>/close")
