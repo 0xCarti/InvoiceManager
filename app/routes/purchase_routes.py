@@ -6,6 +6,7 @@ from flask import (
     render_template,
     request,
     url_for,
+    jsonify,
 )
 from flask_login import current_user, login_required
 
@@ -30,6 +31,8 @@ from app.models import (
     Vendor,
 )
 from app.utils.activity import log_activity
+
+import datetime
 
 purchase = Blueprint("purchase", __name__)
 
@@ -79,10 +82,12 @@ def view_purchase_orders():
         .order_by(PurchaseOrder.order_date.desc())
         .paginate(page=page, per_page=20)
     )
+    vendors = Vendor.query.filter_by(archived=False).all()
     return render_template(
         "purchase_orders/view_purchase_orders.html",
         orders=orders,
         delete_form=delete_form,
+        vendors=vendors,
     )
 
 
@@ -91,6 +96,32 @@ def view_purchase_orders():
 def create_purchase_order():
     """Create a purchase order."""
     form = PurchaseOrderForm()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        vendor_id = request.form.get("vendor", type=int)
+        order_date = request.form.get("order_date")
+        expected_date = request.form.get("expected_date")
+        delivery_charge = request.form.get("delivery_charge", type=float) or 0.0
+        po = PurchaseOrder(
+            vendor_id=vendor_id,
+            user_id=current_user.id,
+            vendor_name=f"{db.session.get(Vendor, vendor_id).first_name} {db.session.get(Vendor, vendor_id).last_name}",
+            order_date=datetime.date.fromisoformat(order_date),
+            expected_date=datetime.date.fromisoformat(expected_date),
+            delivery_charge=delivery_charge,
+        )
+        db.session.add(po)
+        db.session.commit()
+        return jsonify(
+            success=True,
+            order={
+                "id": po.id,
+                "vendor": po.vendor_name,
+                "vendor_id": po.vendor_id,
+                "order_date": po.order_date.isoformat(),
+                "expected_date": po.expected_date.isoformat(),
+                "delivery_charge": po.delivery_charge,
+            },
+        )
     if form.validate_on_submit():
         po = PurchaseOrder(
             vendor_id=form.vendor.data,
@@ -144,6 +175,28 @@ def edit_purchase_order(po_id):
     if po is None:
         abort(404)
     form = PurchaseOrderForm()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        vendor_id = request.form.get("vendor", type=int)
+        order_date = request.form.get("order_date")
+        expected_date = request.form.get("expected_date")
+        delivery_charge = request.form.get("delivery_charge", type=float) or 0.0
+        po.vendor_id = vendor_id
+        po.vendor_name = f"{db.session.get(Vendor, vendor_id).first_name} {db.session.get(Vendor, vendor_id).last_name}"
+        po.order_date = datetime.date.fromisoformat(order_date)
+        po.expected_date = datetime.date.fromisoformat(expected_date)
+        po.delivery_charge = delivery_charge
+        db.session.commit()
+        return jsonify(
+            success=True,
+            order={
+                "id": po.id,
+                "vendor": po.vendor_name,
+                "vendor_id": po.vendor_id,
+                "order_date": po.order_date.isoformat(),
+                "expected_date": po.expected_date.isoformat(),
+                "delivery_charge": po.delivery_charge,
+            },
+        )
     if form.validate_on_submit():
         po.vendor_id = form.vendor.data
         po.vendor_name = f"{db.session.get(Vendor, form.vendor.data).first_name} {db.session.get(Vendor, form.vendor.data).last_name}"
