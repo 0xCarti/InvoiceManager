@@ -9,24 +9,15 @@
     <h2>Invoices</h2>
     <div class="row mb-3">
         <div class="col">
-            <a href="{{ url_for('invoice.create_invoice') }}" class="btn btn-primary">Create Invoice</a>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createInvoiceModal">Create Invoice</button>
+            <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
             <a href="{{ url_for('report.vendor_invoice_report') }}" class="btn btn-secondary">Vendor Report</a>
             <a href="{{ url_for('report.product_sales_report') }}" class="btn btn-secondary">Revenue Report</a>
         </div>
     </div>
 
-    <form method="GET" class="mb-4">
-        {{ form.hidden_tag() }}
-        <div class="row g-2">
-            <div class="col-md-2">{{ form.invoice_id.label }} {{ form.invoice_id(class="form-control") }}</div>
-            <div class="col-md-3">{{ form.customer_id.label }} {{ form.customer_id(class="form-control") }}</div>
-            <div class="col-md-2">{{ form.start_date.label }} {{ form.start_date(class="form-control") }}</div>
-            <div class="col-md-2">{{ form.end_date.label }} {{ form.end_date(class="form-control") }}</div>
-            <div class="col-md-1 align-self-end"><button type="submit" class="btn btn-primary">Filter</button></div>
-        </div>
-    </form>
     <div class="table-responsive">
-    <table class="table">
+    <table class="table" id="invoiceTable">
         <thead>
             <tr>
                 <th>Invoice Number</th>
@@ -42,8 +33,7 @@
                 <td>{{ invoice.date_created|format_datetime('%Y-%m-%d') }}</td>
                 <td>{{ invoice.customer.first_name }} {{ invoice.customer.last_name }}</td>
                 <td>
-                    <a href="{{ url_for('invoice.view_invoice', invoice_id=invoice.id) }}"
-                        class="btn btn-primary mr-2">View</a>
+                    <a href="{{ url_for('invoice.view_invoice', invoice_id=invoice.id) }}" class="btn btn-primary mr-2">View</a>
                     <form action="{{ url_for('invoice.delete_invoice', invoice_id=invoice.id) }}" method="post" class="d-inline">
                         {{ delete_form.hidden_tag() }}
                         <button type="submit" class="btn btn-danger">Delete</button>
@@ -58,7 +48,7 @@
         <ul class="pagination">
             {% if invoices.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('invoice.view_invoices', page=invoices.prev_num, invoice_id=request.args.get('invoice_id'), customer_id=request.args.get('customer_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('invoice.view_invoices', page=invoices.prev_num) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -66,10 +56,201 @@
             </li>
             {% if invoices.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('invoice.view_invoices', page=invoices.next_num, invoice_id=request.args.get('invoice_id'), customer_id=request.args.get('customer_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}">Next</a>
+                <a class="page-link" href="{{ url_for('invoice.view_invoices', page=invoices.next_num) }}">Next</a>
             </li>
             {% endif %}
         </ul>
     </nav>
 </div>
+
+<!-- Filter Modal -->
+<div class="modal fade" id="filterModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Filter Invoices</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="filterForm">
+      <div class="modal-body">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+            {{ form.invoice_id.label }} {{ form.invoice_id(class="form-control") }}
+        </div>
+        <div class="mb-3">
+            {{ form.customer_id.label }} {{ form.customer_id(class="form-control") }}
+        </div>
+        <div class="mb-3">
+            {{ form.start_date.label }} {{ form.start_date(class="form-control") }}
+        </div>
+        <div class="mb-3">
+            {{ form.end_date.label }} {{ form.end_date(class="form-control") }}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-primary">Apply</button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Create Invoice Modal -->
+<div class="modal fade" id="createInvoiceModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Create Invoice</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {% with form=create_form %}
+          {% include "invoices/_invoice_form.html" %}
+        {% endwith %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+$(document).ready(function(){
+    const deleteFormHTML = {{ delete_form.hidden_tag()|tojson }};
+
+    function renderInvoices(invoices){
+        const tbody = $('#invoiceTable tbody');
+        tbody.empty();
+        invoices.forEach(function(inv){
+            const row = `<tr>
+                <td>${inv.id}</td>
+                <td>${inv.date}</td>
+                <td>${inv.customer}</td>
+                <td>
+                    <a href="/view_invoice/${inv.id}" class="btn btn-primary mr-2">View</a>
+                    <form action="/delete_invoice/${inv.id}" method="post" class="d-inline">
+                        ${deleteFormHTML}
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>`;
+            tbody.append(row);
+        });
+    }
+
+    let currentFilters = '';
+
+    function loadInvoices(){
+        $.getJSON("{{ url_for('invoice.filter_invoices_api') }}", currentFilters, function(data){
+            renderInvoices(data.invoices);
+        });
+    }
+
+    $('#filterForm').on('submit', function(e){
+        e.preventDefault();
+        currentFilters = $(this).serialize();
+        loadInvoices();
+        $('#filterModal').modal('hide');
+    });
+
+    // Create invoice form logic
+    let currentTaxStatus = { gst_exempt: false, pst_exempt: false };
+    const initialCustomerId = $('#customerSelect').val();
+    if (initialCustomerId) {
+        $.get(`/get_customer_tax_status/${initialCustomerId}`, function (data) {
+            currentTaxStatus = data;
+        });
+    }
+    $('#customerSelect').on('change', function () {
+        const customerId = $(this).val();
+        if (customerId) {
+            $.get(`/get_customer_tax_status/${customerId}`, function (data) {
+                currentTaxStatus = data;
+            });
+        }
+    });
+
+    $('#productSearch').keyup(function () {
+        var query = $(this).val();
+        $.ajax({
+            url: '/search_products',
+            data: { query: query },
+            success: function (response) {
+                var suggestions = response.map(function (product) {
+                    return '<a href="#" class="list-group-item list-group-item-action" data-name="' + product.name + '" data-price="' + product.price + '">' + product.name + ' - $' + product.price + '</a>';
+                });
+                $('#productSuggestions').html(suggestions.join(''));
+            }
+        });
+    });
+
+    $('#productSuggestions').on('click', '.list-group-item', function (e) {
+        e.preventDefault();
+        var productName = $(this).data('name');
+        var productPrice = $(this).data('price');
+
+        var newRow = `<tr class="product-row">
+    <td>${productName}</td>
+    <td><input type="number" class="form-control quantity" value="1" step="any"></td>
+    <td class="price">$${productPrice}</td>
+    <td class="total">$${(parseFloat(productPrice)).toFixed(2)}</td>
+    <td>
+        <label><input type="checkbox" class="override-gst"${!currentTaxStatus.gst_exempt ? ' checked' : ''}> GST</label><br>
+        <label><input type="checkbox" class="override-pst"${!currentTaxStatus.pst_exempt ? ' checked' : ''}> PST</label>
+    </td>
+    <td><button type="button" class="btn btn-danger btn-sm">Remove</button></td>
+</tr>`;
+        $('#productTable tbody').append(newRow);
+
+        const row = $('#productTable tbody tr').last();
+        updateRowTotal(row);
+    });
+
+    $('#productTable').on('input', '.quantity', function () {
+        const row = $(this).closest('tr');
+        updateRowTotal(row);
+    });
+
+    $('#productTable').on('change', '.override-gst, .override-pst', function () {
+        const row = $(this).closest('tr');
+        updateRowTotal(row);
+    });
+
+    $('#productTable').on('click', '.btn-danger', function () {
+        $(this).closest('tr').remove();
+    });
+
+    function updateRowTotal(row) {
+        const quantity = parseFloat(row.find('.quantity').val()) || 0;
+        const price = parseFloat(row.find('.price').text().replace('$', '')) || 0;
+        const applyGST = row.find('.override-gst').is(':checked');
+        const applyPST = row.find('.override-pst').is(':checked');
+
+        const subtotal = quantity * price;
+        const gst = applyGST ? subtotal * 0.05 : 0;
+        const pst = applyPST ? subtotal * 0.07 : 0;
+        const total = subtotal + gst + pst;
+
+        row.find('.total').text(`$${total.toFixed(2)}`);
+    }
+
+    $('#invoiceForm').on('submit', function (e) {
+        e.preventDefault();
+        let products = '';
+        $('#productTable tbody tr').each(function () {
+            const productName = $(this).find('td:first-child').text();
+            const quantity = $(this).find('.quantity').val();
+            const override_gst = $(this).find('.override-gst').is(':checked') ? 1 : 0;
+            const override_pst = $(this).find('.override-pst').is(':checked') ? 1 : 0;
+            products += `${productName}?${quantity}?${override_gst}?${override_pst}:`;
+        });
+        $('#products').val(products);
+        $.post("{{ url_for('invoice.create_invoice_api') }}", $(this).serialize(), function () {
+            $('#createInvoiceModal').modal('hide');
+            $('#invoiceForm')[0].reset();
+            $('#productTable tbody').empty();
+            loadInvoices();
+        });
+    });
+});
+</script>
 {% endblock %}
