@@ -1,10 +1,10 @@
-{% extends 'base.html' %}
-
-{% block content %}
-<div class="container mt-4">
-    <h2>Add New Location</h2>
-    <form action="" method="post">
-        {{ form.hidden_tag() }}
+<form id="locationForm" action="{{ url_for('locations.add_location') }}" method="post">
+    {{ form.hidden_tag() }}
+    <div class="modal-header">
+        <h5 class="modal-title">Add New Location</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    <div class="modal-body">
         <div class="form-group">
             {{ form.name.label(class="form-label") }}
             {{ form.name(class="form-control") }}
@@ -20,9 +20,12 @@
         </div>
         <ul id="selectedProducts" class="list-group mb-3"></ul>
         {{ form.products(id="products") }}
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         {{ form.submit(class="btn btn-primary") }}
-    </form>
-</div>
+    </div>
+</form>
 <script>
 $(document).ready(function () {
     var selectedProducts = {};
@@ -71,5 +74,3 @@ $(document).ready(function () {
     }
 });
 </script>
-</div>
-{% endblock %}

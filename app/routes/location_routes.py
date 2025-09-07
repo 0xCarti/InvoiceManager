@@ -2,6 +2,7 @@ from flask import (
     Blueprint,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -11,7 +12,7 @@ from flask_login import login_required
 
 from app import db
 from app.forms import DeleteForm, LocationForm
-from app.models import Location, LocationStandItem, Product, Transfer
+from app.models import Location, LocationStandItem, Product
 from app.utils.activity import log_activity
 
 location = Blueprint("locations", __name__)
@@ -61,6 +62,17 @@ def add_location():
                     existing_items[recipe_item.item_id] = new_item
         db.session.commit()
         log_activity(f"Added location {new_location.name}")
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify(
+                {
+                    "success": True,
+                    "action": "create",
+                    "location": {
+                        "id": new_location.id,
+                        "name": new_location.name,
+                    },
+                }
+            )
         flash("Location added successfully!")
         return redirect(url_for("locations.view_locations"))
     selected_products = []
@@ -123,25 +135,24 @@ def edit_location(location_id):
                     existing_items[recipe_item.item_id] = new_item
         db.session.commit()
         log_activity(f"Edited location {location.id}")
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify(
+                {
+                    "success": True,
+                    "action": "update",
+                    "location": {"id": location.id, "name": location.name},
+                }
+            )
         flash("Location updated successfully.", "success")
         return redirect(
             url_for("locations.edit_location", location_id=location.id)
         )
-
-    # Query for completed transfers to this location
-    page = request.args.get("page", 1, type=int)
-    transfers_to_location = (
-        Transfer.query.filter_by(to_location_id=location_id, completed=True)
-        .order_by(Transfer.date_created.desc())
-        .paginate(page=page, per_page=20)
-    )
 
     selected_data = [{"id": p.id, "name": p.name} for p in location.products]
     return render_template(
         "locations/edit_location.html",
         form=form,
         location=location,
-        transfers=transfers_to_location,
         selected_products=selected_data,
     )
 
