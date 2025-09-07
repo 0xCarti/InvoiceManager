@@ -1,4 +1,12 @@
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    abort,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import login_required
 
 from app import db
@@ -15,8 +23,12 @@ def view_gl_codes():
     page = request.args.get("page", 1, type=int)
     codes = GLCode.query.order_by(GLCode.code).paginate(page=page, per_page=20)
     delete_form = DeleteForm()
+    form = GLCodeForm()
     return render_template(
-        "gl_codes/view_gl_codes.html", codes=codes, delete_form=delete_form
+        "gl_codes/view_gl_codes.html",
+        codes=codes,
+        delete_form=delete_form,
+        form=form,
     )
 
 
@@ -65,3 +77,42 @@ def delete_gl_code(code_id):
     db.session.commit()
     flash("GL Code deleted successfully!", "success")
     return redirect(url_for("glcode.view_gl_codes"))
+
+
+@glcode_bp.route("/gl_codes/ajax/create", methods=["POST"])
+@login_required
+def ajax_create_gl_code():
+    """Create a GL code via AJAX."""
+    form = GLCodeForm()
+    if form.validate_on_submit():
+        code = GLCode(code=form.code.data, description=form.description.data)
+        db.session.add(code)
+        db.session.commit()
+        return {
+            "success": True,
+            "id": code.id,
+            "code": code.code,
+            "description": code.description or "",
+        }
+    return {"success": False, "errors": form.errors}, 400
+
+
+@glcode_bp.route("/gl_codes/<int:code_id>/ajax/update", methods=["POST"])
+@login_required
+def ajax_update_gl_code(code_id):
+    """Update a GL code via AJAX."""
+    code = db.session.get(GLCode, code_id)
+    if code is None:
+        abort(404)
+    form = GLCodeForm()
+    if form.validate_on_submit():
+        code.code = form.code.data
+        code.description = form.description.data
+        db.session.commit()
+        return {
+            "success": True,
+            "id": code.id,
+            "code": code.code,
+            "description": code.description or "",
+        }
+    return {"success": False, "errors": form.errors}, 400
