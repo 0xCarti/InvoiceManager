@@ -1,0 +1,8 @@
+<tr>
+    <td>{{ e.name }}</td>
+    <td>{{ type_labels.get(e.event_type, e.event_type) }}</td>
+    <td>{{ e.start_date }}</td>
+    <td>{{ e.end_date }}</td>
+    <td>{{ 'Yes' if e.closed else 'No' }}</td>
+    <td><a href="{{ url_for('event.view_event', event_id=e.id) }}">View</a></td>
+</tr>

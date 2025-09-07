@@ -42,12 +42,14 @@ def view_events():
     if event_type:
         query = query.filter_by(event_type=event_type)
     events = query.all()
+    create_form = EventForm()
     return render_template(
         "events/view_events.html",
         events=events,
         event_type=event_type,
         event_types=EVENT_TYPES,
         type_labels=dict(EVENT_TYPES),
+        create_form=create_form,
     )
 
 
@@ -67,6 +69,38 @@ def create_event():
         flash("Event created")
         return redirect(url_for("event.view_events"))
     return render_template("events/create_event.html", form=form)
+
+
+@event.route("/events/filter", methods=["POST"])
+@login_required
+def filter_events_ajax():
+    event_type = request.form.get("type")
+    query = Event.query
+    if event_type:
+        query = query.filter_by(event_type=event_type)
+    events = query.all()
+    return render_template(
+        "events/_events_table.html", events=events, type_labels=dict(EVENT_TYPES)
+    )
+
+
+@event.route("/events/create/ajax", methods=["POST"])
+@login_required
+def create_event_ajax():
+    form = EventForm()
+    if form.validate_on_submit():
+        ev = Event(
+            name=form.name.data,
+            start_date=form.start_date.data,
+            end_date=form.end_date.data,
+            event_type=form.event_type.data,
+        )
+        db.session.add(ev)
+        db.session.commit()
+        return render_template(
+            "events/_event_row.html", e=ev, type_labels=dict(EVENT_TYPES)
+        )
+    return "Invalid data", 400
 
 
 @event.route("/events/<int:event_id>/edit", methods=["GET", "POST"])

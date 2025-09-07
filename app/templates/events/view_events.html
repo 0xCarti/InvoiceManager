@@ -1,35 +1,90 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Events</h2>
-<a class="btn btn-primary" href="{{ url_for('event.create_event') }}">Create Event</a>
-<form method="get" class="form-inline mt-2">
-    <select name="type" class="form-control">
-        <option value="">All Types</option>
-        {% for val, label in event_types %}
-            <option value="{{ val }}" {% if event_type == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-    </select>
-    <button type="submit" class="btn btn-secondary ml-2">Filter</button>
-</form>
+<button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createEventModal">Create Event</button>
+<button class="btn btn-secondary ml-2" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
 <div class="table-responsive">
 <table class="table mt-3">
     <thead>
         <tr><th>Name</th><th>Type</th><th>Start</th><th>End</th><th>Closed</th><th></th></tr>
     </thead>
-    <tbody>
-    {% for e in events %}
-        <tr>
-            <td>{{ e.name }}</td>
-            <td>{{ type_labels.get(e.event_type, e.event_type) }}</td>
-            <td>{{ e.start_date }}</td>
-            <td>{{ e.end_date }}</td>
-            <td>{{ 'Yes' if e.closed else 'No' }}</td>
-            <td>
-                <a href="{{ url_for('event.view_event', event_id=e.id) }}">View</a>
-            </td>
-        </tr>
-    {% endfor %}
+    <tbody id="events-table-body">
+        {% include 'events/_events_table.html' %}
     </tbody>
 </table>
 </div>
+
+<!-- Filter Modal -->
+<div class="modal fade" id="filterModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Filter Events</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="filterForm">
+        <div class="modal-body">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <select name="type" class="form-control">
+                <option value="">All Types</option>
+                {% for val, label in event_types %}
+                    <option value="{{ val }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="modal-footer">
+            <button type="submit" class="btn btn-primary">Apply</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Create Event Modal -->
+<div class="modal fade" id="createEventModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Create Event</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="createEventForm">
+        <div class="modal-body">
+          {{ create_form.csrf_token }}
+          {{ create_form.name.label }} {{ create_form.name(class='form-control') }}
+          {{ create_form.start_date.label }} {{ create_form.start_date(class='form-control') }}
+          {{ create_form.end_date.label }} {{ create_form.end_date(class='form-control') }}
+          {{ create_form.event_type.label }} {{ create_form.event_type(class='form-control') }}
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+$(function(){
+    $('#filterForm').on('submit', function(e){
+        e.preventDefault();
+        $.post('{{ url_for('event.filter_events_ajax') }}', $(this).serialize(), function(data){
+            $('#events-table-body').html(data);
+            const modalEl = document.getElementById('filterModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) { modal.hide(); }
+        });
+    });
+    $('#createEventForm').on('submit', function(e){
+        e.preventDefault();
+        $.post('{{ url_for('event.create_event_ajax') }}', $(this).serialize(), function(row){
+            $('#events-table-body').append(row);
+            const modalEl = document.getElementById('createEventModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) { modal.hide(); }
+            $('#createEventForm')[0].reset();
+        });
+    });
+});
+</script>
 {% endblock %}
