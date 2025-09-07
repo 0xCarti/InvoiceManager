@@ -649,7 +649,7 @@ def scan_stand_sheet():
         file = request.files.get("file")
         if not file:
             flash("No file uploaded")
-            return redirect(request.url)
+            return redirect(url_for("event.scan_stand_sheet"))
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
             file.save(tmp.name)
             path = tmp.name
@@ -659,14 +659,14 @@ def scan_stand_sheet():
         if not event_id or not location_id:
             os.remove(path)
             flash("Invalid or missing QR code")
-            return redirect(request.url)
+            return redirect(url_for("event.scan_stand_sheet"))
         el = EventLocation.query.filter_by(
             event_id=event_id, location_id=location_id
         ).first()
         if not el:
             os.remove(path)
             flash("Stand sheet not recognized")
-            return redirect(request.url)
+            return redirect(url_for("event.scan_stand_sheet"))
         text = pytesseract.image_to_string(Image.open(path))
         _parse_scanned_sheet(text, el)
         db.session.commit()
