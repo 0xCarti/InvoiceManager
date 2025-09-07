@@ -41,12 +41,16 @@ def view_items():
     page = request.args.get("page", 1, type=int)
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
-    gl_code_id = request.args.get("gl_code_id", type=int)
+    gl_code_ids = [
+        int(x) for x in request.args.getlist("gl_code_id") if x.isdigit()
+    ]
     archived = request.args.get("archived", "active")
     base_unit = request.args.get("base_unit")
     cost_min = request.args.get("cost_min", type=float)
     cost_max = request.args.get("cost_max", type=float)
-    vendor_id = request.args.get("vendor_id", type=int)
+    vendor_ids = [
+        int(x) for x in request.args.getlist("vendor_id") if x.isdigit()
+    ]
 
     query = Item.query
     if archived == "active":
@@ -65,10 +69,10 @@ def view_items():
         else:
             query = query.filter(Item.name.like(f"%{name_query}%"))
 
-    if gl_code_id is not None:
-        query = query.filter(Item.gl_code_id == gl_code_id)
+    if gl_code_ids:
+        query = query.filter(Item.gl_code_id.in_(gl_code_ids))
 
-    if vendor_id is not None:
+    if vendor_ids:
         query = (
             query.join(
                 PurchaseOrderItem, PurchaseOrderItem.item_id == Item.id
@@ -77,7 +81,7 @@ def view_items():
                 PurchaseOrder,
                 PurchaseOrderItem.purchase_order_id == PurchaseOrder.id,
             )
-            .filter(PurchaseOrder.vendor_id == vendor_id)
+            .filter(PurchaseOrder.vendor_id.in_(vendor_ids))
             .distinct()
         )
     if base_unit:
@@ -100,8 +104,12 @@ def view_items():
         .order_by(Item.base_unit)
     ]
     vendors = Vendor.query.order_by(Vendor.first_name, Vendor.last_name).all()
-    active_gl_code = db.session.get(GLCode, gl_code_id) if gl_code_id else None
-    active_vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
+    active_gl_codes = (
+        GLCode.query.filter(GLCode.id.in_(gl_code_ids)).all() if gl_code_ids else []
+    )
+    active_vendors = (
+        Vendor.query.filter(Vendor.id.in_(vendor_ids)).all() if vendor_ids else []
+    )
     return render_template(
         "items/view_items.html",
         items=items,
@@ -109,16 +117,16 @@ def view_items():
         name_query=name_query,
         match_mode=match_mode,
         gl_codes=gl_codes,
-        gl_code_id=gl_code_id,
+        gl_code_ids=gl_code_ids,
         base_units=base_units,
         base_unit=base_unit,
         cost_min=cost_min,
         cost_max=cost_max,
-        active_gl_code=active_gl_code,
+        active_gl_codes=active_gl_codes,
         archived=archived,
         vendors=vendors,
-        vendor_id=vendor_id,
-        active_vendor=active_vendor,
+        vendor_ids=vendor_ids,
+        active_vendors=active_vendors,
     )
 
 

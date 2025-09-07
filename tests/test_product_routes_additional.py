@@ -135,3 +135,26 @@ def test_view_products_sales_gl_code_filter(client, app):
         assert b"P0" in resp.data
         assert b"Other" not in resp.data
         assert f"sales_gl_code_id={gl1_id}".encode() in resp.data
+
+
+def test_view_products_multiple_gl_code_filter(client, app):
+    email, item_id, unit_id = setup_data(app)
+    with app.app_context():
+        gl1 = GLCode(code="7000", description="Food")
+        gl2 = GLCode(code="8000", description="Drink")
+        db.session.add_all([gl1, gl2])
+        db.session.commit()
+        gl1_id, gl2_id = gl1.id, gl2.id
+        products = [
+            Product(name="X", price=1, cost=1, gl_code_id=gl1_id),
+            Product(name="Y", price=1, cost=1, gl_code_id=gl2_id),
+        ]
+        db.session.add_all(products)
+        db.session.commit()
+    with client:
+        login(client, email, "pass")
+        resp = client.get(f"/products?gl_code_id={gl1_id}&gl_code_id={gl2_id}")
+        assert resp.status_code == 200
+        assert b"X" in resp.data
+        assert b"Y" in resp.data
+        assert b"Filtering by GL Code" in resp.data
