@@ -3,63 +3,70 @@
 {% block content %}
 <div class="container mt-5">
     <h2>Spoilage</h2>
-    <form method="get" class="row g-3 mb-4">
-        <div class="col-auto">
-            {{ form.start_date.label }}
-            {{ form.start_date(class='form-control') }}
-        </div>
-        <div class="col-auto">
-            {{ form.end_date.label }}
-            {{ form.end_date(class='form-control') }}
-        </div>
-        <div class="col-auto">
-            {{ form.purchase_gl_code.label }}
-            {{ form.purchase_gl_code(class='form-select') }}
-        </div>
-        <div class="col-auto">
-            {{ form.items.label }}
-            {{ form.items(class='form-select', multiple=True) }}
-        </div>
-        <div class="col-auto align-self-end">
-            <button type="submit" class="btn btn-primary">Filter</button>
-        </div>
-    </form>
-    {% if results %}
-    <div class="mb-3">
-        <button onclick="window.print()" class="btn btn-secondary">Print</button>
+    <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
+        Filters
+    </button>
+
+    <div id="results-container">
+        {% include 'spoilage/_table.html' %}
     </div>
-    <div class="table-responsive">
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>From Location</th>
-                <th>Item</th>
-                <th>Quantity</th>
-                <th>Purchase GL Code</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for ti, tr, item, from_loc, lsi in results %}
-            <tr>
-                <td>{{ tr.date_created.date() }}</td>
-                <td>{{ from_loc.name }}</td>
-                <td>{{ item.name }}</td>
-                <td>{{ ti.quantity }}</td>
-                <td>
-                    {{
-                        lsi.purchase_gl_code.code
-                        if lsi and lsi.purchase_gl_code
-                        else (item.purchase_gl_code.code if item.purchase_gl_code else '')
-                    }}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    </div>
-    {% else %}
-    <p>No spoilage records found.</p>
-    {% endif %}
 </div>
+
+<!-- Filter Modal -->
+<div class="modal fade" id="filterModal" tabindex="-1" aria-labelledby="filterModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="filterForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="filterModalLabel">Filters</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            {{ form.start_date.label }}
+                            {{ form.start_date(class='form-control') }}
+                        </div>
+                        <div class="col-12">
+                            {{ form.end_date.label }}
+                            {{ form.end_date(class='form-control') }}
+                        </div>
+                        <div class="col-12">
+                            {{ form.purchase_gl_code.label }}
+                            {{ form.purchase_gl_code(class='form-select') }}
+                        </div>
+                        <div class="col-12">
+                            {{ form.items.label }}
+                            {{ form.items(class='form-select', multiple=True) }}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Apply</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(function () {
+        $('#filterForm').on('submit', function (e) {
+            e.preventDefault();
+            var params = $(this).serialize();
+            $.ajax({
+                url: '{{ url_for('spoilage.view_spoilage') }}',
+                type: 'GET',
+                data: params,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                success: function (response) {
+                    $('#results-container').html(response);
+                    var modalEl = document.getElementById('filterModal');
+                    var modal = bootstrap.Modal.getInstance(modalEl);
+                    modal.hide();
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}
