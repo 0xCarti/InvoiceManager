@@ -32,6 +32,7 @@ product = Blueprint("product", __name__)
 def view_products():
     """List available products."""
     delete_form = DeleteForm()
+    create_form = ProductWithRecipeForm()
     page = request.args.get("page", 1, type=int)
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
@@ -101,6 +102,7 @@ def view_products():
         "products/view_products.html",
         products=products,
         delete_form=delete_form,
+        form=create_form,
         name_query=name_query,
         match_mode=match_mode,
         sales_gl_code_ids=sales_gl_code_ids,
@@ -159,6 +161,60 @@ def create_product():
     return render_template(
         "products/create_product.html", form=form, product_id=None
     )
+
+
+@product.route("/products/ajax/create", methods=["POST"])
+@login_required
+def ajax_create_product():
+    """Create a product via AJAX."""
+    form = ProductWithRecipeForm()
+    if form.validate_on_submit():
+        product = Product(
+            name=form.name.data,
+            price=form.price.data,
+            cost=form.cost.data,
+            gl_code=form.gl_code.data,
+            gl_code_id=form.gl_code_id.data,
+            sales_gl_code_id=form.sales_gl_code.data or None,
+        )
+        if not product.gl_code and product.gl_code_id:
+            gl = db.session.get(GLCode, product.gl_code_id)
+            if gl:
+                product.gl_code = gl.code
+        db.session.add(product)
+        db.session.commit()
+        for item_form in form.items:
+            item_id = item_form.item.data
+            unit_id = item_form.unit.data or None
+            quantity = item_form.quantity.data
+            countable = item_form.countable.data
+            if item_id and quantity is not None:
+                db.session.add(
+                    ProductRecipeItem(
+                        product_id=product.id,
+                        item_id=item_id,
+                        unit_id=unit_id,
+                        quantity=quantity,
+                        countable=countable,
+                    )
+                )
+        db.session.commit()
+        log_activity(f"Created product {product.name}")
+        row_html = render_template(
+            "products/_product_row.html", product=product, delete_form=DeleteForm()
+        )
+        return jsonify(success=True, html=row_html)
+    return jsonify(success=False, errors=form.errors), 400
+
+
+@product.route("/products/ajax/validate", methods=["POST"])
+@login_required
+def validate_product_form():
+    """Validate product form via AJAX without saving."""
+    form = ProductWithRecipeForm()
+    if form.validate_on_submit():
+        return jsonify(success=True)
+    return jsonify(success=False, errors=form.errors), 400
 
 
 @product.route("/products/<int:product_id>/edit", methods=["GET", "POST"])
