@@ -1,7 +1,14 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>{{ event.name }} - Stand Sheets</h2>
+<style>
+@media print {
+  .standsheet-page { page-break-after: always; }
+  .standsheet-page:last-child { page-break-after: auto; }
+}
+</style>
 {% for entry in data %}
+<div class="standsheet-page">
     <h3>{{ entry.location.name }}</h3>
     <img src="data:image/png;base64,{{ entry.qr }}" alt="QR Code" class="mb-2"/>
     <div class="table-responsive">
@@ -15,7 +22,6 @@
                 <th>Transferred Out</th>
                 <th>Eaten</th>
                 <th>Spoiled</th>
-                <th>Terminal Sales</th>
                 <th>Closing Count</th>
                 <th>Variance</th>
             </tr>
@@ -30,7 +36,6 @@
                 <td></td>
                 <td></td>
                 <td></td>
-                <td>{{ s.sales }}</td>
                 <td></td>
                 <td></td>
             </tr>
@@ -38,6 +43,6 @@
         </tbody>
     </table>
     </div>
-    <div style="page-break-after: always;"></div>
+</div>
 {% endfor %}
 {% endblock %}

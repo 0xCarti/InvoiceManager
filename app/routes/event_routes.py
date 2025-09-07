@@ -672,7 +672,11 @@ def scan_stand_sheet():
         db.session.commit()
         os.remove(path)
         flash("Stand sheet imported")
-        return redirect(url_for("event.view_event", event_id=event_id))
+        return redirect(
+            url_for(
+                "event.stand_sheet", event_id=event_id, location_id=location_id
+            )
+        )
     return render_template("events/scan_stand_sheet.html")
 
 
