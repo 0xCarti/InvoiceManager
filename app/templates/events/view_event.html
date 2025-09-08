@@ -20,6 +20,7 @@
             {% if event.event_type == 'inventory' %}| <a href="{{ url_for('event.count_sheet', event_id=event.id, location_id=el.location_id) }}">Count Sheet</a>{% endif %} |
             <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Enter Sales</a> |
             <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}">Upload Sales</a> |
+            <a href="{{ url_for('event.scan_stand_sheet') }}">Upload Stand Sheet</a> |
             <a href="{{ url_for('event.confirm_location', event_id=event.id, el_id=el.id) }}">Confirm</a>
         {% else %}
             Stand Sheet | Terminal Sales

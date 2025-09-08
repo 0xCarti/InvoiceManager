@@ -1,42 +1,197 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>{{ event.name }} - Stand Sheets</h2>
+<style>
+@page {
+  size: letter portrait;
+  margin: 0.5in;
+}
+body {
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.report {
+  width: 100%;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.header .logo {
+  width: 60px;
+  height: 24px;
+  background: #ddd;
+}
+.header .title {
+  font-size: 22px;
+  font-weight: bold;
+}
+.header .date {
+  font-size: 11px;
+}
+.meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  border-bottom: 1px solid #000;
+  padding-bottom: 4px;
+  margin-bottom: 10px;
+}
+.table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th,
+.table td {
+  border: 1px solid #999;
+  padding: 2px 4px;
+}
+.table th:first-child,
+.table td:first-child {
+  text-align: left;
+  width: 35%;
+}
+.table th:not(:first-child),
+.table td:not(:first-child) {
+  text-align: right;
+}
+.table tbody tr:nth-child(even) {
+  background: #fafafa;
+}
+.signoffs {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+.signoffs .left,
+.signoffs .right {
+  width: 48%;
+}
+.signoffs .left div,
+.signoffs .right div {
+  margin-bottom: 8px;
+}
+.footer {
+  position: fixed;
+  bottom: 0.25in;
+  left: 0.5in;
+  right: 0.5in;
+  display: flex;
+  font-size: 11px;
+}
+.footer div:nth-child(1) {
+  flex: 1;
+  text-align: left;
+}
+.footer div:nth-child(2) {
+  flex: 1;
+  text-align: center;
+}
+.footer div:nth-child(3) {
+  flex: 1;
+  text-align: right;
+}
+.standsheet-page {
+  page-break-after: always;
+}
+.standsheet-page:last-child {
+  page-break-after: auto;
+}
+</style>
 {% for entry in data %}
-    <h3>{{ entry.location.name }}</h3>
-    <div class="table-responsive">
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Item</th>
-                <th>Expected Opening</th>
-                <th>Opening Count</th>
-                <th>Transferred In</th>
-                <th>Transferred Out</th>
-                <th>Eaten</th>
-                <th>Spoiled</th>
-                <th>Terminal Sales</th>
-                <th>Closing Count</th>
-                <th>Variance</th>
-            </tr>
-        </thead>
-        <tbody>
+<section class="report standsheet-page">
+  <div class="header">
+    <div class="logo"></div>
+    <div class="title">Opening Standsheet</div>
+    <div class="date">{{ generated_at_local }}</div>
+  </div>
+  <div class="meta">
+    <div>Location: {{ entry.location.name }}</div>
+    <div>Event: {{ event.name }}</div>
+    <div>Event Date/Time: {{ event.start_date.strftime('%-m/%-d/%Y %-I:%M %p') }}</div>
+  </div>
+  <div class="table">
+    <table>
+      <thead>
+        <tr>
+          <th rowspan="2">Stock Item (Base Unit)</th>
+          <th rowspan="2">Prior Event Close</th>
+          <th colspan="2">Pre-Event Transfers</th>
+          <th rowspan="2">Expected Opening Count</th>
+          <th rowspan="2">Opening Count</th>
+          <th colspan="2">Event Transfers</th>
+          <th rowspan="2">Eaten</th>
+          <th rowspan="2">Spoilage</th>
+          <th rowspan="2">Closing Count</th>
+          <th rowspan="2">Units Sold</th>
+          <th rowspan="2">Price</th>
+          <th rowspan="2">Extension</th>
+        </tr>
+        <tr>
+          <th>In</th>
+          <th>Out</th>
+          <th>In</th>
+          <th>Out</th>
+        </tr>
+      </thead>
+      <tbody>
         {% for s in entry.stand_items %}
-            <tr>
-                <td>{{ s.item.name }}</td>
-                <td>{{ s.expected }}</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td>{{ s.sales }}</td>
-                <td></td>
-                <td></td>
-            </tr>
+        {% set price = namespace(value=None) %}
+        {% for product in entry.location.products %}
+          {% if price.value is none %}
+            {% for ri in product.recipe_items %}
+              {% if price.value is none and ri.item_id == s.item.id %}
+                {% set price.value = product.price %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
         {% endfor %}
-        </tbody>
+        {% set expected_open = s.expected %}
+        {% set extension = (price.value or 0) * s.sales %}
+        <tr>
+          <td>{{ s.item.name }} ({{ s.item.base_unit }})</td>
+          <td>{{ s.expected }}</td>
+          <td></td>
+          <td></td>
+          <td>{{ expected_open }}</td>
+          <td>{{ s.sheet.opening_count if s.sheet else '' }}</td>
+          <td>{{ s.sheet.transferred_in if s.sheet else '' }}</td>
+          <td>{{ s.sheet.transferred_out if s.sheet else '' }}</td>
+          <td>{{ s.sheet.eaten if s.sheet else '' }}</td>
+          <td>{{ s.sheet.spoiled if s.sheet else '' }}</td>
+          <td>{{ s.sheet.closing_count if s.sheet else '' }}</td>
+          <td>{{ s.sales }}</td>
+          <td>{% if price.value is not none %}${{ '%.2f'|format(price.value) }}{% endif %}</td>
+          <td>{% if price.value is not none and s.sales %}${{ '%.2f'|format(extension) }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
+  </div>
+  <div class="signoffs">
+    <div class="left">
+      <div>Opening Stand Manager  ______________________________</div>
+      <div>Opening Supervisor     ______________________________</div>
+      <div>Closing Stand Manager  ______________________________</div>
+      <div>Closing Supervisor     ______________________________</div>
+      <div>Audit/Review Signature ______________________________</div>
     </div>
-    <div style="page-break-after: always;"></div>
+    <div class="right">
+      <div>Total Sales  ______________________________</div>
+      <div>Total Cash   ______________________________</div>
+      <div>Credit Cards ______________________________</div>
+      <div>Coupons      ______________________________</div>
+      <div>Over/Short   ______________________________</div>
+    </div>
+  </div>
+</section>
 {% endfor %}
+<footer class="footer">
+  <div>Standsheet</div>
+  <div>1 of 1</div>
+  <div></div>
+</footer>
 {% endblock %}
