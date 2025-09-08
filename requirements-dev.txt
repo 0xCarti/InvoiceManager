@@ -2,3 +2,4 @@ pre-commit
 black
 isort
 flake8
+pdf2image==1.17.0  # requires Poppler

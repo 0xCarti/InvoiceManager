@@ -82,9 +82,9 @@ def test_scan_stand_sheet(client, app, monkeypatch):
     img = Image.new("RGB", (200, 200), "white")
     img.paste(qr.resize((150, 150)), (25, 25))
     buf = BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="PDF")
     buf.seek(0)
-    data = {"file": (buf, "sheet.png")}
+    data = {"file": (buf, "sheet.pdf")}
 
     monkeypatch.setattr(
         "pytesseract.image_to_string",

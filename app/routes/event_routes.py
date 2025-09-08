@@ -4,6 +4,7 @@ import tempfile
 from datetime import datetime
 
 import pytesseract
+from pdf2image import convert_from_path
 from flask import (
     Blueprint,
     abort,
@@ -658,27 +659,46 @@ def scan_stand_sheet():
         if not file:
             flash("No file uploaded")
             return redirect(url_for("event.scan_stand_sheet"))
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+
+        filename = secure_filename(file.filename or "")
+        is_pdf = filename.lower().endswith(".pdf") or file.mimetype == "application/pdf"
+        suffix = ".pdf" if is_pdf else ".png"
+
+        cleanup_paths = []
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             file.save(tmp.name)
             path = tmp.name
+            cleanup_paths.append(path)
+
+        if is_pdf:
+            images = convert_from_path(path, first_page=1, last_page=1)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as img_tmp:
+                images[0].save(img_tmp.name, format="PNG")
+                img_path = img_tmp.name
+                cleanup_paths.append(img_path)
+            path = img_path
+
         meta = decode_qr(path)
         event_id = meta.get("event_id")
         location_id = meta.get("location_id")
         if not event_id or not location_id:
-            os.remove(path)
+            for p in cleanup_paths:
+                os.remove(p)
             flash("Invalid or missing QR code")
             return redirect(url_for("event.scan_stand_sheet"))
         el = EventLocation.query.filter_by(
             event_id=event_id, location_id=location_id
         ).first()
         if not el:
-            os.remove(path)
+            for p in cleanup_paths:
+                os.remove(p)
             flash("Stand sheet not recognized")
             return redirect(url_for("event.scan_stand_sheet"))
         text = pytesseract.image_to_string(Image.open(path))
         _parse_scanned_sheet(text, el)
         db.session.commit()
-        os.remove(path)
+        for p in cleanup_paths:
+            os.remove(p)
         flash("Stand sheet imported")
         return redirect(
             url_for(
