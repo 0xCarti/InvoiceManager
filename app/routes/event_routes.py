@@ -675,44 +675,49 @@ def scan_stand_sheet():
         suffix = ".pdf" if is_pdf else ".png"
 
         cleanup_paths = []
+        image_paths = []
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             file.save(tmp.name)
             path = tmp.name
             cleanup_paths.append(path)
 
         if is_pdf:
-            images = convert_from_path(path, first_page=1, last_page=1)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as img_tmp:
-                images[0].save(img_tmp.name, format="PNG")
-                img_path = img_tmp.name
-                cleanup_paths.append(img_path)
-            path = img_path
+            images = convert_from_path(path)
+            for img in images:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as img_tmp:
+                    img.save(img_tmp.name, format="PNG")
+                    image_paths.append(img_tmp.name)
+                    cleanup_paths.append(img_tmp.name)
+        else:
+            image_paths.append(path)
 
-        meta = decode_qr(path)
-        event_id = meta.get("event_id")
-        location_id = meta.get("location_id")
-        if not event_id or not location_id:
-            for p in cleanup_paths:
-                os.remove(p)
-            flash("Invalid or missing QR code")
-            return redirect(url_for("event.scan_stand_sheet"))
-        el = EventLocation.query.filter_by(
-            event_id=event_id, location_id=location_id
-        ).first()
-        if not el:
-            for p in cleanup_paths:
-                os.remove(p)
-            flash("Stand sheet not recognized")
-            return redirect(url_for("event.scan_stand_sheet"))
-        ocr_data = pytesseract.image_to_data(
-            Image.open(path), output_type=pytesseract.Output.DICT
-        )
-        parsed = _parse_scanned_sheet(ocr_data, el)
-        session["scanned_sheet"] = {
-            "event_id": event_id,
-            "location_id": location_id,
-            "data": parsed,
-        }
+        parsed_sheets = []
+        for img_path in image_paths:
+            meta = decode_qr(img_path)
+            event_id = meta.get("event_id")
+            location_id = meta.get("location_id")
+            if not event_id or not location_id:
+                for p in cleanup_paths:
+                    os.remove(p)
+                flash("Invalid or missing QR code")
+                return redirect(url_for("event.scan_stand_sheet"))
+            el = EventLocation.query.filter_by(
+                event_id=event_id, location_id=location_id
+            ).first()
+            if not el:
+                for p in cleanup_paths:
+                    os.remove(p)
+                flash("Stand sheet not recognized")
+                return redirect(url_for("event.scan_stand_sheet"))
+            ocr_data = pytesseract.image_to_data(
+                Image.open(img_path), output_type=pytesseract.Output.DICT
+            )
+            parsed = _parse_scanned_sheet(ocr_data, el)
+            parsed_sheets.append(
+                {"event_id": event_id, "location_id": location_id, "data": parsed}
+            )
+
+        session["scanned_sheets"] = parsed_sheets
         for p in cleanup_paths:
             os.remove(p)
         flash("Review scanned data before saving")
@@ -723,62 +728,91 @@ def scan_stand_sheet():
 @event.route("/events/scan_stand_sheet/review", methods=["GET", "POST"])
 @login_required
 def review_scanned_sheet():
-    data = session.get("scanned_sheet")
+    data = session.get("scanned_sheets")
     if not data:
         flash("No scanned data to review")
         return redirect(url_for("event.scan_stand_sheet"))
-    event_id = data.get("event_id")
-    location_id = data.get("location_id")
-    el = EventLocation.query.filter_by(
-        event_id=event_id, location_id=location_id
-    ).first()
-    if el is None:
-        flash("Stand sheet not recognized")
-        session.pop("scanned_sheet", None)
-        return redirect(url_for("event.scan_stand_sheet"))
     if request.method == "POST":
-        for item_id in data["data"].keys():
-            iid = int(item_id)
-            sheet = EventStandSheetItem.query.filter_by(
-                event_location_id=el.id, item_id=iid
+        for sheet_data in data:
+            event_id = sheet_data.get("event_id")
+            location_id = sheet_data.get("location_id")
+            el = EventLocation.query.filter_by(
+                event_id=event_id, location_id=location_id
             ).first()
-            if not sheet:
-                sheet = EventStandSheetItem(event_location_id=el.id, item_id=iid)
-                db.session.add(sheet)
-            sheet.opening_count = (
-                request.form.get(f"open_{item_id}", type=float, default=0) or 0
-            )
-            sheet.transferred_in = (
-                request.form.get(f"in_{item_id}", type=float, default=0) or 0
-            )
-            sheet.transferred_out = (
-                request.form.get(f"out_{item_id}", type=float, default=0) or 0
-            )
-            sheet.eaten = (
-                request.form.get(f"eaten_{item_id}", type=float, default=0) or 0
-            )
-            sheet.spoiled = (
-                request.form.get(f"spoiled_{item_id}", type=float, default=0) or 0
-            )
-            sheet.closing_count = (
-                request.form.get(f"close_{item_id}", type=float, default=0) or 0
-            )
+            if el is None:
+                continue
+            prefix = f"{event_id}_{location_id}"
+            for item_id in sheet_data["data"].keys():
+                iid = int(item_id)
+                sheet = EventStandSheetItem.query.filter_by(
+                    event_location_id=el.id, item_id=iid
+                ).first()
+                if not sheet:
+                    sheet = EventStandSheetItem(
+                        event_location_id=el.id, item_id=iid
+                    )
+                    db.session.add(sheet)
+                sheet.opening_count = (
+                    request.form.get(
+                        f"open_{prefix}_{item_id}", type=float, default=0
+                    )
+                    or 0
+                )
+                sheet.transferred_in = (
+                    request.form.get(
+                        f"in_{prefix}_{item_id}", type=float, default=0
+                    )
+                    or 0
+                )
+                sheet.transferred_out = (
+                    request.form.get(
+                        f"out_{prefix}_{item_id}", type=float, default=0
+                    )
+                    or 0
+                )
+                sheet.eaten = (
+                    request.form.get(
+                        f"eaten_{prefix}_{item_id}", type=float, default=0
+                    )
+                    or 0
+                )
+                sheet.spoiled = (
+                    request.form.get(
+                        f"spoiled_{prefix}_{item_id}", type=float, default=0
+                    )
+                    or 0
+                )
+                sheet.closing_count = (
+                    request.form.get(
+                        f"close_{prefix}_{item_id}", type=float, default=0
+                    )
+                    or 0
+                )
         db.session.commit()
-        session.pop("scanned_sheet", None)
+        session.pop("scanned_sheets", None)
         flash("Stand sheet imported")
-        return redirect(
-            url_for(
-                "event.stand_sheet", event_id=event_id, location_id=location_id
-            )
+        return redirect(url_for("event.scan_stand_sheet"))
+
+    sheets = []
+    for sheet_data in data:
+        event_id = sheet_data.get("event_id")
+        location_id = sheet_data.get("location_id")
+        el = EventLocation.query.filter_by(
+            event_id=event_id, location_id=location_id
+        ).first()
+        if el is None:
+            continue
+        location, stand_items = _get_stand_items(location_id, event_id)
+        sheets.append(
+            {
+                "event": el.event,
+                "location": location,
+                "stand_items": stand_items,
+                "scanned": sheet_data["data"],
+                "prefix": f"{event_id}_{location_id}",
+            }
         )
-    location, stand_items = _get_stand_items(location_id, event_id)
-    return render_template(
-        "events/review_scanned_sheet.html",
-        event=el.event,
-        location=location,
-        stand_items=stand_items,
-        scanned=data["data"],
-    )
+    return render_template("events/review_scanned_sheet.html", sheets=sheets)
 
 
 @event.route("/events/<int:event_id>/close")
