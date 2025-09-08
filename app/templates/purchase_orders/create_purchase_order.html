@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/items/${itemId}/units`).then(r => r.json()).then(data => {
             let opts = '';
             data.units.forEach(u => {
-                opts += `<option value="${u.id}" ${u.receiving_default ? 'selected' : ''}>${u.name}</option>`;
+                opts += `<option value="${u.id}" ${u.receiving_default ? 'selected' : ''}>${u.name} of ${u.factor} ${data.base_unit}${u.factor != 1 ? 's' : ''}</option>`;
             });
             unitSelect.innerHTML = opts;
         });
