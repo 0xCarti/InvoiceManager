@@ -14,6 +14,7 @@ from flask import (
     render_template,
     request,
     url_for,
+    session,
 )
 from flask_login import login_required
 from PIL import Image
@@ -612,43 +613,52 @@ def bulk_count_sheets(event_id):
     )
 
 
-def _parse_scanned_sheet(text, event_location):
-    """Populate stand sheet items from OCR text for the given event location."""
+def _parse_scanned_sheet(ocr_data, event_location, threshold=80):
+    """Return parsed stand sheet data with confidence flags."""
     _, stand_items = _get_stand_items(
         event_location.location_id, event_location.event_id
     )
     item_map = {
         entry["item"].name.lower(): entry["item"] for entry in stand_items
     }
-    for line in text.splitlines():
-        tokens = line.split()
-        if not tokens:
-            continue
-        numbers = [t for t in tokens if re.match(r"^-?\d+(?:\.\d+)?$", t)]
-        name_tokens = [t for t in tokens if t not in numbers]
+    lines = {}
+    for text, conf, line in zip(
+        ocr_data.get("text", []),
+        ocr_data.get("conf", []),
+        ocr_data.get("line_num", []),
+    ):
+        if text.strip():
+            lines.setdefault(line, []).append((text, float(conf)))
+
+    results = {}
+    for tokens in lines.values():
+        words, confs = zip(*tokens)
+        numbers = []
+        num_confs = []
+        name_tokens = []
+        for t, c in zip(words, confs):
+            if re.match(r"^-?\d+(?:\.\d+)?$", t):
+                numbers.append(t)
+                num_confs.append(c)
+            else:
+                name_tokens.append(t)
         name = " ".join(name_tokens).lower()
         if name in item_map and len(numbers) >= 8:
-            opening = float(numbers[1])
-            tin = float(numbers[2])
-            tout = float(numbers[3])
-            eaten = float(numbers[4])
-            spoiled = float(numbers[5])
-            closing = float(numbers[7])
-            sheet = EventStandSheetItem.query.filter_by(
-                event_location_id=event_location.id, item_id=item_map[name].id
-            ).first()
-            if not sheet:
-                sheet = EventStandSheetItem(
-                    event_location_id=event_location.id,
-                    item_id=item_map[name].id,
-                )
-                db.session.add(sheet)
-            sheet.opening_count = opening
-            sheet.transferred_in = tin
-            sheet.transferred_out = tout
-            sheet.eaten = eaten
-            sheet.spoiled = spoiled
-            sheet.closing_count = closing
+            fields = {
+                "opening_count": (float(numbers[1]), num_confs[1] < threshold),
+                "transferred_in": (float(numbers[2]), num_confs[2] < threshold),
+                "transferred_out": (float(numbers[3]), num_confs[3] < threshold),
+                "eaten": (float(numbers[4]), num_confs[4] < threshold),
+                "spoiled": (float(numbers[5]), num_confs[5] < threshold),
+                "closing_count": (float(numbers[7]), num_confs[7] < threshold),
+            }
+            results[str(item_map[name].id)] = {
+                k: v[0] for k, v in fields.items()
+            }
+            results[str(item_map[name].id)]["flags"] = {
+                k: v[1] for k, v in fields.items()
+            }
+    return results
 
 
 @event.route("/events/scan_stand_sheet", methods=["GET", "POST"])
@@ -694,18 +704,81 @@ def scan_stand_sheet():
                 os.remove(p)
             flash("Stand sheet not recognized")
             return redirect(url_for("event.scan_stand_sheet"))
-        text = pytesseract.image_to_string(Image.open(path))
-        _parse_scanned_sheet(text, el)
-        db.session.commit()
+        ocr_data = pytesseract.image_to_data(
+            Image.open(path), output_type=pytesseract.Output.DICT
+        )
+        parsed = _parse_scanned_sheet(ocr_data, el)
+        session["scanned_sheet"] = {
+            "event_id": event_id,
+            "location_id": location_id,
+            "data": parsed,
+        }
         for p in cleanup_paths:
             os.remove(p)
+        flash("Review scanned data before saving")
+        return redirect(url_for("event.review_scanned_sheet"))
+    return render_template("events/scan_stand_sheet.html")
+
+
+@event.route("/events/scan_stand_sheet/review", methods=["GET", "POST"])
+@login_required
+def review_scanned_sheet():
+    data = session.get("scanned_sheet")
+    if not data:
+        flash("No scanned data to review")
+        return redirect(url_for("event.scan_stand_sheet"))
+    event_id = data.get("event_id")
+    location_id = data.get("location_id")
+    el = EventLocation.query.filter_by(
+        event_id=event_id, location_id=location_id
+    ).first()
+    if el is None:
+        flash("Stand sheet not recognized")
+        session.pop("scanned_sheet", None)
+        return redirect(url_for("event.scan_stand_sheet"))
+    if request.method == "POST":
+        for item_id in data["data"].keys():
+            iid = int(item_id)
+            sheet = EventStandSheetItem.query.filter_by(
+                event_location_id=el.id, item_id=iid
+            ).first()
+            if not sheet:
+                sheet = EventStandSheetItem(event_location_id=el.id, item_id=iid)
+                db.session.add(sheet)
+            sheet.opening_count = (
+                request.form.get(f"open_{item_id}", type=float, default=0) or 0
+            )
+            sheet.transferred_in = (
+                request.form.get(f"in_{item_id}", type=float, default=0) or 0
+            )
+            sheet.transferred_out = (
+                request.form.get(f"out_{item_id}", type=float, default=0) or 0
+            )
+            sheet.eaten = (
+                request.form.get(f"eaten_{item_id}", type=float, default=0) or 0
+            )
+            sheet.spoiled = (
+                request.form.get(f"spoiled_{item_id}", type=float, default=0) or 0
+            )
+            sheet.closing_count = (
+                request.form.get(f"close_{item_id}", type=float, default=0) or 0
+            )
+        db.session.commit()
+        session.pop("scanned_sheet", None)
         flash("Stand sheet imported")
         return redirect(
             url_for(
                 "event.stand_sheet", event_id=event_id, location_id=location_id
             )
         )
-    return render_template("events/scan_stand_sheet.html")
+    location, stand_items = _get_stand_items(location_id, event_id)
+    return render_template(
+        "events/review_scanned_sheet.html",
+        event=el.event,
+        location=location,
+        stand_items=stand_items,
+        scanned=data["data"],
+    )
 
 
 @event.route("/events/<int:event_id>/close")
