@@ -366,11 +366,67 @@ def receive_invoice(po_id):
 def view_purchase_invoices():
     """List all received purchase invoices."""
     page = request.args.get("page", 1, type=int)
-    invoices = PurchaseInvoice.query.order_by(
+    invoice_id = request.args.get("invoice_id", type=int)
+    po_number = request.args.get("po_number", type=int)
+    vendor_id = request.args.get("vendor_id", type=int)
+    location_id = request.args.get("location_id", type=int)
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
+
+    start_date = None
+    end_date = None
+    if start_date_str:
+        try:
+            start_date = datetime.date.fromisoformat(start_date_str)
+        except ValueError:
+            flash("Invalid start date.", "error")
+            return redirect(url_for("purchase.view_purchase_invoices"))
+    if end_date_str:
+        try:
+            end_date = datetime.date.fromisoformat(end_date_str)
+        except ValueError:
+            flash("Invalid end date.", "error")
+            return redirect(url_for("purchase.view_purchase_invoices"))
+    if start_date and end_date and start_date > end_date:
+        flash("Invalid date range: start cannot be after end.", "error")
+        return redirect(url_for("purchase.view_purchase_invoices"))
+
+    query = PurchaseInvoice.query
+    if invoice_id:
+        query = query.filter(PurchaseInvoice.id == invoice_id)
+    if po_number:
+        query = query.filter(PurchaseInvoice.purchase_order_id == po_number)
+    if vendor_id:
+        query = query.join(PurchaseOrder).filter(PurchaseOrder.vendor_id == vendor_id)
+    if location_id:
+        query = query.filter(PurchaseInvoice.location_id == location_id)
+    if start_date:
+        query = query.filter(PurchaseInvoice.received_date >= start_date)
+    if end_date:
+        query = query.filter(PurchaseInvoice.received_date <= end_date)
+
+    invoices = query.order_by(
         PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc()
     ).paginate(page=page, per_page=20)
+
+    vendors = Vendor.query.order_by(Vendor.first_name, Vendor.last_name).all()
+    locations = Location.query.order_by(Location.name).all()
+    active_vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
+    active_location = db.session.get(Location, location_id) if location_id else None
+
     return render_template(
-        "purchase_invoices/view_purchase_invoices.html", invoices=invoices
+        "purchase_invoices/view_purchase_invoices.html",
+        invoices=invoices,
+        vendors=vendors,
+        locations=locations,
+        invoice_id=invoice_id,
+        po_number=po_number,
+        vendor_id=vendor_id,
+        location_id=location_id,
+        start_date=start_date_str,
+        end_date=end_date_str,
+        active_vendor=active_vendor,
+        active_location=active_location,
     )
 
 
