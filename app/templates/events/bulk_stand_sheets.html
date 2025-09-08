@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>{{ event.name }} - Stand Sheets</h2>
 <style>
 @media print {
   @page {
@@ -12,8 +11,7 @@
   .navbar-nav,
   .navbar-toggler,
   .offcanvas,
-  .alert,
-  h2 {
+  .alert {
     display: none !important;
   }
 
@@ -44,8 +42,6 @@
 </style>
 {% for entry in data %}
 <div class="standsheet-page">
-    <h3>{{ entry.location.name }}</h3>
-    <img src="data:image/png;base64,{{ entry.qr }}" alt="QR Code" class="mb-2"/>
     <div class="mb-3">
         <div>Location: {{ entry.location.name }}</div>
         <div>Event: {{ event.name }}</div>

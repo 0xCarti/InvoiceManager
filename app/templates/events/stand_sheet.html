@@ -2,14 +2,6 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h2>Stand Sheet - {{ location.name }}</h2>
-    <form action="{{ url_for('event.scan_stand_sheet') }}" method="post" enctype="multipart/form-data" class="mb-3">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-        <div class="input-group">
-            <input type="file" class="form-control" name="file" required>
-            <button class="btn btn-secondary" type="submit">Upload Scanned Sheet</button>
-        </div>
-    </form>
     <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div class="mb-3">
