@@ -1,4 +1,4 @@
-name: Build and Push Dev Image
+name: Build Dev
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push image
+      - name: Build Dev
         uses: docker/build-push-action@v5
         with:
           context: .
