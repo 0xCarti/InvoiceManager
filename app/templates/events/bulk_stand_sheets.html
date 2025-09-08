@@ -3,8 +3,43 @@
 <h2>{{ event.name }} - Stand Sheets</h2>
 <style>
 @media print {
-  .standsheet-page { page-break-after: always; }
-  .standsheet-page:last-child { page-break-after: auto; }
+  @page {
+    size: landscape;
+  }
+
+  nav,
+  .navbar,
+  .navbar-nav,
+  .navbar-toggler,
+  .offcanvas,
+  .alert,
+  h2 {
+    display: none !important;
+  }
+
+  body,
+  .container {
+    margin: 0;
+    padding: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .table-responsive {
+    overflow: visible !important;
+  }
+
+  table {
+    width: 100% !important;
+  }
+
+  .standsheet-page {
+    page-break-after: always;
+  }
+
+  .standsheet-page:last-child {
+    page-break-after: auto;
+  }
 }
 </style>
 {% for entry in data %}
