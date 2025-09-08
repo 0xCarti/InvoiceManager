@@ -73,13 +73,21 @@ Set `PORT` in your environment to change the port (default `5000`).
 
 The application uses a local SQLite database located at `inventory.db` and creates `uploads` and `backups` directories automatically on startup.
 
+For production deployments using Gunicorn, use the provided configuration to enable WebSocket support and prevent worker timeouts:
+
+```bash
+gunicorn -c gunicorn.conf.py run:app
+```
+
 ## Docker Setup
 
 The project includes a `Dockerfile` and a `docker-compose.yml` to make running
-the application in a container straightforward on Linux and Windows. Create a
-`.env` file containing the environment variables described above. You can also
-specify the port the app will use by adding a `PORT` variable to `.env` (or by
-exporting it in your shell) before starting the service:
+the application in a container straightforward on Linux and Windows. The image
+starts Gunicorn using the included `gunicorn.conf.py`, so no additional commands
+are required. Create a `.env` file containing the environment variables
+described above. You can also specify the port the app will use by adding a
+`PORT` variable to `.env` (or by exporting it in your shell) before starting the
+service:
 
 ```bash
 docker compose up --build

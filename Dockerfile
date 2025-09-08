@@ -30,4 +30,4 @@ EXPOSE ${PORT}
 USER app
 
 ENTRYPOINT ["./entrypoint.sh"]
-CMD ["gunicorn", "--worker-class", "eventlet", "run:app"]
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "run:app"]
