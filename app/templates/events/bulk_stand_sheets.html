@@ -46,6 +46,11 @@
 <div class="standsheet-page">
     <h3>{{ entry.location.name }}</h3>
     <img src="data:image/png;base64,{{ entry.qr }}" alt="QR Code" class="mb-2"/>
+    <div class="mb-3">
+        <div>Location: {{ entry.location.name }}</div>
+        <div>Event: {{ event.name }}</div>
+        <div>Event Date/Time: {{ event.start_date }}</div>
+    </div>
     <div class="table-responsive">
     <table class="table table-bordered">
         <thead>
