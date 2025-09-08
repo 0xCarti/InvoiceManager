@@ -1,12 +1,9 @@
 {% extends 'base.html' %}
 {% block content %}
-<style id="orientation-style">
+<style>
 @page {
-  size: letter portrait;
   margin: 0.5in;
 }
-</style>
-<style>
 body {
   font-family: system-ui, sans-serif;
   font-size: 12px;
@@ -45,6 +42,7 @@ body {
 .table table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 .table th,
 .table td {
@@ -54,7 +52,6 @@ body {
 .table th:first-child,
 .table td:first-child {
   text-align: left;
-  width: 35%;
 }
 .table th:not(:first-child),
 .table td:not(:first-child) {
@@ -106,13 +103,6 @@ body {
   .no-print { display: none; }
 }
 </style>
-<div class="no-print" style="margin-bottom:10px;">
-  <label for="orientation">Orientation:</label>
-  <select id="orientation">
-    <option value="portrait">Portrait</option>
-    <option value="landscape">Landscape</option>
-  </select>
-</div>
 {% for entry in data %}
 <section class="report standsheet-page">
   <div class="header">
@@ -127,6 +117,19 @@ body {
   </div>
   <div class="table">
     <table>
+      <colgroup>
+        <col style="width:35%">
+        <col style="width:7%">
+        <col style="width:7%">
+        <col style="width:5%">
+        <col style="width:5%">
+        <col style="width:7%">
+        <col style="width:7%">
+        <col style="width:7%">
+        <col style="width:7%">
+        <col style="width:6%">
+        <col style="width:7%">
+      </colgroup>
       <thead>
         <tr>
           <th rowspan="2">Stock Item (Base Unit)</th>
@@ -199,10 +202,4 @@ body {
   <div>1 of 1</div>
   <div></div>
 </footer>
-<script>
-  document.getElementById('orientation').addEventListener('change', function(){
-    var styleTag = document.getElementById('orientation-style');
-    styleTag.innerHTML = '@page { size: letter ' + this.value + '; margin: 0.5in; }';
-  });
-</script>
 {% endblock %}
