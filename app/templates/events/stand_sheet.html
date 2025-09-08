@@ -12,6 +12,11 @@
     </form>
     <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="mb-3">
+            <div>Location: {{ location.name }}</div>
+            <div>Event: {{ event.name }}</div>
+            <div>Event Date/Time: {{ event.start_date }}</div>
+        </div>
     <div class="table-responsive">
     <table class="table table-bordered">
         <thead>
