@@ -6,6 +6,9 @@
 <a class="btn btn-secondary" href="{{ url_for('event.add_location', event_id=event.id) }}">Add Location</a>
 {% endif %}
 <a class="btn btn-secondary" href="{{ url_for('event.bulk_stand_sheets', event_id=event.id) }}">Stand Sheets</a>
+{% if not event.closed %}
+<a class="btn btn-secondary" href="{{ url_for('event.scan_stand_sheet') }}">Upload Stand Sheets</a>
+{% endif %}
 {% if event.event_type == 'inventory' %}
 <a class="btn btn-secondary" href="{{ url_for('event.bulk_count_sheets', event_id=event.id) }}">Count Sheets</a>
 {% endif %}
@@ -20,7 +23,6 @@
             <a href="{{ url_for('event.stand_sheet', event_id=event.id, location_id=el.location_id) }}">Stand Sheet</a>
             {% if event.event_type == 'inventory' %}| <a href="{{ url_for('event.count_sheet', event_id=event.id, location_id=el.location_id) }}">Count Sheet</a>{% endif %} |
             <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Enter Sales</a> |
-            <a href="{{ url_for('event.scan_stand_sheet') }}">Upload Stand Sheet</a> |
             <a href="{{ url_for('event.confirm_location', event_id=event.id, el_id=el.id) }}">Confirm</a>
         {% else %}
             Stand Sheet | Terminal Sales
