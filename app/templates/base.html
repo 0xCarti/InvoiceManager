@@ -12,6 +12,23 @@
     <script src="{{ url_for('static', filename='js/jquery-3.5.1.min.js') }}"></script>
     <style>
         @media print {
+            nav,
+            .navbar,
+            .navbar-nav,
+            .navbar-toggler,
+            .offcanvas,
+            .alert {
+                display: none !important;
+            }
+
+            body,
+            .container {
+                margin: 0;
+                padding: 0;
+                max-width: 100%;
+                width: 100%;
+            }
+
             .row {
                 display: flex !important;
                 flex-wrap: nowrap !important;
@@ -22,9 +39,14 @@
                 max-width: 50% !important;
             }
 
+            .table-responsive {
+                overflow: visible !important;
+            }
+
             table.table-bordered {
                 border: 1px solid #000 !important;
                 border-collapse: collapse !important;
+                width: 100% !important;
             }
 
             table.table-bordered th,
