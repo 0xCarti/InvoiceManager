@@ -129,12 +129,12 @@ def test_scan_stand_sheet(client, app, monkeypatch):
         resp = client.get(review_url)
         assert resp.status_code == 200
         form_data = {
-            f"open_{item_id}": 8,
-            f"in_{item_id}": 2,
-            f"out_{item_id}": 1,
-            f"eaten_{item_id}": 0,
-            f"spoiled_{item_id}": 0,
-            f"close_{item_id}": 4,
+            f"open_{eid}_{loc_id}_{item_id}": 8,
+            f"in_{eid}_{loc_id}_{item_id}": 2,
+            f"out_{eid}_{loc_id}_{item_id}": 1,
+            f"eaten_{eid}_{loc_id}_{item_id}": 0,
+            f"spoiled_{eid}_{loc_id}_{item_id}": 0,
+            f"close_{eid}_{loc_id}_{item_id}": 4,
         }
         resp = client.post(review_url, data=form_data, follow_redirects=True)
         assert resp.status_code == 200

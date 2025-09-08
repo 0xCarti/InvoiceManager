@@ -3,11 +3,12 @@
 <div class="container mt-4">
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    {% for sheet in sheets %}
     <div class="mb-3">
-      <div>Location: {{ location.name }}</div>
-      <div>Event: {{ event.name }}</div>
+      <div>Location: {{ sheet.location.name }}</div>
+      <div>Event: {{ sheet.event.name }}</div>
     </div>
-    <div class="table-responsive">
+    <div class="table-responsive mb-4">
       <table class="table table-bordered">
         <thead>
           <tr>
@@ -21,43 +22,43 @@
           </tr>
         </thead>
         <tbody>
-          {% for entry in stand_items %}
-          {% set scan = scanned.get(entry.item.id|string) %}
+          {% for entry in sheet.stand_items %}
+          {% set scan = sheet.scanned.get(entry.item.id|string) %}
           <tr>
             <td>{{ entry.item.name }}</td>
             <td>
               <div class="d-flex align-items-center">
-                <input type="number" class="form-control {% if scan and scan.flags.opening_count %}low-confidence{% endif %}" name="open_{{ entry.item.id }}" value="{{ scan.opening_count if scan else '' }}">
+                <input type="number" class="form-control {% if scan and scan.flags.opening_count %}low-confidence{% endif %}" name="open_{{ sheet.prefix }}_{{ entry.item.id }}" value="{{ scan.opening_count if scan else '' }}">
                 {% if scan and scan.flags.opening_count %}<span class="ms-1 text-warning">&#9888;</span>{% endif %}
               </div>
             </td>
             <td>
               <div class="d-flex align-items-center">
-                <input type="number" class="form-control {% if scan and scan.flags.transferred_in %}low-confidence{% endif %}" name="in_{{ entry.item.id }}" value="{{ scan.transferred_in if scan else '' }}">
+                <input type="number" class="form-control {% if scan and scan.flags.transferred_in %}low-confidence{% endif %}" name="in_{{ sheet.prefix }}_{{ entry.item.id }}" value="{{ scan.transferred_in if scan else '' }}">
                 {% if scan and scan.flags.transferred_in %}<span class="ms-1 text-warning">&#9888;</span>{% endif %}
               </div>
             </td>
             <td>
               <div class="d-flex align-items-center">
-                <input type="number" class="form-control {% if scan and scan.flags.transferred_out %}low-confidence{% endif %}" name="out_{{ entry.item.id }}" value="{{ scan.transferred_out if scan else '' }}">
+                <input type="number" class="form-control {% if scan and scan.flags.transferred_out %}low-confidence{% endif %}" name="out_{{ sheet.prefix }}_{{ entry.item.id }}" value="{{ scan.transferred_out if scan else '' }}">
                 {% if scan and scan.flags.transferred_out %}<span class="ms-1 text-warning">&#9888;</span>{% endif %}
               </div>
             </td>
             <td>
               <div class="d-flex align-items-center">
-                <input type="number" class="form-control {% if scan and scan.flags.eaten %}low-confidence{% endif %}" name="eaten_{{ entry.item.id }}" value="{{ scan.eaten if scan else '' }}">
+                <input type="number" class="form-control {% if scan and scan.flags.eaten %}low-confidence{% endif %}" name="eaten_{{ sheet.prefix }}_{{ entry.item.id }}" value="{{ scan.eaten if scan else '' }}">
                 {% if scan and scan.flags.eaten %}<span class="ms-1 text-warning">&#9888;</span>{% endif %}
               </div>
             </td>
             <td>
               <div class="d-flex align-items-center">
-                <input type="number" class="form-control {% if scan and scan.flags.spoiled %}low-confidence{% endif %}" name="spoiled_{{ entry.item.id }}" value="{{ scan.spoiled if scan else '' }}">
+                <input type="number" class="form-control {% if scan and scan.flags.spoiled %}low-confidence{% endif %}" name="spoiled_{{ sheet.prefix }}_{{ entry.item.id }}" value="{{ scan.spoiled if scan else '' }}">
                 {% if scan and scan.flags.spoiled %}<span class="ms-1 text-warning">&#9888;</span>{% endif %}
               </div>
             </td>
             <td>
               <div class="d-flex align-items-center">
-                <input type="number" class="form-control {% if scan and scan.flags.closing_count %}low-confidence{% endif %}" name="close_{{ entry.item.id }}" value="{{ scan.closing_count if scan else '' }}">
+                <input type="number" class="form-control {% if scan and scan.flags.closing_count %}low-confidence{% endif %}" name="close_{{ sheet.prefix }}_{{ entry.item.id }}" value="{{ scan.closing_count if scan else '' }}">
                 {% if scan and scan.flags.closing_count %}<span class="ms-1 text-warning">&#9888;</span>{% endif %}
               </div>
             </td>
@@ -66,6 +67,7 @@
         </tbody>
       </table>
     </div>
+    {% endfor %}
     <button type="submit" class="btn btn-primary">Confirm</button>
   </form>
 </div>
