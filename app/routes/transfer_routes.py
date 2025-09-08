@@ -45,7 +45,9 @@ def check_negative_transfer(transfer_obj, multiplier=1):
         for ti in transfer_obj.transfer_items
     }
     records = LocationStandItem.query.filter(
-        tuple_(LocationStandItem.location_id, LocationStandItem.item_id).in_(pairs)
+        tuple_(LocationStandItem.location_id, LocationStandItem.item_id).in_(
+            pairs
+        )
     ).all()
     indexed = {(r.location_id, r.item_id): r for r in records}
 
@@ -92,7 +94,9 @@ def update_expected_counts(transfer_obj, multiplier=1):
         for ti in transfer_obj.transfer_items
     }
     records = LocationStandItem.query.filter(
-        tuple_(LocationStandItem.location_id, LocationStandItem.item_id).in_(pairs)
+        tuple_(LocationStandItem.location_id, LocationStandItem.item_id).in_(
+            pairs
+        )
     ).all()
     indexed = {(r.location_id, r.item_id): r for r in records}
 
@@ -106,11 +110,15 @@ def update_expected_counts(transfer_obj, multiplier=1):
                 location_id=transfer_obj.from_location_id,
                 item_id=ti.item_id,
                 expected_count=0,
-                purchase_gl_code_id=item_obj.purchase_gl_code_id if item_obj else None,
+                purchase_gl_code_id=(
+                    item_obj.purchase_gl_code_id if item_obj else None
+                ),
             )
             db.session.add(from_record)
             indexed[from_key] = from_record
-        from_record.expected_count = from_record.expected_count - multiplier * ti.quantity
+        from_record.expected_count = (
+            from_record.expected_count - multiplier * ti.quantity
+        )
 
         to_key = (transfer_obj.to_location_id, ti.item_id)
         to_record = indexed.get(to_key)
@@ -119,11 +127,15 @@ def update_expected_counts(transfer_obj, multiplier=1):
                 location_id=transfer_obj.to_location_id,
                 item_id=ti.item_id,
                 expected_count=0,
-                purchase_gl_code_id=item_obj.purchase_gl_code_id if item_obj else None,
+                purchase_gl_code_id=(
+                    item_obj.purchase_gl_code_id if item_obj else None
+                ),
             )
             db.session.add(to_record)
             indexed[to_key] = to_record
-        to_record.expected_count = to_record.expected_count + multiplier * ti.quantity
+        to_record.expected_count = (
+            to_record.expected_count + multiplier * ti.quantity
+        )
 
 
 @transfer.route("/transfers", methods=["GET"])
@@ -251,16 +263,26 @@ def ajax_add_transfer():
             from_location_id=form.from_location_id.data,
             to_location_id=form.to_location_id.data,
             user_id=current_user.id,
-            from_location_name=db.session.get(Location, form.from_location_id.data).name,
-            to_location_name=db.session.get(Location, form.to_location_id.data).name,
+            from_location_name=db.session.get(
+                Location, form.from_location_id.data
+            ).name,
+            to_location_name=db.session.get(
+                Location, form.to_location_id.data
+            ).name,
         )
         db.session.add(transfer)
-        items = [key for key in request.form.keys() if key.startswith("items-") and key.endswith("-item")]
+        items = [
+            key
+            for key in request.form.keys()
+            if key.startswith("add-items-") and key.endswith("-item")
+        ]
         for item_field in items:
-            index = item_field.split("-")[1]
-            item_id = request.form.get(f"items-{index}-item")
-            quantity = request.form.get(f"items-{index}-quantity", type=float)
-            unit_id = request.form.get(f"items-{index}-unit", type=int)
+            index = item_field.split("-")[2]
+            item_id = request.form.get(f"add-items-{index}-item")
+            quantity = request.form.get(
+                f"add-items-{index}-quantity", type=float
+            )
+            unit_id = request.form.get(f"add-items-{index}-unit", type=int)
             if item_id:
                 item = db.session.get(Item, item_id)
                 if item and quantity is not None:
@@ -283,11 +305,15 @@ def ajax_add_transfer():
             notify_users = User.query.filter_by(notify_transfers=True).all()
             for user in notify_users:
                 if user.phone_number:
-                    send_sms(user.phone_number, f"Transfer {transfer.id} created")
+                    send_sms(
+                        user.phone_number, f"Transfer {transfer.id} created"
+                    )
         except Exception:
             pass
         row_html = render_template(
-            "transfers/_transfer_row.html", transfer=transfer, form=TransferForm()
+            "transfers/_transfer_row.html",
+            transfer=transfer,
+            form=TransferForm(),
         )
         return jsonify(success=True, html=row_html)
     return jsonify(success=False, errors=form.errors), 400
@@ -396,10 +422,18 @@ def ajax_edit_transfer(transfer_id):
     if form.validate_on_submit():
         transfer.from_location_id = form.from_location_id.data
         transfer.to_location_id = form.to_location_id.data
-        transfer.from_location_name = db.session.get(Location, form.from_location_id.data).name
-        transfer.to_location_name = db.session.get(Location, form.to_location_id.data).name
+        transfer.from_location_name = db.session.get(
+            Location, form.from_location_id.data
+        ).name
+        transfer.to_location_name = db.session.get(
+            Location, form.to_location_id.data
+        ).name
         TransferItem.query.filter_by(transfer_id=transfer.id).delete()
-        items = [key for key in request.form.keys() if key.startswith("items-") and key.endswith("-item")]
+        items = [
+            key
+            for key in request.form.keys()
+            if key.startswith("items-") and key.endswith("-item")
+        ]
         for item_field in items:
             index = item_field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item")
@@ -421,7 +455,9 @@ def ajax_edit_transfer(transfer_id):
         db.session.commit()
         log_activity(f"Edited transfer {transfer.id}")
         row_html = render_template(
-            "transfers/_transfer_row.html", transfer=transfer, form=TransferForm()
+            "transfers/_transfer_row.html",
+            transfer=transfer,
+            form=TransferForm(),
         )
         return jsonify(success=True, html=row_html, id=transfer.id)
     return jsonify(success=False, errors=form.errors), 400

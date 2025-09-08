@@ -213,9 +213,9 @@
             listItem.innerHTML = `
                 <div style="padding-left: 15px; font-weight: bold;">${name}</div>
                 <div class="d-flex align-items-center">
-                    <input type="hidden" name="items-${addItemIndex}-item" value="${id}">
-                    <select name="items-${addItemIndex}-unit" class="form-control me-2" style="max-width: 160px;">${options}</select>
-                    <input type="number" step="any" class="form-control quantity" name="items-${addItemIndex}-quantity" placeholder="Qty" style="max-width: 120px;" data-base-qty="0">
+                    <input type="hidden" name="add-items-${addItemIndex}-item" value="${id}">
+                    <select name="add-items-${addItemIndex}-unit" class="form-control me-2" style="max-width: 160px;">${options}</select>
+                    <input type="number" step="any" class="form-control quantity" name="add-items-${addItemIndex}-quantity" placeholder="Qty" style="max-width: 120px;" data-base-qty="0">
                     <button type="button" class="btn btn-danger delete-item ms-2">Delete</button>
                 </div>`;
             const qtyInput = listItem.querySelector('.quantity');
