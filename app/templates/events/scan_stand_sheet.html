@@ -5,7 +5,7 @@
   <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <div class="mb-3">
-      <input type="file" class="form-control" name="file" required>
+      <input type="file" class="form-control" name="file" accept="application/pdf,image/*" required>
     </div>
     <button type="submit" class="btn btn-primary">Upload</button>
   </form>

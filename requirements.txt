@@ -24,3 +24,4 @@ twilio==9.0.0
 pytesseract==0.3.10
 opencv-python-headless==4.10.0.84
 qrcode==7.4.2
+pdf2image==1.17.0  # requires Poppler
