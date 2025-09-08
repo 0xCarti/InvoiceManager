@@ -111,7 +111,7 @@ body {
   <div class="meta">
     <div>Location: {{ entry.location.name }}</div>
     <div>Event: {{ event.name }}</div>
-    <div>Event Date/Time: {{ event.start_date.strftime('%-m/%-d/%Y %-I:%M %p') }}</div>
+    <div>Event Date/Time: {{ event.start_date|format_datetime('%-m/%-d/%Y %-I:%M %p') }}</div>
   </div>
   <div class="table">
     <table>

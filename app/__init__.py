@@ -1,5 +1,6 @@
 import os
-from datetime import datetime, timedelta
+import sys
+from datetime import datetime, timedelta, date
 from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
@@ -152,8 +153,13 @@ def create_app(args: list):
             tz = ZoneInfo(tz_name)
         except Exception:
             tz = ZoneInfo("UTC")
-        if value.tzinfo is None:
+        if isinstance(value, date) and not isinstance(value, datetime):
+            value = datetime.combine(value, datetime.min.time())
             value = value.replace(tzinfo=dt_timezone.utc)
+        elif value.tzinfo is None:
+            value = value.replace(tzinfo=dt_timezone.utc)
+        if sys.platform.startswith("win"):
+            fmt = fmt.replace("%-", "%#")
         return value.astimezone(tz).strftime(fmt)
 
     app.jinja_env.filters["format_datetime"] = format_datetime
