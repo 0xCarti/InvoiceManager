@@ -89,6 +89,7 @@ def test_location_flow(client, app):
         assert resp.status_code == 200
         resp = client.get(f"/locations/{lid}/stand_sheet")
         assert resp.status_code == 200
+        assert b"Location: Kitchen" in resp.data
         # edit to add second product triggers stand item creation
         resp = client.post(
             f"/locations/edit/{lid}",
