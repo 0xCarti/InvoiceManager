@@ -1,10 +1,12 @@
 {% extends 'base.html' %}
 {% block content %}
-<style>
+<style id="orientation-style">
 @page {
   size: letter portrait;
   margin: 0.5in;
 }
+</style>
+<style>
 body {
   font-family: system-ui, sans-serif;
   font-size: 12px;
@@ -100,7 +102,17 @@ body {
 .standsheet-page:last-child {
   page-break-after: auto;
 }
+@media print {
+  .no-print { display: none; }
+}
 </style>
+<div class="no-print" style="margin-bottom:10px;">
+  <label for="orientation">Orientation:</label>
+  <select id="orientation">
+    <option value="portrait">Portrait</option>
+    <option value="landscape">Landscape</option>
+  </select>
+</div>
 {% for entry in data %}
 <section class="report standsheet-page">
   <div class="header">
@@ -118,8 +130,6 @@ body {
       <thead>
         <tr>
           <th rowspan="2">Stock Item (Base Unit)</th>
-          <th rowspan="2">Prior Event Close</th>
-          <th colspan="2">Pre-Event Transfers</th>
           <th rowspan="2">Expected Opening Count</th>
           <th rowspan="2">Opening Count</th>
           <th colspan="2">Event Transfers</th>
@@ -128,11 +138,9 @@ body {
           <th rowspan="2">Closing Count</th>
           <th rowspan="2">Units Sold</th>
           <th rowspan="2">Price</th>
-          <th rowspan="2">Extension</th>
+          <th rowspan="2">Variance</th>
         </tr>
         <tr>
-          <th>In</th>
-          <th>Out</th>
           <th>In</th>
           <th>Out</th>
         </tr>
@@ -150,12 +158,9 @@ body {
           {% endif %}
         {% endfor %}
         {% set expected_open = s.expected %}
-        {% set extension = (price.value or 0) * s.sales %}
+        {% set variance = (s.sheet.closing_count if s.sheet else 0) - expected_open %}
         <tr>
           <td>{{ s.item.name }} ({{ s.item.base_unit }})</td>
-          <td>{{ s.expected }}</td>
-          <td></td>
-          <td></td>
           <td>{{ expected_open }}</td>
           <td>{{ s.sheet.opening_count if s.sheet else '' }}</td>
           <td>{{ s.sheet.transferred_in if s.sheet else '' }}</td>
@@ -163,9 +168,9 @@ body {
           <td>{{ s.sheet.eaten if s.sheet else '' }}</td>
           <td>{{ s.sheet.spoiled if s.sheet else '' }}</td>
           <td>{{ s.sheet.closing_count if s.sheet else '' }}</td>
-          <td>{{ s.sales }}</td>
+          <td></td>
           <td>{% if price.value is not none %}${{ '%.2f'|format(price.value) }}{% endif %}</td>
-          <td>{% if price.value is not none and s.sales %}${{ '%.2f'|format(extension) }}{% endif %}</td>
+          <td>{% if s.sheet %}{{ '%.2f'|format(variance) }}{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -194,4 +199,10 @@ body {
   <div>1 of 1</div>
   <div></div>
 </footer>
+<script>
+  document.getElementById('orientation').addEventListener('change', function(){
+    var styleTag = document.getElementById('orientation-style');
+    styleTag.innerHTML = '@page { size: letter ' + this.value + '; margin: 0.5in; }';
+  });
+</script>
 {% endblock %}
