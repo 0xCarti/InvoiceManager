@@ -73,20 +73,57 @@ def check_negative_invoice_reverse(invoice_obj):
 @purchase.route("/purchase_orders", methods=["GET"])
 @login_required
 def view_purchase_orders():
-    """Show outstanding purchase orders."""
+    """Show purchase orders with optional filters."""
     delete_form = DeleteForm()
     page = request.args.get("page", 1, type=int)
-    orders = (
-        PurchaseOrder.query.filter_by(received=False)
-        .order_by(PurchaseOrder.order_date.desc())
-        .paginate(page=page, per_page=20)
+    vendor_id = request.args.get("vendor_id", type=int)
+    status = request.args.get("status", "pending")
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
+
+    start_date = (
+        datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        if start_date_str
+        else None
     )
+    end_date = (
+        datetime.datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        if end_date_str
+        else None
+    )
+
+    query = PurchaseOrder.query
+
+    if status == "pending":
+        query = query.filter_by(received=False)
+    elif status == "completed":
+        query = query.filter_by(received=True)
+
+    if vendor_id:
+        query = query.filter(PurchaseOrder.vendor_id == vendor_id)
+    if start_date:
+        query = query.filter(PurchaseOrder.order_date >= start_date)
+    if end_date:
+        query = query.filter(PurchaseOrder.order_date <= end_date)
+
+    orders = (
+        query.order_by(PurchaseOrder.order_date.desc()).paginate(
+            page=page, per_page=20
+        )
+    )
+
     vendors = Vendor.query.filter_by(archived=False).all()
+    selected_vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
     return render_template(
         "purchase_orders/view_purchase_orders.html",
         orders=orders,
         delete_form=delete_form,
         vendors=vendors,
+        vendor_id=vendor_id,
+        start_date=start_date_str,
+        end_date=end_date_str,
+        status=status,
+        selected_vendor=selected_vendor,
     )
 
 
