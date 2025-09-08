@@ -1,6 +1,7 @@
 import os
 import re
 import tempfile
+from datetime import datetime
 
 import pytesseract
 from flask import (
@@ -583,8 +584,12 @@ def bulk_stand_sheets(event_id):
         loc, items = _get_stand_items(el.location_id, event_id)
         qr = generate_qr_code({"event_id": event_id, "location_id": loc.id})
         data.append({"location": loc, "stand_items": items, "qr": qr})
+    generated_at_local = datetime.now().strftime("%-m/%-d/%Y %-I:%M %p")
     return render_template(
-        "events/bulk_stand_sheets.html", event=ev, data=data
+        "events/bulk_stand_sheets.html",
+        event=ev,
+        data=data,
+        generated_at_local=generated_at_local,
     )
 
 
