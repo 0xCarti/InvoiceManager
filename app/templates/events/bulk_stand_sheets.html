@@ -28,8 +28,18 @@ body {
   font-size: 22px;
   font-weight: bold;
 }
-.header .date {
+.header .date-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.header .date-qr .date {
   font-size: 11px;
+}
+.header .date-qr img {
+  width: 60px;
+  height: 60px;
+  margin-top: 4px;
 }
 .meta {
   display: flex;
@@ -46,16 +56,20 @@ body {
 }
 .table th,
 .table td {
-  border: 1px solid #999;
+  border: 1px solid #000;
   padding: 2px 4px;
 }
-.table th:first-child,
+.table th {
+  text-align: center;
+}
 .table td:first-child {
   text-align: left;
 }
-.table th:not(:first-child),
 .table td:not(:first-child) {
   text-align: right;
+}
+.table .border-right {
+  border-right: 1px solid #000;
 }
 .table tbody tr:nth-child(even) {
   background: #fafafa;
@@ -108,7 +122,10 @@ body {
   <div class="header">
     <div class="logo"></div>
     <div class="title">Opening Standsheet</div>
-    <div class="date">{{ generated_at_local }}</div>
+    <div class="date-qr">
+      <div class="date">{{ generated_at_local }}</div>
+      <img src="data:image/png;base64,{{ entry.qr }}" alt="Upload Stand Sheet QR"/>
+    </div>
   </div>
   <div class="meta">
     <div>Location: {{ entry.location.name }}</div>
@@ -135,16 +152,16 @@ body {
           <th rowspan="2">Stock Item (Base Unit)</th>
           <th rowspan="2">Expected Opening Count</th>
           <th rowspan="2">Opening Count</th>
-          <th colspan="2">Event Transfers</th>
+          <th colspan="2" class="border-right">Event Transfers</th>
           <th rowspan="2">Eaten</th>
-          <th rowspan="2">Spoilage</th>
+          <th rowspan="2" class="border-right">Spoilage</th>
           <th rowspan="2">Closing Count</th>
           <th rowspan="2">Units Sold</th>
           <th rowspan="2">Price</th>
           <th rowspan="2">Variance</th>
         </tr>
         <tr>
-          <th>In</th>
+          <th class="border-right">In</th>
           <th>Out</th>
         </tr>
       </thead>
@@ -166,10 +183,10 @@ body {
           <td>{{ s.item.name }} ({{ s.item.base_unit }})</td>
           <td>{{ expected_open }}</td>
           <td>{{ s.sheet.opening_count if s.sheet else '' }}</td>
-          <td>{{ s.sheet.transferred_in if s.sheet else '' }}</td>
+          <td class="border-right">{{ s.sheet.transferred_in if s.sheet else '' }}</td>
           <td>{{ s.sheet.transferred_out if s.sheet else '' }}</td>
           <td>{{ s.sheet.eaten if s.sheet else '' }}</td>
-          <td>{{ s.sheet.spoiled if s.sheet else '' }}</td>
+          <td class="border-right">{{ s.sheet.spoiled if s.sheet else '' }}</td>
           <td>{{ s.sheet.closing_count if s.sheet else '' }}</td>
           <td></td>
           <td>{% if price.value is not none %}${{ '%.2f'|format(price.value) }}{% endif %}</td>
