@@ -53,9 +53,12 @@
         row.querySelector('.variance').textContent = variance.toFixed(2);
     }
 
-    document.querySelectorAll('tbody tr').forEach(function(row){
-        row.querySelectorAll('input').forEach(function(inp){
-            inp.addEventListener('input', function(){ calcVariance(row); });
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('tbody tr').forEach(function(row){
+            row.querySelectorAll('input').forEach(function(inp){
+                inp.addEventListener('input', function(){ calcVariance(row); });
+            });
+            calcVariance(row);
         });
     });
 </script>
