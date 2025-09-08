@@ -22,7 +22,7 @@ PYTHON
 
 if [ "$1" = "gunicorn" ]; then
     shift
-    exec gunicorn --bind "0.0.0.0:${PORT}" "$@"
+    exec gunicorn "$@"
 fi
 
 exec "$@"
