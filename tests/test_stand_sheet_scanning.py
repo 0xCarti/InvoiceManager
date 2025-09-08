@@ -87,8 +87,34 @@ def test_scan_stand_sheet(client, app, monkeypatch):
     data = {"file": (buf, "sheet.pdf")}
 
     monkeypatch.setattr(
-        "pytesseract.image_to_string",
-        lambda *_args, **_kwargs: "ScanItem 10 8 2 1 0 0 5 4",
+        "app.routes.event_routes.convert_from_path", lambda *a, **k: [img]
+    )
+    dummy_data = {
+        "level": [1] * 9,
+        "page_num": [1] * 9,
+        "block_num": [1] * 9,
+        "par_num": [1] * 9,
+        "line_num": [1] * 9,
+        "word_num": list(range(1, 10)),
+        "left": [0] * 9,
+        "top": [0] * 9,
+        "width": [0] * 9,
+        "height": [0] * 9,
+        "conf": [95] * 9,
+        "text": [
+            "ScanItem",
+            "10",
+            "8",
+            "2",
+            "1",
+            "0",
+            "0",
+            "5",
+            "4",
+        ],
+    }
+    monkeypatch.setattr(
+        "pytesseract.image_to_data", lambda *_args, **_kwargs: dummy_data
     )
 
     with client:
@@ -97,8 +123,20 @@ def test_scan_stand_sheet(client, app, monkeypatch):
             "/events/scan_stand_sheet",
             data=data,
             content_type="multipart/form-data",
-            follow_redirects=True,
         )
+        assert resp.status_code == 302
+        review_url = resp.headers["Location"]
+        resp = client.get(review_url)
+        assert resp.status_code == 200
+        form_data = {
+            f"open_{item_id}": 8,
+            f"in_{item_id}": 2,
+            f"out_{item_id}": 1,
+            f"eaten_{item_id}": 0,
+            f"spoiled_{item_id}": 0,
+            f"close_{item_id}": 4,
+        }
+        resp = client.post(review_url, data=form_data, follow_redirects=True)
         assert resp.status_code == 200
 
     with app.app_context():
