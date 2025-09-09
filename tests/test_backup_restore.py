@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import date
 
 from werkzeug.security import generate_password_hash
@@ -177,3 +178,16 @@ def test_restore_backup_file_rejects_path_traversal(client, app):
         sess["_fresh"] = True
     resp = client.post("/controlpanel/backups/restore/../../etc/passwd")
     assert resp.status_code == 404
+
+
+def test_backup_retention(app):
+    with app.app_context():
+        backups_dir = app.config["BACKUP_FOLDER"]
+        for f in os.listdir(backups_dir):
+            os.remove(os.path.join(backups_dir, f))
+        app.config["MAX_BACKUPS"] = 2
+        for _ in range(3):
+            create_backup()
+            time.sleep(1)
+        files = sorted(os.listdir(backups_dir))
+        assert len(files) == 2

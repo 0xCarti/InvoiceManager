@@ -13,6 +13,24 @@
             {{ form.default_timezone.label }}
             {{ form.default_timezone(class='form-control') }}
         </div>
+        <div class="form-check form-switch mt-2">
+            {{ form.auto_backup_enabled(class='form-check-input') }}
+            {{ form.auto_backup_enabled.label(class='form-check-label') }}
+        </div>
+        <div class="row mt-2">
+            <div class="col">
+                {{ form.auto_backup_interval_value.label }}
+                {{ form.auto_backup_interval_value(class='form-control') }}
+            </div>
+            <div class="col">
+                {{ form.auto_backup_interval_unit.label }}
+                {{ form.auto_backup_interval_unit(class='form-control') }}
+            </div>
+        </div>
+        <div class="form-group mt-2">
+            {{ form.max_backups.label }}
+            {{ form.max_backups(class='form-control') }}
+        </div>
         {{ form.submit(class='btn btn-primary') }}
     </form>
 </div>

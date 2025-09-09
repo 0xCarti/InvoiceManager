@@ -49,7 +49,12 @@ from app.models import (
 )
 from app.utils import send_email
 from app.utils.activity import log_activity
-from app.utils.backup import create_backup, restore_backup
+from app.utils.backup import (
+    UNIT_SECONDS,
+    create_backup,
+    restore_backup,
+    start_auto_backup_thread,
+)
 from app.utils.imports import (
     _import_csv,
     _import_items,
@@ -535,7 +540,9 @@ def import_page():
     return render_template("admin/imports.html", forms=forms, labels=labels)
 
 
-@admin.route("/controlpanel/import/<string:data_type>/example", methods=["GET"])
+@admin.route(
+    "/controlpanel/import/<string:data_type>/example", methods=["GET"]
+)
 @login_required
 def download_example(data_type):
     """Download an example CSV file for the given data type."""
@@ -635,19 +642,74 @@ def settings():
     if tz_setting is None:
         tz_setting = Setting(name="DEFAULT_TIMEZONE", value="UTC")
         db.session.add(tz_setting)
+
+    auto_setting = Setting.query.filter_by(name="AUTO_BACKUP_ENABLED").first()
+    if auto_setting is None:
+        auto_setting = Setting(name="AUTO_BACKUP_ENABLED", value="0")
+        db.session.add(auto_setting)
+
+    interval_value_setting = Setting.query.filter_by(
+        name="AUTO_BACKUP_INTERVAL_VALUE"
+    ).first()
+    if interval_value_setting is None:
+        interval_value_setting = Setting(
+            name="AUTO_BACKUP_INTERVAL_VALUE", value="1"
+        )
+        db.session.add(interval_value_setting)
+
+    interval_unit_setting = Setting.query.filter_by(
+        name="AUTO_BACKUP_INTERVAL_UNIT"
+    ).first()
+    if interval_unit_setting is None:
+        interval_unit_setting = Setting(
+            name="AUTO_BACKUP_INTERVAL_UNIT", value="day"
+        )
+        db.session.add(interval_unit_setting)
+
+    max_backups_setting = Setting.query.filter_by(name="MAX_BACKUPS").first()
+    if max_backups_setting is None:
+        max_backups_setting = Setting(name="MAX_BACKUPS", value="5")
+        db.session.add(max_backups_setting)
+
     db.session.commit()
 
     form = SettingsForm(
-        gst_number=gst_setting.value, default_timezone=tz_setting.value
+        gst_number=gst_setting.value,
+        default_timezone=tz_setting.value,
+        auto_backup_enabled=auto_setting.value == "1",
+        auto_backup_interval_value=int(interval_value_setting.value),
+        auto_backup_interval_unit=interval_unit_setting.value,
+        max_backups=int(max_backups_setting.value),
     )
     if form.validate_on_submit():
         gst_setting.value = form.gst_number.data or ""
         tz_setting.value = form.default_timezone.data or "UTC"
+        auto_setting.value = "1" if form.auto_backup_enabled.data else "0"
+        interval_value_setting.value = str(
+            form.auto_backup_interval_value.data
+        )
+        interval_unit_setting.value = form.auto_backup_interval_unit.data
+        max_backups_setting.value = str(form.max_backups.data)
         db.session.commit()
         import app
 
         app.GST = gst_setting.value
         app.DEFAULT_TIMEZONE = tz_setting.value
+        current_app.config["AUTO_BACKUP_ENABLED"] = (
+            form.auto_backup_enabled.data
+        )
+        current_app.config["AUTO_BACKUP_INTERVAL_VALUE"] = (
+            form.auto_backup_interval_value.data
+        )
+        current_app.config["AUTO_BACKUP_INTERVAL_UNIT"] = (
+            form.auto_backup_interval_unit.data
+        )
+        current_app.config["MAX_BACKUPS"] = form.max_backups.data
+        current_app.config["AUTO_BACKUP_INTERVAL"] = (
+            form.auto_backup_interval_value.data
+            * UNIT_SECONDS[form.auto_backup_interval_unit.data]
+        )
+        start_auto_backup_thread(current_app)
         flash("Settings updated.", "success")
         return redirect(url_for("admin.settings"))
 
