@@ -2,6 +2,7 @@ from werkzeug.security import generate_password_hash
 
 from app import db
 from app.models import Item, ItemUnit, Product, ProductRecipeItem, User
+from tests.utils import login
 
 
 def setup_products(app):
@@ -63,6 +64,7 @@ def setup_products(app):
 
 def test_recipe_report_select_all(client, app):
     p1, p2 = setup_products(app)
+    login(client, "rep@example.com", "pass")
     resp = client.post(
         "/reports/product-recipes",
         data={"select_all": "y"},
@@ -80,6 +82,7 @@ def test_recipe_report_select_all(client, app):
 
 def test_recipe_report_specific_products(client, app):
     p1, p2 = setup_products(app)
+    login(client, "rep@example.com", "pass")
     resp = client.post(
         "/reports/product-recipes",
         data={"products": [str(p1)]},

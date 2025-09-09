@@ -1,4 +1,5 @@
 from flask import Blueprint, redirect, render_template, request, url_for
+from flask_login import login_required
 
 from app import db
 from app.forms import (
@@ -12,6 +13,7 @@ report = Blueprint("report", __name__)
 
 
 @report.route("/reports/vendor-invoices", methods=["GET", "POST"])
+@login_required
 def vendor_invoice_report():
     """Form to select vendor invoice report parameters."""
     form = VendorInvoiceReportForm()
@@ -33,6 +35,7 @@ def vendor_invoice_report():
 
 
 @report.route("/reports/vendor-invoices/results")
+@login_required
 def vendor_invoice_report_results():
     """Show vendor invoice report based on query parameters."""
     customer_ids = request.args.get("customer_ids")
@@ -90,6 +93,7 @@ def vendor_invoice_report_results():
 
 
 @report.route("/reports/product-sales", methods=["GET", "POST"])
+@login_required
 def product_sales_report():
     """Generate a report on product sales and profit."""
     form = ProductSalesReportForm()
@@ -140,6 +144,7 @@ def product_sales_report():
 
 
 @report.route("/reports/product-recipes", methods=["GET", "POST"])
+@login_required
 def product_recipe_report():
     """List products with their recipe items, price and cost."""
     search = request.args.get("search")
