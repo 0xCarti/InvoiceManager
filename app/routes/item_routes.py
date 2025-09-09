@@ -17,12 +17,20 @@ from app import db
 from app.forms import ImportItemsForm, ItemForm
 from app.models import (
     GLCode,
+    Invoice,
+    InvoiceProduct,
     Item,
     ItemUnit,
     LocationStandItem,
-    Vendor,
+    Product,
+    ProductRecipeItem,
+    PurchaseInvoice,
+    PurchaseInvoiceItem,
     PurchaseOrder,
     PurchaseOrderItem,
+    Transfer,
+    TransferItem,
+    Vendor,
 )
 from app.utils.activity import log_activity
 
@@ -127,6 +135,48 @@ def view_items():
         vendors=vendors,
         vendor_ids=vendor_ids,
         active_vendors=active_vendors,
+    )
+
+
+@item.route("/items/<int:item_id>")
+@login_required
+def view_item(item_id):
+    """Display details for a single item."""
+    item_obj = db.session.get(Item, item_id)
+    if item_obj is None:
+        abort(404)
+    purchase_items = (
+        PurchaseInvoiceItem.query
+        .join(PurchaseInvoice)
+        .filter(PurchaseInvoiceItem.item_id == item_id)
+        .order_by(PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc())
+        .limit(5)
+        .all()
+    )
+    sales_items = (
+        InvoiceProduct.query
+        .join(Invoice, InvoiceProduct.invoice_id == Invoice.id)
+        .join(Product, InvoiceProduct.product_id == Product.id, isouter=True)
+        .join(ProductRecipeItem, ProductRecipeItem.product_id == Product.id)
+        .filter(ProductRecipeItem.item_id == item_id)
+        .order_by(Invoice.date_created.desc(), Invoice.id.desc())
+        .limit(5)
+        .all()
+    )
+    transfer_items = (
+        TransferItem.query
+        .join(Transfer)
+        .filter(TransferItem.item_id == item_id)
+        .order_by(Transfer.date_created.desc(), Transfer.id.desc())
+        .limit(5)
+        .all()
+    )
+    return render_template(
+        "items/view_item.html",
+        item=item_obj,
+        purchase_items=purchase_items,
+        sales_items=sales_items,
+        transfer_items=transfer_items,
     )
 
 
