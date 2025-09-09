@@ -19,7 +19,7 @@
         {% if item %}
         <div class="form-group">
             <label class="form-label">Cost</label>
-            <input type="text" class="form-control" value="{{ item.cost }}" readonly>
+            <input type="text" class="form-control" value="{{ '%.6f'|format(item.cost) }}" readonly>
         </div>
         {% endif %}
         <h4>Units</h4>
