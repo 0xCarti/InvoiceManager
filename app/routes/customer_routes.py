@@ -14,6 +14,7 @@ from app import db
 from app.forms import CustomerForm, DeleteForm
 from app.models import Customer
 from app.utils.activity import log_activity
+from sqlalchemy import func
 
 customer = Blueprint("customer", __name__)
 
@@ -23,9 +24,32 @@ customer = Blueprint("customer", __name__)
 def view_customers():
     """Display all customers."""
     page = request.args.get("page", 1, type=int)
-    customers = (
-        Customer.query.filter_by(archived=False).paginate(page=page, per_page=20)
-    )
+    name_query = request.args.get("name_query", "")
+    match_mode = request.args.get("match_mode", "contains")
+    gst_exempt = request.args.get("gst_exempt", "all")
+    pst_exempt = request.args.get("pst_exempt", "all")
+
+    query = Customer.query.filter_by(archived=False)
+    if name_query:
+        full_name = func.concat(Customer.first_name, " ", Customer.last_name)
+        if match_mode == "exact":
+            query = query.filter(full_name == name_query)
+        elif match_mode == "startswith":
+            query = query.filter(full_name.like(f"{name_query}%"))
+        elif match_mode == "not_contains":
+            query = query.filter(full_name.notlike(f"%{name_query}%"))
+        else:
+            query = query.filter(full_name.like(f"%{name_query}%"))
+    if gst_exempt == "yes":
+        query = query.filter(Customer.gst_exempt.is_(True))
+    elif gst_exempt == "no":
+        query = query.filter(Customer.gst_exempt.is_(False))
+    if pst_exempt == "yes":
+        query = query.filter(Customer.pst_exempt.is_(True))
+    elif pst_exempt == "no":
+        query = query.filter(Customer.pst_exempt.is_(False))
+
+    customers = query.paginate(page=page, per_page=20)
     delete_form = DeleteForm()
     form = CustomerForm()
     return render_template(
@@ -33,6 +57,10 @@ def view_customers():
         customers=customers,
         delete_form=delete_form,
         form=form,
+        name_query=name_query,
+        match_mode=match_mode,
+        gst_exempt=gst_exempt,
+        pst_exempt=pst_exempt,
     )
 
 
