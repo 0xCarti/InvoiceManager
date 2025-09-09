@@ -19,7 +19,8 @@ load_dotenv()
 db = SQLAlchemy()
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
-limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
+storage_uri = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
+limiter = Limiter(key_func=get_remote_address, storage_uri=storage_uri)
 socketio = None
 GST = ""
 DEFAULT_TIMEZONE = "UTC"
