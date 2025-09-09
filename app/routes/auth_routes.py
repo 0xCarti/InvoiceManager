@@ -1,5 +1,6 @@
 import os
 import platform
+import sqlite3
 import subprocess
 from datetime import datetime
 from urllib.parse import urlparse
@@ -35,6 +36,7 @@ from app.forms import (
     SettingsForm,
     TimezoneForm,
     UserForm,
+    MAX_BACKUP_SIZE,
 )
 from app.models import (
     ActivityLog,
@@ -64,6 +66,9 @@ from app.utils.imports import (
 
 auth = Blueprint("auth", __name__)
 admin = Blueprint("admin", __name__)
+
+# Only .db files are accepted for database restoration uploads
+ALLOWED_BACKUP_EXTENSIONS = {".db"}
 
 IMPORT_FILES = {
     "locations": "example_locations.csv",
@@ -435,15 +440,35 @@ def restore_backup_route():
     if form.validate_on_submit():
         file = form.file.data
         filename = secure_filename(file.filename)
+        ext = os.path.splitext(filename)[1].lower()
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        if ext not in ALLOWED_BACKUP_EXTENSIONS:
+            flash("Only .db files are allowed.", "error")
+            return redirect(url_for("admin.backups"))
+        if size > MAX_BACKUP_SIZE:
+            flash("File is too large.", "error")
+            return redirect(url_for("admin.backups"))
         from flask import current_app
 
         backups_dir = current_app.config["BACKUP_FOLDER"]
         os.makedirs(backups_dir, exist_ok=True)
         filepath = os.path.join(backups_dir, filename)
         file.save(filepath)
+        try:
+            with sqlite3.connect(f"file:{filepath}?mode=ro", uri=True) as conn:
+                conn.execute("SELECT name FROM sqlite_master LIMIT 1")
+        except sqlite3.Error:
+            os.remove(filepath)
+            flash("Invalid SQLite database.", "error")
+            return redirect(url_for("admin.backups"))
         restore_backup(filepath)
         log_activity(f"Restored backup {filename}")
         flash("Backup restored from " + filename, "success")
+    else:
+        for error in form.file.errors:
+            flash(error, "error")
     return redirect(url_for("admin.backups"))
 
 

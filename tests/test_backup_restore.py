@@ -1,10 +1,12 @@
 import os
 import time
 from datetime import date
+from io import BytesIO
 
 from werkzeug.security import generate_password_hash
 
 from app import db
+from app.forms import MAX_BACKUP_SIZE
 from app.models import (
     Event,
     EventLocation,
@@ -25,6 +27,7 @@ from app.models import (
     Vendor,
 )
 from app.utils.backup import create_backup, restore_backup
+from tests.utils import login
 
 
 def populate_data():
@@ -191,3 +194,34 @@ def test_backup_retention(app):
             time.sleep(1)
         files = sorted(os.listdir(backups_dir))
         assert len(files) == 2
+
+
+def test_restore_backup_route_rejects_large_file(client, app):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+    with client:
+        login(client, admin_email, admin_pass)
+        big_content = b"a" * (MAX_BACKUP_SIZE + 1)
+        data = {"file": (BytesIO(big_content), "large.db")}
+        resp = client.post(
+            "/controlpanel/backups/restore",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"File is too large." in resp.data
+
+
+def test_restore_backup_route_rejects_invalid_sqlite(client, app):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+    with client:
+        login(client, admin_email, admin_pass)
+        data = {"file": (BytesIO(b"not a sqlite"), "bad.db")}
+        resp = client.post(
+            "/controlpanel/backups/restore",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"Invalid SQLite database." in resp.data
