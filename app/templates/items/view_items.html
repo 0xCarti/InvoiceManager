@@ -180,6 +180,20 @@ document.getElementById('select-all').onclick = function() {
 <script>
 const itemModalEl = document.getElementById('itemModal');
 
+function isSafeScriptContent(content) {
+    return content && !/<\/?[a-z][\s\S]*>/i.test(content);
+}
+
+function executeScripts(container) {
+    container.querySelectorAll('script').forEach(s => {
+        const content = s.textContent;
+        if (isSafeScriptContent(content)) {
+            new Function(content)();
+        }
+        s.remove();
+    });
+}
+
 function bindItemForm(actionUrl) {
     const form = itemModalEl.querySelector('form');
     if (!form) return;
@@ -205,7 +219,7 @@ function bindItemForm(actionUrl) {
                 bootstrap.Modal.getInstance(itemModalEl).hide();
             } else if (data.form_html) {
                 itemModalEl.querySelector('.modal-body').innerHTML = data.form_html;
-                itemModalEl.querySelectorAll('script').forEach(s => eval(s.textContent));
+                executeScripts(itemModalEl);
                 bindItemForm(actionUrl);
             }
         });
@@ -219,7 +233,7 @@ document.getElementById('createItemBtn').addEventListener('click', function() {
         .then(html => {
             itemModalEl.querySelector('.modal-title').textContent = 'Add Item';
             itemModalEl.querySelector('.modal-body').innerHTML = html;
-            itemModalEl.querySelectorAll('script').forEach(s => eval(s.textContent));
+            executeScripts(itemModalEl);
             const modal = new bootstrap.Modal(itemModalEl);
             modal.show();
             bindItemForm(url);
@@ -235,7 +249,7 @@ document.querySelector('#itemsTable').addEventListener('click', function(e) {
             .then(html => {
                 itemModalEl.querySelector('.modal-title').textContent = 'Edit Item';
                 itemModalEl.querySelector('.modal-body').innerHTML = html;
-                itemModalEl.querySelectorAll('script').forEach(s => eval(s.textContent));
+                executeScripts(itemModalEl);
                 const modal = new bootstrap.Modal(itemModalEl);
                 modal.show();
                 bindItemForm(url);
