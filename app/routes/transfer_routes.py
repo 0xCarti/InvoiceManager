@@ -646,6 +646,7 @@ def generate_report():
 
 
 @transfer.route("/transfers/report")
+@login_required
 def view_report():
     """Display the previously generated transfer report."""
     aggregated_transfers = session.get("aggregated_transfers", [])
