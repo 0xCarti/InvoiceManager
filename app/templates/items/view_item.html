@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5">
+    <h2>{{ item.name }}</h2>
+    <p><strong>Base Unit:</strong> {{ item.base_unit }}</p>
+    <div class="row">
+        <div class="col-12">
+            <h4>Recent Purchase Invoices</h4>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Invoice #</th>
+                            <th>Quantity</th>
+                            <th>Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pii in purchase_items %}
+                        <tr>
+                            <td>{{ pii.invoice.received_date }}</td>
+                            <td><a href="{{ url_for('purchase.view_purchase_invoice', invoice_id=pii.invoice_id) }}">{{ pii.invoice_id }}</a></td>
+                            <td>{{ pii.quantity }} {{ pii.unit.name if pii.unit else pii.unit_name or item.base_unit }}</td>
+                            <td>{{ '%.2f'|format(pii.cost) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4">No purchase invoices found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-12 mt-4">
+            <h4>Recent Sales Invoices</h4>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Invoice #</th>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ip in sales_items %}
+                        <tr>
+                            <td>{{ ip.invoice.date_created.date() }}</td>
+                            <td><a href="{{ url_for('invoice.view_invoice', invoice_id=ip.invoice_id) }}">{{ ip.invoice_id }}</a></td>
+                            <td>{{ ip.product.name if ip.product else ip.product_name }}</td>
+                            <td>{{ ip.quantity }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4">No sales invoices found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-12 mt-4">
+            <h4>Recent Transfers</h4>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Transfer #</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ti in transfer_items %}
+                        <tr>
+                            <td>{{ ti.transfer.date_created.date() }}</td>
+                            <td><a href="{{ url_for('transfer.view_transfer', transfer_id=ti.transfer_id) }}">{{ ti.transfer_id }}</a></td>
+                            <td>{{ ti.transfer.from_location_name }}</td>
+                            <td>{{ ti.transfer.to_location_name }}</td>
+                            <td>{{ ti.quantity }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5">No transfers found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
