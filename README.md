@@ -39,6 +39,12 @@ The application requires several variables to be present in your environment:
 - `SMTP_PASSWORD` – password for SMTP authentication.
 - `SMTP_SENDER` – email address used as the sender.
 - `SMTP_USE_TLS` – set to `true` to enable TLS.
+- `RATELIMIT_STORAGE_URI` – URI for the rate limiting backend. Use a
+  persistent store such as Redis in production (e.g., `redis://redis:6379/0`).
+
+A persistent backing store is required for rate limiting in production. Set
+`RATELIMIT_STORAGE_URI` to a supported service so that limits are shared
+across workers.
 
 These SMTP variables enable password reset emails. Configure them in your `.env` file if you want users to reset forgotten passwords.
 
@@ -85,8 +91,10 @@ The project includes a `Dockerfile` and a `docker-compose.yml` to make running
 the application in a container straightforward on Linux and Windows. The image
 starts Gunicorn using the included `gunicorn.conf.py`, so no additional commands
 are required. Create a `.env` file containing the environment variables
-described above. You can also specify the port the app will use by adding a
-`PORT` variable to `.env` (or by exporting it in your shell) before starting the
+described above. A persistent backing service such as Redis is required for
+rate limiting in production; set `RATELIMIT_STORAGE_URI` to its connection
+string. You can also specify the port the app will use by adding a `PORT`
+variable to `.env` (or by exporting it in your shell) before starting the
 service:
 
 ```bash
