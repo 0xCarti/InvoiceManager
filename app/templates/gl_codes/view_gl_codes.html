@@ -3,7 +3,50 @@
 {% block content %}
 <div class="container mt-5">
     <h2>GL Codes</h2>
-    <button id="add-gl-code" type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#glCodeModal">Add GL Code</button>
+    <div class="row justify-content-between">
+        <div class="col-auto">
+            <button id="add-gl-code" type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#glCodeModal">Add GL Code</button>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button>
+        </div>
+    </div>
+
+    <!-- Filter Modal -->
+    <div class="modal fade" id="filterModal" tabindex="-1" aria-labelledby="filterModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="filterModalLabel">Filters</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="filter-form" method="get">
+                        <div class="mb-3">
+                            <label for="code_query" class="form-label">Code</label>
+                            <input type="text" id="code_query" name="code_query" class="form-control" value="{{ code_query or '' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="description_query" class="form-label">Description</label>
+                            <input type="text" id="description_query" name="description_query" class="form-control" value="{{ description_query or '' }}">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <a href="{{ url_for('glcode.view_gl_codes') }}" class="btn btn-outline-secondary">Reset</a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="filter-form" class="btn btn-primary">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if code_query %}
+    <p>Filtering by Code: {{ code_query }}</p>
+    {% endif %}
+    {% if description_query %}
+    <p>Filtering by Description: {{ description_query }}</p>
+    {% endif %}
     <div class="table-responsive">
     <table class="table" id="gl-codes-table">
         <thead>
@@ -34,7 +77,7 @@
         <ul class="pagination">
             {% if codes.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('glcode.view_gl_codes', page=codes.prev_num) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('glcode.view_gl_codes', page=codes.prev_num, code_query=code_query, description_query=description_query) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -42,7 +85,7 @@
             </li>
             {% if codes.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('glcode.view_gl_codes', page=codes.next_num) }}">Next</a>
+                <a class="page-link" href="{{ url_for('glcode.view_gl_codes', page=codes.next_num, code_query=code_query, description_query=description_query) }}">Next</a>
             </li>
             {% endif %}
         </ul>
@@ -83,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const modal = new bootstrap.Modal(modalEl);
     const form = document.getElementById('gl-code-form');
     const title = document.getElementById('glCodeModalLabel');
-    const csrfToken = '{{ delete_form.csrf_token._value() }}';
+    const csrfToken = '{{ delete_form.csrf_token._value() if delete_form.csrf_token is defined else '' }}';
 
     document.getElementById('add-gl-code').addEventListener('click', () => {
         form.reset();

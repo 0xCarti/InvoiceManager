@@ -21,7 +21,16 @@ glcode_bp = Blueprint("glcode", __name__)
 def view_gl_codes():
     """List GL codes."""
     page = request.args.get("page", 1, type=int)
-    codes = GLCode.query.order_by(GLCode.code).paginate(page=page, per_page=20)
+    code_query = request.args.get("code_query", "")
+    description_query = request.args.get("description_query", "")
+
+    query = GLCode.query
+    if code_query:
+        query = query.filter(GLCode.code.ilike(f"%{code_query}%"))
+    if description_query:
+        query = query.filter(GLCode.description.ilike(f"%{description_query}%"))
+
+    codes = query.order_by(GLCode.code).paginate(page=page, per_page=20)
     delete_form = DeleteForm()
     form = GLCodeForm()
     return render_template(
@@ -29,6 +38,8 @@ def view_gl_codes():
         codes=codes,
         delete_form=delete_form,
         form=form,
+        code_query=code_query,
+        description_query=description_query,
     )
 
 

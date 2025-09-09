@@ -5,7 +5,74 @@
 {% block content %}
 <div class="container mt-5">
     <h2>Customers</h2>
-    <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createCustomerModal">Create Customer</button>
+    <div class="row justify-content-between">
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createCustomerModal">Create Customer</button>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button>
+        </div>
+    </div>
+
+    <!-- Filter Modal -->
+    <div class="modal fade" id="filterModal" tabindex="-1" aria-labelledby="filterModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="filterModalLabel">Filters</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="filter-form" method="get">
+                        <div class="mb-3">
+                            <label for="name_query" class="form-label">Name</label>
+                            <input type="text" id="name_query" name="name_query" class="form-control" placeholder="Search name" value="{{ name_query or '' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="match_mode" class="form-label">Match Mode</label>
+                            <select id="match_mode" name="match_mode" class="form-select">
+                                <option value="exact" {% if match_mode == 'exact' %}selected{% endif %}>Exact</option>
+                                <option value="startswith" {% if match_mode == 'startswith' %}selected{% endif %}>Starts with</option>
+                                <option value="contains" {% if match_mode == 'contains' %}selected{% endif %}>Contains</option>
+                                <option value="not_contains" {% if match_mode == 'not_contains' %}selected{% endif %}>Does not contain</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="gst_exempt" class="form-label">GST Exempt</label>
+                            <select id="gst_exempt" name="gst_exempt" class="form-select">
+                                <option value="all" {% if gst_exempt == 'all' %}selected{% endif %}>All</option>
+                                <option value="yes" {% if gst_exempt == 'yes' %}selected{% endif %}>Yes</option>
+                                <option value="no" {% if gst_exempt == 'no' %}selected{% endif %}>No</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="pst_exempt" class="form-label">PST Exempt</label>
+                            <select id="pst_exempt" name="pst_exempt" class="form-select">
+                                <option value="all" {% if pst_exempt == 'all' %}selected{% endif %}>All</option>
+                                <option value="yes" {% if pst_exempt == 'yes' %}selected{% endif %}>Yes</option>
+                                <option value="no" {% if pst_exempt == 'no' %}selected{% endif %}>No</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <a href="{{ url_for('customer.view_customers') }}" class="btn btn-outline-secondary">Reset</a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="filter-form" class="btn btn-primary">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if name_query %}
+    <p>Filtering by Name: {{ name_query }}</p>
+    {% endif %}
+    {% if gst_exempt != 'all' %}
+    <p>Filtering by GST Exempt: {{ 'Yes' if gst_exempt == 'yes' else 'No' }}</p>
+    {% endif %}
+    {% if pst_exempt != 'all' %}
+    <p>Filtering by PST Exempt: {{ 'Yes' if pst_exempt == 'yes' else 'No' }}</p>
+    {% endif %}
     <div class="table-responsive">
     <table class="table">
         <thead>
@@ -38,7 +105,7 @@
         <ul class="pagination">
             {% if customers.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('customer.view_customers', page=customers.prev_num) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('customer.view_customers', page=customers.prev_num, name_query=name_query, match_mode=match_mode, gst_exempt=gst_exempt, pst_exempt=pst_exempt) }}">Previous</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -46,7 +113,7 @@
             </li>
             {% if customers.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('customer.view_customers', page=customers.next_num) }}">Next</a>
+                <a class="page-link" href="{{ url_for('customer.view_customers', page=customers.next_num, name_query=name_query, match_mode=match_mode, gst_exempt=gst_exempt, pst_exempt=pst_exempt) }}">Next</a>
             </li>
             {% endif %}
         </ul>
