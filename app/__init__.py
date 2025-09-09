@@ -1,6 +1,6 @@
 import os
 import sys
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
@@ -226,6 +226,45 @@ def create_app(args: list):
             ).first()
             if tz_setting is not None and tz_setting.value:
                 DEFAULT_TIMEZONE = tz_setting.value
+
+            auto_setting = Setting.query.filter_by(
+                name="AUTO_BACKUP_ENABLED"
+            ).first()
+            interval_value_setting = Setting.query.filter_by(
+                name="AUTO_BACKUP_INTERVAL_VALUE"
+            ).first()
+            interval_unit_setting = Setting.query.filter_by(
+                name="AUTO_BACKUP_INTERVAL_UNIT"
+            ).first()
+            max_backups_setting = Setting.query.filter_by(
+                name="MAX_BACKUPS"
+            ).first()
+
+            from app.utils.backup import UNIT_SECONDS, start_auto_backup_thread
+
+            app.config["AUTO_BACKUP_ENABLED"] = (
+                auto_setting.value == "1" if auto_setting else False
+            )
+            app.config["AUTO_BACKUP_INTERVAL_VALUE"] = (
+                int(interval_value_setting.value)
+                if interval_value_setting and interval_value_setting.value
+                else 1
+            )
+            app.config["AUTO_BACKUP_INTERVAL_UNIT"] = (
+                interval_unit_setting.value
+                if interval_unit_setting and interval_unit_setting.value
+                else "day"
+            )
+            app.config["MAX_BACKUPS"] = (
+                int(max_backups_setting.value)
+                if max_backups_setting and max_backups_setting.value
+                else 5
+            )
+            app.config["AUTO_BACKUP_INTERVAL"] = (
+                app.config["AUTO_BACKUP_INTERVAL_VALUE"]
+                * UNIT_SECONDS[app.config["AUTO_BACKUP_INTERVAL_UNIT"]]
+            )
+            start_auto_backup_thread(app)
         except OperationalError:
             pass
 

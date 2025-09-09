@@ -13,6 +13,7 @@ from wtforms import (
     FileField,
     FormField,
     HiddenField,
+    IntegerField,
     PasswordField,
     SelectField,
     SelectMultipleField,
@@ -46,6 +47,7 @@ def load_item_choices():
 def load_unit_choices():
     """Return a list of item unit choices."""
     return [(u.id, u.name) for u in ItemUnit.query.all()]
+
 
 @lru_cache(maxsize=1)
 def get_timezone_choices():
@@ -232,7 +234,10 @@ class SpoilageFilterForm(FlaskForm):
     start_date = DateField("Start Date", validators=[Optional()])
     end_date = DateField("End Date", validators=[Optional()])
     purchase_gl_code = SelectField(
-        "Purchase GL Code", coerce=int, validators=[Optional()], validate_choice=False
+        "Purchase GL Code",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
     )
     items = SelectMultipleField(
         "Items", coerce=int, validators=[Optional()], validate_choice=False
@@ -571,6 +576,25 @@ class SettingsForm(FlaskForm):
         "GST Number", validators=[Optional(), Length(max=50)]
     )
     default_timezone = SelectField("Default Timezone")
+    auto_backup_enabled = BooleanField("Enable Automatic Backups")
+    auto_backup_interval_value = IntegerField(
+        "Backup Interval",
+        validators=[DataRequired(), NumberRange(min=1)],
+    )
+    auto_backup_interval_unit = SelectField(
+        "Interval Unit",
+        choices=[
+            ("hour", "Hour"),
+            ("day", "Day"),
+            ("week", "Week"),
+            ("month", "Month"),
+            ("year", "Year"),
+        ],
+    )
+    max_backups = IntegerField(
+        "Max Stored Backups",
+        validators=[DataRequired(), NumberRange(min=1)],
+    )
     submit = SubmitField("Update")
 
     def __init__(self, *args, **kwargs):
@@ -586,9 +610,9 @@ class TimezoneForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.timezone.choices = [
-            ("", "Use Default")
-        ] + [(tz, tz) for tz in get_timezone_choices()]
+        self.timezone.choices = [("", "Use Default")] + [
+            (tz, tz) for tz in get_timezone_choices()
+        ]
 
 
 class NotificationForm(FlaskForm):

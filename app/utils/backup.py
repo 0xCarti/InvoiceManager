@@ -4,11 +4,24 @@ import logging
 import os
 import shutil
 import sqlite3
+import time
 from datetime import datetime
+from threading import Event, Thread
 
 from flask import current_app
 
 from app import db
+
+UNIT_SECONDS = {
+    "hour": 60 * 60,
+    "day": 60 * 60 * 24,
+    "week": 60 * 60 * 24 * 7,
+    "month": 60 * 60 * 24 * 30,
+    "year": 60 * 60 * 24 * 365,
+}
+
+_backup_thread: Thread | None = None
+_stop_event = Event()
 
 
 def _get_db_path():
@@ -27,6 +40,15 @@ def create_backup():
         os.chmod(backups_dir, 0o777)
     except OSError:
         pass
+    max_backups = current_app.config.get("MAX_BACKUPS")
+    files = sorted(f for f in os.listdir(backups_dir) if f.endswith(".db"))
+    if max_backups:
+        while len(files) >= int(max_backups):
+            oldest = files.pop(0)
+            try:
+                os.remove(os.path.join(backups_dir, oldest))
+            except OSError:
+                pass
     db_path = _get_db_path()
     filename = f"backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.db"
     backup_path = os.path.join(backups_dir, filename)
@@ -34,6 +56,40 @@ def create_backup():
     db.engine.dispose()
     shutil.copyfile(db_path, backup_path)
     return filename
+
+
+def _backup_loop(app, interval: int):
+    while not _stop_event.wait(interval):
+        with app.app_context():
+            create_backup()
+
+
+def start_auto_backup_thread(app):
+    """Start or restart the automatic backup thread based on app config."""
+    global _backup_thread, _stop_event
+    if _backup_thread and _backup_thread.is_alive():
+        _stop_event.set()
+        _backup_thread.join()
+        _stop_event = Event()
+
+    if not app.config.get("AUTO_BACKUP_ENABLED"):
+        return
+
+    interval = app.config.get("AUTO_BACKUP_INTERVAL")
+    if not interval:
+        return
+    _backup_thread = Thread(
+        target=_backup_loop, args=(app, interval), daemon=True
+    )
+    _backup_thread.start()
+
+
+__all__ = [
+    "create_backup",
+    "restore_backup",
+    "start_auto_backup_thread",
+    "UNIT_SECONDS",
+]
 
 
 def restore_backup(file_path):
