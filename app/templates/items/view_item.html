@@ -17,12 +17,12 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for pii in purchase_items %}
+                        {% for pii in purchase_items.items %}
                         <tr>
                             <td>{{ pii.invoice.received_date }}</td>
                             <td><a href="{{ url_for('purchase.view_purchase_invoice', invoice_id=pii.invoice_id) }}">{{ pii.invoice_id }}</a></td>
                             <td>{{ pii.quantity }} {{ pii.unit.name if pii.unit else pii.unit_name or item.base_unit }}</td>
-                            <td>{{ '%.2f'|format(pii.cost) }}</td>
+                            <td>{{ '%.6f'|format(pii.cost) }}</td>
                         </tr>
                         {% else %}
                         <tr><td colspan="4">No purchase invoices found.</td></tr>
@@ -30,6 +30,21 @@
                     </tbody>
                 </table>
             </div>
+            <nav aria-label="Purchase invoice pagination">
+                <ul class="pagination">
+                    {% if purchase_items.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.prev_num, sales_page=sales_items.page, transfer_page=transfer_items.page) }}">Previous</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item disabled"><span class="page-link">Page {{ purchase_items.page }} of {{ purchase_items.pages }}</span></li>
+                    {% if purchase_items.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.next_num, sales_page=sales_items.page, transfer_page=transfer_items.page) }}">Next</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
         </div>
         <div class="col-12 mt-4">
             <h4>Recent Sales Invoices</h4>
@@ -44,7 +59,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for ip in sales_items %}
+                        {% for ip in sales_items.items %}
                         <tr>
                             <td>{{ ip.invoice.date_created.date() }}</td>
                             <td><a href="{{ url_for('invoice.view_invoice', invoice_id=ip.invoice_id) }}">{{ ip.invoice_id }}</a></td>
@@ -57,6 +72,21 @@
                     </tbody>
                 </table>
             </div>
+            <nav aria-label="Sales invoice pagination">
+                <ul class="pagination">
+                    {% if sales_items.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.page, sales_page=sales_items.prev_num, transfer_page=transfer_items.page) }}">Previous</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item disabled"><span class="page-link">Page {{ sales_items.page }} of {{ sales_items.pages }}</span></li>
+                    {% if sales_items.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.page, sales_page=sales_items.next_num, transfer_page=transfer_items.page) }}">Next</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
         </div>
         <div class="col-12 mt-4">
             <h4>Recent Transfers</h4>
@@ -72,7 +102,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for ti in transfer_items %}
+                        {% for ti in transfer_items.items %}
                         <tr>
                             <td>{{ ti.transfer.date_created.date() }}</td>
                             <td><a href="{{ url_for('transfer.view_transfer', transfer_id=ti.transfer_id) }}">{{ ti.transfer_id }}</a></td>
@@ -86,6 +116,21 @@
                     </tbody>
                 </table>
             </div>
+            <nav aria-label="Transfer pagination">
+                <ul class="pagination">
+                    {% if transfer_items.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.page, sales_page=sales_items.page, transfer_page=transfer_items.prev_num) }}">Previous</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item disabled"><span class="page-link">Page {{ transfer_items.page }} of {{ transfer_items.pages }}</span></li>
+                    {% if transfer_items.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.page, sales_page=sales_items.page, transfer_page=transfer_items.next_num) }}">Next</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
         </div>
     </div>
 </div>

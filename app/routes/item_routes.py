@@ -145,13 +145,15 @@ def view_item(item_id):
     item_obj = db.session.get(Item, item_id)
     if item_obj is None:
         abort(404)
+    purchase_page = request.args.get("purchase_page", 1, type=int)
+    sales_page = request.args.get("sales_page", 1, type=int)
+    transfer_page = request.args.get("transfer_page", 1, type=int)
     purchase_items = (
         PurchaseInvoiceItem.query
         .join(PurchaseInvoice)
         .filter(PurchaseInvoiceItem.item_id == item_id)
         .order_by(PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc())
-        .limit(5)
-        .all()
+        .paginate(page=purchase_page, per_page=10)
     )
     sales_items = (
         InvoiceProduct.query
@@ -160,16 +162,14 @@ def view_item(item_id):
         .join(ProductRecipeItem, ProductRecipeItem.product_id == Product.id)
         .filter(ProductRecipeItem.item_id == item_id)
         .order_by(Invoice.date_created.desc(), Invoice.id.desc())
-        .limit(5)
-        .all()
+        .paginate(page=sales_page, per_page=10)
     )
     transfer_items = (
         TransferItem.query
         .join(Transfer)
         .filter(TransferItem.item_id == item_id)
         .order_by(Transfer.date_created.desc(), Transfer.id.desc())
-        .limit(5)
-        .all()
+        .paginate(page=transfer_page, per_page=10)
     )
     return render_template(
         "items/view_item.html",
