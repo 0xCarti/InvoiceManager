@@ -198,16 +198,35 @@ def view_stand_sheet(location_id):
 def view_locations():
     """List all locations."""
     page = request.args.get("page", 1, type=int)
-    locations = (
-        Location.query.filter_by(archived=False)
-        .order_by(Location.name)
-        .paginate(page=page, per_page=20)
-    )
+    name_query = request.args.get("name_query", "")
+    match_mode = request.args.get("match_mode", "contains")
+    archived = request.args.get("archived", "active")
+
+    query = Location.query
+    if archived == "active":
+        query = query.filter(Location.archived.is_(False))
+    elif archived == "archived":
+        query = query.filter(Location.archived.is_(True))
+
+    if name_query:
+        if match_mode == "exact":
+            query = query.filter(Location.name == name_query)
+        elif match_mode == "startswith":
+            query = query.filter(Location.name.like(f"{name_query}%"))
+        elif match_mode == "not_contains":
+            query = query.filter(Location.name.notlike(f"%{name_query}%"))
+        else:
+            query = query.filter(Location.name.like(f"%{name_query}%"))
+
+    locations = query.order_by(Location.name).paginate(page=page, per_page=20)
     delete_form = DeleteForm()
     return render_template(
         "locations/view_locations.html",
         locations=locations,
         delete_form=delete_form,
+        name_query=name_query,
+        match_mode=match_mode,
+        archived=archived,
     )
 
 

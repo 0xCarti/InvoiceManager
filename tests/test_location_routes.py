@@ -108,3 +108,31 @@ def test_location_flow(client, app):
     with app.app_context():
         loc = db.session.get(Location, lid)
         assert loc.archived
+
+
+def test_location_filters(client, app):
+    email, _ = setup_data(app)
+    with app.app_context():
+        active = Location(name="ActiveLoc")
+        archived_loc = Location(name="OldLoc", archived=True)
+        db.session.add_all([active, archived_loc])
+        db.session.commit()
+    with client:
+        login(client, email, "pass")
+        resp = client.get("/locations")
+        assert b"ActiveLoc" in resp.data
+        assert b"OldLoc" not in resp.data
+
+        resp = client.get("/locations", query_string={"archived": "archived"})
+        assert b"ActiveLoc" not in resp.data
+        assert b"OldLoc" in resp.data
+
+        resp = client.get("/locations", query_string={"archived": "all"})
+        assert b"ActiveLoc" in resp.data and b"OldLoc" in resp.data
+
+        resp = client.get(
+            "/locations",
+            query_string={"name_query": "Old", "match_mode": "contains", "archived": "all"},
+        )
+        assert b"OldLoc" in resp.data
+        assert b"ActiveLoc" not in resp.data
