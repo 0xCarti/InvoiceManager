@@ -4,6 +4,7 @@ from werkzeug.security import generate_password_hash
 
 from app import db
 from app.models import Customer, Invoice, InvoiceProduct, Product, User
+from tests.utils import login
 
 
 def setup_invoice(app):
@@ -43,6 +44,7 @@ def setup_invoice(app):
 
 def test_vendor_and_sales_reports(client, app):
     cid = setup_invoice(app)
+    login(client, "report@example.com", "pass")
     resp = client.get("/reports/vendor-invoices")
     assert resp.status_code == 200
     resp = client.post(
