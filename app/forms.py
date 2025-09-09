@@ -1,4 +1,5 @@
 from functools import lru_cache
+import os
 from zoneinfo import available_timezones
 
 from flask import g
@@ -33,6 +34,10 @@ from wtforms.validators import (
 from wtforms.widgets import CheckboxInput, ListWidget
 
 from app.models import GLCode, Item, ItemUnit, Location, Product, Vendor
+
+
+# Uploaded backup files are capped at 10MB to prevent excessive memory usage
+MAX_BACKUP_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 def load_item_choices():
@@ -398,8 +403,20 @@ class CreateBackupForm(FlaskForm):
 
 
 class RestoreBackupForm(FlaskForm):
-    file = FileField("Backup File", validators=[FileRequired()])
+    file = FileField(
+        "Backup File",
+        validators=[
+            FileRequired(),
+            FileAllowed({"db"}, "DB files only!"),
+        ],
+    )
     submit = SubmitField("Restore")
+
+    def validate_file(self, field):
+        field.data.seek(0, os.SEEK_END)
+        if field.data.tell() > MAX_BACKUP_SIZE:
+            raise ValidationError("File is too large.")
+        field.data.seek(0)
 
 
 class ImportForm(FlaskForm):
