@@ -55,6 +55,10 @@ def create_backup():
     db.session.commit()
     db.engine.dispose()
     shutil.copyfile(db_path, backup_path)
+
+    logger = current_app.logger if current_app else logging.getLogger(__name__)
+    logger.info("Created backup %s", filename)
+
     return filename
 
 
