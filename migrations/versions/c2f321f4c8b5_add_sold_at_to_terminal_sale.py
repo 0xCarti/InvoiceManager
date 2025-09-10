@@ -17,11 +17,16 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column(
-        "terminal_sale",
-        sa.Column("sold_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
-    )
-    op.alter_column("terminal_sale", "sold_at", server_default=None)
+    with op.batch_alter_table("terminal_sale", recreate="always") as batch_op:
+        batch_op.add_column(
+            sa.Column(
+                "sold_at",
+                sa.DateTime(),
+                nullable=False,
+                server_default=sa.text("CURRENT_TIMESTAMP"),
+            )
+        )
+        batch_op.alter_column("sold_at", server_default=None)
 
 
 def downgrade():
