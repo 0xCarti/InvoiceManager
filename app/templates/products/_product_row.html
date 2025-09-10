@@ -3,6 +3,7 @@
     <td>{{ product.price }}</td>
     <td>{{ product.cost }}</td>
     <td>{{ '{:.2f}%'.format(product.food_cost_percentage) }}</td>
+    <td>{{ product.last_sold_at.strftime('%Y-%m-%d') if product.last_sold_at else 'Never' }}</td>
     <td>
         <a href="{{ url_for('product.edit_product', product_id=product.id) }}" class="btn btn-primary mr-2">Edit</a>
         <form action="{{ url_for('product.delete_product', product_id=product.id) }}" method="post" class="d-inline">

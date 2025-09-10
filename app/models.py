@@ -1,7 +1,8 @@
 from datetime import datetime
 
 from flask_login import UserMixin
-from sqlalchemy import ForeignKeyConstraint
+from sqlalchemy import ForeignKeyConstraint, func, select
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 
 from app import db
@@ -317,6 +318,18 @@ class Product(db.Model):
     terminal_sales = relationship(
         "TerminalSale", back_populates="product", cascade="all, delete-orphan"
     )
+
+    @hybrid_property
+    def last_sold_at(self):
+        """Return the most recent sale date from invoices or terminal sales."""
+        dates = [
+            ip.invoice.date_created
+            for ip in self.invoice_products
+            if ip.invoice and ip.invoice.date_created
+        ]
+        dates.extend(ts.sold_at for ts in self.terminal_sales if ts.sold_at)
+        return max(dates) if dates else None
+
 
     @property
     def food_cost_percentage(self) -> float:

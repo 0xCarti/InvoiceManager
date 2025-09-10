@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import (
     Blueprint,
     abort,
@@ -9,6 +11,7 @@ from flask import (
     url_for,
 )
 from flask_login import login_required
+from sqlalchemy import func, or_
 
 from app import db
 from app.forms import DeleteForm, ProductRecipeForm, ProductWithRecipeForm
@@ -21,6 +24,7 @@ from app.models import (
     Customer,
     Invoice,
     InvoiceProduct,
+    TerminalSale,
 )
 from app.utils.activity import log_activity
 
@@ -44,6 +48,24 @@ def view_products():
     cost_max = request.args.get("cost_max", type=float)
     price_min = request.args.get("price_min", type=float)
     price_max = request.args.get("price_max", type=float)
+    last_sold_before_str = request.args.get("last_sold_before")
+    include_unsold = request.args.get("include_unsold") in [
+        "1",
+        "true",
+        "True",
+        "yes",
+        "on",
+    ]
+    last_sold_before = None
+    if last_sold_before_str:
+        try:
+            last_sold_before = datetime.strptime(last_sold_before_str, "%Y-%m-%d")
+        except ValueError:
+            flash(
+                "Invalid date format for last_sold_before. Use YYYY-MM-DD.",
+                "error",
+            )
+            return redirect(url_for("product.view_products"))
 
     query = Product.query
     if name_query:
@@ -86,6 +108,25 @@ def view_products():
         query = query.filter(Product.price >= price_min)
     if price_max is not None:
         query = query.filter(Product.price <= price_max)
+    last_sold_expr = func.max(
+        func.coalesce(Invoice.date_created, TerminalSale.sold_at)
+    )
+    query = (
+        query.outerjoin(InvoiceProduct, Product.invoice_products)
+        .outerjoin(Invoice, InvoiceProduct.invoice_id == Invoice.id)
+        .outerjoin(TerminalSale, Product.id == TerminalSale.product_id)
+        .group_by(Product.id)
+    )
+    if last_sold_before:
+        if include_unsold:
+            query = query.having(
+                or_(
+                    last_sold_expr < last_sold_before,
+                    last_sold_expr.is_(None),
+                )
+            )
+        else:
+            query = query.having(last_sold_expr < last_sold_before)
 
     products = query.paginate(page=page, per_page=20)
     sales_gl_codes = (
@@ -115,6 +156,8 @@ def view_products():
         cost_max=cost_max,
         price_min=price_min,
         price_max=price_max,
+        last_sold_before=last_sold_before_str,
+        include_unsold=include_unsold,
     )
 
 
