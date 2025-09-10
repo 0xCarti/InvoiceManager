@@ -178,6 +178,52 @@ def test_item_cost_visible_on_items_page(client, app):
         assert f"{2.5:.6f} / each" in resp.get_data(as_text=True)
 
 
+def test_item_cost_visible_on_item_page(client, app):
+    """Item detail page should show updated base unit cost after receiving invoice."""
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase_with_case(app)
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-01-01",
+                "expected_date": "2023-01-05",
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 1,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po_id}/receive",
+            data={
+                "received_date": "2023-01-04",
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "location_id": location_id,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 1,
+                "items-0-cost": 24,
+            },
+            follow_redirects=True,
+        )
+
+        resp = client.get(f"/items/{item_id}")
+        page = resp.get_data(as_text=True)
+        assert "Current Cost:" in page
+        assert f"{1.0:.6f} / each" in page
+
+
 def test_purchase_order_multiple_items(client, app):
     with app.app_context():
         user = User(
