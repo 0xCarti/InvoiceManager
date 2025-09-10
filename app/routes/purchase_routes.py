@@ -357,15 +357,9 @@ def receive_invoice(po_id):
                 )
 
                 if item_obj:
-                    if unit_obj and unit_obj.factor:
-                        factor = unit_obj.factor
-                    else:
-                        default_unit = (
-                            ItemUnit.query.filter_by(
-                                item_id=item_obj.id, receiving_default=True
-                            ).first()
-                        )
-                        factor = default_unit.factor if default_unit else 1
+                    factor = (
+                        unit_obj.factor if unit_obj and unit_obj.factor else 1
+                    )
                     prev_qty = item_obj.quantity or 0
                     prev_cost = item_obj.cost or 0
                     new_qty = quantity * factor
@@ -382,8 +376,6 @@ def receive_invoice(po_id):
 
                     # Explicitly mark the item as dirty so cost updates persist
                     db.session.add(item_obj)
-                    db.session.flush()
-                    db.session.refresh(item_obj)
 
                     record = LocationStandItem.query.filter_by(
                         location_id=invoice.location_id, item_id=item_obj.id
