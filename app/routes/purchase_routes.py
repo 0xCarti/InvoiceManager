@@ -1,3 +1,5 @@
+import datetime
+
 from flask import (
     Blueprint,
     abort,
@@ -30,8 +32,6 @@ from app.models import (
     Vendor,
 )
 from app.utils.activity import log_activity
-
-import datetime
 
 purchase = Blueprint("purchase", __name__)
 
@@ -106,10 +106,8 @@ def view_purchase_orders():
     if end_date:
         query = query.filter(PurchaseOrder.order_date <= end_date)
 
-    orders = (
-        query.order_by(PurchaseOrder.order_date.desc()).paginate(
-            page=page, per_page=20
-        )
+    orders = query.order_by(PurchaseOrder.order_date.desc()).paginate(
+        page=page, per_page=20
     )
 
     vendors = Vendor.query.filter_by(archived=False).all()
@@ -343,6 +341,17 @@ def receive_invoice(po_id):
                 unit_obj = (
                     db.session.get(ItemUnit, unit_id) if unit_id else None
                 )
+                factor = 1
+                if item_obj:
+                    if unit_obj and unit_obj.factor:
+                        factor = unit_obj.factor
+                    else:
+                        default_unit = ItemUnit.query.filter_by(
+                            item_id=item_obj.id, receiving_default=True
+                        ).first()
+                        if default_unit:
+                            unit_obj = default_unit
+                            factor = default_unit.factor or 1
 
                 db.session.add(
                     PurchaseInvoiceItem(
@@ -357,9 +366,6 @@ def receive_invoice(po_id):
                 )
 
                 if item_obj:
-                    factor = (
-                        unit_obj.factor if unit_obj and unit_obj.factor else 1
-                    )
                     prev_qty = item_obj.quantity or 0
                     prev_cost = item_obj.cost or 0
                     new_qty = quantity * factor
@@ -374,8 +380,9 @@ def receive_invoice(po_id):
                     else:
                         item_obj.cost = 0.0
 
-                    # Explicitly mark the item as dirty so cost updates persist
+                    # Persist the updated cost and quantity
                     db.session.add(item_obj)
+                    db.session.flush()
 
                     record = LocationStandItem.query.filter_by(
                         location_id=invoice.location_id, item_id=item_obj.id
@@ -446,7 +453,9 @@ def view_purchase_invoices():
     if po_number:
         query = query.filter(PurchaseInvoice.purchase_order_id == po_number)
     if vendor_id:
-        query = query.join(PurchaseOrder).filter(PurchaseOrder.vendor_id == vendor_id)
+        query = query.join(PurchaseOrder).filter(
+            PurchaseOrder.vendor_id == vendor_id
+        )
     if location_id:
         query = query.filter(PurchaseInvoice.location_id == location_id)
     if start_date:
@@ -461,7 +470,9 @@ def view_purchase_invoices():
     vendors = Vendor.query.order_by(Vendor.first_name, Vendor.last_name).all()
     locations = Location.query.order_by(Location.name).all()
     active_vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
-    active_location = db.session.get(Location, location_id) if location_id else None
+    active_location = (
+        db.session.get(Location, location_id) if location_id else None
+    )
 
     return render_template(
         "purchase_invoices/view_purchase_invoices.html",
@@ -584,7 +595,9 @@ def reverse_purchase_invoice(invoice_id):
         qty_before = itm.quantity
         itm.quantity = qty_before - removed_qty
 
-        base_cost = abs(inv_item.cost) / factor if factor else abs(inv_item.cost)
+        base_cost = (
+            abs(inv_item.cost) / factor if factor else abs(inv_item.cost)
+        )
         total_cost_before = (itm.cost or 0) * qty_before
         total_cost_after = total_cost_before - base_cost * removed_qty
 
