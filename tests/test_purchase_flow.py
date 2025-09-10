@@ -508,6 +508,120 @@ def test_receive_invoice_base_unit_cost(client, app):
         assert lsi.expected_count == 24
 
 
+def test_receive_invoice_missing_unit_defaults(client, app):
+    """Omitting unit should use receiving default factor."""
+    email, vendor_id, item_id, location_id, case_unit_id = (
+        setup_purchase_with_case(app)
+    )
+    # Make case unit the receiving default
+    with app.app_context():
+        case_unit = db.session.get(ItemUnit, case_unit_id)
+        each_unit = ItemUnit.query.filter_by(
+            item_id=item_id, name="each"
+        ).first()
+        each_unit.receiving_default = False
+        case_unit.receiving_default = True
+        db.session.commit()
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-08-01",
+                "expected_date": "2023-08-05",
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 1,
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        po = PurchaseOrder.query.first()
+        po_id = po.id
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            f"/purchase_orders/{po_id}/receive",
+            data={
+                "received_date": "2023-08-06",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                # intentionally omit unit
+                "items-0-quantity": 1,
+                "items-0-cost": 24,
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        assert item.quantity == 24
+        assert item.cost == 1
+
+
+def test_receive_invoice_missing_unit_shows_on_items_page(client, app):
+    """Missing unit still updates cost displayed on items page."""
+    email, vendor_id, item_id, location_id, case_unit_id = (
+        setup_purchase_with_case(app)
+    )
+    # Make case unit the receiving default
+    with app.app_context():
+        case_unit = db.session.get(ItemUnit, case_unit_id)
+        each_unit = ItemUnit.query.filter_by(
+            item_id=item_id, name="each"
+        ).first()
+        each_unit.receiving_default = False
+        case_unit.receiving_default = True
+        db.session.commit()
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-09-01",
+                "expected_date": "2023-09-05",
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 1,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po_id}/receive",
+            data={
+                "received_date": "2023-09-06",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                # omit unit field
+                "items-0-quantity": 1,
+                "items-0-cost": 24,
+            },
+            follow_redirects=True,
+        )
+        resp = client.get("/items")
+        assert "1.000000 / each" in resp.get_data(as_text=True)
+
+
 def test_item_cost_is_average(client, app):
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
 
@@ -673,12 +787,16 @@ def test_reverse_invoice_restores_average(client, app):
         )
 
     with app.app_context():
-        invoice = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).first()
+        invoice = PurchaseInvoice.query.order_by(
+            PurchaseInvoice.id.desc()
+        ).first()
         inv_id = invoice.id
 
     with client:
         login(client, email, "pass")
-        client.get(f"/purchase_invoices/{inv_id}/reverse", follow_redirects=True)
+        client.get(
+            f"/purchase_invoices/{inv_id}/reverse", follow_redirects=True
+        )
 
     with app.app_context():
         item = db.session.get(Item, item_id)
