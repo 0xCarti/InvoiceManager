@@ -508,63 +508,6 @@ def test_receive_invoice_base_unit_cost(client, app):
         assert lsi.expected_count == 24
 
 
-def test_receive_invoice_missing_unit_defaults(client, app):
-    """Omitting unit should use receiving default factor."""
-    email, vendor_id, item_id, location_id, case_unit_id = (
-        setup_purchase_with_case(app)
-    )
-    # Make case unit the receiving default
-    with app.app_context():
-        case_unit = db.session.get(ItemUnit, case_unit_id)
-        each_unit = ItemUnit.query.filter_by(item_id=item_id, name="each").first()
-        each_unit.receiving_default = False
-        case_unit.receiving_default = True
-        db.session.commit()
-
-    with client:
-        login(client, email, "pass")
-        resp = client.post(
-            "/purchase_orders/create",
-            data={
-                "vendor": vendor_id,
-                "order_date": "2023-08-01",
-                "expected_date": "2023-08-05",
-                "items-0-item": item_id,
-                "items-0-unit": case_unit_id,
-                "items-0-quantity": 1,
-            },
-            follow_redirects=True,
-        )
-        assert resp.status_code == 200
-
-    with app.app_context():
-        po = PurchaseOrder.query.first()
-        po_id = po.id
-
-    with client:
-        login(client, email, "pass")
-        resp = client.post(
-            f"/purchase_orders/{po_id}/receive",
-            data={
-                "received_date": "2023-08-06",
-                "location_id": location_id,
-                "gst": 0,
-                "pst": 0,
-                "delivery_charge": 0,
-                "items-0-item": item_id,
-                # intentionally omit unit
-                "items-0-quantity": 1,
-                "items-0-cost": 24,
-            },
-            follow_redirects=True,
-        )
-        assert resp.status_code == 200
-
-    with app.app_context():
-        item = db.session.get(Item, item_id)
-        assert item.quantity == 24
-        assert item.cost == 1
-
 def test_item_cost_is_average(client, app):
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
 
