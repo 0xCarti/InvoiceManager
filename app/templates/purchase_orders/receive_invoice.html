@@ -33,16 +33,7 @@
         {% for item in form.items %}
         <div class="row g-2 item-row mb-2 align-items-center">
             <div class="col">{{ item.item(class="form-control item-select") }}</div>
-            <div class="col">
-                <select name="items-{{ loop.index0 }}-unit" class="form-control unit-select">
-                {% set poi = po.items[loop.index0] if loop.index0 < po.items|length else None %}
-                {% if poi %}
-                    {% for u in poi.item.units %}
-                        <option value="{{ u.id }}" {% if u.id == poi.unit_id %}selected{% endif %}>{{ u.name }}</option>
-                    {% endfor %}
-                {% endif %}
-                </select>
-            </div>
+            <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select"></select></div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col">{{ item.cost(class="form-control cost") }}</div>
             <div class="col"><span class="line-total">0.00</span></div>
@@ -176,7 +167,7 @@
         }
     });
 
-    document.querySelectorAll('#items .item-row').forEach(row => fetchCost(row));
+    document.querySelectorAll('.item-select').forEach(sel => fetchUnits(sel));
     document.getElementById('gst').addEventListener('input', updateTotals);
     document.getElementById('pst').addEventListener('input', updateTotals);
     document.getElementById('delivery_charge').addEventListener('input', updateTotals);
