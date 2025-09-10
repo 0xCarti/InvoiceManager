@@ -360,11 +360,23 @@ def receive_invoice(po_id):
                     factor = 1
                     if unit_obj:
                         factor = unit_obj.factor
-                    item_obj.quantity = (
-                        item_obj.quantity or 0
-                    ) + quantity * factor
-                    # store cost per base unit (always positive)
-                    item_obj.cost = cost / factor if factor else cost
+
+                    prev_qty = item_obj.quantity or 0
+                    prev_cost = item_obj.cost or 0
+                    new_qty = quantity * factor
+                    total_qty = prev_qty + new_qty
+                    item_obj.quantity = total_qty
+
+                    # convert cost to base unit (always positive)
+                    base_cost = cost / factor if factor else cost
+
+                    if total_qty > 0:
+                        item_obj.cost = (
+                            prev_cost * prev_qty + base_cost * new_qty
+                        ) / total_qty
+                    else:
+                        item_obj.cost = 0.0
+
                     record = LocationStandItem.query.filter_by(
                         location_id=invoice.location_id, item_id=item_obj.id
                     ).first()
@@ -568,32 +580,16 @@ def reverse_purchase_invoice(invoice_id):
             )
             return redirect(url_for("purchase.view_purchase_invoices"))
 
-        itm.quantity -= inv_item.quantity * factor
+        removed_qty = inv_item.quantity * factor
+        qty_before = itm.quantity
+        itm.quantity = qty_before - removed_qty
 
-        # Revert item cost to the most recent prior purchase invoice
-        last_item = (
-            db.session.query(PurchaseInvoiceItem)
-            .join(PurchaseInvoice)
-            .filter(
-                PurchaseInvoiceItem.item_id == itm.id,
-                PurchaseInvoiceItem.invoice_id != invoice.id,
-            )
-            .order_by(
-                PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc()
-            )
-            .first()
-        )
-        if last_item:
-            last_factor = 1
-            if last_item.unit_id:
-                last_unit = db.session.get(ItemUnit, last_item.unit_id)
-                if last_unit:
-                    last_factor = last_unit.factor
-            itm.cost = (
-                abs(last_item.cost) / last_factor
-                if last_factor
-                else abs(last_item.cost)
-            )
+        base_cost = abs(inv_item.cost) / factor if factor else abs(inv_item.cost)
+        total_cost_before = (itm.cost or 0) * qty_before
+        total_cost_after = total_cost_before - base_cost * removed_qty
+
+        if itm.quantity > 0:
+            itm.cost = total_cost_after / itm.quantity
         else:
             itm.cost = 0.0
 
@@ -615,7 +611,7 @@ def reverse_purchase_invoice(invoice_id):
             and itm.purchase_gl_code_id is not None
         ):
             record.purchase_gl_code_id = itm.purchase_gl_code_id
-        new_count = record.expected_count - inv_item.quantity * factor
+        new_count = record.expected_count - removed_qty
         record.expected_count = new_count
 
     loc = db.session.get(Location, invoice.location_id)

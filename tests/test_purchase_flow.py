@@ -465,6 +465,184 @@ def test_receive_invoice_base_unit_cost(client, app):
         assert lsi.expected_count == 24
 
 
+def test_item_cost_is_average(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-07-10",
+                "expected_date": "2023-07-15",
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        po1 = PurchaseOrder.query.first()
+        po1_id = po1.id
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            f"/purchase_orders/{po1_id}/receive",
+            data={
+                "received_date": "2023-07-16",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+                "items-0-cost": 2,
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-07-20",
+                "expected_date": "2023-07-25",
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        po2 = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).first()
+        po2_id = po2.id
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            f"/purchase_orders/{po2_id}/receive",
+            data={
+                "received_date": "2023-07-26",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+                "items-0-cost": 4,
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        assert item.quantity == 4
+        assert item.cost == 3
+
+
+def test_reverse_invoice_restores_average(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-08-10",
+                "expected_date": "2023-08-15",
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po1 = PurchaseOrder.query.first()
+        po1_id = po1.id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po1_id}/receive",
+            data={
+                "received_date": "2023-08-16",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+                "items-0-cost": 2,
+            },
+            follow_redirects=True,
+        )
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-08-20",
+                "expected_date": "2023-08-25",
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po2 = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).first()
+        po2_id = po2.id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po2_id}/receive",
+            data={
+                "received_date": "2023-08-26",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+                "items-0-cost": 4,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        invoice = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).first()
+        inv_id = invoice.id
+
+    with client:
+        login(client, email, "pass")
+        client.get(f"/purchase_invoices/{inv_id}/reverse", follow_redirects=True)
+
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        assert item.quantity == 2
+        assert item.cost == 2
+
+
 def test_delete_unreceived_purchase_order(client, app):
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
 
