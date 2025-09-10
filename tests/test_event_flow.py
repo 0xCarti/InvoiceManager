@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, date
 from io import BytesIO
 from tempfile import NamedTemporaryFile
 
@@ -127,6 +128,8 @@ def test_event_lifecycle(client, app):
     with app.app_context():
         sale = TerminalSale.query.filter_by(event_location_id=elid).first()
         assert sale is not None and sale.quantity == 3
+        assert sale.sold_at is not None
+        assert (datetime.utcnow() - sale.sold_at).total_seconds() < 10
 
     with client:
         login(client, email, "pass")
@@ -415,8 +418,8 @@ def test_upload_sales_xls(client, app):
         sale_w = TerminalSale.query.filter_by(
             event_location_id=west_el.id, product_id=prod1.id
         ).first()
-        assert sale_e and sale_e.quantity == 7
-        assert sale_w and sale_w.quantity == 2
+        assert sale_e and sale_e.quantity == 7 and sale_e.sold_at
+        assert sale_w and sale_w.quantity == 2 and sale_w.sold_at
 
 
 def test_upload_sales_pdf(client, app):
@@ -496,5 +499,46 @@ def test_upload_sales_pdf(client, app):
         sale_w = TerminalSale.query.filter_by(
             event_location_id=west_el.id, product_id=prod1.id
         ).first()
-        assert sale_e and sale_e.quantity == 7
-        assert sale_w and sale_w.quantity == 2
+        assert sale_e and sale_e.quantity == 7 and sale_e.sold_at
+        assert sale_w and sale_w.quantity == 2 and sale_w.sold_at
+
+
+def test_terminal_sale_last_sale(app):
+    email, loc_id, prod_id, _ = setup_event_env(app)
+    with app.app_context():
+        loc = db.session.get(Location, loc_id)
+        prod = db.session.get(Product, prod_id)
+        event1 = Event(
+            name="TS1",
+            start_date=date(2023, 1, 1),
+            end_date=date(2023, 1, 2),
+            event_type="inventory",
+        )
+        el1 = EventLocation(event=event1, location=loc)
+        sale1 = TerminalSale(
+            event_location=el1,
+            product=prod,
+            quantity=1,
+            sold_at=datetime.utcnow() - timedelta(days=1),
+        )
+        event2 = Event(
+            name="TS2",
+            start_date=date(2023, 1, 3),
+            end_date=date(2023, 1, 4),
+            event_type="inventory",
+        )
+        el2 = EventLocation(event=event2, location=loc)
+        sale2 = TerminalSale(
+            event_location=el2,
+            product=prod,
+            quantity=2,
+        )
+        db.session.add_all([event1, el1, sale1, event2, el2, sale2])
+        db.session.commit()
+
+        last_sale = (
+            TerminalSale.query.filter_by(product_id=prod.id)
+            .order_by(TerminalSale.sold_at.desc())
+            .first()
+        )
+        assert last_sale.quantity == 2
