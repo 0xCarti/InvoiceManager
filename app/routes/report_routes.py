@@ -7,7 +7,15 @@ from app.forms import (
     ProductSalesReportForm,
     VendorInvoiceReportForm,
 )
-from app.models import Customer, Invoice, InvoiceProduct, Product
+from app.models import (
+    Customer,
+    Invoice,
+    InvoiceProduct,
+    Product,
+    TerminalSale,
+    EventLocation,
+    Location,
+)
 
 report = Blueprint("report", __name__)
 
@@ -206,3 +214,87 @@ def product_recipe_report():
         )
 
     return render_template("report_product_recipe.html", form=form, search=search)
+
+
+@report.route("/reports/product-location-sales", methods=["GET", "POST"])
+@login_required
+def product_location_sales_report():
+    """Report showing product sales per location and last sale date."""
+    form = ProductSalesReportForm()
+    report_data = None
+
+    if form.validate_on_submit():
+        start = form.start_date.data
+        end = form.end_date.data
+
+        invoice_rows = (
+            db.session.query(
+                InvoiceProduct.product_id.label("product_id"),
+                db.func.max(Invoice.date_created).label("last_sale"),
+            )
+            .join(Invoice, InvoiceProduct.invoice_id == Invoice.id)
+            .filter(Invoice.date_created >= start, Invoice.date_created <= end)
+            .group_by(InvoiceProduct.product_id)
+            .all()
+        )
+        invoice_data = {
+            row.product_id: {"last_sale": row.last_sale} for row in invoice_rows
+        }
+
+        term_rows = (
+            db.session.query(
+                TerminalSale.product_id.label("product_id"),
+                EventLocation.location_id.label("location_id"),
+                db.func.sum(TerminalSale.quantity).label("total_quantity"),
+                db.func.max(TerminalSale.sold_at).label("last_sale"),
+            )
+            .join(EventLocation, TerminalSale.event_location_id == EventLocation.id)
+            .filter(TerminalSale.sold_at >= start, TerminalSale.sold_at <= end)
+            .group_by(TerminalSale.product_id, EventLocation.location_id)
+            .all()
+        )
+
+        terminal_data = {}
+        location_ids = set()
+        for row in term_rows:
+            pid = row.product_id
+            location_ids.add(row.location_id)
+            data = terminal_data.setdefault(
+                pid, {"locations": {}, "last_sale": row.last_sale}
+            )
+            data["locations"][row.location_id] = row.total_quantity
+            if row.last_sale > data["last_sale"]:
+                data["last_sale"] = row.last_sale
+
+        locations = {}
+        if location_ids:
+            loc_objs = Location.query.filter(Location.id.in_(location_ids)).all()
+            locations = {loc.id: loc.name for loc in loc_objs}
+
+        product_ids = set(invoice_data.keys()) | set(terminal_data.keys())
+        products = (
+            Product.query.filter(Product.id.in_(product_ids)).order_by(Product.name).all()
+            if product_ids
+            else []
+        )
+
+        report_data = []
+        for prod in products:
+            inv_last = invoice_data.get(prod.id, {}).get("last_sale")
+            term_last = terminal_data.get(prod.id, {}).get("last_sale")
+            last_sale = max(
+                [d for d in [inv_last, term_last] if d is not None],
+                default=None,
+            )
+            loc_list = []
+            for loc_id, qty in terminal_data.get(prod.id, {}).get("locations", {}).items():
+                loc_list.append(
+                    {"name": locations.get(loc_id, "Unknown"), "quantity": qty}
+                )
+            report_data.append(
+                {"name": prod.name, "last_sale": last_sale, "locations": loc_list}
+            )
+
+    return render_template(
+        "report_product_location_sales.html", form=form, report=report_data
+    )
