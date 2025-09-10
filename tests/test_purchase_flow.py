@@ -135,6 +135,49 @@ def test_purchase_and_receive(client, app):
         )
 
 
+def test_item_cost_visible_on_items_page(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-01-01",
+                "expected_date": "2023-01-05",
+                "delivery_charge": 2,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 3,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po_id}/receive",
+            data={
+                "received_date": "2023-01-04",
+                "gst": 0.25,
+                "pst": 0.35,
+                "delivery_charge": 2,
+                "location_id": location_id,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 3,
+                "items-0-cost": 2.5,
+            },
+            follow_redirects=True,
+        )
+
+        resp = client.get("/items")
+        assert f"{2.5:.6f} / each" in resp.get_data(as_text=True)
+
+
 def test_purchase_order_multiple_items(client, app):
     with app.app_context():
         user = User(

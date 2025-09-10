@@ -377,6 +377,9 @@ def receive_invoice(po_id):
                     else:
                         item_obj.cost = 0.0
 
+                    # Explicitly mark the item as dirty so cost updates persist
+                    db.session.add(item_obj)
+
                     record = LocationStandItem.query.filter_by(
                         location_id=invoice.location_id, item_id=item_obj.id
                     ).first()
