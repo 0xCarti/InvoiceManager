@@ -373,7 +373,10 @@ def test_receive_invoice_prefills_unit(client, app):
 
 
 <<<<<<< ours
+<<<<<<< ours
 =======
+=======
+>>>>>>> theirs
 def test_edit_purchase_order_prefills_unit(client, app):
     """Edit form should retain unit selection from original purchase order."""
     (
@@ -431,6 +434,9 @@ def test_edit_purchase_order_prefills_unit(client, app):
         assert poi.quantity == 4
 
 
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
 def test_edit_purchase_order_updates(client, app):
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
