@@ -203,6 +203,7 @@ def add_terminal_sale(event_id, el_id):
                         event_location_id=el_id,
                         product_id=product.id,
                         quantity=amount,
+                        sold_at=datetime.utcnow(),
                     )
                     db.session.add(sale)
             elif sale:
@@ -332,6 +333,7 @@ def upload_terminal_sales(event_id):
                         event_location_id=el.id,
                         product_id=product.id,
                         quantity=qty,
+                        sold_at=datetime.utcnow(),
                     )
                 )
         db.session.commit()

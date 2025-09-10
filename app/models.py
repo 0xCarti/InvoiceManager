@@ -591,6 +591,7 @@ class TerminalSale(db.Model):
         db.Integer, db.ForeignKey("product.id"), nullable=False
     )
     quantity = db.Column(db.Float, nullable=False)
+    sold_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     event_location = relationship(
         "EventLocation", back_populates="terminal_sales"
