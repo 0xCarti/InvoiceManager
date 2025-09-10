@@ -357,22 +357,19 @@ def receive_invoice(po_id):
                 )
 
                 if item_obj:
-                    factor = 1
-                    if unit_obj:
-                        factor = unit_obj.factor
-
+                    factor = (
+                        unit_obj.factor if unit_obj and unit_obj.factor else 1
+                    )
                     prev_qty = item_obj.quantity or 0
                     prev_cost = item_obj.cost or 0
                     new_qty = quantity * factor
+                    line_total = cost * quantity
                     total_qty = prev_qty + new_qty
                     item_obj.quantity = total_qty
 
-                    # convert cost to base unit (always positive)
-                    base_cost = cost / factor if factor else cost
-
                     if total_qty > 0:
                         item_obj.cost = (
-                            prev_cost * prev_qty + base_cost * new_qty
+                            prev_cost * prev_qty + line_total
                         ) / total_qty
                     else:
                         item_obj.cost = 0.0
