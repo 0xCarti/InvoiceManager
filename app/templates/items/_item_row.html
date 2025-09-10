@@ -1,7 +1,8 @@
 <tr id="item-row-{{ item.id }}">
     <td><input type="checkbox" name="item_ids" value="{{ item.id }}" style="transform: scale(1.5);"></td>
     <td>{{ item.name }}</td>
-    <td>{{ '%.6f'|format(item.cost) }} / {{ item.base_unit }}</td>
+    {% set default_unit = (item.units | selectattr('receiving_default') | first) %}
+    <td>{{ '%.6f'|format(item.cost) }} / {{ item.base_unit }}{% if default_unit and default_unit.factor and default_unit.factor != 1 %} ({{ '%.6f'|format(item.cost * default_unit.factor) }} / {{ default_unit.name }}){% endif %}</td>
     <td>
         <a href="{{ url_for('item.view_item', item_id=item.id) }}" class="btn btn-primary">View</a>
         <button type="button" class="btn btn-secondary edit-item-btn ms-1" data-item-id="{{ item.id }}">Edit</button>
