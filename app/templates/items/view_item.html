@@ -3,6 +3,8 @@
 <div class="container mt-5">
     <h2>{{ item.name }}</h2>
     <p><strong>Base Unit:</strong> {{ item.base_unit }}</p>
+    {% set default_unit = (item.units | selectattr('receiving_default') | first) %}
+    <p><strong>Current Cost:</strong> {{ '%.6f'|format(item.cost) }} / {{ item.base_unit }}{% if default_unit and default_unit.factor and default_unit.factor != 1 %} ({{ '%.6f'|format(item.cost * default_unit.factor) }} / {{ default_unit.name }}){% endif %}</p>
     <div class="row">
         <div class="col-12">
             <h4>Recent Purchase Invoices</h4>
@@ -22,7 +24,7 @@
                             <td>{{ pii.invoice.received_date }}</td>
                             <td><a href="{{ url_for('purchase.view_purchase_invoice', invoice_id=pii.invoice_id) }}">{{ pii.invoice_id }}</a></td>
                             <td>{{ pii.quantity }} {{ pii.unit.name if pii.unit else pii.unit_name or item.base_unit }}</td>
-                            <td>{{ '%.6f'|format(pii.cost) }}</td>
+                            <td>{{ '%.6f'|format((pii.cost|abs) / (pii.unit.factor if pii.unit and pii.unit.factor else 1)) }} / {{ item.base_unit }}</td>
                         </tr>
                         {% else %}
                         <tr><td colspan="4">No purchase invoices found.</td></tr>

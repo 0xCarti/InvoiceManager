@@ -76,6 +76,34 @@ def setup_purchase_with_case(app):
         return user.email, vendor.id, item.id, location.id, case_unit.id
 
 
+def setup_purchase_with_default_can(app):
+    """Setup purchase with base unit in ml and default receiving unit of 355ml."""
+    with app.app_context():
+        user = User(
+            email="mlbuyer@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        vendor = Vendor(first_name="Vend", last_name="Or")
+        item = Item(name="Soda", base_unit="ml")
+        can_unit = ItemUnit(
+            item=item,
+            name="355ml",
+            factor=355,
+            receiving_default=True,
+            transfer_default=True,
+        )
+        location = Location(name="Main")
+        db.session.add_all([user, vendor, item, can_unit, location])
+        db.session.commit()
+        lsi = LocationStandItem(
+            location_id=location.id, item_id=item.id, expected_count=0
+        )
+        db.session.add(lsi)
+        db.session.commit()
+        return user.email, vendor.id, item.id, location.id, can_unit.id
+
+
 def test_purchase_and_receive(client, app):
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
     with client:
@@ -176,6 +204,99 @@ def test_item_cost_visible_on_items_page(client, app):
 
         resp = client.get("/items")
         assert f"{2.5:.6f} / each" in resp.get_data(as_text=True)
+
+
+def test_item_cost_visible_on_item_page(client, app):
+    """Item detail page should show updated base unit cost after receiving invoice."""
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase_with_case(
+        app
+    )
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-01-01",
+                "expected_date": "2023-01-05",
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 1,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po_id}/receive",
+            data={
+                "received_date": "2023-01-04",
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "location_id": location_id,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 1,
+                "items-0-cost": 24,
+            },
+            follow_redirects=True,
+        )
+
+        resp = client.get(f"/items/{item_id}")
+        page = resp.get_data(as_text=True)
+        assert "Current Cost:" in page
+        assert f"{1.0:.6f} / each" in page
+
+
+def test_items_page_shows_default_unit_cost(client, app):
+    email, vendor_id, item_id, location_id, unit_id = (
+        setup_purchase_with_default_can(app)
+    )
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-01-01",
+                "expected_date": "2023-01-05",
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 1,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po_id}/receive",
+            data={
+                "received_date": "2023-01-04",
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "location_id": location_id,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 1,
+                "items-0-cost": 1,
+            },
+            follow_redirects=True,
+        )
+
+        resp = client.get("/items")
+        assert "1.000000 / 355ml" in resp.get_data(as_text=True)
 
 
 def test_purchase_order_multiple_items(client, app):
@@ -673,12 +794,16 @@ def test_reverse_invoice_restores_average(client, app):
         )
 
     with app.app_context():
-        invoice = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).first()
+        invoice = PurchaseInvoice.query.order_by(
+            PurchaseInvoice.id.desc()
+        ).first()
         inv_id = invoice.id
 
     with client:
         login(client, email, "pass")
-        client.get(f"/purchase_invoices/{inv_id}/reverse", follow_redirects=True)
+        client.get(
+            f"/purchase_invoices/{inv_id}/reverse", follow_redirects=True
+        )
 
     with app.app_context():
         item = db.session.get(Item, item_id)
