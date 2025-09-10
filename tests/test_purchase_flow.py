@@ -337,6 +337,101 @@ def test_receive_prefills_items_and_return(client, app):
         assert invoice.total == -4.5
 
 
+def test_receive_invoice_prefills_unit(client, app):
+    """Receive form should retain unit selection from purchase order."""
+    (
+        email,
+        vendor_id,
+        item_id,
+        location_id,
+        case_unit_id,
+    ) = setup_purchase_with_case(app)
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-04-01",
+                "expected_date": "2023-04-05",
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 3,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        resp = client.get(f"/purchase_orders/{po_id}/receive")
+        assert resp.status_code == 200
+        assert f'data-selected="{case_unit_id}"' in resp.get_data(as_text=True)
+
+
+<<<<<<< ours
+=======
+def test_edit_purchase_order_prefills_unit(client, app):
+    """Edit form should retain unit selection from original purchase order."""
+    (
+        email,
+        vendor_id,
+        item_id,
+        location_id,
+        case_unit_id,
+    ) = setup_purchase_with_case(app)
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-07-01",
+                "expected_date": "2023-07-05",
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 3,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        resp = client.get(f"/purchase_orders/edit/{po_id}")
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert f'data-selected="{case_unit_id}"' in html
+
+        resp = client.post(
+            f"/purchase_orders/edit/{po_id}",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-07-01",
+                "expected_date": "2023-07-06",
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 4,
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        poi = PurchaseOrderItem.query.filter_by(
+            purchase_order_id=po_id
+        ).first()
+        assert poi.unit_id == case_unit_id
+        assert poi.quantity == 4
+
+
+>>>>>>> theirs
 def test_edit_purchase_order_updates(client, app):
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
     with client:
@@ -508,7 +603,58 @@ def test_receive_invoice_base_unit_cost(client, app):
         assert lsi.expected_count == 24
 
 
+def test_case_item_cost_visible_on_items_page(client, app):
+    """Cost for case-based items should be visible on the items list."""
+    email, vendor_id, item_id, location_id, case_unit_id = (
+        setup_purchase_with_case(app)
+    )
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-01-01",
+                "expected_date": "2023-01-05",
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 1,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po_id}/receive",
+            data={
+                "received_date": "2023-01-06",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 1,
+                "items-0-cost": 24,
+            },
+            follow_redirects=True,
+        )
+
+        resp = client.get("/items")
+        assert "1.000000 / each" in resp.get_data(as_text=True)
+
+
+<<<<<<< ours
 def test_item_cost_is_average(client, app):
+=======
+def test_item_cost_is_last_cost(client, app):
+    """Receiving multiple invoices sets cost to the most recent price."""
+>>>>>>> theirs
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
 
     with client:
@@ -592,10 +738,11 @@ def test_item_cost_is_average(client, app):
     with app.app_context():
         item = db.session.get(Item, item_id)
         assert item.quantity == 4
-        assert item.cost == 3
+        assert item.cost == 4
 
 
-def test_reverse_invoice_restores_average(client, app):
+def test_reverse_invoice_restores_previous_cost(client, app):
+    """Reversing an invoice restores the prior base unit cost."""
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
 
     with client:
@@ -673,12 +820,16 @@ def test_reverse_invoice_restores_average(client, app):
         )
 
     with app.app_context():
-        invoice = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).first()
+        invoice = PurchaseInvoice.query.order_by(
+            PurchaseInvoice.id.desc()
+        ).first()
         inv_id = invoice.id
 
     with client:
         login(client, email, "pass")
-        client.get(f"/purchase_invoices/{inv_id}/reverse", follow_redirects=True)
+        client.get(
+            f"/purchase_invoices/{inv_id}/reverse", follow_redirects=True
+        )
 
     with app.app_context():
         item = db.session.get(Item, item_id)

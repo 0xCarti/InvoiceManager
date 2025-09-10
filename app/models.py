@@ -516,6 +516,7 @@ class PurchaseInvoiceItem(db.Model):
     unit_name = db.Column(db.String(50), nullable=True)
     quantity = db.Column(db.Float, nullable=False)
     cost = db.Column(db.Float, nullable=False)
+    prev_cost = db.Column(db.Float, nullable=False, default=0.0)
     item = relationship("Item")
     unit = relationship("ItemUnit")
 

@@ -344,6 +344,7 @@ def receive_invoice(po_id):
                     db.session.get(ItemUnit, unit_id) if unit_id else None
                 )
 
+                prev_cost = item_obj.cost if item_obj and item_obj.cost else 0.0
                 db.session.add(
                     PurchaseInvoiceItem(
                         invoice_id=invoice.id,
@@ -353,6 +354,7 @@ def receive_invoice(po_id):
                         unit_name=unit_obj.name if unit_obj else None,
                         quantity=quantity,
                         cost=cost,
+                        prev_cost=prev_cost,
                     )
                 )
 
@@ -361,18 +363,11 @@ def receive_invoice(po_id):
                         unit_obj.factor if unit_obj and unit_obj.factor else 1
                     )
                     prev_qty = item_obj.quantity or 0
-                    prev_cost = item_obj.cost or 0
                     new_qty = quantity * factor
-                    line_total = cost * quantity
-                    total_qty = prev_qty + new_qty
-                    item_obj.quantity = total_qty
+                    item_obj.quantity = prev_qty + new_qty
 
-                    if total_qty > 0:
-                        item_obj.cost = (
-                            prev_cost * prev_qty + line_total
-                        ) / total_qty
-                    else:
-                        item_obj.cost = 0.0
+                    base_cost = abs(cost) / factor if factor else abs(cost)
+                    item_obj.cost = base_cost
 
                     # Explicitly mark the item as dirty so cost updates persist
                     db.session.add(item_obj)
@@ -397,6 +392,10 @@ def receive_invoice(po_id):
                         )
                     record.expected_count += quantity * factor
 
+                    # Ensure the in-memory changes are sent to the database so
+                    # subsequent iterations or queries within this request see
+                    # the updated cost and quantity values immediately.
+                    db.session.flush()
         db.session.commit()
         po.received = True
         db.session.add(po)
@@ -583,15 +582,7 @@ def reverse_purchase_invoice(invoice_id):
         removed_qty = inv_item.quantity * factor
         qty_before = itm.quantity
         itm.quantity = qty_before - removed_qty
-
-        base_cost = abs(inv_item.cost) / factor if factor else abs(inv_item.cost)
-        total_cost_before = (itm.cost or 0) * qty_before
-        total_cost_after = total_cost_before - base_cost * removed_qty
-
-        if itm.quantity > 0:
-            itm.cost = total_cost_after / itm.quantity
-        else:
-            itm.cost = 0.0
+        itm.cost = inv_item.prev_cost or 0.0
 
         # Update expected count for the location where items were received
         record = LocationStandItem.query.filter_by(

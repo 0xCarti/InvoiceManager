@@ -163,7 +163,10 @@ def restore_backup(file_path):
                     if col.default is not None:
                         default = col.default.arg
                         if callable(default):
-                            default = default()
+                            try:
+                                default = default()
+                            except TypeError:
+                                default = default(None)
                     record[col.name] = default
                 else:
                     value = record[col.name]

@@ -26,7 +26,7 @@
         {% for item in form.items %}
         <div class="row g-2 mt-2 item-row align-items-center">
             <div class="col">{{ item.item(class="form-control item-select") }}</div>
-            <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select"></select></div>
+            <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data }}"></select></div>
             <div class="col">{{ item.quantity(class="form-control") }}</div>
             <div class="col-auto">
                 <button type="button" class="btn btn-danger remove-item">Remove</button>
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return row;
     }
 
-    function fetchUnits(selectEl) {
+    function fetchUnits(selectEl, selectedUnitId=null) {
         const itemId = selectEl.value;
         const unitSelect = selectEl.closest('.item-row').querySelector('.unit-select');
         if (!itemId) {
@@ -120,7 +120,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/items/${itemId}/units`).then(r => r.json()).then(data => {
             let opts = '';
             data.units.forEach(u => {
-                opts += `<option value="${u.id}" ${u.receiving_default ? 'selected' : ''}>${u.name} of ${u.factor} ${data.base_unit}${u.factor != 1 ? 's' : ''}</option>`;
+                const selected = (selectedUnitId && parseInt(selectedUnitId) === u.id) || (!selectedUnitId && u.receiving_default) ? 'selected' : '';
+                opts += `<option value="${u.id}" ${selected}>${u.name} of ${u.factor} ${data.base_unit}${u.factor != 1 ? 's' : ''}</option>`;
             });
             unitSelect.innerHTML = opts;
         });
@@ -195,7 +196,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    document.querySelectorAll('.item-select').forEach(sel => fetchUnits(sel));
+    document.querySelectorAll('.item-select').forEach(sel => {
+        const selected = sel.closest('.item-row').querySelector('.unit-select').dataset.selected;
+        fetchUnits(sel, selected);
+    });
 });
 </script>
 </div>
