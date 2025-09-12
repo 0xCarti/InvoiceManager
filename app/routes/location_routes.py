@@ -157,6 +157,66 @@ def edit_location(location_id):
     )
 
 
+@location.route("/locations/<int:source_id>/copy_items", methods=["POST"])
+@login_required
+def copy_location_items(source_id: int):
+    """Copy products and stand sheet items from one location to another.
+
+    The target location id can be supplied either as form data or JSON via the
+    ``target_id`` key. If the target location already has some of the products,
+    they will be left unchanged. Stand sheet items for newly copied products are
+    created automatically.
+    """
+    source = db.session.get(Location, source_id)
+    if source is None:
+        abort(404)
+
+    target_id = request.form.get("target_id") or (
+        request.json.get("target_id") if request.is_json else None
+    )
+    if not target_id:
+        abort(400)
+
+    target = db.session.get(Location, int(target_id))
+    if target is None:
+        abort(404)
+
+    existing_product_ids = {p.id for p in target.products}
+    for product in source.products:
+        if product.id not in existing_product_ids:
+            target.products.append(product)
+
+    db.session.commit()
+
+    existing_items = {
+        item.item_id
+        for item in LocationStandItem.query.filter_by(location_id=target.id).all()
+    }
+    for product in source.products:
+        for recipe_item in product.recipe_items:
+            if recipe_item.countable and recipe_item.item_id not in existing_items:
+                db.session.add(
+                    LocationStandItem(
+                        location_id=target.id,
+                        item_id=recipe_item.item_id,
+                        expected_count=0,
+                        purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+                    )
+                )
+                existing_items.add(recipe_item.item_id)
+
+    db.session.commit()
+    log_activity(
+        f"Copied location items from {source.id} to {target.id}"
+    )
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        return jsonify({"success": True})
+
+    flash("Items copied successfully.", "success")
+    return redirect(url_for("locations.edit_location", location_id=target.id))
+
+
 @location.route("/locations/<int:location_id>/stand_sheet")
 @login_required
 def view_stand_sheet(location_id):
