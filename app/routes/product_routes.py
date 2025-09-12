@@ -262,6 +262,42 @@ def validate_product_form():
     return jsonify(success=False, errors=form.errors), 400
 
 
+@product.route("/products/copy/<int:product_id>")
+@login_required
+def copy_product(product_id):
+    """Provide a pre-filled form for duplicating a product."""
+    product_obj = db.session.get(Product, product_id)
+    if product_obj is None:
+        abort(404)
+    form = ProductWithRecipeForm()
+    form.name.data = product_obj.name
+    form.price.data = product_obj.price
+    form.cost.data = product_obj.cost or 0.0
+    form.gl_code.data = product_obj.gl_code
+    form.gl_code_id.data = product_obj.gl_code_id
+    form.sales_gl_code.data = product_obj.sales_gl_code_id
+    form.items.min_entries = max(1, len(product_obj.recipe_items))
+    item_choices = [
+        (itm.id, itm.name) for itm in Item.query.filter_by(archived=False).all()
+    ]
+    unit_choices = [(u.id, u.name) for u in ItemUnit.query.all()]
+    for i, recipe_item in enumerate(product_obj.recipe_items):
+        if len(form.items) <= i:
+            form.items.append_entry()
+        form.items[i].item.choices = item_choices
+        form.items[i].unit.choices = unit_choices
+        form.items[i].item.data = recipe_item.item_id
+        form.items[i].unit.data = recipe_item.unit_id
+        form.items[i].quantity.data = recipe_item.quantity
+        form.items[i].countable.data = recipe_item.countable
+    for i in range(len(product_obj.recipe_items), len(form.items)):
+        form.items[i].item.choices = item_choices
+        form.items[i].unit.choices = unit_choices
+    return render_template(
+        "products/create_product.html", form=form, product_id=None, title="Copy Product"
+    )
+
+
 @product.route("/products/<int:product_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_product(product_id):
