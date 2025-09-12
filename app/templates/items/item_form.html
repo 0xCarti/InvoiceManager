@@ -39,7 +39,7 @@
         <button type="button" class="btn btn-secondary" id="add-unit">Add Unit</button>
         {{ form.submit(class="btn btn-primary") }}
     </form>
-    <script>
+    <script data-allow-html>
         let unitIndex = {{ form.units|length }};
         document.getElementById('add-unit').addEventListener('click', function() {
             const container = document.getElementById('units-container');

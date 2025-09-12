@@ -5,6 +5,7 @@
     <td>
         <a href="{{ url_for('item.view_item', item_id=item.id) }}" class="btn btn-primary">View</a>
         <button type="button" class="btn btn-secondary edit-item-btn ms-1" data-item-id="{{ item.id }}">Edit</button>
+        <button type="button" class="btn btn-secondary copy-item-btn ms-1" data-item-id="{{ item.id }}">Copy</button>
         <a href="{{ url_for('item.item_locations', item_id=item.id) }}" class="btn btn-info ms-1">Locations</a>
     </td>
 </tr>
