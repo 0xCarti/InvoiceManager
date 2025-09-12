@@ -49,16 +49,26 @@
         {% endfor %}
     </div>
     <button id="add-item" type="button" class="btn btn-secondary">Add Item</button>
-    <button type="button" class="btn btn-secondary" id="calc-cost" disabled>Set Cost From Recipe</button>
+    <button type="button" class="btn btn-secondary" id="calc-cost" {% if product_id %}data-product-id="{{ product_id }}"{% else %}disabled{% endif %}>Set Cost From Recipe</button>
     <button type="submit" class="btn btn-primary">Submit</button>
 </form>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const btn = document.getElementById('calc-cost');
     if (btn) {
-        btn.addEventListener('click', function() {
-            alert('Product must be saved before cost can be calculated from recipe.');
-        });
+        const pid = btn.getAttribute('data-product-id');
+        if (pid) {
+            btn.addEventListener('click', function() {
+                fetch(`/products/${pid}/calculate_cost`).then(resp => resp.json()).then(data => {
+                    const costInput = document.getElementById('cost');
+                    if (costInput) costInput.value = data.cost;
+                });
+            });
+        } else {
+            btn.addEventListener('click', function() {
+                alert('Product must be saved before cost can be calculated from recipe.');
+            });
+        }
     }
 
     const countableLabel = "{{ form.items[0].countable.label.text }}";
