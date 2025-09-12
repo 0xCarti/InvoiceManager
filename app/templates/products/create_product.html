@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Create Product{% endblock %}
+{% block title %}{{ title or "Create Product" }}{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
-    <h2>Create Product</h2>
-    {% set form_action = url_for('product.create_product') %}
+    <h2>{{ title or "Create Product" }}</h2>
+    {% set form_action = form_action or url_for('product.create_product') %}
     {% include 'products/_create_product_form.html' %}
 </div>
 {% endblock %}
