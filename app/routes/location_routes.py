@@ -160,61 +160,79 @@ def edit_location(location_id):
 @location.route("/locations/<int:source_id>/copy_items", methods=["POST"])
 @login_required
 def copy_location_items(source_id: int):
-    """Copy products and stand sheet items from one location to another.
+    """Copy products and stand sheet items from one location to others.
 
-    The target location id can be supplied either as form data or JSON via the
-    ``target_id`` key. If the target location already has some of the products,
-    they will be left unchanged. Stand sheet items for newly copied products are
-    created automatically.
+    The target location ids can be supplied either as form data or JSON via the
+    ``target_ids`` key (list) or a single ``target_id``. Any existing products
+    and stand sheet items on the target locations are overwritten to match the
+    source exactly.
     """
     source = db.session.get(Location, source_id)
     if source is None:
         abort(404)
 
-    target_id = request.form.get("target_id") or (
-        request.json.get("target_id") if request.is_json else None
-    )
-    if not target_id:
+    # Gather target ids from either JSON payload or form data
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        ids = data.get("target_ids") or (
+            [data.get("target_id")] if data.get("target_id") is not None else []
+        )
+    else:
+        ids_str = request.form.get("target_ids") or request.form.get("target_id")
+        ids = [s.strip() for s in ids_str.split(",") if s.strip()] if ids_str else []
+
+    if not ids:
         abort(400)
 
-    target = db.session.get(Location, int(target_id))
-    if target is None:
-        abort(404)
+    target_ids = [int(tid) for tid in ids]
 
-    existing_product_ids = {p.id for p in target.products}
-    for product in source.products:
-        if product.id not in existing_product_ids:
-            target.products.append(product)
-
-    db.session.commit()
-
-    existing_items = {
-        item.item_id
-        for item in LocationStandItem.query.filter_by(location_id=target.id).all()
+    # Cache source products and stand items for reuse
+    source_products = list(source.products)
+    source_item_counts = {
+        item.item_id: item.expected_count
+        for item in LocationStandItem.query.filter_by(location_id=source.id).all()
     }
-    for product in source.products:
-        for recipe_item in product.recipe_items:
-            if recipe_item.countable and recipe_item.item_id not in existing_items:
-                db.session.add(
-                    LocationStandItem(
-                        location_id=target.id,
-                        item_id=recipe_item.item_id,
-                        expected_count=0,
-                        purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+
+    processed_targets = []
+    for tid in target_ids:
+        target = db.session.get(Location, tid)
+        if target is None:
+            abort(404)
+
+        # Overwrite products
+        target.products = list(source_products)
+
+        # Remove existing stand sheet items
+        LocationStandItem.query.filter_by(location_id=target.id).delete()
+
+        # Recreate stand sheet items matching the source
+        for product in source_products:
+            for recipe_item in product.recipe_items:
+                if recipe_item.countable:
+                    expected = source_item_counts.get(recipe_item.item_id, 0)
+                    db.session.add(
+                        LocationStandItem(
+                            location_id=target.id,
+                            item_id=recipe_item.item_id,
+                            expected_count=expected,
+                            purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+                        )
                     )
-                )
-                existing_items.add(recipe_item.item_id)
+
+        processed_targets.append(str(tid))
 
     db.session.commit()
     log_activity(
-        f"Copied location items from {source.id} to {target.id}"
+        f"Copied location items from {source.id} to {', '.join(processed_targets)}"
     )
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
         return jsonify({"success": True})
 
     flash("Items copied successfully.", "success")
-    return redirect(url_for("locations.edit_location", location_id=target.id))
+    return redirect(
+        url_for("locations.edit_location", location_id=target_ids[0])
+    )
 
 
 @location.route("/locations/<int:location_id>/stand_sheet")
