@@ -176,8 +176,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     $(document).on('click', '.copy-location-btn', function() {
         const sourceId = $(this).data('id');
-        const targetId = prompt('Enter target location ID to copy stand sheet to:');
-        if (!targetId) {
+        const targetIds = prompt('Enter target location ID(s) to copy stand sheet to (comma-separated):');
+        if (!targetIds) {
+            return;
+        }
+        const ids = targetIds.split(',').map(id => id.trim()).filter(Boolean);
+        if (ids.length === 0) {
             return;
         }
         $.ajax({
@@ -185,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
             method: 'POST',
             contentType: 'application/json',
             headers: { 'X-CSRFToken': csrfToken },
-            data: JSON.stringify({ target_id: targetId }),
+            data: JSON.stringify({ target_ids: ids }),
             success: function(resp) {
                 alert('Stand sheet copied successfully.');
             },

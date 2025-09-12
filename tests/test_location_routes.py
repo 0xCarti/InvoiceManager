@@ -136,3 +136,74 @@ def test_location_filters(client, app):
         )
         assert b"OldLoc" in resp.data
         assert b"ActiveLoc" not in resp.data
+
+
+def test_copy_stand_sheet_overwrites_and_supports_multiple_targets(client, app):
+    email, prod_id = setup_data(app)
+    with app.app_context():
+        # second product to show overwrite behaviour
+        prod2 = Product(name="Pie", price=4.0, cost=2.0)
+        db.session.add(prod2)
+        db.session.commit()
+        db.session.add(
+            ProductRecipeItem(
+                product_id=prod2.id,
+                item_id=Item.query.first().id,
+                unit_id=ItemUnit.query.first().id,
+                quantity=1,
+                countable=True,
+            )
+        )
+        db.session.commit()
+        prod2_id = prod2.id
+    with client:
+        login(client, email, "pass")
+        # Source location with product 1
+        client.post(
+            "/locations/add",
+            data={"name": "Source", "products": str(prod_id)},
+            follow_redirects=True,
+        )
+        # Targets initially with product 2
+        client.post(
+            "/locations/add",
+            data={"name": "Target1", "products": str(prod2_id)},
+            follow_redirects=True,
+        )
+        client.post(
+            "/locations/add",
+            data={"name": "Target2", "products": str(prod2_id)},
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        source = Location.query.filter_by(name="Source").first()
+        t1 = Location.query.filter_by(name="Target1").first()
+        t2 = Location.query.filter_by(name="Target2").first()
+        # set expected count on source stand item
+        src_item = LocationStandItem.query.filter_by(location_id=source.id).first()
+        src_item.expected_count = 5
+        db.session.commit()
+        src_item_id = src_item.item_id
+        source_id = source.id
+        t1_id = t1.id
+        t2_id = t2.id
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            f"/locations/{source_id}/copy_items",
+            json={"target_ids": [t1_id, t2_id]},
+        )
+        assert resp.status_code == 200
+        assert resp.json["success"]
+
+    with app.app_context():
+        for loc_id in (t1_id, t2_id):
+            loc = db.session.get(Location, loc_id)
+            # products overwritten to match source exactly
+            assert [p.id for p in loc.products] == [prod_id]
+            stand_items = LocationStandItem.query.filter_by(location_id=loc.id).all()
+            assert len(stand_items) == 1
+            assert stand_items[0].item_id == src_item_id
+            assert stand_items[0].expected_count == 5
