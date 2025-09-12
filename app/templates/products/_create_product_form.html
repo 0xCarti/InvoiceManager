@@ -22,9 +22,21 @@
     </div>
     <div id="item-list">
         {% for item in form.items %}
-        <div class="row mb-2 align-items-center">
-            <div class="col">{{ item.item(class="form-control") }}</div>
-            <div class="col">{{ item.unit(class="form-control") }}</div>
+        {% set selected_name = '' %}
+        {% for val, label in form.items[0].item.choices %}
+            {% if val == item.item.data %}
+                {% set selected_name = label %}
+            {% endif %}
+        {% endfor %}
+        <div class="row mb-2 align-items-center item-row">
+            <div class="col position-relative">
+                <input type="hidden" name="{{ item.item.name }}" value="{{ item.item.data or '' }}" class="item-id">
+                <input type="text" class="form-control item-search" placeholder="Search item..." autocomplete="off" value="{{ selected_name }}">
+                <div class="list-group item-suggestions"></div>
+            </div>
+            <div class="col">
+                <select name="{{ item.unit.name }}" class="form-control unit-select" data-selected="{{ item.unit.data or '' }}"></select>
+            </div>
             <div class="col">{{ item.quantity(class="form-control") }}</div>
             <div class="col-auto">
                 {{ item.countable() }}
@@ -49,25 +61,48 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const itemOptions = `{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
-    const unitOptions = `{% for val, label in form.items[0].unit.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
     const countableLabel = "{{ form.items[0].countable.label.text }}";
     let itemIndex = {{ form.items|length }};
 
-    document.getElementById('add-item').addEventListener('click', function(e) {
-        e.preventDefault();
+    function fetchUnits(row, itemId, selected) {
+        if (!itemId) {
+            row.querySelector('.unit-select').innerHTML = '';
+            return;
+        }
+        fetch(`/items/${itemId}/units`).then(r => r.json()).then(data => {
+            let opts = `<option value="">${data.base_unit}</option>`;
+            data.units.forEach(u => {
+                opts += `<option value="${u.id}">${u.name} of ${u.factor} ${data.base_unit}${u.factor != 1 ? 's' : ''}</option>`;
+            });
+            const sel = row.querySelector('.unit-select');
+            sel.innerHTML = opts;
+            if (selected) sel.value = selected;
+        });
+    }
+
+    function createRow(idx) {
         const row = document.createElement('div');
-        row.classList.add('row', 'mb-2', 'align-items-center');
+        row.classList.add('row', 'mb-2', 'align-items-center', 'item-row');
         row.innerHTML = `
-            <div class="col"><select name="items-${itemIndex}-item" class="form-control">${itemOptions}</select></div>
-            <div class="col"><select name="items-${itemIndex}-unit" class="form-control">${unitOptions}</select></div>
-            <div class="col"><input type="number" step="any" name="items-${itemIndex}-quantity" class="form-control"></div>
+            <div class="col position-relative">
+                <input type="hidden" name="items-${idx}-item" class="item-id">
+                <input type="text" class="form-control item-search" placeholder="Search item..." autocomplete="off">
+                <div class="list-group item-suggestions"></div>
+            </div>
+            <div class="col"><select name="items-${idx}-unit" class="form-control unit-select"></select></div>
+            <div class="col"><input type="number" step="any" name="items-${idx}-quantity" class="form-control"></div>
             <div class="col-auto form-check d-flex align-items-center">
-                <input type="checkbox" name="items-${itemIndex}-countable" class="form-check-input" id="items-${itemIndex}-countable">
-                <label class="form-check-label ms-1" for="items-${itemIndex}-countable">${countableLabel}</label>
+                <input type="checkbox" name="items-${idx}-countable" class="form-check-input" id="items-${idx}-countable">
+                <label class="form-check-label ms-1" for="items-${idx}-countable">${countableLabel}</label>
             </div>
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
         `;
+        return row;
+    }
+
+    document.getElementById('add-item').addEventListener('click', function(e) {
+        e.preventDefault();
+        const row = createRow(itemIndex);
         document.getElementById('item-list').appendChild(row);
         itemIndex++;
     });
@@ -75,7 +110,41 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('item-list').addEventListener('click', function(e) {
         if (e.target && e.target.classList.contains('remove-item')) {
             e.target.closest('.row').remove();
+        } else if (e.target && e.target.classList.contains('item-suggestion')) {
+            e.preventDefault();
+            const row = e.target.closest('.item-row');
+            const id = e.target.dataset.id;
+            row.querySelector('.item-id').value = id;
+            row.querySelector('.item-search').value = e.target.textContent;
+            row.querySelector('.item-suggestions').innerHTML = '';
+            fetchUnits(row, id);
         }
+    });
+
+    document.getElementById('item-list').addEventListener('keyup', function(e) {
+        if (e.target && e.target.classList.contains('item-search')) {
+            const row = e.target.closest('.item-row');
+            const query = e.target.value;
+            const sugg = row.querySelector('.item-suggestions');
+            if (!query) {
+                row.querySelector('.item-id').value = '';
+                sugg.innerHTML = '';
+                row.querySelector('.unit-select').innerHTML = '';
+                return;
+            }
+            fetch(`/items/search?term=${encodeURIComponent(query)}`)
+                .then(r => r.json())
+                .then(data => {
+                    sugg.innerHTML = data.map(it => `<a href="#" class="list-group-item list-group-item-action item-suggestion" data-id="${it.id}">${it.name}</a>`).join('');
+                });
+        }
+    });
+
+    document.querySelectorAll('.item-row').forEach(row => {
+        const itemId = row.querySelector('.item-id').value;
+        const sel = row.querySelector('.unit-select');
+        const selected = sel.dataset.selected;
+        if (itemId) fetchUnits(row, itemId, selected);
     });
 });
 </script>
