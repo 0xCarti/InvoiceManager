@@ -1,5 +1,5 @@
-from functools import lru_cache
 import os
+from functools import lru_cache
 from zoneinfo import available_timezones
 
 from flask import g
@@ -34,7 +34,6 @@ from wtforms.validators import (
 from wtforms.widgets import CheckboxInput, ListWidget
 
 from app.models import GLCode, Item, ItemUnit, Location, Product, Vendor
-
 
 # Uploaded backup files are capped at 10MB to prevent excessive memory usage
 MAX_BACKUP_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -289,25 +288,41 @@ class ProductForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(ProductForm, self).__init__(*args, **kwargs)
-        sales_codes = [
-            (g.id, g.code)
-            for g in GLCode.query.filter(GLCode.code.like("4%")).all()
+        sales_codes_raw = (
+            GLCode.query.filter(GLCode.code.like("4%"))
+            .order_by(GLCode.code)
+            .all()
+        )
+        formatted_sales_codes = [
+            (
+                g.id,
+                f"{g.code} - {g.description}" if g.description else g.code,
+            )
+            for g in sales_codes_raw
         ]
-        self.gl_code.choices = [(code, code) for _, code in sales_codes]
-        self.gl_code_id.choices = sales_codes
-        self.sales_gl_code.choices = sales_codes
+        self.gl_code.choices = [(g.code, g.code) for g in sales_codes_raw]
+        self.gl_code_id.choices = formatted_sales_codes
+        self.sales_gl_code.choices = formatted_sales_codes
 
     def validate_gl_code(self, field):
         if field.data and not str(field.data).startswith("4"):
             raise ValidationError("Product GL codes must start with 4")
         from app.models import GLCode
 
-        sales_codes = [
-            (g.id, g.code)
-            for g in GLCode.query.filter(GLCode.code.like("4%")).all()
+        sales_codes_raw = (
+            GLCode.query.filter(GLCode.code.like("4%"))
+            .order_by(GLCode.code)
+            .all()
+        )
+        formatted_sales_codes = [
+            (
+                g.id,
+                f"{g.code} - {g.description}" if g.description else g.code,
+            )
+            for g in sales_codes_raw
         ]
-        self.gl_code_id.choices = sales_codes
-        self.sales_gl_code.choices = sales_codes
+        self.gl_code_id.choices = formatted_sales_codes
+        self.sales_gl_code.choices = formatted_sales_codes
 
 
 class RecipeItemForm(FlaskForm):
