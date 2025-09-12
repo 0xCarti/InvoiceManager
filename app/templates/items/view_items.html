@@ -180,14 +180,11 @@ document.getElementById('select-all').onclick = function() {
 <script>
 const itemModalEl = document.getElementById('itemModal');
 
-function isSafeScriptContent(content) {
-    return content && !/<\/?[a-z][\s\S]*>/i.test(content);
-}
-
 function executeScripts(container) {
     container.querySelectorAll('script').forEach(s => {
         const content = s.textContent;
-        if (isSafeScriptContent(content)) {
+        const allowHtml = s.dataset.allowHtml !== undefined;
+        if (allowHtml || !/<\/?[a-z][\s\S]*>/i.test(content)) {
             new Function(content)();
         }
         s.remove();
@@ -253,6 +250,20 @@ document.querySelector('#itemsTable').addEventListener('click', function(e) {
                 const modal = new bootstrap.Modal(itemModalEl);
                 modal.show();
                 bindItemForm(url);
+            });
+    } else if (e.target.classList.contains('copy-item-btn')) {
+        const itemId = e.target.getAttribute('data-item-id');
+        const url = '{{ url_for('item.copy_item', item_id=0) }}'.replace('0', itemId);
+        const actionUrl = '{{ url_for('item.add_item') }}';
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.text())
+            .then(html => {
+                itemModalEl.querySelector('.modal-title').textContent = 'Copy Item';
+                itemModalEl.querySelector('.modal-body').innerHTML = html;
+                executeScripts(itemModalEl);
+                const modal = new bootstrap.Modal(itemModalEl);
+                modal.show();
+                bindItemForm(actionUrl);
             });
     }
 });

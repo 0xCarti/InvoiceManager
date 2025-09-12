@@ -282,6 +282,22 @@ def add_item():
     return render_template("items/item_form_page.html", form=form, title="Add Item")
 
 
+@item.route("/items/copy/<int:item_id>")
+@login_required
+def copy_item(item_id):
+    """Provide a pre-filled form for duplicating an item."""
+    item = db.session.get(Item, item_id)
+    if item is None:
+        abort(404)
+    form = ItemForm(obj=item)
+    form.gl_code.data = item.gl_code
+    form.gl_code_id.data = item.gl_code_id
+    form.purchase_gl_code.data = item.purchase_gl_code_id
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return render_template("items/item_form.html", form=form)
+    return render_template("items/item_form_page.html", form=form, title="Add Item")
+
+
 @item.route("/items/edit/<int:item_id>", methods=["GET", "POST"])
 @login_required
 def edit_item(item_id):
