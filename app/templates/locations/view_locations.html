@@ -37,6 +37,7 @@
                 <td>
                     <button type="button" class="btn btn-info edit-location-btn" data-id="{{ location.id }}">Edit</button>
                     <a href="{{ url_for('locations.view_stand_sheet', location_id=location.id) }}" class="btn btn-secondary">Stand Sheet</a>
+                    <button type="button" class="btn btn-warning copy-location-btn" data-id="{{ location.id }}">Copy Stand Sheet</button>
                     <form action="{{ url_for('locations.delete_location', location_id=location.id) }}" method="post" class="d-inline">
                         {{ delete_form.hidden_tag() }}
                         <button type="submit" class="btn btn-danger">Delete</button>
@@ -158,6 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <td>
                 <button type="button" class="btn btn-info edit-location-btn" data-id="${loc.id}">Edit</button>
                 <a href="/locations/${loc.id}/stand_sheet" class="btn btn-secondary">Stand Sheet</a>
+                <button type="button" class="btn btn-warning copy-location-btn" data-id="${loc.id}">Copy Stand Sheet</button>
                 <form action="/locations/delete/${loc.id}" method="post" class="d-inline">
                     <input type="hidden" name="csrf_token" value="${csrfToken}">
                     <button type="submit" class="btn btn-danger">Delete</button>
@@ -171,6 +173,27 @@ document.addEventListener('DOMContentLoaded', function() {
         const row = $(`tr[data-id='${loc.id}']`);
         row.find('td:first').text(loc.name);
     }
+
+    $(document).on('click', '.copy-location-btn', function() {
+        const sourceId = $(this).data('id');
+        const targetId = prompt('Enter target location ID to copy stand sheet to:');
+        if (!targetId) {
+            return;
+        }
+        $.ajax({
+            url: `/locations/${sourceId}/copy_items`,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': csrfToken },
+            data: JSON.stringify({ target_id: targetId }),
+            success: function(resp) {
+                alert('Stand sheet copied successfully.');
+            },
+            error: function(xhr) {
+                alert('Error: ' + (xhr.responseJSON?.message || 'Unknown error'));
+            }
+        });
+    });
 });
 </script>
 {% endblock %}
