@@ -91,3 +91,18 @@ def test_copy_location_items(client, app):
                 LocationStandItem.query.filter_by(location_id=target_id).count()
                 == 1
             )
+
+
+def test_copy_button_visible(client, app):
+    email, prod_id = setup_data(app)
+    with client:
+        login(client, email, "pass")
+        # create a location so the listing renders at least one row
+        resp = client.post(
+            "/locations/add",
+            data={"name": "Source", "products": str(prod_id)},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        resp = client.get("/locations")
+        assert b"Copy Stand Sheet" in resp.data
