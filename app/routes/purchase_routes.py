@@ -323,7 +323,10 @@ def receive_invoice(po_id):
             delivery_charge=form.delivery_charge.data or 0.0,
         )
         db.session.add(invoice)
-        db.session.commit()
+        # Flush so the invoice has an ID for related line items without
+        # committing the transaction yet. This keeps all updates in a single
+        # commit so item cost changes persist reliably.
+        db.session.flush()
 
         items = [
             key
@@ -359,15 +362,29 @@ def receive_invoice(po_id):
                 )
 
                 if item_obj:
-                    factor = (
-                        unit_obj.factor if unit_obj and unit_obj.factor else 1
+                    factor = unit_obj.factor if unit_obj and unit_obj.factor else 1
+                    prev_qty = (
+                        db.session.query(
+                            db.func.sum(LocationStandItem.expected_count)
+                        )
+                        .filter(LocationStandItem.item_id == item_obj.id)
+                        .scalar()
+                        or 0
                     )
-                    prev_qty = item_obj.quantity or 0
                     new_qty = quantity * factor
-                    item_obj.quantity = prev_qty + new_qty
+                    total_qty = prev_qty + new_qty
 
-                    base_cost = abs(cost) / factor if factor else abs(cost)
-                    item_obj.cost = base_cost
+                    # Cost per base unit for the newly received stock
+                    cost_per_unit = cost / factor if factor else cost
+                    prev_total_cost = prev_qty * prev_cost
+                    new_total_cost = cost_per_unit * new_qty
+                    if total_qty > 0:
+                        weighted_cost = (prev_total_cost + new_total_cost) / total_qty
+                    else:
+                        weighted_cost = cost_per_unit
+
+                    item_obj.quantity = total_qty
+                    item_obj.cost = weighted_cost
 
                     # Explicitly mark the item as dirty so cost updates persist
                     db.session.add(item_obj)
@@ -396,9 +413,10 @@ def receive_invoice(po_id):
                     # subsequent iterations or queries within this request see
                     # the updated cost and quantity values immediately.
                     db.session.flush()
-        db.session.commit()
         po.received = True
         db.session.add(po)
+        # Commit once so that invoice, items, and updated item costs are saved
+        # atomically, ensuring the weighted cost persists in the database.
         db.session.commit()
         log_activity(f"Received invoice {invoice.id} for PO {po.id}")
         flash("Invoice received successfully!", "success")

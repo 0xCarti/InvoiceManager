@@ -12,6 +12,7 @@ from flask import (
 )
 from flask_login import login_required
 from sqlalchemy import func, or_
+from sqlalchemy.orm import aliased
 
 from app import db
 from app.forms import DeleteForm, ProductRecipeForm, ProductWithRecipeForm
@@ -83,10 +84,11 @@ def view_products():
     if sales_gl_code_ids:
         query = query.filter(Product.sales_gl_code_id.in_(sales_gl_code_ids))
     if customer_id:
+        invoice_alias = aliased(Invoice)
         query = (
             query.join(InvoiceProduct, Product.invoice_products)
-            .join(Invoice, InvoiceProduct.invoice_id == Invoice.id)
-            .filter(Invoice.customer_id == customer_id)
+            .join(invoice_alias, InvoiceProduct.invoice_id == invoice_alias.id)
+            .filter(invoice_alias.customer_id == customer_id)
             .distinct()
         )
 

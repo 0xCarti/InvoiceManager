@@ -1,5 +1,7 @@
 from werkzeug.security import generate_password_hash
 
+import pytest
+
 from app import db
 from app.models import (
     GLCode,
@@ -372,11 +374,6 @@ def test_receive_invoice_prefills_unit(client, app):
         assert f'data-selected="{case_unit_id}"' in resp.get_data(as_text=True)
 
 
-<<<<<<< ours
-<<<<<<< ours
-=======
-=======
->>>>>>> theirs
 def test_edit_purchase_order_prefills_unit(client, app):
     """Edit form should retain unit selection from original purchase order."""
     (
@@ -432,12 +429,6 @@ def test_edit_purchase_order_prefills_unit(client, app):
         ).first()
         assert poi.unit_id == case_unit_id
         assert poi.quantity == 4
-
-
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
 def test_edit_purchase_order_updates(client, app):
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
     with client:
@@ -655,12 +646,8 @@ def test_case_item_cost_visible_on_items_page(client, app):
         assert "1.000000 / each" in resp.get_data(as_text=True)
 
 
-<<<<<<< ours
 def test_item_cost_is_average(client, app):
-=======
-def test_item_cost_is_last_cost(client, app):
-    """Receiving multiple invoices sets cost to the most recent price."""
->>>>>>> theirs
+    """Receiving multiple invoices averages the item cost."""
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
 
     with client:
@@ -744,7 +731,270 @@ def test_item_cost_is_last_cost(client, app):
     with app.app_context():
         item = db.session.get(Item, item_id)
         assert item.quantity == 4
-        assert item.cost == 4
+        assert item.cost == 3
+
+
+def test_item_cost_average_uses_location_counts(client, app):
+    """Weighted cost should use existing inventory even if item.quantity is stale."""
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+
+    # Receive first invoice so location count updates
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-07-10",
+                "expected_date": "2023-07-15",
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po1_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po1_id}/receive",
+            data={
+                "received_date": "2023-07-16",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+                "items-0-cost": 2,
+            },
+            follow_redirects=True,
+        )
+
+    # Simulate stale global quantity
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        item.quantity = 0
+        db.session.commit()
+
+    # Second invoice at higher cost should average with location inventory
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-07-20",
+                "expected_date": "2023-07-25",
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po2_id = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po2_id}/receive",
+            data={
+                "received_date": "2023-07-26",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+                "items-0-cost": 4,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        assert item.quantity == 4
+        assert item.cost == 3
+
+
+def test_item_cost_average_visible_on_items_page(client, app):
+    """Items list should display weighted average cost after multiple invoices."""
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+
+    # First purchase and receive at cost 2
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-07-10",
+                "expected_date": "2023-07-15",
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po1_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po1_id}/receive",
+            data={
+                "received_date": "2023-07-16",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+                "items-0-cost": 2,
+            },
+            follow_redirects=True,
+        )
+
+    # Second purchase and receive at cost 4
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-07-20",
+                "expected_date": "2023-07-25",
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po2_id = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po2_id}/receive",
+            data={
+                "received_date": "2023-07-26",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 2,
+                "items-0-cost": 4,
+            },
+            follow_redirects=True,
+        )
+
+        resp = client.get("/items")
+        assert "3.000000 / each" in resp.get_data(as_text=True)
+
+
+def test_weighted_cost_saved_with_case_unit(client, app):
+    """Weighted average cost should persist when using a case unit."""
+    email, vendor_id, item_id, location_id, case_unit_id = setup_purchase_with_case(app)
+
+    # First purchase: 1 case at $24 per case -> cost per each = $1
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-09-01",
+                "expected_date": "2023-09-05",
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 1,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po1_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po1_id}/receive",
+            data={
+                "received_date": "2023-09-06",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 1,
+                "items-0-cost": 24,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        assert item.quantity == 24
+        assert item.cost == pytest.approx(1)
+
+    # Second purchase: 2 cases at $12 per case -> cost per each = $0.5
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-09-10",
+                "expected_date": "2023-09-15",
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 2,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po2_id = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).first().id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po2_id}/receive",
+            data={
+                "received_date": "2023-09-16",
+                "location_id": location_id,
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": case_unit_id,
+                "items-0-quantity": 2,
+                "items-0-cost": 12,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        # Quantity: 24 + 48 = 72 eaches
+        assert item.quantity == 72
+        # Weighted cost: (24*1 + 48*0.5) / 72 = 2/3
+        assert item.cost == pytest.approx(2 / 3)
 
 
 def test_reverse_invoice_restores_previous_cost(client, app):
