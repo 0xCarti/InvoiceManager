@@ -3,7 +3,6 @@ import re
 import tempfile
 from datetime import datetime
 
-import pytesseract
 from flask import (
     Blueprint,
     abort,
@@ -18,7 +17,6 @@ from flask import (
 from flask_login import login_required
 from pdf2image import convert_from_path
 from pdf2image.exceptions import PDFInfoNotInstalledError
-from PIL import Image
 from werkzeug.utils import secure_filename
 
 from app import db
@@ -39,6 +37,7 @@ from app.models import (
     TerminalSale,
 )
 from app.utils import decode_qr, generate_qr_code
+from app.utils.standsheet_ocr import read_stand_sheet
 
 event = Blueprint("event", __name__)
 
@@ -592,7 +591,10 @@ def bulk_stand_sheets(event_id):
         if not items:
             chunks = [[]]
         else:
-            chunks = [items[i : i + PAGE_SIZE] for i in range(0, len(items), PAGE_SIZE)]
+            chunks = [
+                items[i : i + PAGE_SIZE]  # noqa: E203
+                for i in range(0, len(items), PAGE_SIZE)
+            ]
         for chunk in chunks:
             data.append({"location": loc, "stand_items": chunk, "qr": qr})
     dt = datetime.now()
@@ -738,9 +740,7 @@ def scan_stand_sheet():
                     os.remove(p)
                 flash("Stand sheet not recognized")
                 return redirect(url_for("event.scan_stand_sheet"))
-            ocr_data = pytesseract.image_to_data(
-                Image.open(img_path), output_type=pytesseract.Output.DICT
-            )
+            ocr_data = read_stand_sheet(img_path)
             parsed = _parse_scanned_sheet(ocr_data, el)
             current_app.logger.info(
                 "Parsed stand sheet for event %s location %s: %s",
