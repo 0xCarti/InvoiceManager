@@ -632,50 +632,79 @@ def _parse_scanned_sheet(ocr_data, event_location, threshold=80):
     item_map = {
         entry["item"].name.lower(): entry["item"] for entry in stand_items
     }
-    lines = {}
-    for text, conf, line in zip(
+
+    tokens = []
+    for text, conf, left, top, width, height in zip(
         ocr_data.get("text", []),
         ocr_data.get("conf", []),
-        ocr_data.get("line_num", []),
+        ocr_data.get("left", []),
+        ocr_data.get("top", []),
+        ocr_data.get("width", []),
+        ocr_data.get("height", []),
     ):
         if text.strip():
-            lines.setdefault(line, []).append((text, float(conf)))
+            tokens.append(
+                {
+                    "text": text,
+                    "conf": float(conf),
+                    "left": int(left),
+                    "top": int(top),
+                    "width": int(width),
+                    "height": int(height),
+                }
+            )
+
+    # Group tokens into rows using their vertical position
+    tokens.sort(key=lambda t: t["top"])
+    rows = []
+    row_tol = 10
+    for token in tokens:
+        if not rows or token["top"] - rows[-1]["top"] > row_tol:
+            rows.append({"top": token["top"], "tokens": [token]})
+        else:
+            rows[-1]["tokens"].append(token)
+
+    column_ranges = {
+        "opening_count": (90, 140),
+        "transferred_in": (140, 190),
+        "transferred_out": (190, 240),
+        "eaten": (240, 290),
+        "spoiled": (290, 340),
+        "closing_count": (340, 390),
+    }
 
     results = {}
-    for tokens in lines.values():
-        words, confs = zip(*tokens)
-        numbers = []
-        num_confs = []
+    for row in rows:
+        row_tokens = sorted(row["tokens"], key=lambda t: t["left"])
         name_tokens = []
-        for t, c in zip(words, confs):
-            if re.match(r"^-?\d+(?:\.\d+)?$", t):
-                numbers.append(t)
-                num_confs.append(c)
+        field_data = {}
+        for tok in row_tokens:
+            text = tok["text"]
+            if re.match(r"^-?\d+(?:\.\d+)?$", text):
+                cx = tok["left"] + tok["width"] // 2
+                for field, (xmin, xmax) in column_ranges.items():
+                    if xmin <= cx < xmax:
+                        field_data[field] = (
+                            float(text),
+                            tok["conf"] < threshold,
+                        )
+                        break
             else:
-                name_tokens.append(t)
+                name_tokens.append(text)
         name = " ".join(name_tokens).lower()
         name = re.sub(r"\s*\(.*?\)", "", name).strip()
-        if name in item_map and len(numbers) >= 8:
-            fields = {
-                "opening_count": (float(numbers[1]), num_confs[1] < threshold),
-                "transferred_in": (
-                    float(numbers[2]),
-                    num_confs[2] < threshold,
-                ),
-                "transferred_out": (
-                    float(numbers[3]),
-                    num_confs[3] < threshold,
-                ),
-                "eaten": (float(numbers[4]), num_confs[4] < threshold),
-                "spoiled": (float(numbers[5]), num_confs[5] < threshold),
-                "closing_count": (float(numbers[6]), num_confs[6] < threshold),
-            }
-            results[str(item_map[name].id)] = {
-                k: v[0] for k, v in fields.items()
-            }
-            results[str(item_map[name].id)]["flags"] = {
-                k: v[1] for k, v in fields.items()
-            }
+        if name in item_map:
+            values = {}
+            flags = {}
+            for field in column_ranges:
+                if field in field_data:
+                    values[field] = field_data[field][0]
+                    flags[field] = field_data[field][1]
+                else:
+                    values[field] = 0.0
+                    flags[field] = True
+            results[str(item_map[name].id)] = values
+            results[str(item_map[name].id)]["flags"] = flags
     return results
 
 
