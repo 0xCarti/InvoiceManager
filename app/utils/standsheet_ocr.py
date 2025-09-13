@@ -12,7 +12,9 @@ import cv2
 _paddle_reader = None
 
 
-def _tesseract_data(_path: str) -> Dict[str, List] | None:  # pragma: no cover - legacy stub
+def _tesseract_data(
+    _path: str,
+) -> Dict[str, List] | None:  # pragma: no cover - legacy stub
     """Placeholder for removed Tesseract-based implementation.
 
     The original project attempted Tesseract OCR before falling back to
@@ -71,6 +73,12 @@ def read_stand_sheet(path: str) -> Dict[str, List]:
     if img is None:
         return data
     _, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # ``paddlex`` expects a three-channel image.  ``cv2`` returns a two-dimensional
+    # array when reading in grayscale, which causes ``IndexError: tuple index out of
+    # range`` during normalization.  Converting back to BGR ensures the expected
+    # shape.
+    if img.ndim == 2:  # pragma: no cover - thin compatibility shim
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     results = reader.ocr(img)
     for idx, (box, (txt, conf)) in enumerate(results, start=1):
         if txt.strip():
