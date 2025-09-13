@@ -25,6 +25,11 @@ You can perform the steps below manually or run one of the setup scripts provide
    pip install -r requirements.txt
    ```
 
+   Poppler is required for the stand sheet scanning feature when uploading
+   PDF files. Install `poppler-utils` via your system package manager
+   (for Debian/Ubuntu: `apt-get install poppler-utils`). The Docker image
+   provided with this project installs this dependency automatically.
+
 ## Required Environment Variables
 
 The application requires several variables to be present in your environment:

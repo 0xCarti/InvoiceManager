@@ -4,7 +4,6 @@ import tempfile
 from datetime import datetime
 
 import pytesseract
-from pdf2image import convert_from_path
 from flask import (
     Blueprint,
     abort,
@@ -13,10 +12,12 @@ from flask import (
     redirect,
     render_template,
     request,
-    url_for,
     session,
+    url_for,
 )
 from flask_login import login_required
+from pdf2image import convert_from_path
+from pdf2image.exceptions import PDFInfoNotInstalledError
 from PIL import Image
 from werkzeug.utils import secure_filename
 
@@ -648,8 +649,14 @@ def _parse_scanned_sheet(ocr_data, event_location, threshold=80):
         if name in item_map and len(numbers) >= 8:
             fields = {
                 "opening_count": (float(numbers[1]), num_confs[1] < threshold),
-                "transferred_in": (float(numbers[2]), num_confs[2] < threshold),
-                "transferred_out": (float(numbers[3]), num_confs[3] < threshold),
+                "transferred_in": (
+                    float(numbers[2]),
+                    num_confs[2] < threshold,
+                ),
+                "transferred_out": (
+                    float(numbers[3]),
+                    num_confs[3] < threshold,
+                ),
                 "eaten": (float(numbers[4]), num_confs[4] < threshold),
                 "spoiled": (float(numbers[5]), num_confs[5] < threshold),
                 "closing_count": (float(numbers[7]), num_confs[7] < threshold),
@@ -673,7 +680,10 @@ def scan_stand_sheet():
             return redirect(url_for("event.scan_stand_sheet"))
 
         filename = secure_filename(file.filename or "")
-        is_pdf = filename.lower().endswith(".pdf") or file.mimetype == "application/pdf"
+        is_pdf = (
+            filename.lower().endswith(".pdf")
+            or file.mimetype == "application/pdf"
+        )
         suffix = ".pdf" if is_pdf else ".png"
 
         cleanup_paths = []
@@ -684,9 +694,19 @@ def scan_stand_sheet():
             cleanup_paths.append(path)
 
         if is_pdf:
-            images = convert_from_path(path)
+            try:
+                images = convert_from_path(path)
+            except PDFInfoNotInstalledError:
+                for p in cleanup_paths:
+                    os.remove(p)
+                flash(
+                    "Poppler is required to process PDF stand sheets. Please install poppler-utils."
+                )
+                return redirect(url_for("event.scan_stand_sheet"))
             for img in images:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as img_tmp:
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".png"
+                ) as img_tmp:
                     img.save(img_tmp.name, format="PNG")
                     image_paths.append(img_tmp.name)
                     cleanup_paths.append(img_tmp.name)
@@ -716,7 +736,11 @@ def scan_stand_sheet():
             )
             parsed = _parse_scanned_sheet(ocr_data, el)
             parsed_sheets.append(
-                {"event_id": event_id, "location_id": location_id, "data": parsed}
+                {
+                    "event_id": event_id,
+                    "location_id": location_id,
+                    "data": parsed,
+                }
             )
 
         session["scanned_sheets"] = parsed_sheets
