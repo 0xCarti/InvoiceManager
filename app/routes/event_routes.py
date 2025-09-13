@@ -736,6 +736,12 @@ def scan_stand_sheet():
                 Image.open(img_path), output_type=pytesseract.Output.DICT
             )
             parsed = _parse_scanned_sheet(ocr_data, el)
+            current_app.logger.info(
+                "Parsed stand sheet for event %s location %s: %s",
+                event_id,
+                location_id,
+                parsed,
+            )
             parsed_sheets.append(
                 {
                     "event_id": event_id,
