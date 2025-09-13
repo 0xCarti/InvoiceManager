@@ -585,10 +585,16 @@ def bulk_stand_sheets(event_id):
     if ev is None:
         abort(404)
     data = []
+    PAGE_SIZE = 20  # number of items per stand sheet page
     for el in ev.locations:
         loc, items = _get_stand_items(el.location_id, event_id)
         qr = generate_qr_code({"event_id": event_id, "location_id": loc.id})
-        data.append({"location": loc, "stand_items": items, "qr": qr})
+        if not items:
+            chunks = [[]]
+        else:
+            chunks = [items[i : i + PAGE_SIZE] for i in range(0, len(items), PAGE_SIZE)]
+        for chunk in chunks:
+            data.append({"location": loc, "stand_items": chunk, "qr": qr})
     dt = datetime.now()
     generated_at_local = (
         f"{dt.month}/{dt.day}/{dt.year} {dt.strftime('%I:%M %p').lstrip('0')}"
