@@ -41,8 +41,8 @@
     </form>
     <script data-allow-html>
         let unitIndex = {{ form.units|length }};
+        const unitsContainer = document.getElementById('units-container');
         document.getElementById('add-unit').addEventListener('click', function() {
-            const container = document.getElementById('units-container');
             const row = document.createElement('div');
             row.classList.add('row', 'mb-2');
             row.innerHTML = `
@@ -51,12 +51,31 @@
             <div class="col-auto"><input type="checkbox" name="units-${unitIndex}-receiving_default"> Receiving Default</div>
             <div class="col-auto"><input type="checkbox" name="units-${unitIndex}-transfer_default"> Transfer Default</div>
             <button type="button" class="btn btn-danger btn-sm remove-unit ml-2">Delete</button>`;
-        container.appendChild(row);
-        unitIndex++;
-    });
-        document.getElementById('units-container').addEventListener('click', function(e){
-            if(e.target && e.target.classList.contains('remove-unit')){
+            unitsContainer.appendChild(row);
+            unitIndex++;
+        });
+        unitsContainer.addEventListener('click', function(e) {
+            if (e.target && e.target.classList.contains('remove-unit')) {
                 e.target.closest('.row').remove();
+            }
+        });
+        unitsContainer.addEventListener('change', function(e) {
+            if (e.target.matches('input[type="checkbox"][name$="-receiving_default"]')) {
+                unitsContainer
+                    .querySelectorAll('input[type="checkbox"][name$="-receiving_default"]')
+                    .forEach(cb => {
+                        if (cb !== e.target) {
+                            cb.checked = false;
+                        }
+                    });
+            } else if (e.target.matches('input[type="checkbox"][name$="-transfer_default"]')) {
+                unitsContainer
+                    .querySelectorAll('input[type="checkbox"][name$="-transfer_default"]')
+                    .forEach(cb => {
+                        if (cb !== e.target) {
+                            cb.checked = false;
+                        }
+                    });
             }
         });
     </script>
