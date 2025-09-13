@@ -205,10 +205,11 @@ def copy_location_items(source_id: int):
         # Remove existing stand sheet items
         LocationStandItem.query.filter_by(location_id=target.id).delete()
 
-        # Recreate stand sheet items matching the source
+        # Recreate stand sheet items matching the source without duplicates
+        existing_items = set()
         for product in source_products:
             for recipe_item in product.recipe_items:
-                if recipe_item.countable:
+                if recipe_item.countable and recipe_item.item_id not in existing_items:
                     expected = source_item_counts.get(recipe_item.item_id, 0)
                     db.session.add(
                         LocationStandItem(
@@ -218,6 +219,7 @@ def copy_location_items(source_id: int):
                             purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
                         )
                     )
+                    existing_items.add(recipe_item.item_id)
 
         processed_targets.append(str(tid))
 
