@@ -660,7 +660,7 @@ def _parse_scanned_sheet(ocr_data, event_location, threshold=80):
                 ),
                 "eaten": (float(numbers[4]), num_confs[4] < threshold),
                 "spoiled": (float(numbers[5]), num_confs[5] < threshold),
-                "closing_count": (float(numbers[7]), num_confs[7] < threshold),
+                "closing_count": (float(numbers[6]), num_confs[6] < threshold),
             }
             results[str(item_map[name].id)] = {
                 k: v[0] for k, v in fields.items()

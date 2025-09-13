@@ -90,17 +90,17 @@ def test_scan_stand_sheet(client, app, monkeypatch):
         "app.routes.event_routes.convert_from_path", lambda *a, **k: [img]
     )
     dummy_data = {
-        "level": [1] * 9,
-        "page_num": [1] * 9,
-        "block_num": [1] * 9,
-        "par_num": [1] * 9,
-        "line_num": [1] * 9,
-        "word_num": list(range(1, 10)),
-        "left": [0] * 9,
-        "top": [0] * 9,
-        "width": [0] * 9,
-        "height": [0] * 9,
-        "conf": [95] * 9,
+        "level": [1] * 8,
+        "page_num": [1] * 8,
+        "block_num": [1] * 8,
+        "par_num": [1] * 8,
+        "line_num": [1] * 8,
+        "word_num": list(range(1, 9)),
+        "left": [0] * 8,
+        "top": [0] * 8,
+        "width": [0] * 8,
+        "height": [0] * 8,
+        "conf": [95] * 8,
         "text": [
             "ScanItem (each)",
             "10",
@@ -109,7 +109,6 @@ def test_scan_stand_sheet(client, app, monkeypatch):
             "1",
             "0",
             "0",
-            "5",
             "4",
         ],
     }
