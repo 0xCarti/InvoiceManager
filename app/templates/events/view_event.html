@@ -1,34 +1,50 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>{{ event.name }}</h2>
-<p>Start: {{ event.start_date }} End: {{ event.end_date }}</p>
-{% if not event.closed %}
-<a class="btn btn-secondary" href="{{ url_for('event.add_location', event_id=event.id) }}">Add Location</a>
-{% endif %}
-<a class="btn btn-secondary" href="{{ url_for('event.bulk_stand_sheets', event_id=event.id) }}">Stand Sheets</a>
-{% if not event.closed %}
-<a class="btn btn-secondary" href="{{ url_for('event.scan_stand_sheet') }}">Upload Stand Sheets</a>
-{% endif %}
-{% if event.event_type == 'inventory' %}
-<a class="btn btn-secondary" href="{{ url_for('event.bulk_count_sheets', event_id=event.id) }}">Count Sheets</a>
-{% endif %}
-{% if not event.closed %}
-<a class="btn btn-secondary" href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}">Upload Sales</a>
-<a class="btn btn-danger" href="{{ url_for('event.close_event', event_id=event.id) }}">Close Event</a>
-{% endif %}
-<ul class="mt-3">
-{% for el in event.locations %}
-    <li>{{ el.location.name }} -
-        {% if not el.confirmed and not event.closed %}
-            <a href="{{ url_for('event.stand_sheet', event_id=event.id, location_id=el.location_id) }}">Stand Sheet</a>
-            {% if event.event_type == 'inventory' %}| <a href="{{ url_for('event.count_sheet', event_id=event.id, location_id=el.location_id) }}">Count Sheet</a>{% endif %} |
-            <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Enter Sales</a> |
-            <a href="{{ url_for('event.confirm_location', event_id=event.id, el_id=el.id) }}">Confirm</a>
-        {% else %}
-            Stand Sheet | Terminal Sales
-            {% if el.confirmed %}| Confirmed{% endif %}
+<div class="container mt-4">
+    <h2>{{ event.name }}</h2>
+    <p>Start: {{ event.start_date }} End: {{ event.end_date }}</p>
+    <div class="mb-3">
+        {% if not event.closed %}
+        <a class="btn btn-primary me-2" href="{{ url_for('event.add_location', event_id=event.id) }}">Add Location</a>
         {% endif %}
-    </li>
-{% endfor %}
-</ul>
+        <a class="btn btn-secondary me-2" href="{{ url_for('event.bulk_stand_sheets', event_id=event.id) }}">Stand Sheets</a>
+        {% if not event.closed %}
+        <a class="btn btn-secondary me-2" href="{{ url_for('event.scan_stand_sheet') }}">Upload Stand Sheets</a>
+        {% endif %}
+        {% if event.event_type == 'inventory' %}
+        <a class="btn btn-secondary me-2" href="{{ url_for('event.bulk_count_sheets', event_id=event.id) }}">Count Sheets</a>
+        {% endif %}
+        {% if not event.closed %}
+        <a class="btn btn-secondary me-2" href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}">Upload Sales</a>
+        <a class="btn btn-danger" href="{{ url_for('event.close_event', event_id=event.id) }}">Close Event</a>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for el in event.locations %}
+                <tr>
+                    <td>{{ el.location.name }}</td>
+                    <td>
+                        {% if not el.confirmed and not event.closed %}
+                            <a href="{{ url_for('event.stand_sheet', event_id=event.id, location_id=el.location_id) }}">Stand Sheet</a>
+                            {% if event.event_type == 'inventory' %}| <a href="{{ url_for('event.count_sheet', event_id=event.id, location_id=el.location_id) }}">Count Sheet</a>{% endif %} |
+                            <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Enter Sales</a> |
+                            <a href="{{ url_for('event.confirm_location', event_id=event.id, el_id=el.id) }}">Confirm</a>
+                        {% else %}
+                            Stand Sheet | Terminal Sales {% if el.confirmed %}| Confirmed{% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 {% endblock %}

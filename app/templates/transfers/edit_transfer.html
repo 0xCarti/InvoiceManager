@@ -83,11 +83,13 @@ document.addEventListener('click', function(event) {
 function addItemToList(item, index) {
     fetch(`/items/${item.id}/units`).then(r => r.json()).then(data => {
         const base = data.base_unit;
-        const units = data.units;
-        var options = '';
+        const units = data.units || [];
+        const hasDefault = units.some(u => u.transfer_default);
+        units.unshift({id:0, name: base, factor:1, transfer_default: !hasDefault});
         let defaultUnit = units.find(u => u.transfer_default) || units[0];
+        var options = '';
         units.forEach(u => {
-            const label = `${u.name} of ${u.factor} ${base}${u.factor != 1 ? 's' : ''}`;
+            const label = u.id === 0 ? base : `${u.name} of ${u.factor} ${base}${u.factor != 1 ? 's' : ''}`;
             const selected = u.id === defaultUnit.id ? 'selected' : '';
             options += `<option value="${u.id}" data-factor="${u.factor}" ${selected}>${label}</option>`;
         });

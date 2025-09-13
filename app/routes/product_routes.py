@@ -8,6 +8,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import login_required
@@ -36,6 +37,16 @@ product = Blueprint("product", __name__)
 @login_required
 def view_products():
     """List available products."""
+    if request.args.get("reset"):
+        session.pop("product_filters", None)
+        return redirect(url_for("product.view_products"))
+
+    if not request.args and "product_filters" in session:
+        return redirect(url_for("product.view_products", **session["product_filters"]))
+
+    if request.args:
+        session["product_filters"] = request.args.to_dict(flat=False)
+
     delete_form = DeleteForm()
     create_form = ProductWithRecipeForm()
     page = request.args.get("page", 1, type=int)
@@ -94,6 +105,7 @@ def view_products():
 
     if cost_min is not None and cost_max is not None and cost_min > cost_max:
         flash("Invalid cost range: min cannot be greater than max.", "error")
+        session.pop("product_filters", None)
         return redirect(url_for("product.view_products"))
     if (
         price_min is not None
@@ -101,6 +113,7 @@ def view_products():
         and price_min > price_max
     ):
         flash("Invalid price range: min cannot be greater than max.", "error")
+        session.pop("product_filters", None)
         return redirect(url_for("product.view_products"))
     if cost_min is not None:
         query = query.filter(Product.cost >= cost_min)

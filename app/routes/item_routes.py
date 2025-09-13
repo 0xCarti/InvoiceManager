@@ -8,6 +8,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import login_required
@@ -46,6 +47,16 @@ MAX_IMPORT_SIZE = 1 * 1024 * 1024  # 1 MB
 @login_required
 def view_items():
     """Display the inventory item list."""
+    if request.args.get("reset"):
+        session.pop("item_filters", None)
+        return redirect(url_for("item.view_items"))
+
+    if not request.args and "item_filters" in session:
+        return redirect(url_for("item.view_items", **session["item_filters"]))
+
+    if request.args:
+        session["item_filters"] = request.args.to_dict(flat=False)
+
     page = request.args.get("page", 1, type=int)
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
@@ -96,6 +107,7 @@ def view_items():
         query = query.filter(Item.base_unit == base_unit)
     if cost_min is not None and cost_max is not None and cost_min > cost_max:
         flash("Invalid cost range: min cannot be greater than max.", "error")
+        session.pop("item_filters", None)
         return redirect(url_for("item.view_items"))
     if cost_min is not None:
         query = query.filter(Item.cost >= cost_min)
