@@ -10,7 +10,6 @@ def _dummy_image(tmp_path: Path) -> str:
     Image.new("RGB", (10, 10), "white").save(img_path)
     return str(img_path)
 
-
 def test_read_stand_sheet_uses_paddleocr(monkeypatch, tmp_path):
     path = _dummy_image(tmp_path)
 
@@ -26,16 +25,17 @@ def test_read_stand_sheet_uses_paddleocr(monkeypatch, tmp_path):
     class DummyPaddleReader:
         def ocr(self, _img):
             box = [[0, 0], [10, 0], [10, 10], [0, 10]]
-            return [[box, ("789", 0.95)]]
+            return [[box, ("123", 0.85)]]
 
     monkeypatch.setattr(
-        "app.utils.standsheet_ocr._get_paddle_reader", lambda: DummyPaddleReader()
+        "app.utils.standsheet_ocr._get_paddle_reader",
+        lambda: DummyPaddleReader(),
     )
 
     result = read_stand_sheet(path)
     assert result == {
-        "text": ["789"],
-        "conf": [95.0],
+        "text": ["123"],
+        "conf": [85.0],
         "line_num": [1],
         "left": [0],
         "top": [0],
