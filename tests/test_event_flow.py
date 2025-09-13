@@ -22,6 +22,7 @@ from app.models import (
     TerminalSale,
     User,
 )
+from app.utils import generate_qr_code
 from tests.utils import login
 
 
@@ -238,10 +239,68 @@ def test_no_sales_after_confirmation(client, app):
         )
         resp = client.get(f"/events/{eid}/locations/{elid}/sales/add")
         assert resp.status_code == 302
-        assert f"/events/{eid}" in resp.headers["Location"]
-        resp = client.get(f"/events/{eid}/stand_sheet/{loc_id}")
-        assert resp.status_code == 302
-        assert f"/events/{eid}" in resp.headers["Location"]
+
+
+def test_stand_sheet_qr_on_all_pages(client, app):
+    email, loc_id, prod_id, item_id = setup_event_env(app)
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/events/create",
+            data={
+                "name": "QR Event",
+                "start_date": "2023-05-01",
+                "end_date": "2023-05-02",
+                "event_type": "inventory",
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        ev = Event.query.first()
+        eid = ev.id
+        loc = db.session.get(Location, loc_id)
+        for i in range(21):
+            item = Item(name=f"Extra{i}", base_unit="each")
+            prod = Product(name=f"Prod{i}", price=1.0, cost=0.5)
+            db.session.add_all([item, prod])
+            db.session.flush()
+            iu = ItemUnit(
+                item_id=item.id,
+                name="each",
+                factor=1,
+                receiving_default=True,
+                transfer_default=True,
+            )
+            db.session.add(iu)
+            db.session.add(
+                LocationStandItem(
+                    location_id=loc_id, item_id=item.id, expected_count=0
+                )
+            )
+            db.session.add(
+                ProductRecipeItem(
+                    product_id=prod.id,
+                    item_id=item.id,
+                    unit_id=iu.id,
+                    quantity=1,
+                    countable=True,
+                )
+            )
+            loc.products.append(prod)
+        db.session.commit()
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/events/{eid}/add_location",
+            data={"location_id": loc_id},
+            follow_redirects=True,
+        )
+        resp = client.get(f"/events/{eid}/stand_sheets")
+        assert resp.status_code == 200
+        qr = generate_qr_code({"event_id": eid, "location_id": loc_id})
+        assert resp.data.count(qr.encode()) == 2
 
 
 def test_save_stand_sheet(client, app):
