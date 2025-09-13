@@ -102,7 +102,7 @@ def test_scan_stand_sheet(client, app, monkeypatch):
         "height": [0] * 9,
         "conf": [95] * 9,
         "text": [
-            "ScanItem",
+            "ScanItem (each)",
             "10",
             "8",
             "2",
