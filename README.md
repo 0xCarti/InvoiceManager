@@ -34,7 +34,10 @@ You can perform the steps below manually or run one of the setup scripts provide
    `pytesseract` library and falls back to EasyOCR for handwritten numbers.
    Install `tesseract-ocr` via your package manager
    (for Debian/Ubuntu: `apt-get install tesseract-ocr`). The provided Docker
-   image includes this dependency as well.
+   image includes this dependency as well. For a final fallback the
+   application can use PaddleOCR when both engines return low confidence.
+   Install the CPU versions of `paddlepaddle` and `paddleocr` via pip to
+   enable this optional dependency.
 
 ## Required Environment Variables
 
