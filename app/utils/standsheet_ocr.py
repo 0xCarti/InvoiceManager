@@ -43,9 +43,18 @@ def _tesseract_data(path: str):
     # Apply adaptive threshold to improve character recognition
     _, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     try:
-        return pytesseract.image_to_data(
+        data = pytesseract.image_to_data(
             img, output_type=Output.DICT, config="--oem 3 --psm 6"
         )
+        return {
+            "text": data.get("text", []),
+            "conf": data.get("conf", []),
+            "line_num": data.get("line_num", []),
+            "left": data.get("left", []),
+            "top": data.get("top", []),
+            "width": data.get("width", []),
+            "height": data.get("height", []),
+        }
     except Exception:  # pragma: no cover - OCR failure
         return None
 
@@ -53,31 +62,59 @@ def _tesseract_data(path: str):
 def read_stand_sheet(path: str) -> Dict[str, List]:
     """Read an image file and return OCR data.
 
-    The returned dictionary contains ``text``, ``conf`` and ``line_num`` lists,
-    matching the structure produced by ``pytesseract.image_to_data``.
+    The returned dictionary mirrors ``pytesseract.image_to_data`` and includes
+    positional fields so downstream parsing can determine token placement.
     """
 
-    data: Dict[str, List] = {"text": [], "conf": [], "line_num": []}
+    data: Dict[str, List] = {
+        "text": [],
+        "conf": [],
+        "line_num": [],
+        "left": [],
+        "top": [],
+        "width": [],
+        "height": [],
+    }
 
     tess = _tesseract_data(path)
     if tess:
-        for text, conf, line in zip(
-            tess["text"], tess["conf"], tess["line_num"]
+        for text, conf, line, left, top, width, height in zip(
+            tess["text"],
+            tess["conf"],
+            tess["line_num"],
+            tess["left"],
+            tess["top"],
+            tess["width"],
+            tess["height"],
         ):
             if text.strip():
                 data["text"].append(text)
                 data["conf"].append(float(conf))
                 data["line_num"].append(int(line))
+                data["left"].append(int(left))
+                data["top"].append(int(top))
+                data["width"].append(int(width))
+                data["height"].append(int(height))
 
     if data["text"]:
         return data
 
     reader = _get_reader()
     results = reader.readtext(path, detail=1)
-    for idx, (_box, txt, conf) in enumerate(results, start=1):
+    for idx, (box, txt, conf) in enumerate(results, start=1):
         if txt.strip():
             data["text"].append(txt)
             # EasyOCR returns confidence in range [0,1]; scale to [0,100]
             data["conf"].append(float(conf) * 100)
             data["line_num"].append(idx)
+            xs = [p[0] for p in box]
+            ys = [p[1] for p in box]
+            left = min(xs)
+            top = min(ys)
+            width = max(xs) - left
+            height = max(ys) - top
+            data["left"].append(int(left))
+            data["top"].append(int(top))
+            data["width"].append(int(width))
+            data["height"].append(int(height))
     return data

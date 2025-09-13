@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from io import BytesIO
 
 import qrcode
@@ -90,17 +91,6 @@ def test_scan_stand_sheet(client, app, monkeypatch):
         "app.routes.event_routes.convert_from_path", lambda *a, **k: [img]
     )
     dummy_data = {
-        "level": [1] * 9,
-        "page_num": [1] * 9,
-        "block_num": [1] * 9,
-        "par_num": [1] * 9,
-        "line_num": [1] * 9,
-        "word_num": list(range(1, 10)),
-        "left": [0] * 9,
-        "top": [0] * 9,
-        "width": [0] * 9,
-        "height": [0] * 9,
-        "conf": [95] * 9,
         "text": [
             "ScanItem (each)",
             "10",
@@ -112,6 +102,12 @@ def test_scan_stand_sheet(client, app, monkeypatch):
             "4",
             "0",
         ],
+        "conf": [95] * 9,
+        "line_num": [1] * 9,
+        "left": [0, 50, 100, 150, 200, 250, 300, 350, 400],
+        "top": [0] * 9,
+        "width": [10] * 9,
+        "height": [10] * 9,
     }
     monkeypatch.setattr(
         "app.routes.event_routes.read_stand_sheet",
@@ -154,3 +150,83 @@ def test_scan_stand_sheet(client, app, monkeypatch):
         assert sheet.eaten == 0
         assert sheet.spoiled == 0
         assert sheet.closing_count == 4
+
+
+def test_parse_scanned_sheet_partial_row(app):
+    email, loc_id, item_id = setup_scan_env(app)
+    with app.app_context():
+        ev = Event(
+            name="ParseEvent",
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 1, 2),
+            event_type="inventory",
+        )
+        db.session.add(ev)
+        db.session.commit()
+        el = EventLocation(event_id=ev.id, location_id=loc_id)
+        db.session.add(el)
+        db.session.commit()
+        ocr_data = {
+            "text": ["ScanItem (each)", "8", "2", "1", "4"],
+            "conf": [95] * 5,
+            "line_num": [1] * 5,
+            "left": [0, 100, 150, 200, 350],
+            "top": [0] * 5,
+            "width": [10] * 5,
+            "height": [10] * 5,
+        }
+        from app.routes.event_routes import _parse_scanned_sheet
+
+        parsed = _parse_scanned_sheet(ocr_data, el)
+        pid = str(item_id)
+        assert parsed[pid]["opening_count"] == 8
+        assert parsed[pid]["transferred_in"] == 2
+        assert parsed[pid]["transferred_out"] == 1
+        assert parsed[pid]["eaten"] == 0
+        assert parsed[pid]["spoiled"] == 0
+        assert parsed[pid]["closing_count"] == 4
+        flags = parsed[pid]["flags"]
+        assert flags["opening_count"] is False
+        assert flags["transferred_in"] is False
+        assert flags["transferred_out"] is False
+        assert flags["eaten"] is True
+        assert flags["spoiled"] is True
+        assert flags["closing_count"] is False
+
+
+def test_parse_scanned_sheet_misaligned_row(app):
+    email, loc_id, item_id = setup_scan_env(app)
+    with app.app_context():
+        ev = Event(
+            name="MisalignEvent",
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 1, 2),
+            event_type="inventory",
+        )
+        db.session.add(ev)
+        db.session.commit()
+        el = EventLocation(event_id=ev.id, location_id=loc_id)
+        db.session.add(el)
+        db.session.commit()
+        ocr_data = {
+            "text": ["ScanItem (each)", "8", "2", "1", "4"],
+            "conf": [95] * 5,
+            "line_num": [1] * 5,
+            "left": [0, 100, 150, 400, 350],
+            "top": [0] * 5,
+            "width": [10] * 5,
+            "height": [10] * 5,
+        }
+        from app.routes.event_routes import _parse_scanned_sheet
+
+        parsed = _parse_scanned_sheet(ocr_data, el)
+        pid = str(item_id)
+        assert parsed[pid]["opening_count"] == 8
+        assert parsed[pid]["transferred_in"] == 2
+        # misaligned value should be ignored
+        assert parsed[pid]["transferred_out"] == 0
+        assert parsed[pid]["closing_count"] == 4
+        flags = parsed[pid]["flags"]
+        assert flags["transferred_out"] is True
+        assert flags["eaten"] is True
+        assert flags["spoiled"] is True
