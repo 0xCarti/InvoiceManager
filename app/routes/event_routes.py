@@ -646,9 +646,8 @@ def _parse_scanned_sheet(ocr_data, event_location, threshold=80):
             else:
                 name_tokens.append(t)
         name = " ".join(name_tokens).lower()
-        # We expect at least seven numeric fields. Index 6 represents the
-        # closing count on the stand sheet.
-        if name in item_map and len(numbers) >= 7:
+        name = re.sub(r"\s*\(.*?\)", "", name).strip()
+        if name in item_map and len(numbers) >= 8:
             fields = {
                 "opening_count": (float(numbers[1]), num_confs[1] < threshold),
                 "transferred_in": (
