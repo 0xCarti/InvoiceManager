@@ -97,7 +97,7 @@
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <a href="{{ url_for('product.view_products') }}" class="btn btn-outline-secondary">Reset</a>
+                    <a href="{{ url_for('product.view_products', reset=1) }}" class="btn btn-outline-secondary">Reset</a>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" form="filter-form" class="btn btn-primary">Apply</button>
                 </div>
