@@ -646,6 +646,7 @@ def _parse_scanned_sheet(ocr_data, event_location, threshold=80):
             else:
                 name_tokens.append(t)
         name = " ".join(name_tokens).lower()
+        name = re.sub(r"\s*\(.*?\)", "", name).strip()
         if name in item_map and len(numbers) >= 8:
             fields = {
                 "opening_count": (float(numbers[1]), num_confs[1] < threshold),
