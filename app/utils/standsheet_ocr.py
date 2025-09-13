@@ -12,6 +12,24 @@ import cv2
 _paddle_reader = None
 
 
+def _tesseract_data(_path: str) -> Dict[str, List] | None:  # pragma: no cover - legacy stub
+    """Placeholder for removed Tesseract-based implementation.
+
+    The original project attempted Tesseract OCR before falling back to
+    PaddleOCR.  The dependency was dropped, but tests still monkeypatch this
+    function to short‑circuit the old behaviour.  Providing a stub keeps that
+    patching working without requiring pytesseract at runtime.
+    """
+
+    return None
+
+
+def _get_reader():  # pragma: no cover - legacy stub
+    """Placeholder for the deprecated EasyOCR reader factory."""
+
+    return None
+
+
 def _get_paddle_reader():
     """Return a cached PaddleOCR reader instance."""
     global _paddle_reader
@@ -22,9 +40,12 @@ def _get_paddle_reader():
             raise RuntimeError(
                 "paddleocr is required to read stand sheets",
             ) from exc
-        _paddle_reader = PaddleOCR(
-            use_angle_cls=False, lang="en", show_log=False
-        )
+        # ``show_log`` was removed in recent versions of ``paddleocr``.  Passing
+        # it now raises ``ValueError: Unknown argument: show_log`` which breaks
+        # stand sheet scanning.  The default behaviour is to display minimal
+        # logging so we simply omit the argument for compatibility with newer
+        # releases.
+        _paddle_reader = PaddleOCR(use_angle_cls=False, lang="en")
     return _paddle_reader
 
 
