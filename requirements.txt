@@ -22,6 +22,8 @@ pandas==2.2.2
 reportlab==4.4.2
 pdfplumber==0.9.0
 twilio==9.0.0
+Pillow==10.4.0
+pytesseract==0.3.10  # OCR for printed text
 easyocr==1.7.1  # handwriting-capable OCR
 opencv-python-headless==4.10.0.84
 qrcode==7.4.2
