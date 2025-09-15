@@ -22,7 +22,6 @@ from app.models import (
     TerminalSale,
     User,
 )
-from app.utils import generate_qr_code
 from tests.utils import login
 
 
@@ -241,7 +240,7 @@ def test_no_sales_after_confirmation(client, app):
         assert resp.status_code == 302
 
 
-def test_stand_sheet_qr_on_all_pages(client, app):
+def test_bulk_stand_sheets_render_multiple_pages(client, app):
     email, loc_id, prod_id, item_id = setup_event_env(app)
     with client:
         login(client, email, "pass")
@@ -260,6 +259,7 @@ def test_stand_sheet_qr_on_all_pages(client, app):
         ev = Event.query.first()
         eid = ev.id
         loc = db.session.get(Location, loc_id)
+        loc_name = loc.name
         for i in range(21):
             item = Item(name=f"Extra{i}", base_unit="each")
             prod = Product(name=f"Prod{i}", price=1.0, cost=0.5)
@@ -299,8 +299,9 @@ def test_stand_sheet_qr_on_all_pages(client, app):
         )
         resp = client.get(f"/events/{eid}/stand_sheets")
         assert resp.status_code == 200
-        qr = generate_qr_code({"event_id": eid, "location_id": loc_id})
-        assert resp.data.count(qr.encode()) == 2
+        assert resp.data.count(b"Opening Standsheet") == 2
+        assert f"Location: {loc_name}".encode() in resp.data
+        assert b"Upload Stand Sheet QR" not in resp.data
 
 
 def test_save_stand_sheet(client, app):
