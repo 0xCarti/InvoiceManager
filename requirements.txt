@@ -23,8 +23,3 @@ reportlab==4.4.2
 pdfplumber==0.9.0
 twilio==9.0.0
 Pillow==10.4.0
-opencv-python-headless==4.10.0.84
-qrcode==7.4.2
-pdf2image==1.17.0  # requires Poppler
-paddlepaddle==2.6.1  # PaddleOCR dependency
-paddleocr==2.7.0.3  # OCR engine

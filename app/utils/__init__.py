@@ -9,8 +9,6 @@ from .imports import (
     _import_locations,
     _import_products,
 )
-from .standsheet_scanner import decode_qr, generate_qr_code
-
 __all__ = [
     "log_activity",
     "create_backup",
@@ -20,6 +18,4 @@ __all__ = [
     "_import_locations",
     "_import_products",
     "send_email",
-    "generate_qr_code",
-    "decode_qr",
 ]

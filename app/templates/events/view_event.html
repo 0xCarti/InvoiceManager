@@ -8,9 +8,6 @@
         <a class="btn btn-primary me-2" href="{{ url_for('event.add_location', event_id=event.id) }}">Add Location</a>
         {% endif %}
         <a class="btn btn-secondary me-2" href="{{ url_for('event.bulk_stand_sheets', event_id=event.id) }}">Stand Sheets</a>
-        {% if not event.closed %}
-        <a class="btn btn-secondary me-2" href="{{ url_for('event.scan_stand_sheet') }}">Upload Stand Sheets</a>
-        {% endif %}
         {% if event.event_type == 'inventory' %}
         <a class="btn btn-secondary me-2" href="{{ url_for('event.bulk_count_sheets', event_id=event.id) }}">Count Sheets</a>
         {% endif %}

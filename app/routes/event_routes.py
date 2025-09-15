@@ -1,6 +1,4 @@
 import os
-import re
-import tempfile
 from datetime import datetime
 
 from flask import (
@@ -11,12 +9,9 @@ from flask import (
     redirect,
     render_template,
     request,
-    session,
     url_for,
 )
 from flask_login import login_required
-from pdf2image import convert_from_path
-from pdf2image.exceptions import PDFInfoNotInstalledError
 from werkzeug.utils import secure_filename
 
 from app import db
@@ -36,8 +31,6 @@ from app.models import (
     Product,
     TerminalSale,
 )
-from app.utils import decode_qr, generate_qr_code
-from app.utils.standsheet_ocr import read_stand_sheet
 
 event = Blueprint("event", __name__)
 
@@ -587,7 +580,6 @@ def bulk_stand_sheets(event_id):
     PAGE_SIZE = 20  # number of items per stand sheet page
     for el in ev.locations:
         loc, items = _get_stand_items(el.location_id, event_id)
-        qr = generate_qr_code({"event_id": event_id, "location_id": loc.id})
         if not items:
             chunks = [[]]
         else:
@@ -596,7 +588,7 @@ def bulk_stand_sheets(event_id):
                 for i in range(0, len(items), PAGE_SIZE)
             ]
         for chunk in chunks:
-            data.append({"location": loc, "stand_items": chunk, "qr": qr})
+            data.append({"location": loc, "stand_items": chunk})
     dt = datetime.now()
     generated_at_local = (
         f"{dt.month}/{dt.day}/{dt.year} {dt.strftime('%I:%M %p').lstrip('0')}"
@@ -622,265 +614,6 @@ def bulk_count_sheets(event_id):
     return render_template(
         "events/bulk_count_sheets.html", event=ev, data=data
     )
-
-
-def _parse_scanned_sheet(ocr_data, event_location, threshold=80):
-    """Return parsed stand sheet data with confidence flags."""
-    _, stand_items = _get_stand_items(
-        event_location.location_id, event_location.event_id
-    )
-    item_map = {
-        entry["item"].name.lower(): entry["item"] for entry in stand_items
-    }
-
-    tokens = []
-    for text, conf, left, top, width, height in zip(
-        ocr_data.get("text", []),
-        ocr_data.get("conf", []),
-        ocr_data.get("left", []),
-        ocr_data.get("top", []),
-        ocr_data.get("width", []),
-        ocr_data.get("height", []),
-    ):
-        if text.strip():
-            tokens.append(
-                {
-                    "text": text,
-                    "conf": float(conf),
-                    "left": int(left),
-                    "top": int(top),
-                    "width": int(width),
-                    "height": int(height),
-                }
-            )
-
-    # Group tokens into rows using their vertical position
-    tokens.sort(key=lambda t: t["top"])
-    rows = []
-    row_tol = 10
-    for token in tokens:
-        if not rows or token["top"] - rows[-1]["top"] > row_tol:
-            rows.append({"top": token["top"], "tokens": [token]})
-        else:
-            rows[-1]["tokens"].append(token)
-
-    column_ranges = {
-        "opening_count": (90, 140),
-        "transferred_in": (140, 190),
-        "transferred_out": (190, 240),
-        "eaten": (240, 290),
-        "spoiled": (290, 340),
-        "closing_count": (340, 390),
-    }
-
-    results = {}
-    for row in rows:
-        row_tokens = sorted(row["tokens"], key=lambda t: t["left"])
-        name_tokens = []
-        field_data = {}
-        for tok in row_tokens:
-            text = tok["text"]
-            if re.match(r"^-?\d+(?:\.\d+)?$", text):
-                cx = tok["left"] + tok["width"] // 2
-                for field, (xmin, xmax) in column_ranges.items():
-                    if xmin <= cx < xmax:
-                        field_data[field] = (
-                            float(text),
-                            tok["conf"] < threshold,
-                        )
-                        break
-            else:
-                name_tokens.append(text)
-        name = " ".join(name_tokens).lower()
-        name = re.sub(r"\s*\(.*?\)", "", name).strip()
-        if name in item_map:
-            values = {}
-            flags = {}
-            for field in column_ranges:
-                if field in field_data:
-                    values[field] = field_data[field][0]
-                    flags[field] = field_data[field][1]
-                else:
-                    values[field] = 0.0
-                    flags[field] = True
-            results[str(item_map[name].id)] = values
-            results[str(item_map[name].id)]["flags"] = flags
-    return results
-
-
-@event.route("/events/scan_stand_sheet", methods=["GET", "POST"])
-@login_required
-def scan_stand_sheet():
-    if request.method == "POST":
-        file = request.files.get("file")
-        if not file:
-            flash("No file uploaded")
-            return redirect(url_for("event.scan_stand_sheet"))
-
-        filename = secure_filename(file.filename or "")
-        is_pdf = (
-            filename.lower().endswith(".pdf")
-            or file.mimetype == "application/pdf"
-        )
-        suffix = ".pdf" if is_pdf else ".png"
-
-        cleanup_paths = []
-        image_paths = []
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            file.save(tmp.name)
-            path = tmp.name
-            cleanup_paths.append(path)
-
-        if is_pdf:
-            try:
-                images = convert_from_path(path)
-            except PDFInfoNotInstalledError:
-                for p in cleanup_paths:
-                    os.remove(p)
-                flash(
-                    "Poppler is required to process PDF stand sheets. Please install poppler-utils."
-                )
-                return redirect(url_for("event.scan_stand_sheet"))
-            for img in images:
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".png"
-                ) as img_tmp:
-                    img.save(img_tmp.name, format="PNG")
-                    image_paths.append(img_tmp.name)
-                    cleanup_paths.append(img_tmp.name)
-        else:
-            image_paths.append(path)
-
-        parsed_sheets = []
-        for img_path in image_paths:
-            meta = decode_qr(img_path)
-            event_id = meta.get("event_id")
-            location_id = meta.get("location_id")
-            if not event_id or not location_id:
-                for p in cleanup_paths:
-                    os.remove(p)
-                flash("Invalid or missing QR code")
-                return redirect(url_for("event.scan_stand_sheet"))
-            el = EventLocation.query.filter_by(
-                event_id=event_id, location_id=location_id
-            ).first()
-            if not el:
-                for p in cleanup_paths:
-                    os.remove(p)
-                flash("Stand sheet not recognized")
-                return redirect(url_for("event.scan_stand_sheet"))
-            ocr_data = read_stand_sheet(img_path)
-            parsed = _parse_scanned_sheet(ocr_data, el)
-            current_app.logger.info(
-                "Parsed stand sheet for event %s location %s: %s",
-                event_id,
-                location_id,
-                parsed,
-            )
-            parsed_sheets.append(
-                {
-                    "event_id": event_id,
-                    "location_id": location_id,
-                    "data": parsed,
-                }
-            )
-
-        session["scanned_sheets"] = parsed_sheets
-        for p in cleanup_paths:
-            os.remove(p)
-        flash("Review scanned data before saving")
-        return redirect(url_for("event.review_scanned_sheet"))
-    return render_template("events/scan_stand_sheet.html")
-
-
-@event.route("/events/scan_stand_sheet/review", methods=["GET", "POST"])
-@login_required
-def review_scanned_sheet():
-    data = session.get("scanned_sheets")
-    if not data:
-        flash("No scanned data to review")
-        return redirect(url_for("event.scan_stand_sheet"))
-    if request.method == "POST":
-        for sheet_data in data:
-            event_id = sheet_data.get("event_id")
-            location_id = sheet_data.get("location_id")
-            el = EventLocation.query.filter_by(
-                event_id=event_id, location_id=location_id
-            ).first()
-            if el is None:
-                continue
-            prefix = f"{event_id}_{location_id}"
-            for item_id in sheet_data["data"].keys():
-                iid = int(item_id)
-                sheet = EventStandSheetItem.query.filter_by(
-                    event_location_id=el.id, item_id=iid
-                ).first()
-                if not sheet:
-                    sheet = EventStandSheetItem(
-                        event_location_id=el.id, item_id=iid
-                    )
-                    db.session.add(sheet)
-                sheet.opening_count = (
-                    request.form.get(
-                        f"open_{prefix}_{item_id}", type=float, default=0
-                    )
-                    or 0
-                )
-                sheet.transferred_in = (
-                    request.form.get(
-                        f"in_{prefix}_{item_id}", type=float, default=0
-                    )
-                    or 0
-                )
-                sheet.transferred_out = (
-                    request.form.get(
-                        f"out_{prefix}_{item_id}", type=float, default=0
-                    )
-                    or 0
-                )
-                sheet.eaten = (
-                    request.form.get(
-                        f"eaten_{prefix}_{item_id}", type=float, default=0
-                    )
-                    or 0
-                )
-                sheet.spoiled = (
-                    request.form.get(
-                        f"spoiled_{prefix}_{item_id}", type=float, default=0
-                    )
-                    or 0
-                )
-                sheet.closing_count = (
-                    request.form.get(
-                        f"close_{prefix}_{item_id}", type=float, default=0
-                    )
-                    or 0
-                )
-        db.session.commit()
-        session.pop("scanned_sheets", None)
-        flash("Stand sheet imported")
-        return redirect(url_for("event.scan_stand_sheet"))
-
-    sheets = []
-    for sheet_data in data:
-        event_id = sheet_data.get("event_id")
-        location_id = sheet_data.get("location_id")
-        el = EventLocation.query.filter_by(
-            event_id=event_id, location_id=location_id
-        ).first()
-        if el is None:
-            continue
-        location, stand_items = _get_stand_items(location_id, event_id)
-        sheets.append(
-            {
-                "event": el.event,
-                "location": location,
-                "stand_items": stand_items,
-                "scanned": sheet_data["data"],
-                "prefix": f"{event_id}_{location_id}",
-            }
-        )
-    return render_template("events/review_scanned_sheet.html", sheets=sheets)
 
 
 @event.route("/events/<int:event_id>/close")
