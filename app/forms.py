@@ -445,7 +445,7 @@ class ImportForm(FlaskForm):
 
 
 class POItemForm(FlaskForm):
-    item = SelectField("Item", coerce=int)
+    item = HiddenField("Item")
     product = SelectField(
         "Product", coerce=int, validators=[Optional()], validate_choice=False
     )
@@ -473,11 +473,9 @@ class PurchaseOrderForm(FlaskForm):
             (v.id, f"{v.first_name} {v.last_name}")
             for v in Vendor.query.filter_by(archived=False).all()
         ]
-        items = load_item_choices()
         units = load_unit_choices()
         products = [(p.id, p.name) for p in Product.query.all()]
         for item_form in self.items:
-            item_form.item.choices = items
             item_form.product.choices = products
             item_form.unit.choices = units
 
