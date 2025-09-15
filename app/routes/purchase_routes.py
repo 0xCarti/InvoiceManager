@@ -169,11 +169,26 @@ def create_purchase_order():
         flash("Purchase order created successfully!", "success")
         return redirect(url_for("purchase.view_purchase_orders"))
 
+    selected_item_ids = []
+    for item_form in form.items:
+        if item_form.item.data:
+            try:
+                selected_item_ids.append(int(item_form.item.data))
+            except (TypeError, ValueError):
+                continue
+    item_lookup = {}
+    if selected_item_ids:
+        item_lookup = {
+            item.id: item.name
+            for item in Item.query.filter(Item.id.in_(selected_item_ids)).all()
+        }
+
     codes = GLCode.query.filter(GLCode.code.like("5%"))
     return render_template(
         "purchase_orders/create_purchase_order.html",
         form=form,
         gl_codes=codes,
+        item_lookup=item_lookup,
     )
 
 
@@ -228,15 +243,24 @@ def edit_purchase_order(po_id):
         for i, poi in enumerate(po.items):
             if len(form.items) <= i:
                 form.items.append_entry()
-        for item_form in form.items:
-            item_form.item.choices = [
-                (i.id, i.name)
-                for i in Item.query.filter_by(archived=False).all()
-            ]
         for i, poi in enumerate(po.items):
             form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
+
+    selected_item_ids = []
+    for item_form in form.items:
+        if item_form.item.data:
+            try:
+                selected_item_ids.append(int(item_form.item.data))
+            except (TypeError, ValueError):
+                continue
+    item_lookup = {}
+    if selected_item_ids:
+        item_lookup = {
+            item.id: item.name
+            for item in Item.query.filter(Item.id.in_(selected_item_ids)).all()
+        }
 
     codes = GLCode.query.filter(GLCode.code.like("5%"))
     return render_template(
@@ -244,6 +268,7 @@ def edit_purchase_order(po_id):
         form=form,
         po=po,
         gl_codes=codes,
+        item_lookup=item_lookup,
     )
 
 

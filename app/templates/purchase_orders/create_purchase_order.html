@@ -22,11 +22,21 @@
         </div>
         <h4>Items</h4>
         <button id="quick-add-item" type="button" class="btn btn-link p-0">Create New Item</button>
-        <div id="items">
+        <div id="items" data-next-index="{{ form.items|length }}">
         {% for item in form.items %}
+        {% set item_id = item.item.data %}
+        {% set selected_name = '' %}
+        {% if item_id %}
+            {% set selected_name = item_lookup.get(item_id|int, '') %}
+        {% endif %}
+        {% set input_value = request.form.get('items-' ~ loop.index0 ~ '-item-label', selected_name) %}
         <div class="row g-2 mt-2 item-row align-items-center">
-            <div class="col">{{ item.item(class="form-control item-select") }}</div>
-            <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select"></select></div>
+            <div class="col position-relative">
+                <input type="text" name="items-{{ loop.index0 }}-item-label" class="form-control item-search" placeholder="Search for an item" autocomplete="off" value="{{ input_value }}">
+                {{ item.item(class="item-id-field") }}
+                <div class="list-group suggestion-list d-none position-absolute w-100" style="z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
+            </div>
+            <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data or '' }}"></select></div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col-auto">
                 <button type="button" class="btn btn-danger remove-item">Remove</button>
@@ -93,124 +103,17 @@
     </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/purchase_order_form.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    let itemOptions = `<option value="">Select Item</option>{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
-    let itemIndex = {{ form.items|length }};
-
-    function createRow(index) {
-        const row = document.createElement('div');
-        row.classList.add('row','g-2','mt-2','item-row','align-items-center');
-        row.innerHTML = `
-            <div class="col"><select name="items-${index}-item" class="form-control item-select">${itemOptions}</select></div>
-            <div class="col"><select name="items-${index}-unit" class="form-control unit-select"></select></div>
-            <div class="col"><input type="number" step="any" name="items-${index}-quantity" class="form-control quantity"></div>
-            <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
-        `;
-        return row;
-    }
-
-    function fetchUnits(selectEl) {
-        const itemId = selectEl.value;
-        const unitSelect = selectEl.closest('.item-row').querySelector('.unit-select');
-        if (!itemId) {
-            unitSelect.innerHTML = '';
-            return;
-        }
-        fetch(`/items/${itemId}/units`).then(r => r.json()).then(data => {
-            let opts = '';
-            data.units.forEach(u => {
-                opts += `<option value="${u.id}" ${u.receiving_default ? 'selected' : ''}>${u.name} of ${u.factor} ${data.base_unit}${u.factor != 1 ? 's' : ''}</option>`;
-            });
-            unitSelect.innerHTML = opts;
-        });
-    }
-
-    document.getElementById('add-item').addEventListener('click', function(e) {
-        e.preventDefault();
-        const row = createRow(itemIndex);
-        document.getElementById('items').appendChild(row);
-        itemIndex++;
+    initPurchaseOrderForm({
+        container: document.getElementById('items'),
+        addRowButton: document.getElementById('add-item'),
+        quickAddButton: document.getElementById('quick-add-item'),
+        newItemModal: document.getElementById('newItemModal'),
+        saveNewItemButton: document.getElementById('save-new-item'),
+        nextIndex: {{ form.items|length }}
     });
-
-    document.getElementById('items').addEventListener('click', function(e) {
-        if (e.target && e.target.classList.contains('remove-item')) {
-            e.target.closest('.row').remove();
-        }
-    });
-
-    document.getElementById('items').addEventListener('change', function(e) {
-        if (e.target && e.target.classList.contains('item-select')) {
-            fetchUnits(e.target);
-        }
-    });
-
-    document.getElementById('items').addEventListener('keydown', function(e) {
-        if (
-            e.target &&
-            e.target.classList.contains('quantity') &&
-            e.key === 'Tab' &&
-            !e.shiftKey
-        ) {
-            const nextRow = e.target.closest('.item-row').nextElementSibling;
-            if (nextRow && nextRow.querySelector('.quantity')) {
-                e.preventDefault();
-                nextRow.querySelector('.quantity').focus();
-            }
-        }
-    });
-
-    document.getElementById('quick-add-item').addEventListener('click', function() {
-        new bootstrap.Modal(document.getElementById('newItemModal')).show();
-    });
-
-    document.getElementById('save-new-item').addEventListener('click', function() {
-        const name = document.getElementById('new-item-name').value.trim();
-        const glCode = document.getElementById('new-item-gl-code').value;
-        const baseUnit = document.getElementById('new-item-base-unit').value;
-        const recvUnit = document.getElementById('new-item-receiving-unit').value.trim();
-        const recvFactor = parseFloat(document.getElementById('new-item-receiving-factor').value) || 0;
-        const transUnit = document.getElementById('new-item-transfer-unit').value.trim();
-        const transFactor = parseFloat(document.getElementById('new-item-transfer-factor').value) || 0;
-        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-        if (!name || !recvUnit || !transUnit || recvFactor <= 0 || transFactor <= 0) return;
-        fetch('/items/quick_add', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-            body: JSON.stringify({
-                name: name,
-                purchase_gl_code: glCode,
-                base_unit: baseUnit,
-                receiving_unit: recvUnit,
-                receiving_factor: recvFactor,
-                transfer_unit: transUnit,
-                transfer_factor: transFactor
-            })
-        }).then(r => r.json()).then(data => {
-            if (data.id) {
-                itemOptions += `<option value="${data.id}">${data.name}</option>`;
-                document.querySelectorAll('.item-select').forEach(sel => {
-                    sel.insertAdjacentHTML('beforeend', `<option value="${data.id}">${data.name}</option>`);
-                });
-
-                const row = createRow(itemIndex);
-                document.getElementById('items').appendChild(row);
-                const newSelect = row.querySelector('.item-select');
-                newSelect.value = data.id;
-                fetchUnits(newSelect);
-                itemIndex++;
-
-                document.getElementById('new-item-name').value = '';
-                document.getElementById('new-item-receiving-unit').value = '';
-                document.getElementById('new-item-receiving-factor').value = '1';
-                document.getElementById('new-item-transfer-unit').value = '';
-                document.getElementById('new-item-transfer-factor').value = '1';
-                bootstrap.Modal.getInstance(document.getElementById('newItemModal')).hide();
-            }
-        });
-    });
-
-    document.querySelectorAll('.item-select').forEach(sel => fetchUnits(sel));
 });
 </script>
 {% endblock %}
