@@ -25,52 +25,102 @@
         <h4>Units</h4>
         <div id="units-container">
         {% for unit in form.units %}
-        <div class="row mb-2">
-            <div class="col">{{ unit.form.name(class="form-control", placeholder="Name") }}</div>
-            <div class="col">{{ unit.form.factor(class="form-control", placeholder="Factor") }}</div>
-            <div class="col-auto">{{ unit.form.receiving_default() }} {{ unit.form.receiving_default.label }}</div>
-            <div class="col-auto">{{ unit.form.transfer_default() }} {{ unit.form.transfer_default.label }}</div>
-            <div class="col-auto">
-                <button type="button" class="btn btn-danger btn-sm remove-unit">Delete</button>
+        <div class="row g-2 align-items-end unit-row mb-2">
+            <div class="col-md-4">
+                <label class="form-label {% if not loop.first %}visually-hidden{% endif %}"
+                       for="{{ unit.form.name.id }}">Unit of Measure</label>
+                {{ unit.form.name(class="form-control", placeholder="e.g. case") }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label {% if not loop.first %}visually-hidden{% endif %}"
+                       for="{{ unit.form.factor.id }}">Factor</label>
+                {{ unit.form.factor(class="form-control", placeholder="Quantity in base units") }}
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-4">
+                    {{ unit.form.receiving_default(class="form-check-input default-receiving", id=unit.form.receiving_default.id) }}
+                    <label class="form-check-label" for="{{ unit.form.receiving_default.id }}">Receiving Default</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-4">
+                    {{ unit.form.transfer_default(class="form-check-input default-transfer", id=unit.form.transfer_default.id) }}
+                    <label class="form-check-label" for="{{ unit.form.transfer_default.id }}">Transfer Default</label>
+                </div>
+            </div>
+            <div class="col-md-1 text-end">
+                <button type="button" class="btn btn-outline-danger btn-sm remove-unit mt-4">Delete</button>
             </div>
         </div>
         {% endfor %}
         </div>
-        <button type="button" class="btn btn-secondary" id="add-unit">Add Unit</button>
+        <button type="button" class="btn btn-outline-secondary" id="add-unit">Add Unit</button>
         {{ form.submit(class="btn btn-primary") }}
     </form>
+    <script type="text/template" id="unit-row-template">
+        <div class="row g-2 align-items-end unit-row mb-2">
+            <div class="col-md-4">
+                <label class="form-label visually-hidden" for="units-__index__-name">Unit of Measure</label>
+                <input type="text" name="units-__index__-name" id="units-__index__-name"
+                       class="form-control" placeholder="e.g. case">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label visually-hidden" for="units-__index__-factor">Factor</label>
+                <input type="number" step="any" name="units-__index__-factor" id="units-__index__-factor"
+                       class="form-control" placeholder="Quantity in base units">
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-4">
+                    <input type="checkbox" name="units-__index__-receiving_default"
+                           id="units-__index__-receiving_default" value="y"
+                           class="form-check-input default-receiving">
+                    <label class="form-check-label" for="units-__index__-receiving_default">Receiving Default</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-4">
+                    <input type="checkbox" name="units-__index__-transfer_default"
+                           id="units-__index__-transfer_default" value="y"
+                           class="form-check-input default-transfer">
+                    <label class="form-check-label" for="units-__index__-transfer_default">Transfer Default</label>
+                </div>
+            </div>
+            <div class="col-md-1 text-end">
+                <button type="button" class="btn btn-outline-danger btn-sm remove-unit mt-4">Delete</button>
+            </div>
+        </div>
+    </script>
     <script data-allow-html>
         let unitIndex = {{ form.units|length }};
         const unitsContainer = document.getElementById('units-container');
+        const unitTemplate = document.getElementById('unit-row-template').innerHTML.trim();
         document.getElementById('add-unit').addEventListener('click', function() {
-            const row = document.createElement('div');
-            row.classList.add('row', 'mb-2');
-            row.innerHTML = `
-                <div class="col"><input type="text" name="units-${unitIndex}-name" class="form-control" placeholder="Name"></div>
-                <div class="col"><input type="number" step="any" name="units-${unitIndex}-factor" class="form-control" placeholder="Factor"></div>
-            <div class="col-auto"><input type="checkbox" name="units-${unitIndex}-receiving_default"> Receiving Default</div>
-            <div class="col-auto"><input type="checkbox" name="units-${unitIndex}-transfer_default"> Transfer Default</div>
-            <button type="button" class="btn btn-danger btn-sm remove-unit ml-2">Delete</button>`;
+            const rowWrapper = document.createElement('div');
+            rowWrapper.innerHTML = unitTemplate.replace(/__index__/g, unitIndex);
+            const row = rowWrapper.firstElementChild;
             unitsContainer.appendChild(row);
             unitIndex++;
         });
         unitsContainer.addEventListener('click', function(e) {
             if (e.target && e.target.classList.contains('remove-unit')) {
-                e.target.closest('.row').remove();
+                const row = e.target.closest('.unit-row');
+                if (row) {
+                    row.remove();
+                }
             }
         });
         unitsContainer.addEventListener('change', function(e) {
-            if (e.target.matches('input[type="checkbox"][name$="-receiving_default"]')) {
+            if (e.target.classList.contains('default-receiving') && e.target.checked) {
                 unitsContainer
-                    .querySelectorAll('input[type="checkbox"][name$="-receiving_default"]')
+                    .querySelectorAll('.default-receiving')
                     .forEach(cb => {
                         if (cb !== e.target) {
                             cb.checked = false;
                         }
                     });
-            } else if (e.target.matches('input[type="checkbox"][name$="-transfer_default"]')) {
+            } else if (e.target.classList.contains('default-transfer') && e.target.checked) {
                 unitsContainer
-                    .querySelectorAll('input[type="checkbox"][name$="-transfer_default"]')
+                    .querySelectorAll('.default-transfer')
                     .forEach(cb => {
                         if (cb !== e.target) {
                             cb.checked = false;
