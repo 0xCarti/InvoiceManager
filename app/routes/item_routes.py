@@ -507,25 +507,39 @@ def quick_add_item():
         purchase_gl_code = int(purchase_gl_code)
     except (TypeError, ValueError):
         purchase_gl_code = None
-    recv_unit = (data.get("receiving_unit") or "").strip()
-    trans_unit = (data.get("transfer_unit") or "").strip()
-    try:
-        recv_factor = float(data.get("receiving_factor", 0))
-    except (TypeError, ValueError):
-        recv_factor = 0
-    try:
-        trans_factor = float(data.get("transfer_factor", 0))
-    except (TypeError, ValueError):
-        trans_factor = 0
+    raw_units = data.get("units")
+    if not isinstance(raw_units, list):
+        raw_units = []
+
+    cleaned_units = []
+    for unit in raw_units:
+        if not isinstance(unit, dict):
+            continue
+        unit_name = (unit.get("name") or "").strip()
+        try:
+            unit_factor = float(unit.get("factor", 0))
+        except (TypeError, ValueError):
+            unit_factor = 0
+        receiving_default = bool(unit.get("receiving_default"))
+        transfer_default = bool(unit.get("transfer_default"))
+        if not unit_name or unit_factor <= 0:
+            continue
+        if unit_name == base_unit:
+            unit_factor = 1.0
+        cleaned_units.append(
+            {
+                "name": unit_name,
+                "factor": unit_factor,
+                "receiving_default": receiving_default,
+                "transfer_default": transfer_default,
+            }
+        )
     valid_units = {"ounce", "gram", "each", "millilitre"}
     if (
         not name
         or base_unit not in valid_units
         or not purchase_gl_code
-        or not recv_unit
-        or recv_factor <= 0
-        or not trans_unit
-        or trans_factor <= 0
+        or not cleaned_units
     ):
         return jsonify({"error": "Invalid data"}), 400
     if Item.query.filter_by(name=name, archived=False).first():
@@ -538,28 +552,52 @@ def quick_add_item():
     db.session.add(item)
     db.session.commit()
     units = {}
+    receiving_set = False
+    transfer_set = False
 
     def add_unit(name, factor, receiving=False, transfer=False):
+        nonlocal receiving_set, transfer_set
         unit = units.get(name)
+        receiving_flag = bool(receiving) and not receiving_set
+        transfer_flag = bool(transfer) and not transfer_set
         if unit:
-            if receiving:
+            if receiving_flag:
                 unit.receiving_default = True
-            if transfer:
+            if transfer_flag:
                 unit.transfer_default = True
-            # If the unit already exists but a different factor is provided,
-            # do not override the original to avoid inconsistencies.
         else:
             units[name] = ItemUnit(
                 item_id=item.id,
                 name=name,
                 factor=float(factor),
-                receiving_default=receiving,
-                transfer_default=transfer,
+                receiving_default=receiving_flag,
+                transfer_default=transfer_flag,
             )
+        if receiving_flag:
+            receiving_set = True
+        if transfer_flag:
+            transfer_set = True
 
-    add_unit(base_unit, 1)
-    add_unit(recv_unit, recv_factor, receiving=True)
-    add_unit(trans_unit, trans_factor, transfer=True)
+    for unit in cleaned_units:
+        add_unit(
+            unit["name"],
+            unit["factor"],
+            receiving=unit["receiving_default"],
+            transfer=unit["transfer_default"],
+        )
+
+    if base_unit not in units:
+        add_unit(base_unit, 1.0)
+
+    base_unit_entry = units.get(base_unit)
+    if base_unit_entry:
+        base_unit_entry.factor = 1.0
+
+    if not receiving_set:
+        add_unit(base_unit, 1.0, receiving=True)
+    if not transfer_set:
+        add_unit(base_unit, 1.0, transfer=True)
+
     db.session.add_all(units.values())
     db.session.commit()
     log_activity(f"Added item {item.name}")
