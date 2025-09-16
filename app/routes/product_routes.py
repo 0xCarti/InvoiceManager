@@ -13,7 +13,7 @@ from flask import (
 )
 from flask_login import login_required
 from sqlalchemy import func, or_
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 
 from app import db
 from app.forms import DeleteForm, ProductRecipeForm, ProductWithRecipeForm
@@ -142,6 +142,14 @@ def view_products():
             )
         else:
             query = query.having(last_sold_expr < last_sold_before)
+
+    query = query.options(
+        selectinload(Product.sales_gl_code),
+        selectinload(Product.gl_code_rel),
+        selectinload(Product.locations),
+        selectinload(Product.recipe_items).selectinload(ProductRecipeItem.item),
+        selectinload(Product.recipe_items).selectinload(ProductRecipeItem.unit),
+    )
 
     products = query.paginate(page=page, per_page=20)
     sales_gl_codes = (

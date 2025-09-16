@@ -1,24 +1,37 @@
 (function () {
-    document.addEventListener('DOMContentLoaded', function () {
-        var table = document.getElementById('itemsTable');
+    function initColumnVisibility(control) {
+        if (!control) {
+            return;
+        }
+
+        var tableId = control.getAttribute('data-table-id');
+        if (!tableId) {
+            return;
+        }
+
+        var table = document.getElementById(tableId);
         if (!table) {
             return;
         }
 
-        var checkboxes = Array.prototype.slice.call(document.querySelectorAll('.column-toggle'));
-        if (!checkboxes.length) {
+        var checkboxNodes = control.querySelectorAll('.column-toggle');
+        if (!checkboxNodes.length) {
             return;
         }
 
-        var storageKey = 'itemsTableColumnVisibility';
+        var checkboxes = Array.prototype.slice.call(checkboxNodes);
+        var storageKey = control.getAttribute('data-storage-key') || tableId + 'ColumnVisibility';
         var storedState = {};
-        try {
-            var saved = window.localStorage.getItem(storageKey);
-            if (saved) {
-                storedState = JSON.parse(saved) || {};
+
+        if (storageKey) {
+            try {
+                var saved = window.localStorage.getItem(storageKey);
+                if (saved) {
+                    storedState = JSON.parse(saved) || {};
+                }
+            } catch (err) {
+                storedState = {};
             }
-        } catch (err) {
-            storedState = {};
         }
 
         checkboxes.forEach(function (checkbox) {
@@ -83,6 +96,9 @@
         }
 
         function persistState() {
+            if (!storageKey) {
+                return;
+            }
             var state = {};
             checkboxes.forEach(function (checkbox) {
                 var columnClass = checkbox.dataset.columnTarget;
@@ -97,5 +113,10 @@
                 /* Ignore storage errors */
             }
         }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var controls = document.querySelectorAll('[data-column-visibility]');
+        Array.prototype.slice.call(controls).forEach(initColumnVisibility);
     });
 })();

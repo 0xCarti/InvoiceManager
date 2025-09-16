@@ -6,7 +6,70 @@
         <div class="col-auto">
             <a class="btn btn-primary mb-3" href="{{ url_for('purchase.create_purchase_order') }}">Create Purchase Order</a>
         </div>
-        <div class="col-auto">
+        <div class="col-auto text-end">
+            <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="purchase-orders-table" data-storage-key="purchaseOrderTableColumnVisibility">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="purchaseOrderColumnSelector"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                    Columns
+                </button>
+                <div class="dropdown-menu dropdown-menu-end p-3" aria-labelledby="purchaseOrderColumnSelector">
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-id"
+                            data-column-target="col-po-id" checked>
+                        <label class="form-check-label" for="toggle-po-column-id">PO ID</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-vendor"
+                            data-column-target="col-po-vendor" checked>
+                        <label class="form-check-label" for="toggle-po-column-vendor">Vendor</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-vendor-name"
+                            data-column-target="col-po-vendor-name">
+                        <label class="form-check-label" for="toggle-po-column-vendor-name">Vendor (Recorded)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-vendor-id"
+                            data-column-target="col-po-vendor-id">
+                        <label class="form-check-label" for="toggle-po-column-vendor-id">Vendor ID</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-order-date"
+                            data-column-target="col-po-order-date" checked>
+                        <label class="form-check-label" for="toggle-po-column-order-date">Order Date</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-expected-date"
+                            data-column-target="col-po-expected-date" checked>
+                        <label class="form-check-label" for="toggle-po-column-expected-date">Expected Date</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-delivery"
+                            data-column-target="col-po-delivery">
+                        <label class="form-check-label" for="toggle-po-column-delivery">Delivery Charge</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-received"
+                            data-column-target="col-po-received" checked>
+                        <label class="form-check-label" for="toggle-po-column-received">Received</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-item-count"
+                            data-column-target="col-po-item-count">
+                        <label class="form-check-label" for="toggle-po-column-item-count">Item Count</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-items"
+                            data-column-target="col-po-items">
+                        <label class="form-check-label" for="toggle-po-column-items">Line Items</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-user"
+                            data-column-target="col-po-user">
+                        <label class="form-check-label" for="toggle-po-column-user">Created By (User ID)</label>
+                    </div>
+                </div>
+            </div>
             <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
                 Filters
             </button>
@@ -78,26 +141,67 @@
     {% endif %}
 
     <div class="table-responsive">
-    <table class="table sortable">
+    <table class="table sortable" id="purchase-orders-table">
         <thead>
             <tr>
-                <th data-type="number">ID</th>
-                <th>Vendor</th>
-                <th>Order Date</th>
-                <th>Expected Date</th>
-                <th data-type="number">Delivery</th>
-                <th>Actions</th>
+                <th class="col-po-id" data-type="number">ID</th>
+                <th class="col-po-vendor">Vendor</th>
+                <th class="col-po-vendor-name">Vendor (Recorded)</th>
+                <th class="col-po-vendor-id" data-type="number">Vendor ID</th>
+                <th class="col-po-order-date">Order Date</th>
+                <th class="col-po-expected-date">Expected Date</th>
+                <th class="col-po-delivery" data-type="number">Delivery</th>
+                <th class="col-po-received">Received</th>
+                <th class="col-po-item-count" data-type="number">Item Count</th>
+                <th class="col-po-items">Line Items</th>
+                <th class="col-po-user" data-type="number">Created By</th>
+                <th class="col-po-actions">Actions</th>
             </tr>
         </thead>
         <tbody id="po-table-body">
         {% for order in orders.items %}
             <tr data-id="{{ order.id }}" data-vendor="{{ order.vendor_id }}" data-order-date="{{ order.order_date }}" data-expected-date="{{ order.expected_date }}" data-delivery="{{ order.delivery_charge }}">
-                <td>{{ order.id }}</td>
-                <td class="po-vendor">{{ order.vendor.first_name }} {{ order.vendor.last_name }}</td>
-                <td class="po-order-date">{{ order.order_date }}</td>
-                <td class="po-expected-date">{{ order.expected_date }}</td>
-                <td class="po-delivery">{{ order.delivery_charge }}</td>
-                <td>
+                <td class="col-po-id" data-sort-value="{{ order.id }}">{{ order.id }}</td>
+                <td class="col-po-vendor">
+                    {% if order.vendor %}
+                        {{ order.vendor.first_name }} {{ order.vendor.last_name }}
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="col-po-vendor-name">{{ order.vendor_name or '—' }}</td>
+                <td class="col-po-vendor-id" data-sort-value="{{ order.vendor_id }}">{{ order.vendor_id }}</td>
+                <td class="col-po-order-date" data-sort-value="{{ order.order_date.strftime('%Y%m%d') if order.order_date else '' }}">{{ order.order_date.strftime('%Y-%m-%d') if order.order_date else '—' }}</td>
+                <td class="col-po-expected-date" data-sort-value="{{ order.expected_date.strftime('%Y%m%d') if order.expected_date else '' }}">{{ order.expected_date.strftime('%Y-%m-%d') if order.expected_date else '—' }}</td>
+                <td class="col-po-delivery" data-sort-value="{{ '%.6f'|format(order.delivery_charge or 0) }}">{{ '%.2f'|format(order.delivery_charge or 0) }}</td>
+                <td class="col-po-received" data-sort-value="{{ '1' if order.received else '0' }}">{{ 'Yes' if order.received else 'No' }}</td>
+                {% set order_item_count = order.items | length %}
+                <td class="col-po-item-count" data-sort-value="{{ order_item_count }}">{{ order_item_count }}</td>
+                <td class="col-po-items">
+                    {% if order.items %}
+                        <ul class="mb-0 ps-3">
+                            {% for line in order.items %}
+                                <li>
+                                    {% if line.item %}
+                                        {{ line.item.name }}
+                                    {% elif line.product %}
+                                        {{ line.product.name }}
+                                    {% else %}
+                                        Item #{{ line.item_id or line.product_id }}
+                                    {% endif %}
+                                    — {{ '%.4f'|format(line.quantity) }}
+                                    {% if line.unit %}
+                                        {{ line.unit.name }}
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <span class="text-muted">No items</span>
+                    {% endif %}
+                </td>
+                <td class="col-po-user" data-sort-value="{{ order.user_id or '' }}">{{ order.user_id or '—' }}</td>
+                <td class="col-po-actions">
                     <a href="{{ url_for('purchase.edit_purchase_order', po_id=order.id) }}" class="btn btn-sm btn-primary">Edit</a>
                     <a href="{{ url_for('purchase.receive_invoice', po_id=order.id) }}" class="btn btn-sm btn-success">Receive</a>
                     <form action="{{ url_for('purchase.delete_purchase_order', po_id=order.id) }}" method="post" class="d-inline">
@@ -128,4 +232,5 @@
         </ul>
     </nav>
 </div>
+<script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
 {% endblock %}

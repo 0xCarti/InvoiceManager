@@ -10,7 +10,90 @@
             <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createProductModal">Create Product</button>
             <a href="{{ url_for('report.product_recipe_report') }}" class="btn btn-secondary mb-3">Recipe Report</a>
         </div>
-        <div class="col-auto">
+        <div class="col-auto text-end">
+            <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="product-table" data-storage-key="productTableColumnVisibility">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="productColumnSelector"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                    Columns
+                </button>
+                <div class="dropdown-menu dropdown-menu-end p-3" aria-labelledby="productColumnSelector">
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-id"
+                            data-column-target="col-product-id">
+                        <label class="form-check-label" for="toggle-product-column-id">Product ID</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-name"
+                            data-column-target="col-product-name" checked>
+                        <label class="form-check-label" for="toggle-product-column-name">Name</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-price"
+                            data-column-target="col-product-price" checked>
+                        <label class="form-check-label" for="toggle-product-column-price">Price</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-cost"
+                            data-column-target="col-product-cost" checked>
+                        <label class="form-check-label" for="toggle-product-column-cost">Cost</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-food-cost"
+                            data-column-target="col-product-food-cost" checked>
+                        <label class="form-check-label" for="toggle-product-column-food-cost">Food Cost %</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-last-sold"
+                            data-column-target="col-product-last-sold" checked>
+                        <label class="form-check-label" for="toggle-product-column-last-sold">Last Sold</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-quantity"
+                            data-column-target="col-product-quantity">
+                        <label class="form-check-label" for="toggle-product-column-quantity">Quantity</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-profit"
+                            data-column-target="col-product-profit">
+                        <label class="form-check-label" for="toggle-product-column-profit">Profit</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-sales-gl"
+                            data-column-target="col-product-sales-gl-code">
+                        <label class="form-check-label" for="toggle-product-column-sales-gl">Sales GL Code</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-sales-gl-desc"
+                            data-column-target="col-product-sales-gl-desc">
+                        <label class="form-check-label" for="toggle-product-column-sales-gl-desc">Sales GL Description</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-gl-code"
+                            data-column-target="col-product-gl-code">
+                        <label class="form-check-label" for="toggle-product-column-gl-code">Inventory GL Code</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-gl-desc"
+                            data-column-target="col-product-gl-desc">
+                        <label class="form-check-label" for="toggle-product-column-gl-desc">Inventory GL Description</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-locations"
+                            data-column-target="col-product-locations">
+                        <label class="form-check-label" for="toggle-product-column-locations">Locations</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-recipe-count"
+                            data-column-target="col-product-recipe-count">
+                        <label class="form-check-label" for="toggle-product-column-recipe-count">Recipe Item Count</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-recipe-details"
+                            data-column-target="col-product-recipe-details">
+                        <label class="form-check-label" for="toggle-product-column-recipe-details">Recipe Details</label>
+                    </div>
+                </div>
+            </div>
             <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
                 Filters
             </button>
@@ -130,12 +213,22 @@
     <table class="table sortable" id="product-table">
         <thead>
             <tr>
-                <th>Name</th>
-                <th data-type="number">Price</th>
-                <th data-type="number">Cost</th>
-                <th data-type="number">Food Cost %</th>
-                <th>Last Sold</th>
-                <th>Action</th>
+                <th class="col-product-id" data-type="number">ID</th>
+                <th class="col-product-name">Name</th>
+                <th class="col-product-price" data-type="number">Price</th>
+                <th class="col-product-cost" data-type="number">Cost</th>
+                <th class="col-product-food-cost" data-type="number">Food Cost %</th>
+                <th class="col-product-last-sold">Last Sold</th>
+                <th class="col-product-quantity" data-type="number">Quantity</th>
+                <th class="col-product-profit" data-type="number">Profit</th>
+                <th class="col-product-sales-gl-code">Sales GL Code</th>
+                <th class="col-product-sales-gl-desc">Sales GL Description</th>
+                <th class="col-product-gl-code">Inventory GL Code</th>
+                <th class="col-product-gl-desc">Inventory GL Description</th>
+                <th class="col-product-locations">Locations</th>
+                <th class="col-product-recipe-count" data-type="number">Recipe Item Count</th>
+                <th class="col-product-recipe-details">Recipe Details</th>
+                <th class="col-product-actions">Action</th>
             </tr>
         </thead>
         <tbody>
@@ -163,6 +256,7 @@
         </ul>
     </nav>
 </div>
+<script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('create-product-form');
