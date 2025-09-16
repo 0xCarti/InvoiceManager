@@ -22,16 +22,11 @@
     </div>
     <div id="item-list">
         {% for item in form.items %}
-        {% set selected_name = '' %}
-        {% for val, label in form.items[0].item.choices %}
-            {% if val == item.item.data %}
-                {% set selected_name = label %}
-            {% endif %}
-        {% endfor %}
+        {% set selected_name = item.item.choices | selectattr('0', 'equalto', item.item.data) | map(attribute=1) | first %}
         <div class="row mb-2 align-items-center item-row">
             <div class="col position-relative">
                 <input type="hidden" name="{{ item.item.name }}" value="{{ item.item.data or '' }}" class="item-id">
-                <input type="text" class="form-control item-search" placeholder="Search item..." autocomplete="off" value="{{ selected_name }}">
+                <input type="text" class="form-control item-search" placeholder="Search item..." autocomplete="off" value="{{ selected_name or '' }}">
                 <div class="list-group item-suggestions"></div>
             </div>
             <div class="col">
