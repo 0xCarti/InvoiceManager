@@ -1,4 +1,5 @@
 <tr id="product-row-{{ product.id }}">
+    <td class="col-select"><input type="checkbox" name="product_ids" value="{{ product.id }}" style="transform: scale(1.5);"></td>
     <td class="col-product-id" data-sort-value="{{ product.id }}">{{ product.id }}</td>
     <td class="col-product-name">{{ product.name }}</td>
     <td class="col-product-price" data-sort-value="{{ '%.6f'|format(product.price or 0) }}">{{ '%.2f'|format(product.price or 0) }}</td>

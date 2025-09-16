@@ -9,6 +9,7 @@
         <div class="col-auto">
             <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createProductModal">Create Product</button>
             <a href="{{ url_for('report.product_recipe_report') }}" class="btn btn-secondary mb-3">Recipe Report</a>
+            <button type="submit" class="btn btn-warning mb-3" form="bulk-cost-form">Set Cost From Recipe</button>
         </div>
         <div class="col-auto text-end">
             <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="product-table" data-storage-key="productTableColumnVisibility">
@@ -209,10 +210,13 @@
     {% if selected_customer %}
     <p>Filtering by Customer: {{ selected_customer.first_name }} {{ selected_customer.last_name }}</p>
     {% endif %}
-    <div class="table-responsive">
-    <table class="table sortable" id="product-table">
+    <form id="bulk-cost-form" action="{{ url_for('product.bulk_set_cost_from_recipe') }}" method="post">
+        {{ bulk_cost_form.hidden_tag() }}
+        <div class="table-responsive">
+        <table class="table sortable" id="product-table">
         <thead>
             <tr>
+                <th class="col-select"><input type="checkbox" id="select-all-products" style="transform: scale(1.5);"></th>
                 <th class="col-product-id" data-type="number">ID</th>
                 <th class="col-product-name">Name</th>
                 <th class="col-product-price" data-type="number">Price</th>
@@ -236,8 +240,9 @@
             {% include 'products/_product_row.html' %}
             {% endfor %}
         </tbody>
-    </table>
-    </div>
+        </table>
+        </div>
+    </form>
     <nav aria-label="Product pagination">
         <ul class="pagination">
             {% if products.has_prev %}
@@ -259,6 +264,15 @@
 <script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const selectAllProducts = document.getElementById('select-all-products');
+    if (selectAllProducts) {
+        selectAllProducts.addEventListener('click', function() {
+            document.querySelectorAll('#product-table tbody input[type="checkbox"][name="product_ids"]').forEach(cb => {
+                cb.checked = selectAllProducts.checked;
+            });
+        });
+    }
+
     const form = document.getElementById('create-product-form');
     if (form) {
         form.addEventListener('submit', function(e) {
@@ -277,6 +291,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     }).then(r => r.json()).then(res => {
                         if (res.success) {
                             document.querySelector('#product-table tbody').insertAdjacentHTML('beforeend', res.html);
+                            if (selectAllProducts && selectAllProducts.checked) {
+                                const lastRowCheckbox = document.querySelector('#product-table tbody tr:last-child input[type="checkbox"][name="product_ids"]');
+                                if (lastRowCheckbox) {
+                                    lastRowCheckbox.checked = true;
+                                }
+                            }
                             form.reset();
                             const modalEl = document.getElementById('createProductModal');
                             bootstrap.Modal.getInstance(modalEl).hide();
