@@ -295,8 +295,25 @@ if (itemModalBody) {
     itemModalBody.innerHTML = '';
 }
 
+const EXECUTABLE_SCRIPT_TYPES = new Set(['', 'text/javascript', 'application/javascript', 'module']);
+
 function executeScripts(container) {
-    container.querySelectorAll('script').forEach(s => {
+    container.querySelectorAll('script').forEach((s) => {
+        const src = s.getAttribute('src');
+        const typeAttr = (s.getAttribute('type') || '').trim().toLowerCase();
+
+        if (src) {
+            const script = document.createElement('script');
+            script.src = src;
+            document.head.appendChild(script);
+            s.remove();
+            return;
+        }
+
+        if (!EXECUTABLE_SCRIPT_TYPES.has(typeAttr)) {
+            return;
+        }
+
         const content = s.textContent;
         const allowHtml = s.dataset.allowHtml !== undefined;
         if (allowHtml || !/<\/?[a-z][\s\S]*>/i.test(content)) {
