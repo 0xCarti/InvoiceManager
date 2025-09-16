@@ -127,13 +127,13 @@
     <p>Filtering by Customer: {{ selected_customer.first_name }} {{ selected_customer.last_name }}</p>
     {% endif %}
     <div class="table-responsive">
-    <table class="table" id="product-table">
+    <table class="table sortable" id="product-table">
         <thead>
             <tr>
                 <th>Name</th>
-                <th>Price</th>
-                <th>Cost</th>
-                <th>Food Cost %</th>
+                <th data-type="number">Price</th>
+                <th data-type="number">Cost</th>
+                <th data-type="number">Food Cost %</th>
                 <th>Last Sold</th>
                 <th>Action</th>
             </tr>
