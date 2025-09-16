@@ -1,8 +1,8 @@
 <tr id="item-row-{{ item.id }}">
-    <td><input type="checkbox" name="item_ids" value="{{ item.id }}" style="transform: scale(1.5);"></td>
-    <td>{{ item.name }}</td>
-    <td>{{ '%.6f'|format(item.cost) }} / {{ item.base_unit }}</td>
-    <td>
+    <td class="col-select"><input type="checkbox" name="item_ids" value="{{ item.id }}" style="transform: scale(1.5);"></td>
+    <td class="col-name">{{ item.name }}</td>
+    <td class="col-cost">{{ '%.6f'|format(item.cost) }} / {{ item.base_unit }}</td>
+    <td class="col-actions">
         <a href="{{ url_for('item.view_item', item_id=item.id) }}" class="btn btn-primary">View</a>
         <button type="button" class="btn btn-secondary edit-item-btn ms-1" data-item-id="{{ item.id }}">Edit</button>
         <button type="button" class="btn btn-secondary copy-item-btn ms-1" data-item-id="{{ item.id }}">Copy</button>
