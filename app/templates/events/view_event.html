@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
+{% set unconfirmed_count = event.locations | selectattr('confirmed', 'equalto', False) | list | length %}
 <div class="container mt-4">
     <h2>{{ event.name }}</h2>
     <p>Start: {{ event.start_date }} End: {{ event.end_date }}</p>
@@ -13,7 +14,7 @@
         {% endif %}
         {% if not event.closed %}
         <a class="btn btn-secondary me-2" href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}">Upload Sales</a>
-        <a class="btn btn-danger" href="{{ url_for('event.close_event', event_id=event.id) }}">Close Event</a>
+        <a class="btn btn-danger" id="close-event-btn" href="{{ url_for('event.close_event', event_id=event.id) }}">Close Event</a>
         {% endif %}
     </div>
     <div class="table-responsive">
@@ -44,4 +45,21 @@
         </table>
     </div>
 </div>
+{% if not event.closed and unconfirmed_count %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const closeEventButton = document.getElementById('close-event-btn');
+        if (!closeEventButton) {
+            return;
+        }
+
+        const warningMessage = 'There are locations for this event that are still unconfirmed. Closing the event will prevent further updates. Do you want to continue?';
+        closeEventButton.addEventListener('click', function (event) {
+            if (!confirm(warningMessage)) {
+                event.preventDefault();
+            }
+        });
+    });
+</script>
+{% endif %}
 {% endblock %}
