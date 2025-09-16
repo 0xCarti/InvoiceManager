@@ -8,6 +8,24 @@
             <button type="button" class="btn btn-primary mb-3" id="createItemBtn">Add New Item</button>
         </div>
         <div class="col-auto">
+            <div class="dropdown d-inline-block mb-3 me-2">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="columnSelectorDropdown"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                    Columns
+                </button>
+                <div class="dropdown-menu dropdown-menu-end p-3" aria-labelledby="columnSelectorDropdown">
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-name"
+                            data-column-target="col-name" checked>
+                        <label class="form-check-label" for="toggle-column-name">Name</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-cost"
+                            data-column-target="col-cost" checked>
+                        <label class="form-check-label" for="toggle-column-cost">Cost</label>
+                    </div>
+                </div>
+            </div>
             <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
                 Filters
             </button>
@@ -124,10 +142,10 @@
         <table class="table sortable" id="itemsTable">
             <thead>
                 <tr>
-                    <th scope="col"><input type="checkbox" id="select-all" style="transform: scale(1.5);"></th>
-                    <th scope="col">Name</th>
-                    <th scope="col" data-type="number">Cost</th>
-                    <th scope="col">Actions</th>
+                    <th scope="col" class="col-select"><input type="checkbox" id="select-all" style="transform: scale(1.5);"></th>
+                    <th scope="col" class="col-name">Name</th>
+                    <th scope="col" class="col-cost" data-type="number">Cost</th>
+                    <th scope="col" class="col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -156,13 +174,19 @@
         </ul>
     </nav>
 </div>
+<script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
 <script>
-document.getElementById('select-all').onclick = function() {
-    var checkboxes = document.querySelectorAll('input[type="checkbox"][name="item_ids"]');
-    for (var checkbox of checkboxes) {
-        checkbox.checked = this.checked;
+document.addEventListener('DOMContentLoaded', function() {
+    var selectAll = document.getElementById('select-all');
+    if (selectAll) {
+        selectAll.addEventListener('click', function() {
+            var checkboxes = document.querySelectorAll('input[type="checkbox"][name="item_ids"]');
+            checkboxes.forEach(function(checkbox) {
+                checkbox.checked = selectAll.checked;
+            });
+        });
     }
-}
+});
 </script>
 <!-- Item Modal -->
 <div class="modal fade" id="itemModal" tabindex="-1" aria-hidden="true">
