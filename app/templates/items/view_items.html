@@ -5,7 +5,7 @@
     <h2>Items List</h2>
     <div class="row justify-content-between">
         <div class="col-auto">
-            <button type="button" class="btn btn-primary mb-3" id="createItemBtn">Add New Item</button>
+            <a href="{{ url_for('item.add_item') }}" class="btn btn-primary mb-3" id="createItemBtn">Add New Item</a>
         </div>
         <div class="col-auto">
             <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="itemsTable" data-storage-key="itemsTableColumnVisibility">
@@ -313,19 +313,32 @@ function bindItemForm(actionUrl) {
     });
 }
 
-document.getElementById('createItemBtn').addEventListener('click', function() {
-    const url = '{{ url_for('item.add_item') }}';
-    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(r => r.text())
-        .then(html => {
-            itemModalEl.querySelector('.modal-title').textContent = 'Add Item';
-            itemModalEl.querySelector('.modal-body').innerHTML = html;
-            executeScripts(itemModalEl);
-            const modal = new bootstrap.Modal(itemModalEl);
-            modal.show();
-            bindItemForm(url);
-        });
-});
+const createItemBtn = document.getElementById('createItemBtn');
+if (createItemBtn) {
+    createItemBtn.addEventListener('click', function(event) {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+        }
+        event.preventDefault();
+        const url = createItemBtn.getAttribute('href');
+        if (!url) {
+            return;
+        }
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.text())
+            .then(html => {
+                itemModalEl.querySelector('.modal-title').textContent = 'Add Item';
+                itemModalEl.querySelector('.modal-body').innerHTML = html;
+                executeScripts(itemModalEl);
+                const modal = new bootstrap.Modal(itemModalEl);
+                modal.show();
+                bindItemForm(url);
+            })
+            .catch(() => {
+                window.location.href = url;
+            });
+    });
+}
 
 document.querySelector('#itemsTable').addEventListener('click', function(e) {
     if (e.target.classList.contains('edit-item-btn')) {
