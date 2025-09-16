@@ -222,23 +222,37 @@
         </table>
         </div>
     </form>
-    <nav aria-label="Item pagination">
-        <ul class="pagination">
-            {% if items.has_prev %}
-            <li class="page-item">
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_ids, base_unit=base_unit, cost_min=cost_min, cost_max=cost_max, archived=archived, vendor_id=vendor_ids) }}">Previous</a>
-            </li>
-            {% endif %}
-            <li class="page-item disabled">
-                <span class="page-link">Page {{ items.page }} of {{ items.pages }}</span>
-            </li>
-            {% if items.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num, name_query=name_query, match_mode=match_mode, gl_code_id=gl_code_ids, base_unit=base_unit, cost_min=cost_min, cost_max=cost_max, archived=archived, vendor_id=vendor_ids) }}">Next</a>
-            </li>
-            {% endif %}
-        </ul>
-    </nav>
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mt-3">
+        <nav aria-label="Item pagination">
+            <ul class="pagination mb-0">
+                <li class="page-item {% if not items.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('item.view_items', page=items.prev_num if items.has_prev else 1, **pagination_args) }}"{% if not items.has_prev %} tabindex="-1" aria-disabled="true"{% endif %}>Previous</a>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link">Page {{ items.page }} of {{ items.pages }}</span>
+                </li>
+                <li class="page-item {% if not items.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('item.view_items', page=items.next_num if items.has_next else items.pages or 1, **pagination_args) }}"{% if not items.has_next %} tabindex="-1" aria-disabled="true"{% endif %}>Next</a>
+                </li>
+            </ul>
+        </nav>
+        <form method="get" class="d-flex align-items-center gap-2">
+            {% for key, values in request.args.lists() %}
+                {% if key not in ['page', 'per_page'] %}
+                    {% for value in values %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+            <input type="hidden" name="page" value="1">
+            <label for="items-per-page" class="form-label mb-0">Rows per page</label>
+            <select id="items-per-page" name="per_page" class="form-select" onchange="this.form.submit()">
+                {% for option in PAGINATION_SIZES %}
+                    <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
 </div>
 <script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
 <script>

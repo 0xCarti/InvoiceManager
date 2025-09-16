@@ -8,12 +8,13 @@ from flask import (
     url_for,
     jsonify,
 )
-from flask_login import current_user, login_required
+from flask_login import login_required
 
 from app import db
 from app.forms import CustomerForm, DeleteForm
 from app.models import Customer
 from app.utils.activity import log_activity
+from app.utils.pagination import build_pagination_args, get_per_page
 from sqlalchemy import func
 
 customer = Blueprint("customer", __name__)
@@ -49,9 +50,8 @@ def view_customers():
     elif pst_exempt == "no":
         query = query.filter(Customer.pst_exempt.is_(False))
 
-    customers = query.paginate(
-        page=page, per_page=current_user.pagination_limit
-    )
+    per_page = get_per_page()
+    customers = query.paginate(page=page, per_page=per_page)
     delete_form = DeleteForm()
     form = CustomerForm()
     return render_template(
@@ -63,6 +63,8 @@ def view_customers():
         match_mode=match_mode,
         gst_exempt=gst_exempt,
         pst_exempt=pst_exempt,
+        per_page=per_page,
+        pagination_args=build_pagination_args(per_page),
     )
 
 

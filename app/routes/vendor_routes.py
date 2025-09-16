@@ -8,12 +8,13 @@ from flask import (
     request,
     url_for,
 )
-from flask_login import current_user, login_required
+from flask_login import login_required
 
 from app import db
 from app.forms import CustomerForm, DeleteForm
 from app.models import Vendor
 from app.utils.activity import log_activity
+from app.utils.pagination import build_pagination_args, get_per_page
 
 vendor = Blueprint("vendor", __name__)
 
@@ -23,12 +24,17 @@ vendor = Blueprint("vendor", __name__)
 def view_vendors():
     """Display all vendors."""
     page = request.args.get("page", 1, type=int)
+    per_page = get_per_page()
     vendors = Vendor.query.filter_by(archived=False).paginate(
-        page=page, per_page=current_user.pagination_limit
+        page=page, per_page=per_page
     )
     delete_form = DeleteForm()
     return render_template(
-        "vendors/view_vendors.html", vendors=vendors, delete_form=delete_form
+        "vendors/view_vendors.html",
+        vendors=vendors,
+        delete_form=delete_form,
+        per_page=per_page,
+        pagination_args=build_pagination_args(per_page),
     )
 
 

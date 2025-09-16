@@ -30,6 +30,7 @@ from app.models import (
     Vendor,
 )
 from app.utils.activity import log_activity
+from app.utils.pagination import build_pagination_args, get_per_page
 
 import datetime
 
@@ -78,6 +79,7 @@ def view_purchase_orders():
     """Show purchase orders with optional filters."""
     delete_form = DeleteForm()
     page = request.args.get("page", 1, type=int)
+    per_page = get_per_page()
     vendor_id = request.args.get("vendor_id", type=int)
     status = request.args.get("status", "pending")
     start_date_str = request.args.get("start_date")
@@ -116,7 +118,7 @@ def view_purchase_orders():
     )
 
     orders = query.order_by(PurchaseOrder.order_date.desc()).paginate(
-        page=page, per_page=current_user.pagination_limit
+        page=page, per_page=per_page
     )
 
     vendors = Vendor.query.filter_by(archived=False).all()
@@ -131,6 +133,8 @@ def view_purchase_orders():
         end_date=end_date_str,
         status=status,
         selected_vendor=selected_vendor,
+        per_page=per_page,
+        pagination_args=build_pagination_args(per_page),
     )
 
 
@@ -464,6 +468,7 @@ def receive_invoice(po_id):
 def view_purchase_invoices():
     """List all received purchase invoices."""
     page = request.args.get("page", 1, type=int)
+    per_page = get_per_page()
     invoice_id = request.args.get("invoice_id", type=int)
     po_number = request.args.get("po_number", type=int)
     vendor_id = request.args.get("vendor_id", type=int)
@@ -508,7 +513,7 @@ def view_purchase_invoices():
 
     invoices = query.order_by(
         PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc()
-    ).paginate(page=page, per_page=current_user.pagination_limit)
+    ).paginate(page=page, per_page=per_page)
 
     vendors = Vendor.query.order_by(Vendor.first_name, Vendor.last_name).all()
     locations = Location.query.order_by(Location.name).all()
@@ -528,6 +533,8 @@ def view_purchase_invoices():
         end_date=end_date_str,
         active_vendor=active_vendor,
         active_location=active_location,
+        per_page=per_page,
+        pagination_args=build_pagination_args(per_page),
     )
 
 

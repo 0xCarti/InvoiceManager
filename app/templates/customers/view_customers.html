@@ -101,23 +101,37 @@
         </tbody>
     </table>
     </div>
-    <nav aria-label="Customer pagination">
-        <ul class="pagination">
-            {% if customers.has_prev %}
-            <li class="page-item">
-                <a class="page-link" href="{{ url_for('customer.view_customers', page=customers.prev_num, name_query=name_query, match_mode=match_mode, gst_exempt=gst_exempt, pst_exempt=pst_exempt) }}">Previous</a>
-            </li>
-            {% endif %}
-            <li class="page-item disabled">
-                <span class="page-link">Page {{ customers.page }} of {{ customers.pages }}</span>
-            </li>
-            {% if customers.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="{{ url_for('customer.view_customers', page=customers.next_num, name_query=name_query, match_mode=match_mode, gst_exempt=gst_exempt, pst_exempt=pst_exempt) }}">Next</a>
-            </li>
-            {% endif %}
-        </ul>
-    </nav>
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mt-3">
+        <nav aria-label="Customer pagination">
+            <ul class="pagination mb-0">
+                <li class="page-item {% if not customers.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('customer.view_customers', page=customers.prev_num if customers.has_prev else 1, **pagination_args) }}"{% if not customers.has_prev %} tabindex="-1" aria-disabled="true"{% endif %}>Previous</a>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link">Page {{ customers.page }} of {{ customers.pages }}</span>
+                </li>
+                <li class="page-item {% if not customers.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('customer.view_customers', page=customers.next_num if customers.has_next else customers.pages or 1, **pagination_args) }}"{% if not customers.has_next %} tabindex="-1" aria-disabled="true"{% endif %}>Next</a>
+                </li>
+            </ul>
+        </nav>
+        <form method="get" class="d-flex align-items-center gap-2">
+            {% for key, values in request.args.lists() %}
+                {% if key not in ['page', 'per_page'] %}
+                    {% for value in values %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+            <input type="hidden" name="page" value="1">
+            <label for="customers-per-page" class="form-label mb-0">Rows per page</label>
+            <select id="customers-per-page" name="per_page" class="form-select" onchange="this.form.submit()">
+                {% for option in PAGINATION_SIZES %}
+                    <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
 
     <!-- Create Customer Modal -->
     <div class="modal fade" id="createCustomerModal" tabindex="-1" aria-labelledby="createCustomerModalLabel" aria-hidden="true">

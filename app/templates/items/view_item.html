@@ -30,21 +30,35 @@
                     </tbody>
                 </table>
             </div>
-            <nav aria-label="Purchase invoice pagination">
-                <ul class="pagination">
-                    {% if purchase_items.has_prev %}
-                    <li class="page-item">
-                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.prev_num, sales_page=sales_items.page, transfer_page=transfer_items.page) }}">Previous</a>
-                    </li>
-                    {% endif %}
-                    <li class="page-item disabled"><span class="page-link">Page {{ purchase_items.page }} of {{ purchase_items.pages }}</span></li>
-                    {% if purchase_items.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.next_num, sales_page=sales_items.page, transfer_page=transfer_items.page) }}">Next</a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mt-2">
+                <nav aria-label="Purchase invoice pagination">
+                    <ul class="pagination mb-0">
+                        <li class="page-item {% if not purchase_items.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.prev_num if purchase_items.has_prev else 1, **purchase_pagination_args) }}"{% if not purchase_items.has_prev %} tabindex="-1" aria-disabled="true"{% endif %}>Previous</a>
+                        </li>
+                        <li class="page-item disabled"><span class="page-link">Page {{ purchase_items.page }} of {{ purchase_items.pages }}</span></li>
+                        <li class="page-item {% if not purchase_items.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.next_num if purchase_items.has_next else purchase_items.pages or 1, **purchase_pagination_args) }}"{% if not purchase_items.has_next %} tabindex="-1" aria-disabled="true"{% endif %}>Next</a>
+                        </li>
+                    </ul>
+                </nav>
+                <form method="get" class="d-flex align-items-center gap-2">
+                    {% for key, values in request.args.lists() %}
+                        {% if key not in ['purchase_page', 'purchase_per_page'] %}
+                            {% for value in values %}
+                                <input type="hidden" name="{{ key }}" value="{{ value }}">
+                            {% endfor %}
+                        {% endif %}
+                    {% endfor %}
+                    <input type="hidden" name="purchase_page" value="1">
+                    <label for="purchase-per-page" class="form-label mb-0">Rows per page</label>
+                    <select id="purchase-per-page" name="purchase_per_page" class="form-select" onchange="this.form.submit()">
+                        {% for option in PAGINATION_SIZES %}
+                            <option value="{{ option }}" {% if purchase_per_page == option %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
         </div>
         <div class="col-12 mt-4">
             <h4>Recent Sales Invoices</h4>
@@ -72,21 +86,35 @@
                     </tbody>
                 </table>
             </div>
-            <nav aria-label="Sales invoice pagination">
-                <ul class="pagination">
-                    {% if sales_items.has_prev %}
-                    <li class="page-item">
-                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.page, sales_page=sales_items.prev_num, transfer_page=transfer_items.page) }}">Previous</a>
-                    </li>
-                    {% endif %}
-                    <li class="page-item disabled"><span class="page-link">Page {{ sales_items.page }} of {{ sales_items.pages }}</span></li>
-                    {% if sales_items.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.page, sales_page=sales_items.next_num, transfer_page=transfer_items.page) }}">Next</a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mt-2">
+                <nav aria-label="Sales invoice pagination">
+                    <ul class="pagination mb-0">
+                        <li class="page-item {% if not sales_items.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, sales_page=sales_items.prev_num if sales_items.has_prev else 1, **sales_pagination_args) }}"{% if not sales_items.has_prev %} tabindex="-1" aria-disabled="true"{% endif %}>Previous</a>
+                        </li>
+                        <li class="page-item disabled"><span class="page-link">Page {{ sales_items.page }} of {{ sales_items.pages }}</span></li>
+                        <li class="page-item {% if not sales_items.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, sales_page=sales_items.next_num if sales_items.has_next else sales_items.pages or 1, **sales_pagination_args) }}"{% if not sales_items.has_next %} tabindex="-1" aria-disabled="true"{% endif %}>Next</a>
+                        </li>
+                    </ul>
+                </nav>
+                <form method="get" class="d-flex align-items-center gap-2">
+                    {% for key, values in request.args.lists() %}
+                        {% if key not in ['sales_page', 'sales_per_page'] %}
+                            {% for value in values %}
+                                <input type="hidden" name="{{ key }}" value="{{ value }}">
+                            {% endfor %}
+                        {% endif %}
+                    {% endfor %}
+                    <input type="hidden" name="sales_page" value="1">
+                    <label for="sales-per-page" class="form-label mb-0">Rows per page</label>
+                    <select id="sales-per-page" name="sales_per_page" class="form-select" onchange="this.form.submit()">
+                        {% for option in PAGINATION_SIZES %}
+                            <option value="{{ option }}" {% if sales_per_page == option %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
         </div>
         <div class="col-12 mt-4">
             <h4>Recent Transfers</h4>
@@ -116,21 +144,35 @@
                     </tbody>
                 </table>
             </div>
-            <nav aria-label="Transfer pagination">
-                <ul class="pagination">
-                    {% if transfer_items.has_prev %}
-                    <li class="page-item">
-                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.page, sales_page=sales_items.page, transfer_page=transfer_items.prev_num) }}">Previous</a>
-                    </li>
-                    {% endif %}
-                    <li class="page-item disabled"><span class="page-link">Page {{ transfer_items.page }} of {{ transfer_items.pages }}</span></li>
-                    {% if transfer_items.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, purchase_page=purchase_items.page, sales_page=sales_items.page, transfer_page=transfer_items.next_num) }}">Next</a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mt-2">
+                <nav aria-label="Transfer pagination">
+                    <ul class="pagination mb-0">
+                        <li class="page-item {% if not transfer_items.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, transfer_page=transfer_items.prev_num if transfer_items.has_prev else 1, **transfer_pagination_args) }}"{% if not transfer_items.has_prev %} tabindex="-1" aria-disabled="true"{% endif %}>Previous</a>
+                        </li>
+                        <li class="page-item disabled"><span class="page-link">Page {{ transfer_items.page }} of {{ transfer_items.pages }}</span></li>
+                        <li class="page-item {% if not transfer_items.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('item.view_item', item_id=item.id, transfer_page=transfer_items.next_num if transfer_items.has_next else transfer_items.pages or 1, **transfer_pagination_args) }}"{% if not transfer_items.has_next %} tabindex="-1" aria-disabled="true"{% endif %}>Next</a>
+                        </li>
+                    </ul>
+                </nav>
+                <form method="get" class="d-flex align-items-center gap-2">
+                    {% for key, values in request.args.lists() %}
+                        {% if key not in ['transfer_page', 'transfer_per_page'] %}
+                            {% for value in values %}
+                                <input type="hidden" name="{{ key }}" value="{{ value }}">
+                            {% endfor %}
+                        {% endif %}
+                    {% endfor %}
+                    <input type="hidden" name="transfer_page" value="1">
+                    <label for="transfer-per-page" class="form-label mb-0">Rows per page</label>
+                    <select id="transfer-per-page" name="transfer_per_page" class="form-select" onchange="this.form.submit()">
+                        {% for option in PAGINATION_SIZES %}
+                            <option value="{{ option }}" {% if transfer_per_page == option %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
         </div>
     </div>
 </div>

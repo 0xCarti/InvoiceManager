@@ -214,23 +214,37 @@
         </tbody>
     </table>
     </div>
-    <nav aria-label="Purchase order pagination">
-        <ul class="pagination">
-            {% if orders.has_prev %}
-            <li class="page-item">
-                <a class="page-link" href="{{ url_for('purchase.view_purchase_orders', page=orders.prev_num, vendor_id=vendor_id, start_date=start_date, end_date=end_date, status=status) }}">Previous</a>
-            </li>
-            {% endif %}
-            <li class="page-item disabled">
-                <span class="page-link">Page {{ orders.page }} of {{ orders.pages }}</span>
-            </li>
-            {% if orders.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="{{ url_for('purchase.view_purchase_orders', page=orders.next_num, vendor_id=vendor_id, start_date=start_date, end_date=end_date, status=status) }}">Next</a>
-            </li>
-            {% endif %}
-        </ul>
-    </nav>
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mt-3">
+        <nav aria-label="Purchase order pagination">
+            <ul class="pagination mb-0">
+                <li class="page-item {% if not orders.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('purchase.view_purchase_orders', page=orders.prev_num if orders.has_prev else 1, **pagination_args) }}"{% if not orders.has_prev %} tabindex="-1" aria-disabled="true"{% endif %}>Previous</a>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link">Page {{ orders.page }} of {{ orders.pages }}</span>
+                </li>
+                <li class="page-item {% if not orders.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('purchase.view_purchase_orders', page=orders.next_num if orders.has_next else orders.pages or 1, **pagination_args) }}"{% if not orders.has_next %} tabindex="-1" aria-disabled="true"{% endif %}>Next</a>
+                </li>
+            </ul>
+        </nav>
+        <form method="get" class="d-flex align-items-center gap-2">
+            {% for key, values in request.args.lists() %}
+                {% if key not in ['page', 'per_page'] %}
+                    {% for value in values %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+            <input type="hidden" name="page" value="1">
+            <label for="purchase-orders-per-page" class="form-label mb-0">Rows per page</label>
+            <select id="purchase-orders-per-page" name="per_page" class="form-select" onchange="this.form.submit()">
+                {% for option in PAGINATION_SIZES %}
+                    <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
 </div>
 <script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
 {% endblock %}

@@ -11,7 +11,7 @@ from flask import (
     session,
     url_for,
 )
-from flask_login import current_user, login_required
+from flask_login import login_required
 from sqlalchemy import func, or_
 from sqlalchemy.orm import aliased, selectinload
 
@@ -34,6 +34,7 @@ from app.models import (
     TerminalSale,
 )
 from app.utils.activity import log_activity
+from app.utils.pagination import build_pagination_args, get_per_page
 
 product = Blueprint("product", __name__)
 
@@ -56,6 +57,7 @@ def view_products():
     bulk_cost_form = BulkProductCostForm()
     create_form = ProductWithRecipeForm()
     page = request.args.get("page", 1, type=int)
+    per_page = get_per_page()
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
     sales_gl_code_ids = [
@@ -157,9 +159,7 @@ def view_products():
         selectinload(Product.recipe_items).selectinload(ProductRecipeItem.unit),
     )
 
-    products = query.paginate(
-        page=page, per_page=current_user.pagination_limit
-    )
+    products = query.paginate(page=page, per_page=per_page)
     sales_gl_codes = (
         GLCode.query.filter(GLCode.code.like("4%")).order_by(GLCode.code).all()
     )
@@ -190,6 +190,8 @@ def view_products():
         last_sold_before=last_sold_before_str,
         include_unsold=include_unsold,
         bulk_cost_form=bulk_cost_form,
+        per_page=per_page,
+        pagination_args=build_pagination_args(per_page),
     )
 
 

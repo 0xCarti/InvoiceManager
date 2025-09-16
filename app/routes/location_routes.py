@@ -8,12 +8,13 @@ from flask import (
     request,
     url_for,
 )
-from flask_login import current_user, login_required
+from flask_login import login_required
 
 from app import db
 from app.forms import DeleteForm, LocationForm
 from app.models import Location, LocationStandItem, Product
 from app.utils.activity import log_activity
+from app.utils.pagination import build_pagination_args, get_per_page
 
 location = Blueprint("locations", __name__)
 
@@ -278,6 +279,7 @@ def view_stand_sheet(location_id):
 def view_locations():
     """List all locations."""
     page = request.args.get("page", 1, type=int)
+    per_page = get_per_page()
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
     archived = request.args.get("archived", "active")
@@ -299,7 +301,7 @@ def view_locations():
             query = query.filter(Location.name.like(f"%{name_query}%"))
 
     locations = query.order_by(Location.name).paginate(
-        page=page, per_page=current_user.pagination_limit
+        page=page, per_page=per_page
     )
     delete_form = DeleteForm()
     return render_template(
@@ -309,6 +311,8 @@ def view_locations():
         name_query=name_query,
         match_mode=match_mode,
         archived=archived,
+        per_page=per_page,
+        pagination_args=build_pagination_args(per_page),
     )
 
 

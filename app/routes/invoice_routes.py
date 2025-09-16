@@ -16,6 +16,7 @@ from app import GST, db
 from app.forms import DeleteForm, InvoiceFilterForm, InvoiceForm
 from app.models import Customer, Invoice, InvoiceProduct, Product
 from app.utils.activity import log_activity
+from app.utils.pagination import build_pagination_args, get_per_page
 
 invoice = Blueprint("invoice", __name__)
 
@@ -279,10 +280,11 @@ def view_invoices():
     """List invoices with optional filters."""
     form = InvoiceFilterForm()
     page = request.args.get("page", 1, type=int)
+    per_page = get_per_page()
     form.customer_id.choices = [(-1, "All")] + [
         (c.id, f"{c.first_name} {c.last_name}")
         for c in Customer.query.paginate(
-            page=page, per_page=current_user.pagination_limit
+            page=page, per_page=per_page
         ).items
     ]
 
@@ -327,7 +329,7 @@ def view_invoices():
             <= datetime.combine(end_date, datetime.max.time())
         )
     invoices = query.order_by(Invoice.date_created.desc()).paginate(
-        page=page, per_page=current_user.pagination_limit
+        page=page, per_page=per_page
     )
     delete_form = DeleteForm()
     create_form = InvoiceForm()
@@ -340,4 +342,6 @@ def view_invoices():
         form=form,
         delete_form=delete_form,
         create_form=create_form,
+        per_page=per_page,
+        pagination_args=build_pagination_args(per_page),
     )

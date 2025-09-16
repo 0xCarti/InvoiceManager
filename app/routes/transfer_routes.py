@@ -29,6 +29,7 @@ from app.models import (
     User,
 )
 from app.utils.activity import log_activity
+from app.utils.pagination import build_pagination_args, get_per_page
 from app.utils.sms import send_sms
 
 transfer = Blueprint("transfer", __name__)
@@ -173,9 +174,8 @@ def view_transfers():
     elif filter_option == "not_completed":
         query = query.filter(~Transfer.completed)
 
-    transfers = query.paginate(
-        page=page, per_page=current_user.pagination_limit
-    )
+    per_page = get_per_page()
+    transfers = query.paginate(page=page, per_page=per_page)
 
     form = TransferForm()
     add_form = TransferForm(prefix="add")
@@ -186,6 +186,8 @@ def view_transfers():
         form=form,
         add_form=add_form,
         edit_form=edit_form,
+        per_page=per_page,
+        pagination_args=build_pagination_args(per_page),
     )
 
 
