@@ -11,7 +11,7 @@ from flask import (
     session,
     url_for,
 )
-from flask_login import current_user, login_required
+from flask_login import login_required
 from werkzeug.utils import secure_filename
 
 from sqlalchemy.orm import selectinload
@@ -36,6 +36,7 @@ from app.models import (
     Vendor,
 )
 from app.utils.activity import log_activity
+from app.utils.pagination import build_pagination_args, get_per_page
 
 item = Blueprint("item", __name__)
 
@@ -60,6 +61,7 @@ def view_items():
         session["item_filters"] = request.args.to_dict(flat=False)
 
     page = request.args.get("page", 1, type=int)
+    per_page = get_per_page()
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
     gl_code_ids = [
@@ -121,8 +123,16 @@ def view_items():
         query = query.filter(Item.cost <= cost_max)
 
     items = query.order_by(Item.name).paginate(
-        page=page, per_page=current_user.pagination_limit
+        page=page, per_page=per_page, error_out=False
     )
+    if items.pages and page > items.pages:
+        page = items.pages
+        items = query.order_by(Item.name).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+    extra_pagination = {}
+    if "archived" not in request.args:
+        extra_pagination["archived"] = archived
     form = ItemForm()
     gl_codes = GLCode.query.order_by(GLCode.code).all()
     base_units = [
@@ -155,6 +165,10 @@ def view_items():
         vendors=vendors,
         vendor_ids=vendor_ids,
         active_vendors=active_vendors,
+        per_page=per_page,
+        pagination_args=build_pagination_args(
+            per_page, extra_params=extra_pagination
+        ),
     )
 
 
@@ -168,13 +182,16 @@ def view_item(item_id):
     purchase_page = request.args.get("purchase_page", 1, type=int)
     sales_page = request.args.get("sales_page", 1, type=int)
     transfer_page = request.args.get("transfer_page", 1, type=int)
+    purchase_per_page = get_per_page("purchase_per_page")
+    sales_per_page = get_per_page("sales_per_page")
+    transfer_per_page = get_per_page("transfer_per_page")
     purchase_items = (
         PurchaseInvoiceItem.query
         .join(PurchaseInvoice)
         .filter(PurchaseInvoiceItem.item_id == item_id)
         .order_by(PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc())
         .paginate(
-            page=purchase_page, per_page=current_user.pagination_limit
+            page=purchase_page, per_page=purchase_per_page
         )
     )
     sales_items = (
@@ -185,7 +202,7 @@ def view_item(item_id):
         .filter(ProductRecipeItem.item_id == item_id)
         .order_by(Invoice.date_created.desc(), Invoice.id.desc())
         .paginate(
-            page=sales_page, per_page=current_user.pagination_limit
+            page=sales_page, per_page=sales_per_page
         )
     )
     transfer_items = (
@@ -194,7 +211,7 @@ def view_item(item_id):
         .filter(TransferItem.item_id == item_id)
         .order_by(Transfer.date_created.desc(), Transfer.id.desc())
         .paginate(
-            page=transfer_page, per_page=current_user.pagination_limit
+            page=transfer_page, per_page=transfer_per_page
         )
     )
     return render_template(
@@ -203,6 +220,24 @@ def view_item(item_id):
         purchase_items=purchase_items,
         sales_items=sales_items,
         transfer_items=transfer_items,
+        purchase_per_page=purchase_per_page,
+        sales_per_page=sales_per_page,
+        transfer_per_page=transfer_per_page,
+        purchase_pagination_args=build_pagination_args(
+            purchase_per_page,
+            page_param="purchase_page",
+            per_page_param="purchase_per_page",
+        ),
+        sales_pagination_args=build_pagination_args(
+            sales_per_page,
+            page_param="sales_page",
+            per_page_param="sales_per_page",
+        ),
+        transfer_pagination_args=build_pagination_args(
+            transfer_per_page,
+            page_param="transfer_page",
+            per_page_param="transfer_per_page",
+        ),
     )
 
 
@@ -214,8 +249,9 @@ def item_locations(item_id):
     if item_obj is None:
         abort(404)
     page = request.args.get("page", 1, type=int)
+    per_page = get_per_page()
     entries = LocationStandItem.query.filter_by(item_id=item_id).paginate(
-        page=page, per_page=current_user.pagination_limit
+        page=page, per_page=per_page
     )
     total = (
         db.session.query(db.func.sum(LocationStandItem.expected_count))
@@ -228,6 +264,8 @@ def item_locations(item_id):
         item=item_obj,
         entries=entries,
         total=total,
+        per_page=per_page,
+        pagination_args=build_pagination_args(per_page),
     )
 
 

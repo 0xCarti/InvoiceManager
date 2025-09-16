@@ -91,12 +91,6 @@ class User(UserMixin, db.Model):
             favs.add(endpoint)
         self.favorites = ",".join(sorted(favs))
 
-    @property
-    def pagination_limit(self) -> int:
-        """Return the preferred pagination size constrained to sensible bounds."""
-        value = self.items_per_page or 20
-        return max(1, min(value, 1000))
-
 
 class Location(db.Model):
     id = db.Column(db.Integer, primary_key=True)

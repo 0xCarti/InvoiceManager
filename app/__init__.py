@@ -175,6 +175,13 @@ def create_app(args: list):
         """Provide navigation labels to templates."""
         return dict(NAV_LINKS=NAV_LINKS)
 
+    @app.context_processor
+    def inject_pagination_sizes():
+        """Expose pagination size options to all templates."""
+        from app.utils.pagination import PAGINATION_SIZES
+
+        return {"PAGINATION_SIZES": PAGINATION_SIZES}
+
     with app.app_context():
         # Ensure models are imported and the database schema is created on
         # application start.  This allows the app to run even if migrations

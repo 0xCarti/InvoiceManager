@@ -30,7 +30,6 @@ from app.forms import (
     InviteUserForm,
     LoginForm,
     NotificationForm,
-    PaginationForm,
     PasswordResetRequestForm,
     RestoreBackupForm,
     SetPasswordForm,
@@ -189,9 +188,6 @@ def profile():
         phone_number=current_user.phone_number or "",
         notify_transfers=current_user.notify_transfers,
     )
-    pagination_form = PaginationForm(
-        items_per_page=current_user.items_per_page
-    )
     if form.validate_on_submit():
         if not check_password_hash(
             current_user.password, form.current_password.data
@@ -219,13 +215,6 @@ def profile():
         db.session.commit()
         flash("Notification settings updated.", "success")
         return redirect(url_for("auth.profile"))
-    elif (
-        "items_per_page" in request.form and pagination_form.validate_on_submit()
-    ):
-        current_user.items_per_page = pagination_form.items_per_page.data
-        db.session.commit()
-        flash("Pagination settings updated.", "success")
-        return redirect(url_for("auth.profile"))
 
     transfers = Transfer.query.filter_by(user_id=current_user.id).all()
     invoices = Invoice.query.filter_by(user_id=current_user.id).all()
@@ -235,7 +224,6 @@ def profile():
         form=form,
         tz_form=tz_form,
         notif_form=notif_form,
-        pagination_form=pagination_form,
         transfers=transfers,
         invoices=invoices,
     )
@@ -273,7 +261,6 @@ def user_profile(user_id):
         phone_number=user.phone_number or "",
         notify_transfers=user.notify_transfers,
     )
-    pagination_form = PaginationForm(items_per_page=user.items_per_page)
     if form.validate_on_submit():
         user.password = generate_password_hash(form.new_password.data)
         db.session.commit()
@@ -292,13 +279,6 @@ def user_profile(user_id):
         db.session.commit()
         flash("Notification settings updated.", "success")
         return redirect(url_for("admin.user_profile", user_id=user_id))
-    elif (
-        "items_per_page" in request.form and pagination_form.validate_on_submit()
-    ):
-        user.items_per_page = pagination_form.items_per_page.data
-        db.session.commit()
-        flash("Pagination settings updated.", "success")
-        return redirect(url_for("admin.user_profile", user_id=user_id))
 
     transfers = Transfer.query.filter_by(user_id=user.id).all()
     invoices = Invoice.query.filter_by(user_id=user.id).all()
@@ -308,7 +288,6 @@ def user_profile(user_id):
         form=form,
         tz_form=tz_form,
         notif_form=notif_form,
-        pagination_form=pagination_form,
         transfers=transfers,
         invoices=invoices,
     )

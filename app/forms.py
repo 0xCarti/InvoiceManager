@@ -667,10 +667,3 @@ class NotificationForm(FlaskForm):
     notify_transfers = BooleanField("Send text on new transfer")
     submit = SubmitField("Update Notifications")
 
-
-class PaginationForm(FlaskForm):
-    items_per_page = IntegerField(
-        "Items per page",
-        validators=[InputRequired(), NumberRange(min=1, max=1000)],
-    )
-    submit = SubmitField("Update Pagination")
