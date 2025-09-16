@@ -68,6 +68,12 @@ class LoginForm(FlaskForm):
     password = PasswordField("Password", validators=[DataRequired()])
 
 
+class CSRFOnlyForm(FlaskForm):
+    """Simple form that only provides CSRF protection."""
+
+    pass
+
+
 class PasswordResetRequestForm(FlaskForm):
     """Form for requesting a password reset email."""
 

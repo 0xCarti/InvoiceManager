@@ -17,7 +17,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy.orm import selectinload
 
 from app import db
-from app.forms import ImportItemsForm, ItemForm
+from app.forms import CSRFOnlyForm, ImportItemsForm, ItemForm
 from app.models import (
     GLCode,
     Invoice,
@@ -133,7 +133,8 @@ def view_items():
     extra_pagination = {}
     if "archived" not in request.args:
         extra_pagination["archived"] = archived
-    form = ItemForm()
+    create_form = ItemForm()
+    bulk_delete_form = CSRFOnlyForm()
     gl_codes = GLCode.query.order_by(GLCode.code).all()
     base_units = [
         u
@@ -151,7 +152,8 @@ def view_items():
     return render_template(
         "items/view_items.html",
         items=items,
-        form=form,
+        create_form=create_form,
+        bulk_delete_form=bulk_delete_form,
         name_query=name_query,
         match_mode=match_mode,
         gl_codes=gl_codes,
