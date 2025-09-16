@@ -33,6 +33,8 @@ from app.utils.activity import log_activity
 
 import datetime
 
+from sqlalchemy.orm import selectinload
+
 purchase = Blueprint("purchase", __name__)
 
 
@@ -105,6 +107,13 @@ def view_purchase_orders():
         query = query.filter(PurchaseOrder.order_date >= start_date)
     if end_date:
         query = query.filter(PurchaseOrder.order_date <= end_date)
+
+    query = query.options(
+        selectinload(PurchaseOrder.vendor),
+        selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.item),
+        selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.product),
+        selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.unit),
+    )
 
     orders = (
         query.order_by(PurchaseOrder.order_date.desc()).paginate(
@@ -482,7 +491,10 @@ def view_purchase_invoices():
         flash("Invalid date range: start cannot be after end.", "error")
         return redirect(url_for("purchase.view_purchase_invoices"))
 
-    query = PurchaseInvoice.query
+    query = PurchaseInvoice.query.options(
+        selectinload(PurchaseInvoice.purchase_order).selectinload(PurchaseOrder.vendor),
+        selectinload(PurchaseInvoice.items),
+    )
     if invoice_id:
         query = query.filter(PurchaseInvoice.id == invoice_id)
     if po_number:
