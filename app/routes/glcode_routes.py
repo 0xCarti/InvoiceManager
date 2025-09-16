@@ -7,7 +7,7 @@ from flask import (
     request,
     url_for,
 )
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from app import db
 from app.forms import DeleteForm, GLCodeForm
@@ -30,7 +30,9 @@ def view_gl_codes():
     if description_query:
         query = query.filter(GLCode.description.ilike(f"%{description_query}%"))
 
-    codes = query.order_by(GLCode.code).paginate(page=page, per_page=20)
+    codes = query.order_by(GLCode.code).paginate(
+        page=page, per_page=current_user.pagination_limit
+    )
     delete_form = DeleteForm()
     form = GLCodeForm()
     return render_template(

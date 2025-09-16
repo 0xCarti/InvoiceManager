@@ -173,7 +173,9 @@ def view_transfers():
     elif filter_option == "not_completed":
         query = query.filter(~Transfer.completed)
 
-    transfers = query.paginate(page=page, per_page=20)
+    transfers = query.paginate(
+        page=page, per_page=current_user.pagination_limit
+    )
 
     form = TransferForm()
     add_form = TransferForm(prefix="add")

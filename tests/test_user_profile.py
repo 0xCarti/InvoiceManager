@@ -114,3 +114,34 @@ def test_user_can_set_timezone(client, app):
     with app.app_context():
         user = User.query.filter_by(email="tz@example.com").first()
         assert user.timezone == "US/Eastern"
+
+
+def test_user_can_update_pagination_settings(client, app):
+    create_user(app, "paginate@example.com")
+    with client:
+        login(client, "paginate@example.com", "oldpass")
+        resp = client.post(
+            "/auth/profile",
+            data={"items_per_page": 75},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+    with app.app_context():
+        user = User.query.filter_by(email="paginate@example.com").first()
+        assert user.items_per_page == 75
+
+
+def test_pagination_setting_enforces_maximum(client, app):
+    create_user(app, "limit@example.com")
+    with client:
+        login(client, "limit@example.com", "oldpass")
+        resp = client.post(
+            "/auth/profile",
+            data={"items_per_page": 2000},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert b"Number must be between 1 and 1000." in resp.data
+    with app.app_context():
+        user = User.query.filter_by(email="limit@example.com").first()
+        assert user.items_per_page == 20

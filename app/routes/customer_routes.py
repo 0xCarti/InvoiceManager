@@ -8,7 +8,7 @@ from flask import (
     url_for,
     jsonify,
 )
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from app import db
 from app.forms import CustomerForm, DeleteForm
@@ -49,7 +49,9 @@ def view_customers():
     elif pst_exempt == "no":
         query = query.filter(Customer.pst_exempt.is_(False))
 
-    customers = query.paginate(page=page, per_page=20)
+    customers = query.paginate(
+        page=page, per_page=current_user.pagination_limit
+    )
     delete_form = DeleteForm()
     form = CustomerForm()
     return render_template(

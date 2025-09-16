@@ -281,7 +281,9 @@ def view_invoices():
     page = request.args.get("page", 1, type=int)
     form.customer_id.choices = [(-1, "All")] + [
         (c.id, f"{c.first_name} {c.last_name}")
-        for c in Customer.query.paginate(page=page, per_page=20).items
+        for c in Customer.query.paginate(
+            page=page, per_page=current_user.pagination_limit
+        ).items
     ]
 
     # Determine filter values from form submission or query params
@@ -325,7 +327,7 @@ def view_invoices():
             <= datetime.combine(end_date, datetime.max.time())
         )
     invoices = query.order_by(Invoice.date_created.desc()).paginate(
-        page=page, per_page=20
+        page=page, per_page=current_user.pagination_limit
     )
     delete_form = DeleteForm()
     create_form = InvoiceForm()

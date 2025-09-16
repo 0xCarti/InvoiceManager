@@ -11,7 +11,7 @@ from flask import (
     session,
     url_for,
 )
-from flask_login import login_required
+from flask_login import current_user, login_required
 from sqlalchemy import func, or_
 from sqlalchemy.orm import aliased, selectinload
 
@@ -157,7 +157,9 @@ def view_products():
         selectinload(Product.recipe_items).selectinload(ProductRecipeItem.unit),
     )
 
-    products = query.paginate(page=page, per_page=20)
+    products = query.paginate(
+        page=page, per_page=current_user.pagination_limit
+    )
     sales_gl_codes = (
         GLCode.query.filter(GLCode.code.like("4%")).order_by(GLCode.code).all()
     )
