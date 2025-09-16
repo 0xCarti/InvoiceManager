@@ -1,3 +1,4 @@
+import pytest
 from werkzeug.security import generate_password_hash
 
 from app import db
@@ -190,3 +191,35 @@ def test_view_products_customer_filter(client, app):
         assert resp.status_code == 200
         assert b"ProdX" in resp.data
         assert b"ProdY" not in resp.data
+
+
+def test_bulk_set_cost_from_recipe(client, app):
+    email, item_id, unit_id = setup_data(app)
+    with app.app_context():
+        product = Product(name="BulkProd", price=5, cost=0)
+        db.session.add(product)
+        db.session.commit()
+        db.session.add(
+            ProductRecipeItem(
+                product_id=product.id,
+                item_id=item_id,
+                unit_id=unit_id,
+                quantity=3,
+            )
+        )
+        db.session.commit()
+        product_id = product.id
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            "/products/bulk_set_cost_from_recipe",
+            data={"product_ids": [str(product_id)]},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert b"Updated recipe cost" in resp.data
+
+    with app.app_context():
+        updated = db.session.get(Product, product_id)
+        assert updated.cost == pytest.approx(3.0)

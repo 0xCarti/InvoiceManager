@@ -530,6 +530,12 @@ class DeleteForm(FlaskForm):
     submit = SubmitField("Delete")
 
 
+class BulkProductCostForm(FlaskForm):
+    """Form used when bulk-updating product costs from their recipes."""
+
+    submit = SubmitField("Apply")
+
+
 class GLCodeForm(FlaskForm):
     code = StringField("Code", validators=[DataRequired(), Length(max=6)])
     description = StringField("Description", validators=[Optional()])

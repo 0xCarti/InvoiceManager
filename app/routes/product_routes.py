@@ -16,7 +16,12 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import aliased, selectinload
 
 from app import db
-from app.forms import DeleteForm, ProductRecipeForm, ProductWithRecipeForm
+from app.forms import (
+    BulkProductCostForm,
+    DeleteForm,
+    ProductRecipeForm,
+    ProductWithRecipeForm,
+)
 from app.models import (
     GLCode,
     Item,
@@ -48,6 +53,7 @@ def view_products():
         session["product_filters"] = request.args.to_dict(flat=False)
 
     delete_form = DeleteForm()
+    bulk_cost_form = BulkProductCostForm()
     create_form = ProductWithRecipeForm()
     page = request.args.get("page", 1, type=int)
     name_query = request.args.get("name_query", "")
@@ -181,6 +187,7 @@ def view_products():
         price_max=price_max,
         last_sold_before=last_sold_before_str,
         include_unsold=include_unsold,
+        bulk_cost_form=bulk_cost_form,
     )
 
 
@@ -467,6 +474,61 @@ def calculate_product_cost(product_id):
         factor = ri.unit.factor if ri.unit else 1
         total += (item_cost or 0) * qty * factor
     return jsonify({"cost": total})
+
+
+@product.route("/products/bulk_set_cost_from_recipe", methods=["POST"])
+@login_required
+def bulk_set_cost_from_recipe():
+    """Recalculate cost from recipe for selected products."""
+    form = BulkProductCostForm()
+    if not form.validate_on_submit():
+        flash("Invalid request.", "error")
+        return redirect(url_for("product.view_products"))
+
+    raw_ids = request.form.getlist("product_ids")
+    product_ids = []
+    for raw_id in raw_ids:
+        try:
+            product_ids.append(int(raw_id))
+        except (TypeError, ValueError):
+            continue
+
+    query = Product.query.options(
+        selectinload(Product.recipe_items).selectinload(ProductRecipeItem.item),
+        selectinload(Product.recipe_items).selectinload(ProductRecipeItem.unit),
+    )
+    if product_ids:
+        query = query.filter(Product.id.in_(product_ids))
+
+    products = query.all()
+    if not products:
+        flash("No products selected for recipe cost update.", "warning")
+        return redirect(url_for("product.view_products"))
+
+    updated = 0
+    for product_obj in products:
+        total = 0.0
+        for recipe_item in product_obj.recipe_items:
+            item_cost = getattr(recipe_item.item, "cost", 0.0)
+            try:
+                quantity = float(recipe_item.quantity or 0)
+            except (TypeError, ValueError):
+                quantity = 0.0
+            factor = recipe_item.unit.factor if recipe_item.unit else 1
+            total += (item_cost or 0.0) * quantity * factor
+        product_obj.cost = total
+        updated += 1
+
+    db.session.commit()
+    log_activity(
+        f"Bulk updated product cost from recipe for {updated} product"
+        f"{'s' if updated != 1 else ''}"
+    )
+    flash(
+        f"Updated recipe cost for {updated} product{'s' if updated != 1 else ''}.",
+        "success",
+    )
+    return redirect(url_for("product.view_products"))
 
 
 @product.route("/products/<int:product_id>/delete", methods=["POST"])
