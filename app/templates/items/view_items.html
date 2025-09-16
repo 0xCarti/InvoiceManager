@@ -192,7 +192,7 @@
     </div>
     {% endif %}
     <form id="bulk-delete-form" action="{{ url_for('item.bulk_delete_items') }}" method="post">
-        {{ form.hidden_tag() }}
+        {{ bulk_delete_form.hidden_tag() }}
         <div class="table-responsive">
         <table class="table sortable" id="itemsTable">
             <thead>
@@ -276,13 +276,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h5 class="modal-title">Item</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body"></div>
+            <div class="modal-body">
+                {% with form=create_form, item=None %}
+                    {% include 'items/item_form.html' %}
+                {% endwith %}
+            </div>
         </div>
     </div>
 </div>
 
 <script>
 const itemModalEl = document.getElementById('itemModal');
+const itemModalBody = itemModalEl ? itemModalEl.querySelector('.modal-body') : null;
+let createItemTemplate = '';
+
+if (itemModalBody) {
+    createItemTemplate = itemModalBody.innerHTML.trim();
+    itemModalBody.innerHTML = '';
+}
 
 function executeScripts(container) {
     container.querySelectorAll('script').forEach(s => {
@@ -334,55 +345,62 @@ if (createItemBtn) {
             return;
         }
         event.preventDefault();
-        const url = createItemBtn.getAttribute('href');
-        if (!url) {
+        if (!createItemTemplate) {
             return;
         }
-        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(r => r.text())
-            .then(html => {
-                itemModalEl.querySelector('.modal-title').textContent = 'Add Item';
-                itemModalEl.querySelector('.modal-body').innerHTML = html;
-                executeScripts(itemModalEl);
-                const modal = new bootstrap.Modal(itemModalEl);
-                modal.show();
-                bindItemForm(url);
-            })
-            .catch(() => {
-                window.location.href = url;
-            });
+        itemModalEl.dataset.mode = 'create';
+        itemModalEl.querySelector('.modal-title').textContent = 'Add Item';
+        itemModalBody.innerHTML = createItemTemplate;
+        executeScripts(itemModalEl);
+        const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
+        modal.show();
+        bindItemForm('{{ url_for('item.add_item') }}');
     });
 }
 
-document.querySelector('#itemsTable').addEventListener('click', function(e) {
-    if (e.target.classList.contains('edit-item-btn')) {
-        const itemId = e.target.getAttribute('data-item-id');
-        const url = '{{ url_for('item.edit_item', item_id=0) }}'.replace('0', itemId);
-        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(r => r.text())
-            .then(html => {
-                itemModalEl.querySelector('.modal-title').textContent = 'Edit Item';
-                itemModalEl.querySelector('.modal-body').innerHTML = html;
-                executeScripts(itemModalEl);
-                const modal = new bootstrap.Modal(itemModalEl);
-                modal.show();
-                bindItemForm(url);
-            });
-    } else if (e.target.classList.contains('copy-item-btn')) {
-        const itemId = e.target.getAttribute('data-item-id');
-        const url = '{{ url_for('item.copy_item', item_id=0) }}'.replace('0', itemId);
-        const actionUrl = '{{ url_for('item.add_item') }}';
-        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(r => r.text())
-            .then(html => {
-                itemModalEl.querySelector('.modal-title').textContent = 'Copy Item';
-                itemModalEl.querySelector('.modal-body').innerHTML = html;
-                executeScripts(itemModalEl);
-                const modal = new bootstrap.Modal(itemModalEl);
-                modal.show();
-                bindItemForm(actionUrl);
-            });
-    }
-});
+const itemsTableEl = document.querySelector('#itemsTable');
+if (itemsTableEl) {
+    itemsTableEl.addEventListener('click', function(e) {
+        if (e.target.classList.contains('edit-item-btn')) {
+            const itemId = e.target.getAttribute('data-item-id');
+            const url = '{{ url_for('item.edit_item', item_id=0) }}'.replace('0', itemId);
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => r.text())
+                .then(html => {
+                    itemModalEl.dataset.mode = 'edit';
+                    itemModalEl.querySelector('.modal-title').textContent = 'Edit Item';
+                    itemModalEl.querySelector('.modal-body').innerHTML = html;
+                    executeScripts(itemModalEl);
+                    const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
+                    modal.show();
+                    bindItemForm(url);
+                });
+        } else if (e.target.classList.contains('copy-item-btn')) {
+            const itemId = e.target.getAttribute('data-item-id');
+            const url = '{{ url_for('item.copy_item', item_id=0) }}'.replace('0', itemId);
+            const actionUrl = '{{ url_for('item.add_item') }}';
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => r.text())
+                .then(html => {
+                    itemModalEl.dataset.mode = 'copy';
+                    itemModalEl.querySelector('.modal-title').textContent = 'Copy Item';
+                    itemModalEl.querySelector('.modal-body').innerHTML = html;
+                    executeScripts(itemModalEl);
+                    const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
+                    modal.show();
+                    bindItemForm(actionUrl);
+                });
+        }
+    });
+}
+
+if (itemModalEl) {
+    itemModalEl.addEventListener('hidden.bs.modal', () => {
+        if (itemModalEl.dataset.mode === 'create') {
+            itemModalBody.innerHTML = '';
+        }
+        itemModalEl.dataset.mode = '';
+    });
+}
 </script>
 {% endblock %}
