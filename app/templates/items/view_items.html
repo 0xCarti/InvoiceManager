@@ -121,12 +121,12 @@
     <form id="bulk-delete-form" action="{{ url_for('item.bulk_delete_items') }}" method="post">
         {{ form.hidden_tag() }}
         <div class="table-responsive">
-        <table class="table" id="itemsTable">
+        <table class="table sortable" id="itemsTable">
             <thead>
                 <tr>
                     <th scope="col"><input type="checkbox" id="select-all" style="transform: scale(1.5);"></th>
                     <th scope="col">Name</th>
-                    <th scope="col">Cost</th>
+                    <th scope="col" data-type="number">Cost</th>
                     <th scope="col">Actions</th>
                 </tr>
             </thead>
