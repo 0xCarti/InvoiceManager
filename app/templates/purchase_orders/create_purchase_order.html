@@ -78,20 +78,10 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label for="new-item-receiving-unit" class="form-label">Receiving Unit</label>
-                        <input type="text" id="new-item-receiving-unit" class="form-control">
-                    </div>
-                    <div class="mb-3">
-                        <label for="new-item-receiving-factor" class="form-label">Receiving Ratio to Base Unit</label>
-                        <input type="number" step="any" id="new-item-receiving-factor" class="form-control" value="1">
-                    </div>
-                    <div class="mb-3">
-                        <label for="new-item-transfer-unit" class="form-label">Transfer Unit</label>
-                        <input type="text" id="new-item-transfer-unit" class="form-control">
-                    </div>
-                    <div class="mb-3">
-                        <label for="new-item-transfer-factor" class="form-label">Transfer Ratio to Base Unit</label>
-                        <input type="number" step="any" id="new-item-transfer-factor" class="form-control" value="1">
+                        <label class="form-label">Units of Measure</label>
+                        <div id="new-item-units" class="d-flex flex-column gap-2"></div>
+                        <button type="button" id="add-new-item-unit" class="btn btn-outline-secondary btn-sm mt-2">Add Unit</button>
+                        <div class="form-text">Configure unit conversions and choose the defaults for receiving and transfers.</div>
                     </div>
                 </div>
                 <div class="modal-footer">

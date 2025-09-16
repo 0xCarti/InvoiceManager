@@ -35,6 +35,226 @@
                 new bootstrap.Modal(newItemModalEl);
         }
 
+        const baseUnitSelect = document.getElementById("new-item-base-unit");
+        const newItemUnitsContainer = document.getElementById("new-item-units");
+        const addNewItemUnitButton = document.getElementById("add-new-item-unit");
+        let newItemUnitIndex = 0;
+
+        function syncBaseUnitRow() {
+            if (!newItemUnitsContainer) {
+                return;
+            }
+            const baseRow = newItemUnitsContainer.querySelector(
+                '.new-item-unit-row[data-base="true"]'
+            );
+            if (!baseRow) {
+                return;
+            }
+            const nameInput = baseRow.querySelector(".new-item-unit-name");
+            if (nameInput && baseUnitSelect) {
+                nameInput.value = baseUnitSelect.value || "";
+            }
+        }
+
+        function ensureUnitDefaults() {
+            if (!newItemUnitsContainer) {
+                return;
+            }
+            const receivingChecked = newItemUnitsContainer.querySelector(
+                ".new-item-unit-receiving:checked"
+            );
+            if (!receivingChecked) {
+                const fallback = newItemUnitsContainer.querySelector(
+                    '.new-item-unit-row[data-base="true"] .new-item-unit-receiving'
+                );
+                if (fallback) {
+                    fallback.checked = true;
+                }
+            }
+
+            const transferChecked = newItemUnitsContainer.querySelector(
+                ".new-item-unit-transfer:checked"
+            );
+            if (!transferChecked) {
+                const fallback = newItemUnitsContainer.querySelector(
+                    '.new-item-unit-row[data-base="true"] .new-item-unit-transfer'
+                );
+                if (fallback) {
+                    fallback.checked = true;
+                }
+            }
+        }
+
+        function createNewItemUnitRow(options = {}) {
+            const index = newItemUnitIndex++;
+            const isBase = Boolean(options.isBase);
+            const row = document.createElement("div");
+            row.classList.add(
+                "row",
+                "g-2",
+                "align-items-end",
+                "new-item-unit-row"
+            );
+            row.dataset.base = isBase ? "true" : "false";
+
+            const nameCol = document.createElement("div");
+            nameCol.classList.add("col-12", "col-md-4");
+            const nameLabel = document.createElement("label");
+            nameLabel.classList.add("form-label");
+            const nameId = `new-item-unit-${index}-name`;
+            nameLabel.setAttribute("for", nameId);
+            nameLabel.textContent = isBase ? "Base Unit" : "Unit Name";
+            const nameInput = document.createElement("input");
+            nameInput.type = "text";
+            nameInput.classList.add("form-control", "new-item-unit-name");
+            nameInput.id = nameId;
+            nameInput.value = options.name || "";
+            if (isBase) {
+                nameInput.readOnly = true;
+            } else {
+                nameInput.placeholder = "e.g. Case";
+            }
+            nameCol.append(nameLabel, nameInput);
+            row.appendChild(nameCol);
+
+            const factorCol = document.createElement("div");
+            factorCol.classList.add("col-12", "col-md-3");
+            const factorLabel = document.createElement("label");
+            factorLabel.classList.add("form-label");
+            const factorId = `new-item-unit-${index}-factor`;
+            factorLabel.setAttribute("for", factorId);
+            factorLabel.textContent = "Ratio to Base Unit";
+            const factorInput = document.createElement("input");
+            factorInput.type = "number";
+            factorInput.classList.add("form-control", "new-item-unit-factor");
+            factorInput.id = factorId;
+            factorInput.step = "any";
+            factorInput.min = "0";
+            factorInput.value =
+                options.factor !== undefined && options.factor !== null
+                    ? options.factor
+                    : 1;
+            if (isBase) {
+                factorInput.readOnly = true;
+                factorInput.value = 1;
+            }
+            factorCol.append(factorLabel, factorInput);
+            row.appendChild(factorCol);
+
+            const receivingCol = document.createElement("div");
+            receivingCol.classList.add(
+                "col-6",
+                "col-md-2",
+                "d-flex",
+                "align-items-center"
+            );
+            const receivingWrapper = document.createElement("div");
+            receivingWrapper.classList.add("form-check");
+            const receivingId = `new-item-unit-${index}-receiving`;
+            const receivingInput = document.createElement("input");
+            receivingInput.type = "radio";
+            receivingInput.classList.add(
+                "form-check-input",
+                "new-item-unit-receiving"
+            );
+            receivingInput.name = "new-item-receiving-default";
+            receivingInput.id = receivingId;
+            if (options.receivingDefault) {
+                receivingInput.checked = true;
+            }
+            const receivingLabel = document.createElement("label");
+            receivingLabel.classList.add("form-check-label");
+            receivingLabel.setAttribute("for", receivingId);
+            receivingLabel.textContent = "Receiving Default";
+            receivingWrapper.append(receivingInput, receivingLabel);
+            receivingCol.appendChild(receivingWrapper);
+            row.appendChild(receivingCol);
+
+            const transferCol = document.createElement("div");
+            transferCol.classList.add(
+                "col-6",
+                "col-md-2",
+                "d-flex",
+                "align-items-center"
+            );
+            const transferWrapper = document.createElement("div");
+            transferWrapper.classList.add("form-check");
+            const transferId = `new-item-unit-${index}-transfer`;
+            const transferInput = document.createElement("input");
+            transferInput.type = "radio";
+            transferInput.classList.add(
+                "form-check-input",
+                "new-item-unit-transfer"
+            );
+            transferInput.name = "new-item-transfer-default";
+            transferInput.id = transferId;
+            if (options.transferDefault) {
+                transferInput.checked = true;
+            }
+            const transferLabel = document.createElement("label");
+            transferLabel.classList.add("form-check-label");
+            transferLabel.setAttribute("for", transferId);
+            transferLabel.textContent = "Transfer Default";
+            transferWrapper.append(transferInput, transferLabel);
+            transferCol.appendChild(transferWrapper);
+            row.appendChild(transferCol);
+
+            if (!isBase) {
+                const removeCol = document.createElement("div");
+                removeCol.classList.add(
+                    "col-12",
+                    "col-md-1",
+                    "d-flex",
+                    "align-items-center"
+                );
+                const removeButton = document.createElement("button");
+                removeButton.type = "button";
+                removeButton.classList.add(
+                    "btn",
+                    "btn-outline-danger",
+                    "btn-sm",
+                    "w-100",
+                    "new-item-unit-remove"
+                );
+                removeButton.textContent = "Remove";
+                removeButton.setAttribute("aria-label", "Remove unit");
+                removeCol.appendChild(removeButton);
+                row.appendChild(removeCol);
+            }
+
+            return row;
+        }
+
+        function appendNewItemUnitRow(options = {}) {
+            if (!newItemUnitsContainer) {
+                return null;
+            }
+            const row = createNewItemUnitRow(options);
+            newItemUnitsContainer.appendChild(row);
+            ensureUnitDefaults();
+            return row;
+        }
+
+        function resetNewItemUnitRows() {
+            if (!newItemUnitsContainer) {
+                return;
+            }
+            newItemUnitsContainer.innerHTML = "";
+            newItemUnitIndex = 0;
+            const baseName = baseUnitSelect ? baseUnitSelect.value || "" : "";
+            appendNewItemUnitRow({
+                name: baseName,
+                factor: 1,
+                receivingDefault: true,
+                transferDefault: true,
+                isBase: true,
+            });
+            syncBaseUnitRow();
+            ensureUnitDefaults();
+        }
+
+        resetNewItemUnitRows();
+
         function closeAllSuggestionLists(exceptList) {
             container.querySelectorAll(".suggestion-list").forEach((list) => {
                 if (list !== exceptList) {
@@ -337,8 +557,54 @@
             });
         }
 
+        if (baseUnitSelect) {
+            baseUnitSelect.addEventListener("change", () => {
+                syncBaseUnitRow();
+                ensureUnitDefaults();
+            });
+        }
+
+        if (addNewItemUnitButton) {
+            addNewItemUnitButton.addEventListener("click", () => {
+                const row = appendNewItemUnitRow();
+                if (!row) {
+                    return;
+                }
+                const nameInput = row.querySelector(".new-item-unit-name");
+                if (nameInput && !nameInput.readOnly) {
+                    nameInput.focus();
+                }
+            });
+        }
+
+        if (newItemUnitsContainer) {
+            newItemUnitsContainer.addEventListener("click", (event) => {
+                const target = event.target;
+                if (!(target instanceof Element)) {
+                    return;
+                }
+                const removeButton = target.closest(".new-item-unit-remove");
+                if (!removeButton) {
+                    return;
+                }
+                const row = removeButton.closest(".new-item-unit-row");
+                if (row && row.dataset.base !== "true") {
+                    row.remove();
+                    ensureUnitDefaults();
+                }
+            });
+        }
+
         if (quickAddButton && newItemModal) {
             quickAddButton.addEventListener("click", () => {
+                const nameField = document.getElementById("new-item-name");
+                if (nameField) {
+                    nameField.value = "";
+                }
+                resetNewItemUnitRows();
+                if (nameField) {
+                    nameField.focus();
+                }
                 newItemModal.show();
             });
         }
@@ -347,19 +613,6 @@
             saveNewItemButton.addEventListener("click", () => {
                 const nameInput = document.getElementById("new-item-name");
                 const glCodeSelect = document.getElementById("new-item-gl-code");
-                const baseUnitSelect = document.getElementById("new-item-base-unit");
-                const receivingUnitInput = document.getElementById(
-                    "new-item-receiving-unit"
-                );
-                const receivingFactorInput = document.getElementById(
-                    "new-item-receiving-factor"
-                );
-                const transferUnitInput = document.getElementById(
-                    "new-item-transfer-unit"
-                );
-                const transferFactorInput = document.getElementById(
-                    "new-item-transfer-factor"
-                );
                 const csrfTokenInput = document.querySelector(
                     'input[name="csrf_token"]'
                 );
@@ -367,27 +620,93 @@
                 const name = nameInput ? nameInput.value.trim() : "";
                 const glCode = glCodeSelect ? glCodeSelect.value : null;
                 const baseUnit = baseUnitSelect ? baseUnitSelect.value : null;
-                const receivingUnit = receivingUnitInput
-                    ? receivingUnitInput.value.trim()
-                    : "";
-                const receivingFactor = receivingFactorInput
-                    ? parseFloat(receivingFactorInput.value) || 0
-                    : 0;
-                const transferUnit = transferUnitInput
-                    ? transferUnitInput.value.trim()
-                    : "";
-                const transferFactor = transferFactorInput
-                    ? parseFloat(transferFactorInput.value) || 0
-                    : 0;
                 const csrfToken = csrfTokenInput ? csrfTokenInput.value : null;
+
+                const unitRows = newItemUnitsContainer
+                    ? Array.from(
+                          newItemUnitsContainer.querySelectorAll(
+                              ".new-item-unit-row"
+                          )
+                      )
+                    : [];
+
+                const unitsPayload = [];
+                let hasInvalidUnits = false;
+                let hasReceivingDefault = false;
+                let hasTransferDefault = false;
+
+                unitRows.forEach((row) => {
+                    const nameField = row.querySelector(".new-item-unit-name");
+                    const factorField = row.querySelector(".new-item-unit-factor");
+                    const receivingField = row.querySelector(
+                        ".new-item-unit-receiving"
+                    );
+                    const transferField = row.querySelector(
+                        ".new-item-unit-transfer"
+                    );
+
+                    let unitName = nameField ? nameField.value.trim() : "";
+                    let factorValue = factorField
+                        ? parseFloat(factorField.value)
+                        : NaN;
+
+                    if (row.dataset.base === "true") {
+                        if (baseUnit) {
+                            unitName = baseUnit;
+                        }
+                        factorValue = 1;
+                    }
+
+                    const receivingDefault = receivingField
+                        ? receivingField.checked
+                        : false;
+                    const transferDefault = transferField
+                        ? transferField.checked
+                        : false;
+
+                    if (!unitName || !Number.isFinite(factorValue) || factorValue <= 0) {
+                        hasInvalidUnits = true;
+                        return;
+                    }
+
+                    if (receivingDefault) {
+                        hasReceivingDefault = true;
+                    }
+                    if (transferDefault) {
+                        hasTransferDefault = true;
+                    }
+
+                    unitsPayload.push({
+                        name: unitName,
+                        factor: factorValue,
+                        receiving_default: receivingDefault,
+                        transfer_default: transferDefault,
+                    });
+                });
 
                 if (
                     !name ||
-                    !receivingUnit ||
-                    !transferUnit ||
-                    receivingFactor <= 0 ||
-                    transferFactor <= 0
+                    !baseUnit ||
+                    !glCode ||
+                    !unitsPayload.length ||
+                    hasInvalidUnits
                 ) {
+                    return;
+                }
+
+                const baseUnitEntry = unitsPayload.find(
+                    (unit) => unit.name === baseUnit
+                );
+                if (!hasReceivingDefault && baseUnitEntry) {
+                    baseUnitEntry.receiving_default = true;
+                    hasReceivingDefault = true;
+                }
+                if (!hasTransferDefault && baseUnitEntry) {
+                    baseUnitEntry.transfer_default = true;
+                    hasTransferDefault = true;
+                }
+
+                if (!hasReceivingDefault || !hasTransferDefault) {
                     return;
                 }
 
@@ -401,10 +720,7 @@
                         name,
                         purchase_gl_code: glCode,
                         base_unit: baseUnit,
-                        receiving_unit: receivingUnit,
-                        receiving_factor: receivingFactor,
-                        transfer_unit: transferUnit,
-                        transfer_factor: transferFactor,
+                        units: unitsPayload,
                     }),
                 })
                     .then((response) => {
@@ -431,18 +747,7 @@
                         if (nameInput) {
                             nameInput.value = "";
                         }
-                        if (receivingUnitInput) {
-                            receivingUnitInput.value = "";
-                        }
-                        if (receivingFactorInput) {
-                            receivingFactorInput.value = "1";
-                        }
-                        if (transferUnitInput) {
-                            transferUnitInput.value = "";
-                        }
-                        if (transferFactorInput) {
-                            transferFactorInput.value = "1";
-                        }
+                        resetNewItemUnitRows();
 
                         if (newItemModal) {
                             newItemModal.hide();

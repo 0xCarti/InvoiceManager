@@ -41,10 +41,18 @@ def test_quick_add_item_endpoint(client, app):
                 "name": "FastItem",
                 "purchase_gl_code": gl_id,
                 "base_unit": "each",
-                "receiving_unit": "case",
-                "receiving_factor": 12,
-                "transfer_unit": "each",
-                "transfer_factor": 1,
+                "units": [
+                    {
+                        "name": "each",
+                        "factor": 1,
+                        "transfer_default": True,
+                    },
+                    {
+                        "name": "case",
+                        "factor": 12,
+                        "receiving_default": True,
+                    },
+                ],
             },
         )
         assert resp.status_code == 200
