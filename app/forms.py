@@ -350,10 +350,11 @@ class ProductRecipeForm(FlaskForm):
 class ProductWithRecipeForm(ProductForm):
     """Form used on product create/edit pages to also manage recipe items."""
 
-    items = FieldList(FormField(RecipeItemForm), min_entries=1)
+    items = FieldList(FormField(RecipeItemForm), min_entries=0)
 
     def __init__(self, *args, **kwargs):
         super(ProductWithRecipeForm, self).__init__(*args, **kwargs)
+        self.countable_label = RecipeItemForm().countable.label.text
         items = load_item_choices()
         units = load_unit_choices()
         for item_form in self.items:

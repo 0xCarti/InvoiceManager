@@ -36,6 +36,27 @@ def setup_user_and_items(app):
         return user.email, item1.id, item2.id, iu1.id, iu2.id
 
 
+def test_create_product_without_recipe_items(client, app):
+    email, *_ = setup_user_and_items(app)
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            "/products/create",
+            data={
+                "name": "Simple Item",
+                "price": 7,
+                "cost": 3,
+                "gl_code": "4000",
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+    with app.app_context():
+        product = Product.query.filter_by(name="Simple Item").first()
+        assert product is not None
+        assert len(product.recipe_items) == 0
+
+
 def test_create_product_with_recipe_items(client, app):
     email, item1_id, item2_id, unit1_id, unit2_id = setup_user_and_items(app)
     with client:

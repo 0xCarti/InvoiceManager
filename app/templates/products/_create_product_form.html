@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    const countableLabel = "{{ form.items[0].countable.label.text }}";
+    const countableLabel = {{ form.countable_label|default('Countable', true)|tojson }};
     let itemIndex = {{ form.items|length }};
 
     function fetchUnits(row, itemId, selected) {

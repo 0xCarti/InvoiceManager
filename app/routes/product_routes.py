@@ -304,7 +304,7 @@ def copy_product(product_id):
     form.gl_code.data = product_obj.gl_code
     form.gl_code_id.data = product_obj.gl_code_id
     form.sales_gl_code.data = product_obj.sales_gl_code_id
-    form.items.min_entries = max(1, len(product_obj.recipe_items))
+    form.items.min_entries = len(product_obj.recipe_items)
     item_choices = [
         (itm.id, itm.name) for itm in Item.query.filter_by(archived=False).all()
     ]
@@ -373,7 +373,7 @@ def edit_product(product_id):
         form.gl_code.data = product.gl_code
         form.gl_code_id.data = product.gl_code_id
         form.sales_gl_code.data = product.sales_gl_code_id
-        form.items.min_entries = max(1, len(product.recipe_items))
+        form.items.min_entries = len(product.recipe_items)
         item_choices = [
             (itm.id, itm.name)
             for itm in Item.query.filter_by(archived=False).all()
