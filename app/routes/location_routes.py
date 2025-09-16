@@ -8,7 +8,7 @@ from flask import (
     request,
     url_for,
 )
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from app import db
 from app.forms import DeleteForm, LocationForm
@@ -298,7 +298,9 @@ def view_locations():
         else:
             query = query.filter(Location.name.like(f"%{name_query}%"))
 
-    locations = query.order_by(Location.name).paginate(page=page, per_page=20)
+    locations = query.order_by(Location.name).paginate(
+        page=page, per_page=current_user.pagination_limit
+    )
     delete_form = DeleteForm()
     return render_template(
         "locations/view_locations.html",

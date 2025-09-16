@@ -11,7 +11,7 @@ from flask import (
     session,
     url_for,
 )
-from flask_login import login_required
+from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
 from sqlalchemy.orm import selectinload
@@ -120,7 +120,9 @@ def view_items():
     if cost_max is not None:
         query = query.filter(Item.cost <= cost_max)
 
-    items = query.order_by(Item.name).paginate(page=page, per_page=20)
+    items = query.order_by(Item.name).paginate(
+        page=page, per_page=current_user.pagination_limit
+    )
     form = ItemForm()
     gl_codes = GLCode.query.order_by(GLCode.code).all()
     base_units = [
@@ -171,7 +173,9 @@ def view_item(item_id):
         .join(PurchaseInvoice)
         .filter(PurchaseInvoiceItem.item_id == item_id)
         .order_by(PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc())
-        .paginate(page=purchase_page, per_page=10)
+        .paginate(
+            page=purchase_page, per_page=current_user.pagination_limit
+        )
     )
     sales_items = (
         InvoiceProduct.query
@@ -180,14 +184,18 @@ def view_item(item_id):
         .join(ProductRecipeItem, ProductRecipeItem.product_id == Product.id)
         .filter(ProductRecipeItem.item_id == item_id)
         .order_by(Invoice.date_created.desc(), Invoice.id.desc())
-        .paginate(page=sales_page, per_page=10)
+        .paginate(
+            page=sales_page, per_page=current_user.pagination_limit
+        )
     )
     transfer_items = (
         TransferItem.query
         .join(Transfer)
         .filter(TransferItem.item_id == item_id)
         .order_by(Transfer.date_created.desc(), Transfer.id.desc())
-        .paginate(page=transfer_page, per_page=10)
+        .paginate(
+            page=transfer_page, per_page=current_user.pagination_limit
+        )
     )
     return render_template(
         "items/view_item.html",
@@ -207,7 +215,7 @@ def item_locations(item_id):
         abort(404)
     page = request.args.get("page", 1, type=int)
     entries = LocationStandItem.query.filter_by(item_id=item_id).paginate(
-        page=page, per_page=20
+        page=page, per_page=current_user.pagination_limit
     )
     total = (
         db.session.query(db.func.sum(LocationStandItem.expected_count))

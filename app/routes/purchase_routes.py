@@ -115,10 +115,8 @@ def view_purchase_orders():
         selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.unit),
     )
 
-    orders = (
-        query.order_by(PurchaseOrder.order_date.desc()).paginate(
-            page=page, per_page=20
-        )
+    orders = query.order_by(PurchaseOrder.order_date.desc()).paginate(
+        page=page, per_page=current_user.pagination_limit
     )
 
     vendors = Vendor.query.filter_by(archived=False).all()
@@ -510,7 +508,7 @@ def view_purchase_invoices():
 
     invoices = query.order_by(
         PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc()
-    ).paginate(page=page, per_page=20)
+    ).paginate(page=page, per_page=current_user.pagination_limit)
 
     vendors = Vendor.query.order_by(Vendor.first_name, Vendor.last_name).all()
     locations = Location.query.order_by(Location.name).all()

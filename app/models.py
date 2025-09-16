@@ -74,6 +74,9 @@ class User(UserMixin, db.Model):
     timezone = db.Column(db.String(50))
     phone_number = db.Column(db.String(20))
     notify_transfers = db.Column(db.Boolean, default=False, nullable=False)
+    items_per_page = db.Column(
+        db.Integer, nullable=False, default=20, server_default="20"
+    )
 
     def get_favorites(self):
         """Return the user's favourite endpoint names as a list."""
@@ -87,6 +90,12 @@ class User(UserMixin, db.Model):
         else:
             favs.add(endpoint)
         self.favorites = ",".join(sorted(favs))
+
+    @property
+    def pagination_limit(self) -> int:
+        """Return the preferred pagination size constrained to sensible bounds."""
+        value = self.items_per_page or 20
+        return max(1, min(value, 1000))
 
 
 class Location(db.Model):
