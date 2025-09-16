@@ -14,6 +14,8 @@ from flask import (
 from flask_login import login_required
 from werkzeug.utils import secure_filename
 
+from sqlalchemy.orm import selectinload
+
 from app import db
 from app.forms import ImportItemsForm, ItemForm
 from app.models import (
@@ -71,7 +73,11 @@ def view_items():
         int(x) for x in request.args.getlist("vendor_id") if x.isdigit()
     ]
 
-    query = Item.query
+    query = Item.query.options(
+        selectinload(Item.units),
+        selectinload(Item.purchase_gl_code),
+        selectinload(Item.gl_code_rel),
+    )
     if archived == "active":
         query = query.filter(Item.archived.is_(False))
     elif archived == "archived":

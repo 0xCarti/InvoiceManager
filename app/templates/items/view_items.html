@@ -15,14 +15,69 @@
                 </button>
                 <div class="dropdown-menu dropdown-menu-end p-3" aria-labelledby="columnSelectorDropdown">
                     <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-id"
+                            data-column-target="col-id" checked>
+                        <label class="form-check-label" for="toggle-column-id">ID</label>
+                    </div>
+                    <div class="form-check">
                         <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-name"
                             data-column-target="col-name" checked>
                         <label class="form-check-label" for="toggle-column-name">Name</label>
                     </div>
                     <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-base-unit"
+                            data-column-target="col-base-unit" checked>
+                        <label class="form-check-label" for="toggle-column-base-unit">Base Unit</label>
+                    </div>
+                    <div class="form-check">
                         <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-cost"
                             data-column-target="col-cost" checked>
-                        <label class="form-check-label" for="toggle-column-cost">Cost</label>
+                        <label class="form-check-label" for="toggle-column-cost">Cost / Base Unit</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-quantity"
+                            data-column-target="col-quantity" checked>
+                        <label class="form-check-label" for="toggle-column-quantity">Quantity</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-gl-code"
+                            data-column-target="col-gl-code" checked>
+                        <label class="form-check-label" for="toggle-column-gl-code">Inventory GL Code</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-gl-desc"
+                            data-column-target="col-gl-desc" checked>
+                        <label class="form-check-label" for="toggle-column-gl-desc">Inventory GL Description</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-purchase-gl-code"
+                            data-column-target="col-purchase-gl-code" checked>
+                        <label class="form-check-label" for="toggle-column-purchase-gl-code">Purchase GL Code</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-purchase-gl-desc"
+                            data-column-target="col-purchase-gl-desc" checked>
+                        <label class="form-check-label" for="toggle-column-purchase-gl-desc">Purchase GL Description</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-units"
+                            data-column-target="col-units" checked>
+                        <label class="form-check-label" for="toggle-column-units">Units</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-receiving-default"
+                            data-column-target="col-receiving-default" checked>
+                        <label class="form-check-label" for="toggle-column-receiving-default">Receiving Default Unit</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-transfer-default"
+                            data-column-target="col-transfer-default" checked>
+                        <label class="form-check-label" for="toggle-column-transfer-default">Transfer Default Unit</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-archived"
+                            data-column-target="col-archived" checked>
+                        <label class="form-check-label" for="toggle-column-archived">Archived</label>
                     </div>
                 </div>
             </div>
@@ -143,8 +198,19 @@
             <thead>
                 <tr>
                     <th scope="col" class="col-select"><input type="checkbox" id="select-all" style="transform: scale(1.5);"></th>
+                    <th scope="col" class="col-id" data-type="number">ID</th>
                     <th scope="col" class="col-name">Name</th>
-                    <th scope="col" class="col-cost" data-type="number">Cost</th>
+                    <th scope="col" class="col-base-unit">Base Unit</th>
+                    <th scope="col" class="col-cost" data-type="number">Cost / Base Unit</th>
+                    <th scope="col" class="col-quantity" data-type="number">Quantity</th>
+                    <th scope="col" class="col-gl-code">Inventory GL Code</th>
+                    <th scope="col" class="col-gl-desc">Inventory GL Description</th>
+                    <th scope="col" class="col-purchase-gl-code">Purchase GL Code</th>
+                    <th scope="col" class="col-purchase-gl-desc">Purchase GL Description</th>
+                    <th scope="col" class="col-units">Units</th>
+                    <th scope="col" class="col-receiving-default">Receiving Default Unit</th>
+                    <th scope="col" class="col-transfer-default">Transfer Default Unit</th>
+                    <th scope="col" class="col-archived">Archived</th>
                     <th scope="col" class="col-actions">Actions</th>
                 </tr>
             </thead>
