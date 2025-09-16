@@ -382,6 +382,14 @@ class VendorInvoiceReportForm(FlaskForm):
     submit = SubmitField("Generate Report")
 
 
+class ReceivedInvoiceReportForm(FlaskForm):
+    """Report form for received purchase invoices."""
+
+    start_date = DateField("Start Date", validators=[DataRequired()])
+    end_date = DateField("End Date", validators=[DataRequired()])
+    submit = SubmitField("Generate Report")
+
+
 # forms.py
 class ProductSalesReportForm(FlaskForm):
     start_date = DateField("Start Date", validators=[DataRequired()])

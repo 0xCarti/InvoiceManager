@@ -5,14 +5,18 @@ from app import db
 from app.forms import (
     ProductRecipeReportForm,
     ProductSalesReportForm,
+    ReceivedInvoiceReportForm,
     VendorInvoiceReportForm,
 )
 from app.models import (
     Customer,
     Invoice,
     InvoiceProduct,
+    PurchaseInvoice,
+    PurchaseOrder,
     Product,
     TerminalSale,
+    User,
     EventLocation,
     Location,
 )
@@ -98,6 +102,57 @@ def vendor_invoice_report_results():
         start=start,
         end=end,
     )
+
+
+@report.route("/reports/received-invoices", methods=["GET", "POST"])
+@login_required
+def received_invoice_report():
+    """Display and process the received invoices report form."""
+
+    form = ReceivedInvoiceReportForm()
+
+    if form.validate_on_submit():
+        start = form.start_date.data
+        end = form.end_date.data
+
+        if end < start:
+            form.end_date.errors.append(
+                "End date must be on or after the start date."
+            )
+            return render_template("report_received_invoices.html", form=form)
+
+        invoice_rows = (
+            db.session.query(
+                PurchaseInvoice,
+                PurchaseOrder.order_date.label("order_date"),
+                User.email.label("received_by"),
+            )
+            .join(PurchaseOrder, PurchaseInvoice.purchase_order)
+            .join(User, User.id == PurchaseInvoice.user_id)
+            .filter(PurchaseInvoice.received_date >= start)
+            .filter(PurchaseInvoice.received_date <= end)
+            .order_by(PurchaseInvoice.received_date.asc(), PurchaseInvoice.id.asc())
+            .all()
+        )
+
+        results = [
+            {
+                "invoice": invoice,
+                "order_date": order_date,
+                "received_by": received_by,
+            }
+            for invoice, order_date, received_by in invoice_rows
+        ]
+
+        return render_template(
+            "report_received_invoices_results.html",
+            form=form,
+            results=results,
+            start=start,
+            end=end,
+        )
+
+    return render_template("report_received_invoices.html", form=form)
 
 
 @report.route("/reports/product-sales", methods=["GET", "POST"])

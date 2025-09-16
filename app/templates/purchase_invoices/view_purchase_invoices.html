@@ -2,7 +2,10 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Purchase Invoices</h2>
-    <div class="row justify-content-end">
+    <div class="row justify-content-end g-2">
+        <div class="col-auto">
+            <a href="{{ url_for('report.received_invoice_report') }}" class="btn btn-secondary mb-3">Received Invoice Report</a>
+        </div>
         <div class="col-auto">
             <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
                 Filters
