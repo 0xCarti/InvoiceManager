@@ -5,7 +5,7 @@ from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, Response, request
 from flask_bootstrap import Bootstrap
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -22,6 +22,17 @@ login_manager.login_view = "auth.login"
 storage_uri = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
 limiter = Limiter(key_func=get_remote_address, storage_uri=storage_uri)
 socketio = None
+DEFAULT_CSP = (
+    "default-src 'self'; "
+    "img-src 'self' data:; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+    "font-src 'self' data:; "
+    "connect-src 'self' wss:; "
+    "frame-ancestors 'self'; "
+    "form-action 'self'; "
+    "base-uri 'self'"
+)
 GST = ""
 DEFAULT_TIMEZONE = "UTC"
 NAV_LINKS = {
@@ -181,6 +192,40 @@ def create_app(args: list):
         from app.utils.pagination import PAGINATION_SIZES
 
         return {"PAGINATION_SIZES": PAGINATION_SIZES}
+
+    @app.after_request
+    def apply_security_headers(response):
+        """Attach standard security headers to every response."""
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        if request.is_secure or app.config.get("ENFORCE_HTTPS", False):
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains; preload",
+            )
+        csp = app.config.get("CONTENT_SECURITY_POLICY", DEFAULT_CSP)
+        response.headers.setdefault("Content-Security-Policy", csp)
+        return response
+
+    @app.before_request
+    def block_http_options():
+        """Return a 405 for HTTP OPTIONS requests to reduce information leakage."""
+        if request.method == "OPTIONS":
+            return Response(status=405)
+
+    @app.route("/.well-known/security.txt")
+    def security_txt():
+        """Provide contact details for responsible disclosure."""
+        contact_email = os.getenv("SECURITY_CONTACT_EMAIL") or os.getenv(
+            "ADMIN_EMAIL", "security@example.com"
+        )
+        policy_url = os.getenv("SECURITY_POLICY_URL", "https://example.com/security")
+        lines = [
+            f"Contact: mailto:{contact_email}",
+            f"Policy: {policy_url}",
+            "Preferred-Languages: en",
+        ]
+        return Response("\n".join(lines) + "\n", mimetype="text/plain")
 
     with app.app_context():
         # Ensure models are imported and the database schema is created on
