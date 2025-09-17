@@ -476,6 +476,7 @@ class POItemForm(FlaskForm):
         "Unit", coerce=int, validators=[Optional()], validate_choice=False
     )
     quantity = DecimalField("Quantity", validators=[InputRequired()])
+    position = HiddenField("Position")
 
 
 class PurchaseOrderForm(FlaskForm):
@@ -510,6 +511,7 @@ class InvoiceItemReceiveForm(FlaskForm):
     )
     quantity = DecimalField("Quantity", validators=[InputRequired()])
     cost = DecimalField("Cost", validators=[InputRequired()])
+    position = HiddenField("Position")
 
 
 class ReceiveInvoiceForm(FlaskForm):

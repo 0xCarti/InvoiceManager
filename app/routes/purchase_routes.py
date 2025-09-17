@@ -155,6 +155,8 @@ def create_purchase_order():
         db.session.add(po)
         db.session.commit()
 
+        item_entries = []
+        fallback_counter = 0
         items = [
             key
             for key in request.form.keys()
@@ -165,15 +167,38 @@ def create_purchase_order():
             item_id = request.form.get(f"items-{index}-item", type=int)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             quantity = request.form.get(f"items-{index}-quantity", type=float)
+            position = request.form.get(f"items-{index}-position", type=int)
             if item_id and quantity is not None:
-                db.session.add(
-                    PurchaseOrderItem(
-                        purchase_order_id=po.id,
-                        item_id=item_id,
-                        unit_id=unit_id,
-                        quantity=quantity,
-                    )
+                item_entries.append(
+                    {
+                        "item_id": item_id,
+                        "unit_id": unit_id,
+                        "quantity": quantity,
+                        "position": position,
+                        "fallback": fallback_counter,
+                    }
                 )
+                fallback_counter += 1
+
+        item_entries.sort(
+            key=lambda entry: (
+                entry["position"]
+                if entry["position"] is not None
+                else entry["fallback"],
+                entry["fallback"],
+            )
+        )
+
+        for order_index, entry in enumerate(item_entries):
+            db.session.add(
+                PurchaseOrderItem(
+                    purchase_order_id=po.id,
+                    item_id=entry["item_id"],
+                    unit_id=entry["unit_id"],
+                    quantity=entry["quantity"],
+                    position=order_index,
+                )
+            )
 
         db.session.commit()
         log_activity(f"Created purchase order {po.id}")
@@ -220,6 +245,8 @@ def edit_purchase_order(po_id):
 
         PurchaseOrderItem.query.filter_by(purchase_order_id=po.id).delete()
 
+        item_entries = []
+        fallback_counter = 0
         items = [
             key
             for key in request.form.keys()
@@ -230,15 +257,38 @@ def edit_purchase_order(po_id):
             item_id = request.form.get(f"items-{index}-item", type=int)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             quantity = request.form.get(f"items-{index}-quantity", type=float)
+            position = request.form.get(f"items-{index}-position", type=int)
             if item_id and quantity is not None:
-                db.session.add(
-                    PurchaseOrderItem(
-                        purchase_order_id=po.id,
-                        item_id=item_id,
-                        unit_id=unit_id,
-                        quantity=quantity,
-                    )
+                item_entries.append(
+                    {
+                        "item_id": item_id,
+                        "unit_id": unit_id,
+                        "quantity": quantity,
+                        "position": position,
+                        "fallback": fallback_counter,
+                    }
                 )
+                fallback_counter += 1
+
+        item_entries.sort(
+            key=lambda entry: (
+                entry["position"]
+                if entry["position"] is not None
+                else entry["fallback"],
+                entry["fallback"],
+            )
+        )
+
+        for order_index, entry in enumerate(item_entries):
+            db.session.add(
+                PurchaseOrderItem(
+                    purchase_order_id=po.id,
+                    item_id=entry["item_id"],
+                    unit_id=entry["unit_id"],
+                    quantity=entry["quantity"],
+                    position=order_index,
+                )
+            )
 
         db.session.commit()
         log_activity(f"Edited purchase order {po.id}")
@@ -258,6 +308,7 @@ def edit_purchase_order(po_id):
             form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
+            form.items[i].position.data = poi.position
 
     selected_item_ids = []
     for item_form in form.items:
@@ -332,6 +383,7 @@ def receive_invoice(po_id):
             form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
+            form.items[i].position.data = poi.position
     if form.validate_on_submit():
         if not PurchaseOrderItemArchive.query.filter_by(
             purchase_order_id=po.id
@@ -340,6 +392,7 @@ def receive_invoice(po_id):
                 db.session.add(
                     PurchaseOrderItemArchive(
                         purchase_order_id=po.id,
+                        position=poi.position,
                         item_id=poi.item_id,
                         unit_id=poi.unit_id,
                         quantity=poi.quantity,
@@ -364,6 +417,8 @@ def receive_invoice(po_id):
         # commit so item cost changes persist reliably.
         db.session.flush()
 
+        item_entries = []
+        fallback_counter = 0
         items = [
             key
             for key in request.form.keys()
@@ -375,80 +430,103 @@ def receive_invoice(po_id):
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             quantity = request.form.get(f"items-{index}-quantity", type=float)
             cost = request.form.get(f"items-{index}-cost", type=float)
+            position = request.form.get(f"items-{index}-position", type=int)
             if item_id and quantity is not None and cost is not None:
-                cost = abs(cost)
-
-                item_obj = db.session.get(Item, item_id)
-                unit_obj = (
-                    db.session.get(ItemUnit, unit_id) if unit_id else None
+                item_entries.append(
+                    {
+                        "item_id": item_id,
+                        "unit_id": unit_id,
+                        "quantity": quantity,
+                        "cost": abs(cost),
+                        "position": position,
+                        "fallback": fallback_counter,
+                    }
                 )
+                fallback_counter += 1
 
-                prev_cost = item_obj.cost if item_obj and item_obj.cost else 0.0
-                db.session.add(
-                    PurchaseInvoiceItem(
-                        invoice_id=invoice.id,
-                        item_id=item_obj.id if item_obj else None,
-                        unit_id=unit_obj.id if unit_obj else None,
-                        item_name=item_obj.name if item_obj else "",
-                        unit_name=unit_obj.name if unit_obj else None,
-                        quantity=quantity,
-                        cost=cost,
-                        prev_cost=prev_cost,
-                    )
+        item_entries.sort(
+            key=lambda entry: (
+                entry["position"]
+                if entry["position"] is not None
+                else entry["fallback"],
+                entry["fallback"],
+            )
+        )
+
+        for order_index, entry in enumerate(item_entries):
+            item_obj = db.session.get(Item, entry["item_id"])
+            unit_obj = (
+                db.session.get(ItemUnit, entry["unit_id"]) if entry["unit_id"] else None
+            )
+
+            prev_cost = item_obj.cost if item_obj and item_obj.cost else 0.0
+            quantity = entry["quantity"]
+            cost = entry["cost"]
+
+            db.session.add(
+                PurchaseInvoiceItem(
+                    invoice_id=invoice.id,
+                    item_id=item_obj.id if item_obj else None,
+                    unit_id=unit_obj.id if unit_obj else None,
+                    item_name=item_obj.name if item_obj else "",
+                    unit_name=unit_obj.name if unit_obj else None,
+                    quantity=quantity,
+                    cost=cost,
+                    prev_cost=prev_cost,
+                    position=order_index,
                 )
+            )
 
-                if item_obj:
-                    factor = unit_obj.factor if unit_obj and unit_obj.factor else 1
-                    prev_qty = (
-                        db.session.query(
-                            db.func.sum(LocationStandItem.expected_count)
-                        )
-                        .filter(LocationStandItem.item_id == item_obj.id)
-                        .scalar()
-                        or 0
+            if item_obj:
+                factor = unit_obj.factor if unit_obj and unit_obj.factor else 1
+                prev_qty = (
+                    db.session.query(
+                        db.func.sum(LocationStandItem.expected_count)
                     )
-                    new_qty = quantity * factor
-                    total_qty = prev_qty + new_qty
+                    .filter(LocationStandItem.item_id == item_obj.id)
+                    .scalar()
+                    or 0
+                )
+                new_qty = quantity * factor
+                total_qty = prev_qty + new_qty
 
-                    # Cost per base unit for the newly received stock
-                    cost_per_unit = cost / factor if factor else cost
-                    prev_total_cost = prev_qty * prev_cost
-                    new_total_cost = cost_per_unit * new_qty
-                    if total_qty > 0:
-                        weighted_cost = (prev_total_cost + new_total_cost) / total_qty
-                    else:
-                        weighted_cost = cost_per_unit
+                # Cost per base unit for the newly received stock
+                cost_per_unit = cost / factor if factor else cost
+                prev_total_cost = prev_qty * prev_cost
+                new_total_cost = cost_per_unit * new_qty
+                if total_qty > 0:
+                    weighted_cost = (prev_total_cost + new_total_cost) / total_qty
+                else:
+                    weighted_cost = cost_per_unit
 
-                    item_obj.quantity = total_qty
-                    item_obj.cost = weighted_cost
+                item_obj.quantity = total_qty
+                item_obj.cost = weighted_cost
 
-                    # Explicitly mark the item as dirty so cost updates persist
-                    db.session.add(item_obj)
+                # Explicitly mark the item as dirty so cost updates persist
+                db.session.add(item_obj)
 
-                    record = LocationStandItem.query.filter_by(
-                        location_id=invoice.location_id, item_id=item_obj.id
-                    ).first()
-                    if not record:
-                        record = LocationStandItem(
-                            location_id=invoice.location_id,
-                            item_id=item_obj.id,
-                            expected_count=0,
-                            purchase_gl_code_id=item_obj.purchase_gl_code_id,
-                        )
-                        db.session.add(record)
-                    elif (
-                        record.purchase_gl_code_id is None
-                        and item_obj.purchase_gl_code_id is not None
-                    ):
-                        record.purchase_gl_code_id = (
-                            item_obj.purchase_gl_code_id
-                        )
-                    record.expected_count += quantity * factor
+                record = LocationStandItem.query.filter_by(
+                    location_id=invoice.location_id, item_id=item_obj.id
+                ).first()
+                if not record:
+                    record = LocationStandItem(
+                        location_id=invoice.location_id,
+                        item_id=item_obj.id,
+                        expected_count=0,
+                        purchase_gl_code_id=item_obj.purchase_gl_code_id,
+                    )
+                    db.session.add(record)
+                elif (
+                    record.purchase_gl_code_id is None
+                    and item_obj.purchase_gl_code_id is not None
+                ):
+                    record.purchase_gl_code_id = item_obj.purchase_gl_code_id
+                record.expected_count += quantity * factor
 
-                    # Ensure the in-memory changes are sent to the database so
-                    # subsequent iterations or queries within this request see
-                    # the updated cost and quantity values immediately.
-                    db.session.flush()
+                # Ensure the in-memory changes are sent to the database so
+                # subsequent iterations or queries within this request see
+                # the updated cost and quantity values immediately.
+                db.session.flush()
         po.received = True
         db.session.add(po)
         # Commit once so that invoice, items, and updated item costs are saved

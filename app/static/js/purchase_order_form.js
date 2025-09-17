@@ -341,6 +341,15 @@
             }
             itemCol.appendChild(hiddenInput);
 
+            const positionInput = document.createElement("input");
+            positionInput.type = "hidden";
+            positionInput.name = `items-${index}-position`;
+            positionInput.classList.add("item-position");
+            if (options.position !== undefined && options.position !== null) {
+                positionInput.value = options.position;
+            }
+            itemCol.appendChild(positionInput);
+
             const suggestionList = document.createElement("div");
             suggestionList.classList.add(
                 "list-group",
@@ -374,6 +383,36 @@
             }
             quantityCol.appendChild(quantityInput);
 
+            const reorderCol = document.createElement("div");
+            reorderCol.classList.add("col-auto");
+            const reorderWrapper = document.createElement("div");
+            reorderWrapper.classList.add("d-flex", "flex-column", "gap-1");
+
+            const moveUpButton = document.createElement("button");
+            moveUpButton.type = "button";
+            moveUpButton.classList.add(
+                "btn",
+                "btn-outline-secondary",
+                "btn-sm",
+                "move-up"
+            );
+            moveUpButton.setAttribute("aria-label", "Move item up");
+            moveUpButton.textContent = "\u2191";
+
+            const moveDownButton = document.createElement("button");
+            moveDownButton.type = "button";
+            moveDownButton.classList.add(
+                "btn",
+                "btn-outline-secondary",
+                "btn-sm",
+                "move-down"
+            );
+            moveDownButton.setAttribute("aria-label", "Move item down");
+            moveDownButton.textContent = "\u2193";
+
+            reorderWrapper.append(moveUpButton, moveDownButton);
+            reorderCol.appendChild(reorderWrapper);
+
             const removeCol = document.createElement("div");
             removeCol.classList.add("col-auto");
             const removeButton = document.createElement("button");
@@ -382,7 +421,7 @@
             removeButton.textContent = "Remove";
             removeCol.appendChild(removeButton);
 
-            row.append(itemCol, unitCol, quantityCol, removeCol);
+            row.append(itemCol, unitCol, quantityCol, reorderCol, removeCol);
             return row;
         }
 
@@ -391,6 +430,8 @@
             container.appendChild(row);
             nextIndex += 1;
             container.dataset.nextIndex = String(nextIndex);
+
+            updatePositions();
 
             const unitSelect = row.querySelector(".unit-select");
             if (options.itemId) {
@@ -405,6 +446,24 @@
             }
 
             return row;
+        }
+
+        function updatePositions() {
+            const rows = Array.from(container.querySelectorAll(".item-row"));
+            rows.forEach((row, index) => {
+                const positionField = row.querySelector(".item-position");
+                if (positionField) {
+                    positionField.value = String(index);
+                }
+                const moveUp = row.querySelector(".move-up");
+                if (moveUp) {
+                    moveUp.disabled = index === 0;
+                }
+                const moveDown = row.querySelector(".move-down");
+                if (moveDown) {
+                    moveDown.disabled = index === rows.length - 1;
+                }
+            });
         }
 
         function performSearch(input, term) {
@@ -788,10 +847,29 @@
         });
 
         container.addEventListener("click", (event) => {
-            if (event.target.classList.contains("remove-item")) {
-                event.target.closest(".row").remove();
-            } else if (event.target.classList.contains("suggestion-option")) {
-                handleSuggestionSelection(event.target);
+            const target = event.target;
+            if (target.classList.contains("remove-item")) {
+                const row = target.closest(".item-row");
+                if (row) {
+                    row.remove();
+                    updatePositions();
+                }
+            } else if (target.classList.contains("move-up")) {
+                const row = target.closest(".item-row");
+                const previous = row ? row.previousElementSibling : null;
+                if (row && previous) {
+                    row.parentElement.insertBefore(row, previous);
+                    updatePositions();
+                }
+            } else if (target.classList.contains("move-down")) {
+                const row = target.closest(".item-row");
+                const next = row ? row.nextElementSibling : null;
+                if (row && next) {
+                    row.parentElement.insertBefore(next, row);
+                    updatePositions();
+                }
+            } else if (target.classList.contains("suggestion-option")) {
+                handleSuggestionSelection(target);
             }
         });
 
@@ -809,6 +887,8 @@
                 fetchUnits(hiddenField.value, unitSelect, selectedUnit || null);
             }
         });
+
+        updatePositions();
 
         return {
             addRow,
