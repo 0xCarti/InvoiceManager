@@ -445,6 +445,7 @@ class PurchaseOrder(db.Model):
         "PurchaseOrderItem",
         backref="purchase_order",
         cascade="all, delete-orphan",
+        order_by="PurchaseOrderItem.position",
     )
     vendor = relationship("Vendor", backref="purchase_orders")
 
@@ -453,6 +454,9 @@ class PurchaseOrderItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     purchase_order_id = db.Column(
         db.Integer, db.ForeignKey("purchase_order.id"), nullable=False
+    )
+    position = db.Column(
+        db.Integer, nullable=False, default=0, server_default="0"
     )
     product_id = db.Column(
         db.Integer, db.ForeignKey("product.id"), nullable=True
@@ -486,7 +490,10 @@ class PurchaseInvoice(db.Model):
     pst = db.Column(db.Float, nullable=False, default=0.0)
     delivery_charge = db.Column(db.Float, nullable=False, default=0.0)
     items = relationship(
-        "PurchaseInvoiceItem", backref="invoice", cascade="all, delete-orphan"
+        "PurchaseInvoiceItem",
+        backref="invoice",
+        cascade="all, delete-orphan",
+        order_by="PurchaseInvoiceItem.position",
     )
     location = relationship("Location")
     purchase_order = relationship("PurchaseOrder")
@@ -504,6 +511,9 @@ class PurchaseInvoiceItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoice_id = db.Column(
         db.Integer, db.ForeignKey("purchase_invoice.id"), nullable=False
+    )
+    position = db.Column(
+        db.Integer, nullable=False, default=0, server_default="0"
     )
     item_id = db.Column(
         db.Integer,
@@ -531,6 +541,9 @@ class PurchaseInvoiceItem(db.Model):
 class PurchaseOrderItemArchive(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     purchase_order_id = db.Column(db.Integer, nullable=False)
+    position = db.Column(
+        db.Integer, nullable=False, default=0, server_default="0"
+    )
     item_id = db.Column(db.Integer, nullable=False)
     unit_id = db.Column(db.Integer, nullable=True)
     quantity = db.Column(db.Float, nullable=False)

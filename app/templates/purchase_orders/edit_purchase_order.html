@@ -34,10 +34,17 @@
             <div class="col position-relative">
                 <input type="text" name="items-{{ loop.index0 }}-item-label" class="form-control item-search" placeholder="Search for an item" autocomplete="off" value="{{ input_value }}">
                 {{ item.item(class="item-id-field") }}
+                <input type="hidden" name="items-{{ loop.index0 }}-position" class="item-position" value="{{ item.position.data or loop.index0 }}">
                 <div class="list-group suggestion-list d-none position-absolute w-100" style="z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
             </div>
             <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data or '' }}"></select></div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
+            <div class="col-auto">
+                <div class="d-flex flex-column gap-1">
+                    <button type="button" class="btn btn-outline-secondary btn-sm move-up" aria-label="Move item up">↑</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm move-down" aria-label="Move item down">↓</button>
+                </div>
+            </div>
             <div class="col-auto">
                 <button type="button" class="btn btn-danger remove-item">Remove</button>
             </div>

@@ -32,11 +32,20 @@
         <div id="items">
         {% for item in form.items %}
         <div class="row g-2 item-row mb-2 align-items-center">
-            <div class="col">{{ item.item(class="form-control item-select") }}</div>
+            <div class="col">
+                {{ item.item(class="form-control item-select") }}
+                <input type="hidden" name="items-{{ loop.index0 }}-position" class="item-position" value="{{ item.position.data or loop.index0 }}">
+            </div>
             <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data }}"></select></div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col">{{ item.cost(class="form-control cost") }}</div>
             <div class="col"><span class="line-total">0.00</span></div>
+            <div class="col-auto">
+                <div class="d-flex flex-column gap-1">
+                    <button type="button" class="btn btn-outline-secondary btn-sm move-up" aria-label="Move item up">↑</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm move-down" aria-label="Move item down">↓</button>
+                </div>
+            </div>
             <div class="col-auto">
                 <button type="button" class="btn btn-danger remove-item">Remove</button>
             </div>
@@ -61,14 +70,41 @@
         const row = document.createElement('div');
         row.classList.add('row','g-2','mb-2','item-row','align-items-center');
         row.innerHTML = `
-            <div class="col"><select name="items-${index}-item" id="items-${index}-item" class="form-control item-select">${itemOptions}</select></div>
+            <div class="col">
+                <select name="items-${index}-item" id="items-${index}-item" class="form-control item-select">${itemOptions}</select>
+                <input type="hidden" name="items-${index}-position" class="item-position" value="">
+            </div>
             <div class="col"><select name="items-${index}-unit" id="items-${index}-unit" class="form-control unit-select"></select></div>
             <div class="col"><input type="number" step="any" name="items-${index}-quantity" id="items-${index}-quantity" class="form-control quantity"></div>
             <div class="col"><input type="number" step="any" name="items-${index}-cost" id="items-${index}-cost" class="form-control cost"></div>
             <div class="col"><span class="line-total">0.00</span></div>
+            <div class="col-auto">
+                <div class="d-flex flex-column gap-1">
+                    <button type="button" class="btn btn-outline-secondary btn-sm move-up" aria-label="Move item up">↑</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm move-down" aria-label="Move item down">↓</button>
+                </div>
+            </div>
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
         `;
         return row;
+    }
+
+    function updatePositions() {
+        const rows = Array.from(document.querySelectorAll('#items .item-row'));
+        rows.forEach((row, index) => {
+            const positionInput = row.querySelector('.item-position');
+            if (positionInput) {
+                positionInput.value = index;
+            }
+            const moveUp = row.querySelector('.move-up');
+            if (moveUp) {
+                moveUp.disabled = index === 0;
+            }
+            const moveDown = row.querySelector('.move-down');
+            if (moveDown) {
+                moveDown.disabled = index === rows.length - 1;
+            }
+        });
     }
 
     function fetchCost(row) {
@@ -123,12 +159,28 @@
         const row = createRow(itemIndex);
         document.getElementById('items').appendChild(row);
         itemIndex++;
+        updatePositions();
     });
 
     document.getElementById('items').addEventListener('click', function(e) {
         if (e.target && e.target.classList.contains('remove-item')) {
             e.target.closest('.item-row').remove();
+            updatePositions();
             updateTotals();
+        } else if (e.target && e.target.classList.contains('move-up')) {
+            const row = e.target.closest('.item-row');
+            const prev = row ? row.previousElementSibling : null;
+            if (row && prev) {
+                row.parentElement.insertBefore(row, prev);
+                updatePositions();
+            }
+        } else if (e.target && e.target.classList.contains('move-down')) {
+            const row = e.target.closest('.item-row');
+            const next = row ? row.nextElementSibling : null;
+            if (row && next) {
+                row.parentElement.insertBefore(next, row);
+                updatePositions();
+            }
         }
     });
 
@@ -175,6 +227,7 @@
     document.getElementById('gst').addEventListener('input', updateTotals);
     document.getElementById('pst').addEventListener('input', updateTotals);
     document.getElementById('delivery_charge').addEventListener('input', updateTotals);
+    updatePositions();
     updateTotals();
 </script>
 {% endblock %}
