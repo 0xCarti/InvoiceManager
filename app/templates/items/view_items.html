@@ -255,6 +255,7 @@
     </div>
 </div>
 <script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
+<script src="{{ url_for('static', filename='js/item_form.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     var selectAll = document.getElementById('select-all');
@@ -287,7 +288,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script nonce="{{ csp_nonce }}">
 const itemModalEl = document.getElementById('itemModal');
-const executingScript = document.currentScript;
 const itemModalBody = itemModalEl ? itemModalEl.querySelector('.modal-body') : null;
 let createItemTemplate = '';
 
@@ -296,42 +296,10 @@ if (itemModalBody) {
     itemModalBody.innerHTML = '';
 }
 
-const EXECUTABLE_SCRIPT_TYPES = new Set(['', 'text/javascript', 'application/javascript', 'module']);
-
-function runInlineScript(code) {
-    const inlineScript = document.createElement('script');
-    if (executingScript && executingScript.nonce) {
-        inlineScript.setAttribute('nonce', executingScript.nonce);
+function initializeItemForm() {
+    if (window.ItemForm && typeof window.ItemForm.init === 'function') {
+        window.ItemForm.init(itemModalEl);
     }
-    inlineScript.textContent = code;
-    document.head.appendChild(inlineScript);
-    inlineScript.remove();
-}
-
-function executeScripts(container) {
-    container.querySelectorAll('script').forEach((s) => {
-        const src = s.getAttribute('src');
-        const typeAttr = (s.getAttribute('type') || '').trim().toLowerCase();
-
-        if (src) {
-            const script = document.createElement('script');
-            script.src = src;
-            document.head.appendChild(script);
-            s.remove();
-            return;
-        }
-
-        if (!EXECUTABLE_SCRIPT_TYPES.has(typeAttr)) {
-            return;
-        }
-
-        const content = s.textContent;
-        const allowHtml = s.dataset.allowHtml !== undefined;
-        if (allowHtml || !/<\/?[a-z][\s\S]*>/i.test(content)) {
-            runInlineScript(content);
-        }
-        s.remove();
-    });
 }
 
 function bindItemForm(actionUrl) {
@@ -359,7 +327,7 @@ function bindItemForm(actionUrl) {
                 bootstrap.Modal.getInstance(itemModalEl).hide();
             } else if (data.form_html) {
                 itemModalEl.querySelector('.modal-body').innerHTML = data.form_html;
-                executeScripts(itemModalEl);
+                initializeItemForm();
                 bindItemForm(actionUrl);
             }
         });
@@ -379,7 +347,7 @@ if (createItemBtn) {
         itemModalEl.dataset.mode = 'create';
         itemModalEl.querySelector('.modal-title').textContent = 'Add Item';
         itemModalBody.innerHTML = createItemTemplate;
-        executeScripts(itemModalEl);
+        initializeItemForm();
         const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
         modal.show();
         bindItemForm('{{ url_for('item.add_item') }}');
@@ -398,7 +366,7 @@ if (itemsTableEl) {
                     itemModalEl.dataset.mode = 'edit';
                     itemModalEl.querySelector('.modal-title').textContent = 'Edit Item';
                     itemModalEl.querySelector('.modal-body').innerHTML = html;
-                    executeScripts(itemModalEl);
+                    initializeItemForm();
                     const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
                     modal.show();
                     bindItemForm(url);
@@ -413,7 +381,7 @@ if (itemsTableEl) {
                     itemModalEl.dataset.mode = 'copy';
                     itemModalEl.querySelector('.modal-title').textContent = 'Copy Item';
                     itemModalEl.querySelector('.modal-body').innerHTML = html;
-                    executeScripts(itemModalEl);
+                    initializeItemForm();
                     const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
                     modal.show();
                     bindItemForm(actionUrl);
