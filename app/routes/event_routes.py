@@ -151,15 +151,23 @@ def add_location(event_id):
     ev = db.session.get(Event, event_id)
     if ev is None:
         abort(404)
-    form = EventLocationForm()
+    form = EventLocationForm(event_id=event_id)
+    if not form.location_id.choices:
+        flash("All available locations have already been assigned to this event.")
+        return redirect(url_for("event.view_event", event_id=event_id))
     if form.validate_on_submit():
-        el = EventLocation(
-            event_id=event_id,
-            location_id=form.location_id.data,
-        )
-        db.session.add(el)
+        selected_ids = form.location_id.data
+        event_locations = [
+            EventLocation(event_id=event_id, location_id=location_id)
+            for location_id in selected_ids
+        ]
+        db.session.add_all(event_locations)
         db.session.commit()
-        flash("Location assigned")
+        flash(
+            "Locations assigned"
+            if len(event_locations) > 1
+            else "Location assigned"
+        )
         return redirect(url_for("event.view_event", event_id=event_id))
     return render_template("events/add_location.html", form=form, event=ev)
 
