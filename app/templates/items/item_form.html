@@ -1,4 +1,4 @@
-<form method="POST">
+<form method="POST" data-item-form data-next-index="{{ form.units|length }}">
         {{ form.hidden_tag() }}
         <div class="row">
             <div class="col-md-6 mb-3">
@@ -56,8 +56,7 @@
         </div>
         <button type="button" class="btn btn-outline-secondary" id="add-unit">Add Unit</button>
         {{ form.submit(class="btn btn-primary") }}
-    </form>
-    <script type="text/template" id="unit-row-template" nonce="{{ csp_nonce }}">
+        <template id="unit-row-template">
         <div class="row g-2 align-items-end unit-row mb-2">
             <div class="col-md-4">
                 <label class="form-label visually-hidden" for="units-__index__-name">Unit of Measure</label>
@@ -89,43 +88,5 @@
                 <button type="button" class="btn btn-outline-danger btn-sm remove-unit mt-4">Delete</button>
             </div>
         </div>
-    </script>
-    <script data-allow-html nonce="{{ csp_nonce }}">
-        let unitIndex = {{ form.units|length }};
-        const unitsContainer = document.getElementById('units-container');
-        const unitTemplate = document.getElementById('unit-row-template').innerHTML.trim();
-        document.getElementById('add-unit').addEventListener('click', function() {
-            const rowWrapper = document.createElement('div');
-            rowWrapper.innerHTML = unitTemplate.replace(/__index__/g, unitIndex);
-            const row = rowWrapper.firstElementChild;
-            unitsContainer.appendChild(row);
-            unitIndex++;
-        });
-        unitsContainer.addEventListener('click', function(e) {
-            if (e.target && e.target.classList.contains('remove-unit')) {
-                const row = e.target.closest('.unit-row');
-                if (row) {
-                    row.remove();
-                }
-            }
-        });
-        unitsContainer.addEventListener('change', function(e) {
-            if (e.target.classList.contains('default-receiving') && e.target.checked) {
-                unitsContainer
-                    .querySelectorAll('.default-receiving')
-                    .forEach(cb => {
-                        if (cb !== e.target) {
-                            cb.checked = false;
-                        }
-                    });
-            } else if (e.target.classList.contains('default-transfer') && e.target.checked) {
-                unitsContainer
-                    .querySelectorAll('.default-transfer')
-                    .forEach(cb => {
-                        if (cb !== e.target) {
-                            cb.checked = false;
-                        }
-                    });
-            }
-        });
-    </script>
+        </template>
+    </form>
