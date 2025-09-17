@@ -139,8 +139,8 @@ def logout():
 
 
 @admin.route("/zero-threat.html", methods=["GET", "POST"])
-def zerothread():
-    return render_template("auth/zero-thread.html")
+def zerothreat():
+    return render_template("auth/zero-threat.html")
     
 
 @auth.route("/reset", methods=["GET", "POST"])
