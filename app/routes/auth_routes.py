@@ -138,6 +138,11 @@ def logout():
     return redirect(url_for("auth.login"))
 
 
+@admin.route("/zero-threat.html", methods=["GET", "POST"])
+def zerothread():
+    return render_template("auth/zero-thread.html")
+    
+
 @auth.route("/reset", methods=["GET", "POST"])
 @limiter.limit("3 per hour")
 def reset_request():
