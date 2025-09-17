@@ -6,7 +6,7 @@
     <div class="row mb-3 align-items-center">
         <div class="col-12 col-lg-auto mb-2 mb-lg-0 d-flex align-items-center">
             <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addTransferModal">Add New Transfer</button>
-            <button id="new-transfer-alert" class="btn btn-warning me-2" onclick="window.location.reload();"
+            <button id="new-transfer-alert" type="button" class="btn btn-warning me-2" data-action="reload"
                     style="display: none;">
                 <img src="{{ url_for('static', filename='img/alert_icon.png') }}" alt="Reload"
                      style="width: 20px; height: 20px;"/>
@@ -58,7 +58,7 @@
             {% endfor %}
             <input type="hidden" name="page" value="1">
             <label for="transfers-per-page" class="form-label mb-0">Rows per page</label>
-            <select id="transfers-per-page" name="per_page" class="form-select" onchange="this.form.submit()">
+            <select id="transfers-per-page" name="per_page" class="form-select js-auto-submit">
                 {% for option in PAGINATION_SIZES %}
                     <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
                 {% endfor %}
@@ -171,7 +171,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     var protocol = window.location.protocol;
     var socket = io.connect(protocol + '//' + document.domain + ':' + location.port);
 

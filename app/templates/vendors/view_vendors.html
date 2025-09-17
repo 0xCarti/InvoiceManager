@@ -48,7 +48,7 @@
             {% endfor %}
             <input type="hidden" name="page" value="1">
             <label for="vendors-per-page" class="form-label mb-0">Rows per page</label>
-            <select id="vendors-per-page" name="per_page" class="form-select" onchange="this.form.submit()">
+            <select id="vendors-per-page" name="per_page" class="form-select js-auto-submit">
                 {% for option in PAGINATION_SIZES %}
                     <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
                 {% endfor %}
@@ -70,7 +70,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 const modalEl = document.getElementById('vendorModal');
 
 function bindVendorForm() {

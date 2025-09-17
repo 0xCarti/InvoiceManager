@@ -68,7 +68,7 @@
             {% endfor %}
             <input type="hidden" name="page" value="1">
             <label for="invoices-per-page" class="form-label mb-0">Rows per page</label>
-            <select id="invoices-per-page" name="per_page" class="form-select" onchange="this.form.submit()">
+            <select id="invoices-per-page" name="per_page" class="form-select js-auto-submit">
                 {% for option in PAGINATION_SIZES %}
                     <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
                 {% endfor %}
@@ -127,7 +127,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 $(document).ready(function(){
     const deleteFormHTML = {{ delete_form.hidden_tag()|tojson }};
 

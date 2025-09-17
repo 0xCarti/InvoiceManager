@@ -35,7 +35,7 @@
         {{ form.submit(class="btn btn-success") }}
     </form>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
     let itemIndex = 0;
     window.addEventListener('DOMContentLoaded', (event) => {
     const existingItems = {{ items | tojson | safe }};

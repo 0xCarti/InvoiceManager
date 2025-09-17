@@ -104,7 +104,7 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/purchase_order_form.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     initPurchaseOrderForm({
         container: document.getElementById('items'),

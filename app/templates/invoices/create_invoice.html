@@ -7,7 +7,7 @@
     {% include "invoices/_invoice_form.html" %}
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 $(document).ready(function () {
     let currentTaxStatus = { gst_exempt: false, pst_exempt: false };
 

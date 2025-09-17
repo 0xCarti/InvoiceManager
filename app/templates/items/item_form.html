@@ -57,7 +57,7 @@
         <button type="button" class="btn btn-outline-secondary" id="add-unit">Add Unit</button>
         {{ form.submit(class="btn btn-primary") }}
     </form>
-    <script type="text/template" id="unit-row-template">
+    <script type="text/template" id="unit-row-template" nonce="{{ csp_nonce }}">
         <div class="row g-2 align-items-end unit-row mb-2">
             <div class="col-md-4">
                 <label class="form-label visually-hidden" for="units-__index__-name">Unit of Measure</label>
@@ -90,7 +90,7 @@
             </div>
         </div>
     </script>
-    <script data-allow-html>
+    <script data-allow-html nonce="{{ csp_nonce }}">
         let unitIndex = {{ form.units|length }};
         const unitsContainer = document.getElementById('units-container');
         const unitTemplate = document.getElementById('unit-row-template').innerHTML.trim();

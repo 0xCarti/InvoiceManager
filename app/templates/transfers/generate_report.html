@@ -26,7 +26,7 @@
         <button type="submit" class="btn btn-primary mt-2">Generate Report</button>
     </form>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
 flatpickr("#start_datetime", {
     enableTime: true,
     dateFormat: "Y-m-d H:i",

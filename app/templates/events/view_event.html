@@ -46,7 +46,7 @@
     </div>
 </div>
 {% if not event.closed and unconfirmed_count %}
-<script>
+<script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function () {
         const closeEventButton = document.getElementById('close-event-btn');
         if (!closeEventButton) {
