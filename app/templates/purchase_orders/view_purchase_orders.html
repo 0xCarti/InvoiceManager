@@ -206,7 +206,7 @@
                     <a href="{{ url_for('purchase.receive_invoice', po_id=order.id) }}" class="btn btn-sm btn-success">Receive</a>
                     <form action="{{ url_for('purchase.delete_purchase_order', po_id=order.id) }}" method="post" class="d-inline">
                         {{ delete_form.hidden_tag() }}
-                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?');">Delete</button>
+                        <button type="submit" class="btn btn-sm btn-danger" data-confirm-message="Are you sure?">Delete</button>
                     </form>
                 </td>
             </tr>
@@ -238,7 +238,7 @@
             {% endfor %}
             <input type="hidden" name="page" value="1">
             <label for="purchase-orders-per-page" class="form-label mb-0">Rows per page</label>
-            <select id="purchase-orders-per-page" name="per_page" class="form-select" onchange="this.form.submit()">
+            <select id="purchase-orders-per-page" name="per_page" class="form-select js-auto-submit">
                 {% for option in PAGINATION_SIZES %}
                     <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
                 {% endfor %}

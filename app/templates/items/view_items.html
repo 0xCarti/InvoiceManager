@@ -85,7 +85,7 @@
                 Filters
             </button>
             <a href="{{ url_for('item.import_items') }}" class="btn btn-info mb-3">Import Items</a>
-            <button type="submit" form="bulk-delete-form" class="btn btn-warning mb-3" onclick="return confirm('Are you sure?');">Delete Items</button>
+            <button type="submit" form="bulk-delete-form" class="btn btn-warning mb-3" data-confirm-message="Are you sure?">Delete Items</button>
         </div>
     </div>
 
@@ -246,7 +246,7 @@
             {% endfor %}
             <input type="hidden" name="page" value="1">
             <label for="items-per-page" class="form-label mb-0">Rows per page</label>
-            <select id="items-per-page" name="per_page" class="form-select" onchange="this.form.submit()">
+            <select id="items-per-page" name="per_page" class="form-select js-auto-submit">
                 {% for option in PAGINATION_SIZES %}
                     <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
                 {% endfor %}
@@ -255,7 +255,7 @@
     </div>
 </div>
 <script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     var selectAll = document.getElementById('select-all');
     if (selectAll) {
@@ -285,8 +285,9 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 const itemModalEl = document.getElementById('itemModal');
+const executingScript = document.currentScript;
 const itemModalBody = itemModalEl ? itemModalEl.querySelector('.modal-body') : null;
 let createItemTemplate = '';
 
@@ -296,6 +297,16 @@ if (itemModalBody) {
 }
 
 const EXECUTABLE_SCRIPT_TYPES = new Set(['', 'text/javascript', 'application/javascript', 'module']);
+
+function runInlineScript(code) {
+    const inlineScript = document.createElement('script');
+    if (executingScript && executingScript.nonce) {
+        inlineScript.setAttribute('nonce', executingScript.nonce);
+    }
+    inlineScript.textContent = code;
+    document.head.appendChild(inlineScript);
+    inlineScript.remove();
+}
 
 function executeScripts(container) {
     container.querySelectorAll('script').forEach((s) => {
@@ -317,7 +328,7 @@ function executeScripts(container) {
         const content = s.textContent;
         const allowHtml = s.dataset.allowHtml !== undefined;
         if (allowHtml || !/<\/?[a-z][\s\S]*>/i.test(content)) {
-            new Function(content)();
+            runInlineScript(content);
         }
         s.remove();
     });

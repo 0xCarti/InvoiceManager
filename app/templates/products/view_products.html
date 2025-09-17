@@ -267,7 +267,7 @@
             {% endfor %}
             <input type="hidden" name="page" value="1">
             <label for="products-per-page" class="form-label mb-0">Rows per page</label>
-            <select id="products-per-page" name="per_page" class="form-select" onchange="this.form.submit()">
+            <select id="products-per-page" name="per_page" class="form-select js-auto-submit">
                 {% for option in PAGINATION_SIZES %}
                     <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
                 {% endfor %}
@@ -276,7 +276,7 @@
     </div>
 </div>
 <script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const selectAllProducts = document.getElementById('select-all-products');
     if (selectAllProducts) {

@@ -23,7 +23,7 @@
         <button type="submit" class="btn btn-primary">Generate Report</button>
     </form>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
         const selectAll = document.querySelector('input[name="select_all"]');
         const checkboxes = document.querySelectorAll('input[name="products"]');

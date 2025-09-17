@@ -35,7 +35,7 @@
         {{ form.submit(class="btn btn-success") }}
     </form>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
     document.getElementById('item-name').addEventListener('input', function() {
         var input = this.value;
         if (input === ''){

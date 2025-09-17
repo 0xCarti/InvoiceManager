@@ -1,11 +1,12 @@
 import os
+import secrets
 import sys
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from flask import Flask, Response, request
+from flask import Flask, Response, g, request
 from flask_bootstrap import Bootstrap
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -22,15 +23,16 @@ login_manager.login_view = "auth.login"
 storage_uri = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
 limiter = Limiter(key_func=get_remote_address, storage_uri=storage_uri)
 socketio = None
-DEFAULT_CSP = (
+DEFAULT_CSP_TEMPLATE = (
     "default-src 'self'; "
     "img-src 'self' data:; "
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+    "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'nonce-{nonce}'; "
     "font-src 'self' data:; "
     "connect-src 'self' wss:; "
     "frame-ancestors 'self'; "
     "form-action 'self'; "
+    "object-src 'none'; "
     "base-uri 'self'"
 )
 GST = ""
@@ -193,6 +195,12 @@ def create_app(args: list):
 
         return {"PAGINATION_SIZES": PAGINATION_SIZES}
 
+    @app.before_request
+    def set_csp_nonce():
+        """Generate a nonce for inline scripts allowed by the CSP."""
+
+        g.csp_nonce = secrets.token_urlsafe(16)
+
     @app.after_request
     def apply_security_headers(response):
         """Attach standard security headers to every response."""
@@ -203,9 +211,27 @@ def create_app(args: list):
                 "Strict-Transport-Security",
                 "max-age=31536000; includeSubDomains; preload",
             )
-        csp = app.config.get("CONTENT_SECURITY_POLICY", DEFAULT_CSP)
+        nonce = getattr(g, "csp_nonce", "")
+        if not nonce:
+            nonce = secrets.token_urlsafe(16)
+            g.csp_nonce = nonce
+        csp_template = app.config.get("CONTENT_SECURITY_POLICY_TEMPLATE")
+        if csp_template is None:
+            csp_template = app.config.get(
+                "CONTENT_SECURITY_POLICY", DEFAULT_CSP_TEMPLATE
+            )
+        try:
+            csp = csp_template.format(nonce=nonce)
+        except Exception:
+            csp = csp_template
         response.headers.setdefault("Content-Security-Policy", csp)
         return response
+
+    @app.context_processor
+    def inject_csp_nonce():
+        """Expose the CSP nonce to templates for inline scripts."""
+
+        return {"csp_nonce": getattr(g, "csp_nonce", "")}
 
     @app.before_request
     def block_http_options():

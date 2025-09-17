@@ -93,7 +93,7 @@
                     <a href="{{ url_for('customer.edit_customer', customer_id=customer.id) }}" class="btn btn-primary mr-2">Edit</a>
                     <form action="{{ url_for('customer.delete_customer', customer_id=customer.id) }}" method="post" class="d-inline">
                         {{ delete_form.hidden_tag() }}
-                        <button type="submit" class="btn btn-danger mr-2" onclick="return confirm('Are you sure you want to delete this customer?')">Delete</button>
+                        <button type="submit" class="btn btn-danger mr-2" data-confirm-message="Are you sure you want to delete this customer?">Delete</button>
                     </form>
                 </td>
             </tr>
@@ -125,7 +125,7 @@
             {% endfor %}
             <input type="hidden" name="page" value="1">
             <label for="customers-per-page" class="form-label mb-0">Rows per page</label>
-            <select id="customers-per-page" name="per_page" class="form-select" onchange="this.form.submit()">
+            <select id="customers-per-page" name="per_page" class="form-select js-auto-submit">
                 {% for option in PAGINATION_SIZES %}
                     <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
                 {% endfor %}
@@ -148,7 +148,7 @@
         </div>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
         const form = document.getElementById('customerForm');
         if (!form) return;
@@ -171,7 +171,7 @@
                             <a href="/customers/${data.customer.id}/edit" class="btn btn-primary mr-2">Edit</a>
                             <form action="/customers/${data.customer.id}/delete" method="post" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="${data.delete_csrf_token}">
-                                <button type="submit" class="btn btn-danger mr-2" onclick="return confirm('Are you sure you want to delete this customer?')">Delete</button>
+                                <button type="submit" class="btn btn-danger mr-2" data-confirm-message="Are you sure you want to delete this customer?">Delete</button>
                             </form>
                         </td>`;
                     tbody.appendChild(row);

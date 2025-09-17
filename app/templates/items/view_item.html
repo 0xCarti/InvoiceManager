@@ -52,7 +52,7 @@
                     {% endfor %}
                     <input type="hidden" name="purchase_page" value="1">
                     <label for="purchase-per-page" class="form-label mb-0">Rows per page</label>
-                    <select id="purchase-per-page" name="purchase_per_page" class="form-select" onchange="this.form.submit()">
+                    <select id="purchase-per-page" name="purchase_per_page" class="form-select js-auto-submit">
                         {% for option in PAGINATION_SIZES %}
                             <option value="{{ option }}" {% if purchase_per_page == option %}selected{% endif %}>{{ option }}</option>
                         {% endfor %}
@@ -108,7 +108,7 @@
                     {% endfor %}
                     <input type="hidden" name="sales_page" value="1">
                     <label for="sales-per-page" class="form-label mb-0">Rows per page</label>
-                    <select id="sales-per-page" name="sales_per_page" class="form-select" onchange="this.form.submit()">
+                    <select id="sales-per-page" name="sales_per_page" class="form-select js-auto-submit">
                         {% for option in PAGINATION_SIZES %}
                             <option value="{{ option }}" {% if sales_per_page == option %}selected{% endif %}>{{ option }}</option>
                         {% endfor %}
@@ -166,7 +166,7 @@
                     {% endfor %}
                     <input type="hidden" name="transfer_page" value="1">
                     <label for="transfer-per-page" class="form-label mb-0">Rows per page</label>
-                    <select id="transfer-per-page" name="transfer_per_page" class="form-select" onchange="this.form.submit()">
+                    <select id="transfer-per-page" name="transfer_per_page" class="form-select js-auto-submit">
                         {% for option in PAGINATION_SIZES %}
                             <option value="{{ option }}" {% if transfer_per_page == option %}selected{% endif %}>{{ option }}</option>
                         {% endfor %}

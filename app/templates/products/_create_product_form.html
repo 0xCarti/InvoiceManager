@@ -47,7 +47,7 @@
     <button type="button" class="btn btn-secondary" id="calc-cost" {% if product_id %}data-product-id="{{ product_id }}"{% else %}disabled{% endif %}>Set Cost From Recipe</button>
     <button type="submit" class="btn btn-primary">Submit</button>
 </form>
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const btn = document.getElementById('calc-cost');
     if (btn) {

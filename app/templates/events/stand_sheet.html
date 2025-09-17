@@ -42,7 +42,7 @@
     <button type="submit" class="btn btn-primary">Save</button>
     </form>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
     function calcVariance(row) {
         const sales = parseFloat(row.querySelector('.sales').dataset.sales) || 0;
         const pre = parseFloat(row.querySelector('input[name^="open_"]').value) || 0;
