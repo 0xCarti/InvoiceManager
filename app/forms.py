@@ -33,7 +33,15 @@ from wtforms.validators import (
 )
 from wtforms.widgets import CheckboxInput, ListWidget
 
-from app.models import GLCode, Item, ItemUnit, Location, Product, Vendor
+from app.models import (
+    EventLocation,
+    GLCode,
+    Item,
+    ItemUnit,
+    Location,
+    Product,
+    Vendor,
+)
 
 # Uploaded backup files are capped at 10MB to prevent excessive memory usage
 MAX_BACKUP_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -572,16 +580,28 @@ class EventForm(FlaskForm):
 
 
 class EventLocationForm(FlaskForm):
-    location_id = SelectField(
-        "Location", coerce=int, validators=[DataRequired()]
+    location_id = SelectMultipleField(
+        "Locations", coerce=int, validators=[DataRequired()]
     )
     submit = SubmitField("Submit")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, event_id=None, *args, **kwargs):
         super(EventLocationForm, self).__init__(*args, **kwargs)
+        existing_location_ids = set()
+        if event_id is not None:
+            existing_location_ids = {
+                loc_id
+                for (loc_id,) in EventLocation.query.with_entities(
+                    EventLocation.location_id
+                ).filter_by(event_id=event_id)
+            }
+
         self.location_id.choices = [
             (loc.id, loc.name)
-            for loc in Location.query.filter_by(archived=False).all()
+            for loc in Location.query.filter_by(archived=False)
+            .order_by(Location.name)
+            .all()
+            if loc.id not in existing_location_ids
         ]
 
 
