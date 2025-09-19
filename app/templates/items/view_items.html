@@ -287,41 +287,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <script nonce="{{ csp_nonce }}">
-const currentScript = document.currentScript;
-const scriptNonce = currentScript ? currentScript.nonce : '';
-
-function executeInlineScripts(container) {
-    if (!container) {
-        return;
-    }
-
-    const scripts = container.querySelectorAll('script');
-    scripts.forEach((oldScript) => {
-        const replacement = document.createElement('script');
-        const oldNonce = oldScript.nonce || (oldScript.getAttribute('nonce') || '');
-        const finalNonce = oldNonce || scriptNonce;
-
-        Array.from(oldScript.attributes).forEach((attr) => {
-            if (attr.name.toLowerCase() === 'nonce') {
-                return;
-            }
-            replacement.setAttribute(attr.name, attr.value);
-        });
-
-        if (finalNonce) {
-            replacement.setAttribute('nonce', finalNonce);
-        }
-
-        if (oldScript.src) {
-            replacement.src = oldScript.src;
-        } else {
-            replacement.textContent = oldScript.textContent;
-        }
-
-        oldScript.replaceWith(replacement);
-    });
-}
-
 const itemModalEl = document.getElementById('itemModal');
 const itemModalBody = itemModalEl ? itemModalEl.querySelector('.modal-body') : null;
 let createItemTemplate = '';
@@ -362,7 +327,6 @@ function bindItemForm(actionUrl) {
                 bootstrap.Modal.getInstance(itemModalEl).hide();
             } else if (data.form_html) {
                 itemModalEl.querySelector('.modal-body').innerHTML = data.form_html;
-                executeInlineScripts(itemModalEl.querySelector('.modal-body'));
                 initializeItemForm();
                 bindItemForm(actionUrl);
             }
@@ -383,7 +347,6 @@ if (createItemBtn) {
         itemModalEl.dataset.mode = 'create';
         itemModalEl.querySelector('.modal-title').textContent = 'Add Item';
         itemModalBody.innerHTML = createItemTemplate;
-        executeInlineScripts(itemModalBody);
         initializeItemForm();
         const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
         modal.show();
@@ -403,7 +366,6 @@ if (itemsTableEl) {
                     itemModalEl.dataset.mode = 'edit';
                     itemModalEl.querySelector('.modal-title').textContent = 'Edit Item';
                     itemModalEl.querySelector('.modal-body').innerHTML = html;
-                    executeInlineScripts(itemModalEl.querySelector('.modal-body'));
                     initializeItemForm();
                     const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
                     modal.show();
@@ -419,7 +381,6 @@ if (itemsTableEl) {
                     itemModalEl.dataset.mode = 'copy';
                     itemModalEl.querySelector('.modal-title').textContent = 'Copy Item';
                     itemModalEl.querySelector('.modal-body').innerHTML = html;
-                    executeInlineScripts(itemModalEl.querySelector('.modal-body'));
                     initializeItemForm();
                     const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
                     modal.show();

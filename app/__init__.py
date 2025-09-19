@@ -29,7 +29,7 @@ DEFAULT_CSP_TEMPLATE = (
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
     "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'nonce-{nonce}'; "
     "font-src 'self' data:; "
-    "connect-src 'self' wss:; "
+    "connect-src 'self' wss: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
     "frame-ancestors 'self'; "
     "form-action 'self'; "
     "object-src 'none'; "
