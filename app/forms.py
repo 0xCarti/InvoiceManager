@@ -5,6 +5,7 @@ from zoneinfo import available_timezones
 from flask import g
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileRequired
+from sqlalchemy import or_
 from wtforms import (
     BooleanField,
     DateField,
@@ -129,7 +130,7 @@ class ItemForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(ItemForm, self).__init__(*args, **kwargs)
-        codes = GLCode.query.filter(GLCode.code.like("5%")).all()
+        codes = self._fetch_purchase_gl_codes()
         self.gl_code.choices = [
             (
                 g.code,
@@ -145,17 +146,25 @@ class ItemForm(FlaskForm):
         self.purchase_gl_code.choices = purchase_codes
 
     def validate_gl_code(self, field):
-        if field.data and not str(field.data).startswith("5"):
-            raise ValidationError("Item GL codes must start with 5")
-        from app.models import GLCode
-
-        codes = GLCode.query.filter(GLCode.code.like("5%")).all()
+        if field.data and not str(field.data).startswith(("5", "6")):
+            raise ValidationError("Item GL codes must start with 5 or 6")
+        codes = self._fetch_purchase_gl_codes()
         purchase_codes = [
             (g.id, f"{g.code} - {g.description}" if g.description else g.code)
             for g in codes
         ]
         self.gl_code_id.choices = purchase_codes
         self.purchase_gl_code.choices = purchase_codes
+
+    @staticmethod
+    def _fetch_purchase_gl_codes():
+        return (
+            GLCode.query.filter(
+                or_(GLCode.code.like("5%"), GLCode.code.like("6%"))
+            )
+            .order_by(GLCode.code)
+            .all()
+        )
 
 
 class TransferItemForm(FlaskForm):
@@ -264,7 +273,7 @@ class SpoilageFilterForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(SpoilageFilterForm, self).__init__(*args, **kwargs)
-        gl_codes = GLCode.query.filter(GLCode.code.like("5%"))
+        gl_codes = ItemForm._fetch_purchase_gl_codes()
         self.purchase_gl_code.choices = [
             (g.id, f"{g.code} - {g.description}" if g.description else g.code)
             for g in gl_codes

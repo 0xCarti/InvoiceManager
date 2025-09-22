@@ -34,9 +34,20 @@ from app.utils.pagination import build_pagination_args, get_per_page
 
 import datetime
 
+from sqlalchemy import or_
 from sqlalchemy.orm import selectinload
 
 purchase = Blueprint("purchase", __name__)
+
+
+def _purchase_gl_code_choices():
+    return (
+        GLCode.query.filter(
+            or_(GLCode.code.like("5%"), GLCode.code.like("6%"))
+        )
+        .order_by(GLCode.code)
+        .all()
+    )
 
 
 def check_negative_invoice_reverse(invoice_obj):
@@ -219,7 +230,7 @@ def create_purchase_order():
             for item in Item.query.filter(Item.id.in_(selected_item_ids)).all()
         }
 
-    codes = GLCode.query.filter(GLCode.code.like("5%"))
+    codes = _purchase_gl_code_choices()
     return render_template(
         "purchase_orders/create_purchase_order.html",
         form=form,
@@ -324,7 +335,7 @@ def edit_purchase_order(po_id):
             for item in Item.query.filter(Item.id.in_(selected_item_ids)).all()
         }
 
-    codes = GLCode.query.filter(GLCode.code.like("5%"))
+    codes = _purchase_gl_code_choices()
     return render_template(
         "purchase_orders/edit_purchase_order.html",
         form=form,
