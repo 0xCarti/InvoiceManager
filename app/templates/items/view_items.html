@@ -289,11 +289,57 @@ document.addEventListener('DOMContentLoaded', function() {
 <script nonce="{{ csp_nonce }}">
 const itemModalEl = document.getElementById('itemModal');
 const itemModalBody = itemModalEl ? itemModalEl.querySelector('.modal-body') : null;
+const scriptNonce = {{ csp_nonce | tojson }};
 let createItemTemplate = '';
 
 if (itemModalBody) {
     createItemTemplate = itemModalBody.innerHTML.trim();
     itemModalBody.innerHTML = '';
+}
+
+function updateModalBody(html) {
+    if (!itemModalBody) {
+        return;
+    }
+
+    const template = document.createElement('template');
+    template.innerHTML = html || '';
+    const fragment = template.content;
+
+    const scripts = fragment.querySelectorAll('script');
+    scripts.forEach((originalScript) => {
+        const newScript = document.createElement('script');
+        Array.from(originalScript.attributes).forEach((attr) => {
+            if (attr.name.toLowerCase() === 'nonce') {
+                return;
+            }
+            newScript.setAttribute(attr.name, attr.value);
+        });
+
+        if (originalScript.src) {
+            const srcValue = originalScript.src;
+            const alreadyLoaded = Array.from(document.querySelectorAll('script[src]'))
+                .some((scriptEl) => scriptEl.src === srcValue);
+            if (!alreadyLoaded) {
+                if (scriptNonce) {
+                    newScript.setAttribute('nonce', scriptNonce);
+                }
+                newScript.src = srcValue;
+                document.head.appendChild(newScript);
+            }
+            originalScript.remove();
+            return;
+        }
+
+        newScript.textContent = originalScript.textContent;
+        if (scriptNonce) {
+            newScript.setAttribute('nonce', scriptNonce);
+        }
+        originalScript.replaceWith(newScript);
+    });
+
+    itemModalBody.innerHTML = '';
+    itemModalBody.appendChild(fragment);
 }
 
 function initializeItemForm() {
@@ -326,7 +372,7 @@ function bindItemForm(actionUrl) {
                 }
                 bootstrap.Modal.getInstance(itemModalEl).hide();
             } else if (data.form_html) {
-                itemModalEl.querySelector('.modal-body').innerHTML = data.form_html;
+                updateModalBody(data.form_html);
                 initializeItemForm();
                 bindItemForm(actionUrl);
             }
@@ -346,7 +392,7 @@ if (createItemBtn) {
         }
         itemModalEl.dataset.mode = 'create';
         itemModalEl.querySelector('.modal-title').textContent = 'Add Item';
-        itemModalBody.innerHTML = createItemTemplate;
+        updateModalBody(createItemTemplate);
         initializeItemForm();
         const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
         modal.show();
@@ -365,7 +411,7 @@ if (itemsTableEl) {
                 .then(html => {
                     itemModalEl.dataset.mode = 'edit';
                     itemModalEl.querySelector('.modal-title').textContent = 'Edit Item';
-                    itemModalEl.querySelector('.modal-body').innerHTML = html;
+                    updateModalBody(html);
                     initializeItemForm();
                     const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
                     modal.show();
@@ -380,7 +426,7 @@ if (itemsTableEl) {
                 .then(html => {
                     itemModalEl.dataset.mode = 'copy';
                     itemModalEl.querySelector('.modal-title').textContent = 'Copy Item';
-                    itemModalEl.querySelector('.modal-body').innerHTML = html;
+                    updateModalBody(html);
                     initializeItemForm();
                     const modal = bootstrap.Modal.getOrCreateInstance(itemModalEl);
                     modal.show();
