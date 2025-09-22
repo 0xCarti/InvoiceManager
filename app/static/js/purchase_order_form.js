@@ -39,6 +39,11 @@
         const newItemUnitsContainer = document.getElementById("new-item-units");
         const addNewItemUnitButton = document.getElementById("add-new-item-unit");
         let newItemUnitIndex = 0;
+        let preparedDragRow = null;
+        let activeDragRow = null;
+        const supportsPointerEvents =
+            typeof window !== "undefined" &&
+            typeof window.PointerEvent !== "undefined";
 
         function syncBaseUnitRow() {
             if (!newItemUnitsContainer) {
@@ -385,33 +390,18 @@
 
             const reorderCol = document.createElement("div");
             reorderCol.classList.add("col-auto");
-            const reorderWrapper = document.createElement("div");
-            reorderWrapper.classList.add("d-flex", "flex-column", "gap-1");
-
-            const moveUpButton = document.createElement("button");
-            moveUpButton.type = "button";
-            moveUpButton.classList.add(
+            const dragButton = document.createElement("button");
+            dragButton.type = "button";
+            dragButton.classList.add(
                 "btn",
                 "btn-outline-secondary",
                 "btn-sm",
-                "move-up"
+                "drag-handle"
             );
-            moveUpButton.setAttribute("aria-label", "Move item up");
-            moveUpButton.textContent = "\u2191";
-
-            const moveDownButton = document.createElement("button");
-            moveDownButton.type = "button";
-            moveDownButton.classList.add(
-                "btn",
-                "btn-outline-secondary",
-                "btn-sm",
-                "move-down"
-            );
-            moveDownButton.setAttribute("aria-label", "Move item down");
-            moveDownButton.textContent = "\u2193";
-
-            reorderWrapper.append(moveUpButton, moveDownButton);
-            reorderCol.appendChild(reorderWrapper);
+            dragButton.setAttribute("aria-label", "Drag to reorder");
+            dragButton.setAttribute("title", "Drag to reorder");
+            dragButton.textContent = "=";
+            reorderCol.appendChild(dragButton);
 
             const removeCol = document.createElement("div");
             removeCol.classList.add("col-auto");
@@ -455,15 +445,47 @@
                 if (positionField) {
                     positionField.value = String(index);
                 }
-                const moveUp = row.querySelector(".move-up");
-                if (moveUp) {
-                    moveUp.disabled = index === 0;
-                }
-                const moveDown = row.querySelector(".move-down");
-                if (moveDown) {
-                    moveDown.disabled = index === rows.length - 1;
-                }
             });
+        }
+
+        function clearPreparedDragRow() {
+            if (!preparedDragRow) {
+                return;
+            }
+            preparedDragRow.removeAttribute("draggable");
+            delete preparedDragRow.dataset.dragPrepared;
+            preparedDragRow = null;
+        }
+
+        function prepareRowForDrag(row) {
+            if (!row) {
+                return;
+            }
+            if (preparedDragRow && preparedDragRow !== row && !activeDragRow) {
+                clearPreparedDragRow();
+            }
+            preparedDragRow = row;
+            row.dataset.dragPrepared = "true";
+            row.setAttribute("draggable", "true");
+        }
+
+        function handleDragPrepare(event) {
+            const handle = event.target.closest(".drag-handle");
+            if (!handle) {
+                return;
+            }
+            const row = handle.closest(".item-row");
+            if (!row) {
+                return;
+            }
+            prepareRowForDrag(row);
+        }
+
+        function handlePointerLikeCleanup() {
+            if (activeDragRow) {
+                return;
+            }
+            clearPreparedDragRow();
         }
 
         function performSearch(input, term) {
@@ -635,6 +657,81 @@
                 }
             });
         }
+
+        if (supportsPointerEvents) {
+            container.addEventListener("pointerdown", handleDragPrepare);
+            container.addEventListener("pointerup", handlePointerLikeCleanup);
+            container.addEventListener("pointercancel", handlePointerLikeCleanup);
+            document.addEventListener("pointerup", handlePointerLikeCleanup);
+        } else {
+            container.addEventListener("mousedown", handleDragPrepare);
+            container.addEventListener("touchstart", handleDragPrepare, {
+                passive: true,
+            });
+            document.addEventListener("mouseup", handlePointerLikeCleanup);
+            document.addEventListener("touchend", handlePointerLikeCleanup);
+            document.addEventListener("touchcancel", handlePointerLikeCleanup);
+        }
+
+        container.addEventListener("dragstart", (event) => {
+            const row = event.target.closest(".item-row");
+            if (!row || row.dataset.dragPrepared !== "true") {
+                event.preventDefault();
+                return;
+            }
+            activeDragRow = row;
+            row.classList.add("dragging");
+            if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData(
+                    "text/plain",
+                    row.dataset.dragPrepared || ""
+                );
+            }
+        });
+
+        container.addEventListener("dragover", (event) => {
+            if (!activeDragRow) {
+                return;
+            }
+            event.preventDefault();
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = "move";
+            }
+            const targetRow = event.target.closest(".item-row");
+            if (!targetRow || targetRow === activeDragRow) {
+                return;
+            }
+            const rect = targetRow.getBoundingClientRect();
+            const offset = event.clientY - rect.top;
+            if (offset < rect.height / 2) {
+                container.insertBefore(activeDragRow, targetRow);
+            } else {
+                container.insertBefore(
+                    activeDragRow,
+                    targetRow.nextElementSibling
+                );
+            }
+        });
+
+        container.addEventListener("drop", (event) => {
+            if (!activeDragRow) {
+                return;
+            }
+            event.preventDefault();
+            updatePositions();
+        });
+
+        container.addEventListener("dragend", () => {
+            if (!activeDragRow) {
+                return;
+            }
+            const row = activeDragRow;
+            row.classList.remove("dragging");
+            activeDragRow = null;
+            clearPreparedDragRow();
+            updatePositions();
+        });
 
         if (newItemUnitsContainer) {
             newItemUnitsContainer.addEventListener("click", (event) => {
@@ -852,20 +949,6 @@
                 const row = target.closest(".item-row");
                 if (row) {
                     row.remove();
-                    updatePositions();
-                }
-            } else if (target.classList.contains("move-up")) {
-                const row = target.closest(".item-row");
-                const previous = row ? row.previousElementSibling : null;
-                if (row && previous) {
-                    row.parentElement.insertBefore(row, previous);
-                    updatePositions();
-                }
-            } else if (target.classList.contains("move-down")) {
-                const row = target.closest(".item-row");
-                const next = row ? row.nextElementSibling : null;
-                if (row && next) {
-                    row.parentElement.insertBefore(next, row);
                     updatePositions();
                 }
             } else if (target.classList.contains("suggestion-option")) {

@@ -40,10 +40,7 @@
             <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data or '' }}"></select></div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col-auto">
-                <div class="d-flex flex-column gap-1">
-                    <button type="button" class="btn btn-outline-secondary btn-sm move-up" aria-label="Move item up">↑</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm move-down" aria-label="Move item down">↓</button>
-                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm drag-handle" aria-label="Drag to reorder" title="Drag to reorder">=</button>
             </div>
             <div class="col-auto">
                 <button type="button" class="btn btn-danger remove-item">Remove</button>
