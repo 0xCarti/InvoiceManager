@@ -192,10 +192,6 @@ class ItemUnit(db.Model):
 
     item = relationship("Item", back_populates="units")
 
-    __table_args__ = (
-        db.UniqueConstraint("item_id", "name", name="_item_unit_name_uc"),
-    )
-
 
 class Transfer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
