@@ -41,6 +41,8 @@
         let newItemUnitIndex = 0;
         let preparedDragRow = null;
         let activeDragRow = null;
+        let skipNextPointerCancel = false;
+        let pointerCancelFallbackTimer = null;
         const supportsPointerEvents =
             typeof window !== "undefined" &&
             typeof window.PointerEvent !== "undefined";
@@ -479,9 +481,56 @@
                 return;
             }
             prepareRowForDrag(row);
+
+            if (supportsPointerEvents && event.type === "pointerdown") {
+                skipNextPointerCancel = true;
+                if (pointerCancelFallbackTimer) {
+                    clearTimeout(pointerCancelFallbackTimer);
+                    pointerCancelFallbackTimer = null;
+                }
+            } else if (!supportsPointerEvents && event.type === "touchstart") {
+                skipNextPointerCancel = true;
+                if (pointerCancelFallbackTimer) {
+                    clearTimeout(pointerCancelFallbackTimer);
+                    pointerCancelFallbackTimer = null;
+                }
+            }
         }
 
-        function handlePointerLikeCleanup() {
+        function handlePointerLikeCleanup(event) {
+            if (event) {
+                const eventType = event.type;
+
+                if (
+                    (eventType === "pointercancel" || eventType === "touchcancel") &&
+                    skipNextPointerCancel
+                ) {
+                    skipNextPointerCancel = false;
+                    if (pointerCancelFallbackTimer) {
+                        clearTimeout(pointerCancelFallbackTimer);
+                    }
+                    pointerCancelFallbackTimer = setTimeout(() => {
+                        pointerCancelFallbackTimer = null;
+                        if (!activeDragRow) {
+                            clearPreparedDragRow();
+                        }
+                    }, 0);
+                    return;
+                }
+
+                if (
+                    eventType === "pointerup" ||
+                    eventType === "mouseup" ||
+                    eventType === "touchend"
+                ) {
+                    skipNextPointerCancel = false;
+                    if (pointerCancelFallbackTimer) {
+                        clearTimeout(pointerCancelFallbackTimer);
+                        pointerCancelFallbackTimer = null;
+                    }
+                }
+            }
+
             if (activeDragRow) {
                 return;
             }
@@ -678,6 +727,11 @@
             if (!row || row.dataset.dragPrepared !== "true") {
                 event.preventDefault();
                 return;
+            }
+            skipNextPointerCancel = false;
+            if (pointerCancelFallbackTimer) {
+                clearTimeout(pointerCancelFallbackTimer);
+                pointerCancelFallbackTimer = null;
             }
             activeDragRow = row;
             row.classList.add("dragging");
