@@ -43,6 +43,35 @@ def test_add_item_multiple_units(client, app):
         assert sum(1 for u in item.units if u.transfer_default) == 1
 
 
+def test_allow_duplicate_unit_names(client, app):
+    create_user(app, "dupunit@example.com")
+    with client:
+        login(client, "dupunit@example.com", "pass")
+        resp = client.post(
+            "/items/add",
+            data={
+                "name": "DuplicateUnits",
+                "base_unit": "each",
+                "gl_code": "5000",
+                "units-0-name": "Bottle",
+                "units-0-factor": 1,
+                "units-0-receiving_default": "y",
+                "units-0-transfer_default": "y",
+                "units-1-name": "Bottle",
+                "units-1-factor": 12,
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+    with app.app_context():
+        item = Item.query.filter_by(name="DuplicateUnits").first()
+        assert item is not None
+        assert len(item.units) == 2
+        assert [u.name for u in sorted(item.units, key=lambda unit: unit.id)].count(
+            "Bottle"
+        ) == 2
+
+
 def test_edit_item_shows_units_once(client, app):
     create_user(app, "editunits@example.com")
     with client:
