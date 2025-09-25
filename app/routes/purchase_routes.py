@@ -410,6 +410,7 @@ def receive_invoice(po_id):
             form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
             form.items[i].position.data = poi.position
+            form.items[i].gl_code.data = 0
     if form.validate_on_submit():
         if not PurchaseOrderItemArchive.query.filter_by(
             purchase_order_id=po.id
@@ -457,6 +458,8 @@ def receive_invoice(po_id):
             quantity = request.form.get(f"items-{index}-quantity", type=float)
             cost = request.form.get(f"items-{index}-cost", type=float)
             position = request.form.get(f"items-{index}-position", type=int)
+            gl_code_id = request.form.get(f"items-{index}-gl_code", type=int)
+            gl_code_id = gl_code_id or None
             if item_id and quantity is not None and cost is not None:
                 item_entries.append(
                     {
@@ -466,6 +469,7 @@ def receive_invoice(po_id):
                         "cost": abs(cost),
                         "position": position,
                         "fallback": fallback_counter,
+                        "gl_code_id": gl_code_id,
                     }
                 )
                 fallback_counter += 1
@@ -500,6 +504,7 @@ def receive_invoice(po_id):
                     cost=cost,
                     prev_cost=prev_cost,
                     position=order_index,
+                    purchase_gl_code_id=entry["gl_code_id"],
                 )
             )
 
@@ -670,9 +675,7 @@ def purchase_invoice_report(invoice_id):
     for it in invoice.items:
         line_total = it.line_total
         item_total += line_total
-        gl = None
-        if it.item:
-            gl = it.item.purchase_gl_code_for_location(invoice.location_id)
+        gl = it.resolved_purchase_gl_code(invoice.location_id)
         code = gl.code if gl and gl.code else None
         description = gl.description if gl and gl.description else ""
         display_code = code or "Unassigned"
