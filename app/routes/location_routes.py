@@ -293,6 +293,34 @@ def location_items(location_id):
     if location_obj is None:
         abort(404)
 
+    # Ensure that every countable item from assigned products has a corresponding
+    # ``LocationStandItem`` record so it can be displayed and managed on this
+    # page. Older data may predate the automatic creation that now happens when
+    # editing locations, which meant the management view could appear empty even
+    # though the stand sheets contained items. Matching the stand sheet behavior
+    # keeps the two views consistent.
+    existing_items = {
+        record.item_id: record for record in location_obj.stand_items
+    }
+    created = False
+    for product_obj in location_obj.products:
+        for recipe_item in product_obj.recipe_items:
+            if not recipe_item.countable:
+                continue
+            if recipe_item.item_id in existing_items:
+                continue
+            new_record = LocationStandItem(
+                location_id=location_id,
+                item_id=recipe_item.item_id,
+                expected_count=0,
+                purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+            )
+            db.session.add(new_record)
+            existing_items[recipe_item.item_id] = new_record
+            created = True
+    if created:
+        db.session.commit()
+
     form = CSRFOnlyForm()
     page = request.args.get("page", 1, type=int)
     per_page = get_per_page()
