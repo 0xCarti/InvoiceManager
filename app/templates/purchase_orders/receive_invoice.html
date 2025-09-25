@@ -39,6 +39,7 @@
             <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data }}"></select></div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col">{{ item.cost(class="form-control cost") }}</div>
+            <div class="col"><span class="gl-code">—</span></div>
             <div class="col"><span class="line-total">0.00</span></div>
             <div class="col-auto">
                 <div class="d-flex flex-column gap-1">
@@ -74,9 +75,10 @@
                 <select name="items-${index}-item" id="items-${index}-item" class="form-control item-select">${itemOptions}</select>
                 <input type="hidden" name="items-${index}-position" class="item-position" value="">
             </div>
-            <div class="col"><select name="items-${index}-unit" id="items-${index}-unit" class="form-control unit-select"></select></div>
+            <div class="col"><select name="items-${index}-unit" id="items-${index}-unit" class="form-control unit-select" data-selected=""></select></div>
             <div class="col"><input type="number" step="any" name="items-${index}-quantity" id="items-${index}-quantity" class="form-control quantity"></div>
             <div class="col"><input type="number" step="any" name="items-${index}-cost" id="items-${index}-cost" class="form-control cost"></div>
+            <div class="col"><span class="gl-code">—</span></div>
             <div class="col"><span class="line-total">0.00</span></div>
             <div class="col-auto">
                 <div class="d-flex flex-column gap-1">
@@ -123,19 +125,43 @@
     function fetchUnits(selectEl, selectedUnitId=null) {
         const itemId = selectEl.value;
         const unitSelect = selectEl.closest('.item-row').querySelector('.unit-select');
+        const row = selectEl.closest('.item-row');
         if (!itemId) {
             unitSelect.innerHTML = '';
+            updateGlCode(row, null);
             return;
         }
-        fetch(`/items/${itemId}/units`).then(r => r.json()).then(data => {
+        const locationField = document.getElementById('location_id');
+        const params = new URLSearchParams();
+        if (locationField && locationField.value) {
+            params.append('location_id', locationField.value);
+        }
+        const url = params.toString() ? `/items/${itemId}/units?${params.toString()}` : `/items/${itemId}/units`;
+        fetch(url).then(r => r.json()).then(data => {
             let opts = '';
             data.units.forEach(u => {
                 const selected = (selectedUnitId && parseInt(selectedUnitId) === u.id) || (!selectedUnitId && u.receiving_default) ? 'selected' : '';
                 opts += `<option value="${u.id}" ${selected}>${u.name}</option>`;
             });
             unitSelect.innerHTML = opts;
+            updateGlCode(row, data.purchase_gl_code);
             fetchCost(selectEl.closest('.item-row'));
         });
+    }
+
+    function updateGlCode(row, glData) {
+        const glSpan = row ? row.querySelector('.gl-code') : null;
+        if (!glSpan) return;
+        if (!glData || !glData.code) {
+            glSpan.textContent = '—';
+            glSpan.dataset.code = '';
+            glSpan.dataset.description = '';
+            return;
+        }
+        const description = glData.description ? ` - ${glData.description}` : '';
+        glSpan.textContent = `${glData.code}${description}`;
+        glSpan.dataset.code = glData.code;
+        glSpan.dataset.description = glData.description || '';
     }
 
     function updateTotals() {
@@ -195,6 +221,22 @@
             updateTotals();
         }
     });
+
+    const locationField = document.getElementById('location_id');
+    if (locationField) {
+        locationField.addEventListener('change', () => {
+            document.querySelectorAll('#items .item-row').forEach(row => {
+                const itemSelect = row.querySelector('.item-select');
+                if (itemSelect && itemSelect.value) {
+                    const unitSelect = row.querySelector('.unit-select');
+                    const selectedUnit = unitSelect ? unitSelect.value : null;
+                    fetchUnits(itemSelect, selectedUnit);
+                } else {
+                    updateGlCode(row, null);
+                }
+            });
+        });
+    }
 
     document.getElementById('items').addEventListener('input', function(e) {
         if (e.target && (e.target.classList.contains('quantity') || e.target.classList.contains('cost'))) {
