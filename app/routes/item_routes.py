@@ -624,6 +624,13 @@ def item_units(item_id):
     item = db.session.get(Item, item_id)
     if item is None:
         abort(404)
+
+    location_id = request.args.get("location_id", type=int)
+    if location_id:
+        gl_obj = item.purchase_gl_code_for_location(location_id)
+    else:
+        gl_obj = item.purchase_gl_code
+
     data = {
         "base_unit": item.base_unit,
         "units": [
@@ -636,6 +643,11 @@ def item_units(item_id):
             }
             for u in item.units
         ],
+        "purchase_gl_code": {
+            "id": gl_obj.id if gl_obj else None,
+            "code": gl_obj.code if gl_obj else "",
+            "description": gl_obj.description if gl_obj and gl_obj.description else "",
+        },
     }
     return jsonify(data)
 
