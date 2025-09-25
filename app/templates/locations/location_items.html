@@ -72,12 +72,16 @@
                         {% if entry.is_protected %}
                             <span class="text-muted" title="This item comes from a product recipe and cannot be removed.">Locked</span>
                         {% else %}
-                            <form method="post" action="{{ url_for('locations.delete_location_item', location_id=location.id, item_id=entry.item_id) }}" class="d-inline">
-                                {{ delete_form.hidden_tag() }}
-                                <input type="hidden" name="page" value="{{ entries.page }}">
-                                <input type="hidden" name="per_page" value="{{ per_page }}">
-                                <button type="submit" class="btn btn-outline-danger btn-sm">Remove</button>
-                            </form>
+                            <input type="hidden" name="page" value="{{ entries.page }}">
+                            <input type="hidden" name="per_page" value="{{ per_page }}">
+                            <button
+                                type="submit"
+                                class="btn btn-outline-danger btn-sm"
+                                formmethod="post"
+                                formaction="{{ url_for('locations.delete_location_item', location_id=location.id, item_id=entry.item_id) }}"
+                            >
+                                Remove
+                            </button>
                         {% endif %}
                     </td>
                 </tr>
