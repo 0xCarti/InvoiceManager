@@ -153,40 +153,146 @@
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const csrfToken = document.getElementById('csrf_token').value;
-    const locationModal = new bootstrap.Modal(document.getElementById('locationModal'));
+    const locationModalElement = document.getElementById('locationModal');
+    const $locationModal = $('#locationModal');
+    const locationModal = new bootstrap.Modal(locationModalElement);
     const copyModal = new bootstrap.Modal(document.getElementById('copyModal'));
+    const productSearchUrl = "{{ url_for('product.search_products') }}";
     let currentSourceId = null;
 
-    $('#addLocationBtn').on('click', function() {
-        $.get('{{ url_for('locations.add_location') }}', function(data) {
-            $('#locationModal .modal-content').html(data);
+    function initProductSelector(modalElement) {
+        const container = modalElement.find('.modal-content');
+        container.off('.productSelector');
+
+        const searchInput = container.find('#productSearch');
+        if (!searchInput.length) {
+            return;
+        }
+
+        const suggestions = container.find('#productSuggestions');
+        const selectedList = container.find('#selectedProducts');
+        const hiddenField = container.find('#products');
+        const selectedProducts = new Map();
+
+        function updateHidden() {
+            hiddenField.val(Array.from(selectedProducts.keys()).join(','));
+        }
+
+        function syncFromDom() {
+            selectedProducts.clear();
+            selectedList.children('li').each(function() {
+                const li = $(this);
+                const id = li.data('id');
+                const name = li.data('name');
+                if (id !== undefined && name !== undefined) {
+                    selectedProducts.set(String(id), name);
+                }
+            });
+            updateHidden();
+        }
+
+        function createListItem(id, name) {
+            return $('<li>')
+                .addClass('list-group-item d-flex justify-content-between align-items-center')
+                .attr('data-id', id)
+                .attr('data-name', name)
+                .append($('<span>').text(name))
+                .append(
+                    $('<button>')
+                        .attr('type', 'button')
+                        .addClass('btn btn-sm btn-danger remove-product')
+                        .text('Remove')
+                );
+        }
+
+        function addProduct(id, name) {
+            const key = String(id);
+            if (!selectedProducts.has(key)) {
+                selectedProducts.set(key, name);
+                selectedList.append(createListItem(id, name));
+                updateHidden();
+            }
+        }
+
+        syncFromDom();
+
+        container.on('keyup.productSelector', '#productSearch', function () {
+            const query = $(this).val() || '';
+            $.get(productSearchUrl, { query: query }, function (response) {
+                const products = Array.isArray(response) ? response : [];
+                const items = products.map(function (product) {
+                    return $('<a>')
+                        .addClass('list-group-item list-group-item-action')
+                        .attr('href', '#')
+                        .attr('data-id', product.id)
+                        .attr('data-name', product.name)
+                        .text(product.name);
+                });
+                suggestions.empty().append(items);
+            });
+        });
+
+        container.on('click.productSelector', '#productSuggestions .list-group-item', function (e) {
+            e.preventDefault();
+            const id = $(this).data('id');
+            const name = $(this).data('name');
+            if (id !== undefined && name !== undefined) {
+                addProduct(id, name);
+                searchInput.val('');
+                suggestions.empty();
+            }
+        });
+
+        container.on('click.productSelector', '.remove-product', function () {
+            const li = $(this).closest('li');
+            const id = li.data('id');
+            if (id !== undefined) {
+                selectedProducts.delete(String(id));
+            }
+            li.remove();
+            updateHidden();
+        });
+    }
+
+    function loadLocationForm(url) {
+        $.get(url, function(data) {
+            const modalContent = $locationModal.find('.modal-content');
+            modalContent.html(data);
+            initProductSelector($locationModal);
             locationModal.show();
         });
+    }
+
+    $('#addLocationBtn').on('click', function() {
+        loadLocationForm('{{ url_for('locations.add_location') }}');
     });
 
     $(document).on('click', '.edit-location-btn', function() {
         const id = $(this).data('id');
-        $.get(`/locations/edit/${id}`, function(data) {
-            $('#locationModal .modal-content').html(data);
-            locationModal.show();
-        });
+        loadLocationForm(`/locations/edit/${id}`);
     });
 
     $(document).on('submit', '#locationForm', function(e) {
         e.preventDefault();
         const form = $(this);
-        $.post(form.attr('action'), form.serialize(), function(response) {
-            if (response.success) {
-                if (response.action === 'create') {
-                    addRow(response.location);
+        const modalContent = $locationModal.find('.modal-content');
+        $.post(form.attr('action'), form.serialize())
+            .done(function(response) {
+                if (response && typeof response === 'object' && response.success) {
+                    if (response.action === 'create') {
+                        addRow(response.location);
+                    } else {
+                        updateRow(response.location);
+                    }
+                    locationModal.hide();
                 } else {
-                    updateRow(response.location);
+                    modalContent.html(response);
+                    initProductSelector($locationModal);
                 }
-                locationModal.hide();
-            }
-        }).fail(function(xhr) {
-            alert('Error: ' + (xhr.responseJSON?.errors ? JSON.stringify(xhr.responseJSON.errors) : 'Unknown error'));
-        });
+            })
+            .fail(function(xhr) {
+                alert('Error: ' + (xhr.responseJSON?.errors ? JSON.stringify(xhr.responseJSON.errors) : 'Unknown error'));
+            });
     });
 
     function addRow(loc) {
