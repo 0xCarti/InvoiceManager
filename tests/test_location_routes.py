@@ -1,3 +1,6 @@
+from contextlib import contextmanager
+
+from flask import template_rendered
 from werkzeug.security import generate_password_hash
 
 from app import db
@@ -21,7 +24,19 @@ def setup_data(app):
             password=generate_password_hash("pass"),
             active=True,
         )
-        gl = GLCode.query.first()
+        gl = (
+            GLCode.query.filter(GLCode.code.like("5%"))
+            .order_by(GLCode.id)
+            .first()
+            or GLCode.query.filter(GLCode.code.like("6%"))
+            .order_by(GLCode.id)
+            .first()
+            or GLCode.query.first()
+        )
+        if gl is None or not str(gl.code or "").startswith(("5", "6")):
+            gl = GLCode(code="5000")
+            db.session.add(gl)
+            db.session.flush()
         item = Item(
             name="Flour",
             base_unit="gram",
@@ -50,6 +65,20 @@ def setup_data(app):
         )
         db.session.commit()
         return user.email, product.id
+
+
+@contextmanager
+def captured_templates(app):
+    recorded = []
+
+    def record(sender, template, context, **extra):
+        recorded.append((template, context))
+
+    template_rendered.connect(record, app)
+    try:
+        yield recorded
+    finally:
+        template_rendered.disconnect(record, app)
 
 
 def test_location_flow(client, app):
@@ -136,6 +165,87 @@ def test_location_filters(client, app):
         )
         assert b"OldLoc" in resp.data
         assert b"ActiveLoc" not in resp.data
+
+
+def test_location_items_manage_gl_overrides(client, app):
+    email, _ = setup_data(app)
+    with app.app_context():
+        gl_default = (
+            GLCode.query.filter(GLCode.code.like("5%"))
+            .order_by(GLCode.id)
+            .first()
+        )
+        if gl_default is None:
+            gl_default = GLCode(code="5002")
+            db.session.add(gl_default)
+            db.session.flush()
+        gl_override = GLCode.query.filter_by(code="5001").first()
+        if gl_override is None:
+            gl_override = GLCode(code="5001")
+            db.session.add(gl_override)
+            db.session.flush()
+        item_one = Item.query.filter_by(name="Flour").first()
+        item_one.purchase_gl_code_id = gl_default.id
+        item_two = Item(
+            name="Sugar",
+            base_unit="gram",
+            purchase_gl_code_id=gl_default.id,
+        )
+        location = Location(name="Bakery")
+        db.session.add_all([item_two, location])
+        db.session.flush()
+        db.session.add_all(
+            [
+                LocationStandItem(
+                    location_id=location.id,
+                    item_id=item_one.id,
+                    expected_count=3,
+                    purchase_gl_code_id=gl_override.id,
+                ),
+                LocationStandItem(
+                    location_id=location.id,
+                    item_id=item_two.id,
+                    expected_count=7,
+                ),
+            ]
+        )
+        db.session.commit()
+        location_id = location.id
+        first_item_id = item_one.id
+        second_item_id = item_two.id
+        override_id = gl_override.id
+        default_id = gl_default.id
+    with client:
+        login(client, email, "pass")
+        with captured_templates(app) as templates:
+            resp = client.get(f"/locations/{location_id}/items")
+            assert resp.status_code == 200
+            template, context = templates[0]
+            assert template.name == "locations/location_items.html"
+            assert context["location"].id == location_id
+            assert context["entries"].total == 2
+            assert any(gl.id == default_id for gl in context["purchase_gl_codes"])
+            assert "per_page" in context["pagination_args"]
+            assert context["pagination_args"]["per_page"] == str(context["per_page"])
+        resp = client.post(
+            f"/locations/{location_id}/items?page=1",
+            data={
+                f"location_gl_code_{first_item_id}": "",
+                f"location_gl_code_{second_item_id}": str(override_id),
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert b"Item GL codes updated successfully" in resp.data
+    with app.app_context():
+        first = LocationStandItem.query.filter_by(
+            location_id=location_id, item_id=first_item_id
+        ).first()
+        second = LocationStandItem.query.filter_by(
+            location_id=location_id, item_id=second_item_id
+        ).first()
+        assert first.purchase_gl_code_id is None
+        assert second.purchase_gl_code_id == override_id
 
 
 def test_copy_stand_sheet_overwrites_and_supports_multiple_targets(client, app):

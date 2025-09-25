@@ -11,8 +11,10 @@ from flask import (
 from flask_login import login_required
 
 from app import db
-from app.forms import DeleteForm, LocationForm
-from app.models import Location, LocationStandItem, Product
+from sqlalchemy.orm import selectinload
+
+from app.forms import CSRFOnlyForm, DeleteForm, ItemForm, LocationForm
+from app.models import GLCode, Item, Location, LocationStandItem, Product
 from app.utils.activity import log_activity
 from app.utils.pagination import build_pagination_args, get_per_page
 
@@ -271,6 +273,87 @@ def view_stand_sheet(location_id):
         "locations/stand_sheet.html",
         location=location,
         stand_items=stand_items,
+    )
+
+
+@location.route("/locations/<int:location_id>/items", methods=["GET", "POST"])
+@login_required
+def location_items(location_id):
+    """Manage stand sheet items and GL overrides for a location."""
+    location_obj = (
+        Location.query.options(
+            selectinload(Location.stand_items)
+            .selectinload(LocationStandItem.item),
+            selectinload(Location.stand_items)
+            .selectinload(LocationStandItem.purchase_gl_code),
+        )
+        .filter_by(id=location_id)
+        .first()
+    )
+    if location_obj is None:
+        abort(404)
+
+    form = CSRFOnlyForm()
+    page = request.args.get("page", 1, type=int)
+    per_page = get_per_page()
+
+    query = (
+        LocationStandItem.query.join(Item)
+        .outerjoin(GLCode, LocationStandItem.purchase_gl_code_id == GLCode.id)
+        .options(
+            selectinload(LocationStandItem.item),
+            selectinload(LocationStandItem.purchase_gl_code),
+        )
+        .filter(LocationStandItem.location_id == location_id)
+        .order_by(Item.name)
+    )
+
+    if form.validate_on_submit():
+        updated = 0
+        for record in query.paginate(page=page, per_page=per_page).items:
+            field_name = f"location_gl_code_{record.item_id}"
+            raw_value = request.form.get(field_name, "").strip()
+            if raw_value:
+                try:
+                    new_value = int(raw_value)
+                except ValueError:
+                    continue
+            else:
+                new_value = None
+            current_value = record.purchase_gl_code_id or None
+            if new_value != current_value:
+                record.purchase_gl_code_id = new_value
+                updated += 1
+        if updated:
+            db.session.commit()
+            flash("Item GL codes updated successfully.", "success")
+        else:
+            flash("No changes were made to item GL codes.", "info")
+        return redirect(
+            url_for(
+                "locations.location_items",
+                location_id=location_id,
+                page=page,
+                per_page=per_page,
+            )
+        )
+
+    entries = query.paginate(page=page, per_page=per_page)
+    total_expected = (
+        db.session.query(db.func.sum(LocationStandItem.expected_count))
+        .filter_by(location_id=location_id)
+        .scalar()
+        or 0
+    )
+    return render_template(
+        "locations/location_items.html",
+        location=location_obj,
+        entries=entries,
+        total=total_expected,
+        per_page=per_page,
+        form=form,
+        purchase_gl_codes=ItemForm._fetch_purchase_gl_codes(),
+        pagination_args=build_pagination_args(per_page),
     )
 
 
