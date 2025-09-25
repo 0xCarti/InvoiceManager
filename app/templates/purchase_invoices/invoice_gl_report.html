@@ -1,6 +1,18 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="container mt-4">
+<style>
+@media print {
+    .purchase-invoice-report .row {
+        flex-wrap: wrap !important;
+    }
+
+    .purchase-invoice-report dt[class*='col-'],
+    .purchase-invoice-report dd[class*='col-'] {
+        max-width: 100% !important;
+    }
+}
+</style>
+<div class="container mt-4 purchase-invoice-report">
     <h2>Purchase Invoice Report</h2>
     <div class="card mb-4">
         <div class="card-body">
