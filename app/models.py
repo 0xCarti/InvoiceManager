@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from flask_login import UserMixin
 from sqlalchemy import ForeignKeyConstraint, func, select
@@ -528,10 +529,35 @@ class PurchaseInvoiceItem(db.Model):
     prev_cost = db.Column(db.Float, nullable=False, default=0.0)
     item = relationship("Item")
     unit = relationship("ItemUnit")
+    purchase_gl_code_id = db.Column(
+        db.Integer,
+        db.ForeignKey("gl_code.id"),
+        nullable=True,
+    )
+    purchase_gl_code = relationship(
+        "GLCode", foreign_keys=[purchase_gl_code_id]
+    )
 
     @property
     def line_total(self):
         return self.quantity * abs(self.cost)
+
+    def resolved_purchase_gl_code(self, location_id: Optional[int] = None):
+        """Return the effective purchase GL code for this invoice line."""
+        if self.purchase_gl_code:
+            return self.purchase_gl_code
+
+        if not self.item:
+            return None
+
+        loc_id = location_id
+        if loc_id is None and self.invoice is not None:
+            loc_id = self.invoice.location_id
+
+        if loc_id is not None:
+            return self.item.purchase_gl_code_for_location(loc_id)
+
+        return self.item.purchase_gl_code
 
 
 class PurchaseOrderItemArchive(db.Model):

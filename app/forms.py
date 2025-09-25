@@ -62,6 +62,28 @@ def load_unit_choices():
     return [(u.id, u.name) for u in ItemUnit.query.all()]
 
 
+def load_purchase_gl_code_choices():
+    """Return purchase GL code options filtered for expense accounts."""
+    if "purchase_gl_code_choices" not in g:
+        codes = (
+            GLCode.query.filter(
+                or_(GLCode.code.like("5%"), GLCode.code.like("6%"))
+            )
+            .order_by(GLCode.code)
+            .all()
+        )
+        g.purchase_gl_code_choices = [
+            (0, "Use Default GL Code")
+        ] + [
+            (
+                code.id,
+                f"{code.code} - {code.description}" if code.description else code.code,
+            )
+            for code in codes
+        ]
+    return g.purchase_gl_code_choices
+
+
 @lru_cache(maxsize=1)
 def get_timezone_choices():
     """Return a sorted list of available time zones.
@@ -521,6 +543,12 @@ class InvoiceItemReceiveForm(FlaskForm):
     quantity = DecimalField("Quantity", validators=[InputRequired()])
     cost = DecimalField("Cost", validators=[InputRequired()])
     position = HiddenField("Position")
+    gl_code = SelectField(
+        "GL Code",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+    )
 
 
 class ReceiveInvoiceForm(FlaskForm):
@@ -545,9 +573,11 @@ class ReceiveInvoiceForm(FlaskForm):
         ]
         items = load_item_choices()
         units = load_unit_choices()
+        gl_codes = load_purchase_gl_code_choices()
         for item_form in self.items:
             item_form.item.choices = items
             item_form.unit.choices = units
+            item_form.gl_code.choices = gl_codes
 
 
 class DeleteForm(FlaskForm):
