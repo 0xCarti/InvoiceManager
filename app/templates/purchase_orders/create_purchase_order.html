@@ -25,10 +25,9 @@
         <div id="items" data-next-index="{{ form.items|length }}">
         {% for item in form.items %}
         {% set item_id = item.item.data %}
-        {% set selected_name = '' %}
-        {% if item_id %}
-            {% set selected_name = item_lookup.get(item_id|int, '') %}
-        {% endif %}
+        {% set item_info = item_lookup.get(item_id|int) if item_id else None %}
+        {% set selected_name = item_info['name'] if item_info else '' %}
+        {% set selected_gl_code = item_info['gl_code'] if item_info else '' %}
         {% set input_value = request.form.get('items-' ~ loop.index0 ~ '-item-label', selected_name) %}
         <div class="row g-2 mt-2 item-row align-items-center">
             <div class="col position-relative">
@@ -36,6 +35,9 @@
                 {{ item.item(class="item-id-field") }}
                 <input type="hidden" name="items-{{ loop.index0 }}-position" class="item-position" value="{{ item.position.data or loop.index0 }}">
                 <div class="list-group suggestion-list d-none position-absolute w-100" style="z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
+            </div>
+            <div class="col-auto gl-code-column">
+                <span class="gl-code-display badge bg-light text-dark" data-gl-code="{{ selected_gl_code }}">{{ selected_gl_code or 'Unassigned' }}</span>
             </div>
             <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data or '' }}"></select></div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>

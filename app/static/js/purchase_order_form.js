@@ -17,6 +17,29 @@
         const saveNewItemButton = config.saveNewItemButton || null;
         const newItemModalEl = config.newItemModal || null;
         const searchTimers = new WeakMap();
+        const defaultGlCodeLabel = "Unassigned";
+
+        function formatGlCode(value) {
+            if (typeof value === "string") {
+                const trimmed = value.trim();
+                if (trimmed) {
+                    return trimmed;
+                }
+            }
+            return defaultGlCodeLabel;
+        }
+
+        function updateRowGlCode(row, glCode) {
+            if (!row) {
+                return;
+            }
+            const display = row.querySelector(".gl-code-display");
+            if (!display) {
+                return;
+            }
+            display.textContent = formatGlCode(glCode || "");
+            display.dataset.glCode = glCode || "";
+        }
 
         let nextIndex = toNumber(
             config.nextIndex !== undefined
@@ -370,6 +393,19 @@
             suggestionList.style.overflowY = "auto";
             itemCol.appendChild(suggestionList);
 
+            const glCodeCol = document.createElement("div");
+            glCodeCol.classList.add("col-auto", "gl-code-column");
+            const glCodeBadge = document.createElement("span");
+            glCodeBadge.classList.add(
+                "gl-code-display",
+                "badge",
+                "bg-light",
+                "text-dark"
+            );
+            glCodeBadge.textContent = formatGlCode(options.glCode || "");
+            glCodeBadge.dataset.glCode = options.glCode || "";
+            glCodeCol.appendChild(glCodeBadge);
+
             const unitCol = document.createElement("div");
             unitCol.classList.add("col");
             const unitSelect = document.createElement("select");
@@ -413,7 +449,14 @@
             removeButton.textContent = "Remove";
             removeCol.appendChild(removeButton);
 
-            row.append(itemCol, unitCol, quantityCol, reorderCol, removeCol);
+            row.append(
+                itemCol,
+                glCodeCol,
+                unitCol,
+                quantityCol,
+                reorderCol,
+                removeCol
+            );
             return row;
         }
 
@@ -424,6 +467,8 @@
             container.dataset.nextIndex = String(nextIndex);
 
             updatePositions();
+
+            updateRowGlCode(row, options.glCode || "");
 
             const unitSelect = row.querySelector(".unit-select");
             if (options.itemId) {
@@ -573,6 +618,7 @@
                         option.textContent = item.name;
                         option.dataset.itemId = item.id;
                         option.dataset.itemName = item.name;
+                        option.dataset.glCode = item.gl_code || "";
                         suggestionList.appendChild(option);
                     });
 
@@ -595,6 +641,7 @@
             if (hiddenField) {
                 hiddenField.value = "";
             }
+            updateRowGlCode(row, "");
             clearUnits(unitSelect);
             closeAllSuggestionLists(suggestionList);
 
@@ -630,6 +677,7 @@
             if (searchInput) {
                 searchInput.value = option.dataset.itemName || "";
             }
+            updateRowGlCode(row, option.dataset.glCode || "");
             clearSuggestions(suggestionList);
             fetchUnits(option.dataset.itemId, unitSelect);
 
@@ -946,6 +994,7 @@
                         const row = addRow({
                             itemId: data.id,
                             itemName: data.name,
+                            glCode: data.gl_code || "",
                         });
                         const unitSelect = row.querySelector(".unit-select");
                         fetchUnits(data.id, unitSelect);

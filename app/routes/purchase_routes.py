@@ -226,8 +226,15 @@ def create_purchase_order():
     item_lookup = {}
     if selected_item_ids:
         item_lookup = {
-            item.id: item.name
-            for item in Item.query.filter(Item.id.in_(selected_item_ids)).all()
+            item.id: {
+                "name": item.name,
+                "gl_code": item.purchase_gl_code.code
+                if item.purchase_gl_code
+                else "",
+            }
+            for item in Item.query.options(selectinload(Item.purchase_gl_code))
+            .filter(Item.id.in_(selected_item_ids))
+            .all()
         }
 
     codes = _purchase_gl_code_choices()
@@ -331,8 +338,15 @@ def edit_purchase_order(po_id):
     item_lookup = {}
     if selected_item_ids:
         item_lookup = {
-            item.id: item.name
-            for item in Item.query.filter(Item.id.in_(selected_item_ids)).all()
+            item.id: {
+                "name": item.name,
+                "gl_code": item.purchase_gl_code.code
+                if item.purchase_gl_code
+                else "",
+            }
+            for item in Item.query.options(selectinload(Item.purchase_gl_code))
+            .filter(Item.id.in_(selected_item_ids))
+            .all()
         }
 
     codes = _purchase_gl_code_choices()
