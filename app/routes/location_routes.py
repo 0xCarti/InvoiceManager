@@ -13,12 +13,40 @@ from flask_login import login_required
 from app import db
 from sqlalchemy.orm import selectinload
 
-from app.forms import CSRFOnlyForm, DeleteForm, ItemForm, LocationForm
+from app.forms import (
+    CSRFOnlyForm,
+    DeleteForm,
+    ItemForm,
+    LocationForm,
+    LocationItemAddForm,
+)
 from app.models import GLCode, Item, Location, LocationStandItem, Product
 from app.utils.activity import log_activity
 from app.utils.pagination import build_pagination_args, get_per_page
 
 location = Blueprint("locations", __name__)
+
+
+def _protected_location_item_ids(location_obj: Location) -> set[int]:
+    """Return item ids that cannot be removed from the location."""
+
+    protected = set()
+    for product_obj in location_obj.products:
+        for recipe_item in product_obj.recipe_items:
+            if recipe_item.countable:
+                protected.add(recipe_item.item_id)
+    return protected
+
+
+def _location_items_redirect(location_id: int, page: str | None, per_page: str | None):
+    """Redirect back to the location items view preserving pagination."""
+
+    args = {"location_id": location_id}
+    if page and page.isdigit():
+        args["page"] = int(page)
+    if per_page and per_page.isdigit():
+        args["per_page"] = int(per_page)
+    return redirect(url_for("locations.location_items", **args))
 
 
 @location.route("/locations/add", methods=["GET", "POST"])
@@ -321,9 +349,21 @@ def location_items(location_id):
     if created:
         db.session.commit()
 
+    protected_item_ids = _protected_location_item_ids(location_obj)
     form = CSRFOnlyForm()
+    add_form = LocationItemAddForm()
+    delete_form = DeleteForm()
     page = request.args.get("page", 1, type=int)
     per_page = get_per_page()
+
+    available_choices = [
+        (item.id, item.name)
+        for item in Item.query.filter_by(archived=False)
+        .order_by(Item.name)
+        .all()
+        if item.id not in existing_items
+    ]
+    add_form.item_id.choices = available_choices
 
     query = (
         LocationStandItem.query.join(Item)
@@ -367,6 +407,8 @@ def location_items(location_id):
         )
 
     entries = query.paginate(page=page, per_page=per_page)
+    for record in entries.items:
+        record.is_protected = record.item_id in protected_item_ids
     total_expected = (
         db.session.query(db.func.sum(LocationStandItem.expected_count))
         .filter_by(location_id=location_id)
@@ -380,9 +422,124 @@ def location_items(location_id):
         total=total_expected,
         per_page=per_page,
         form=form,
+        add_form=add_form,
+        delete_form=delete_form,
+        can_add_items=bool(available_choices),
         purchase_gl_codes=ItemForm._fetch_purchase_gl_codes(),
         pagination_args=build_pagination_args(per_page),
     )
+
+
+@location.route("/locations/<int:location_id>/items/add", methods=["POST"])
+@login_required
+def add_location_item(location_id: int):
+    """Add a standalone item to a location's stand sheet."""
+
+    location_obj = (
+        Location.query.options(selectinload(Location.stand_items))
+        .filter_by(id=location_id)
+        .first()
+    )
+    if location_obj is None:
+        abort(404)
+
+    add_form = LocationItemAddForm()
+    page = request.form.get("page")
+    per_page = request.form.get("per_page")
+
+    existing_item_ids = {
+        record.item_id for record in location_obj.stand_items
+    }
+    available_choices = [
+        (item.id, item.name)
+        for item in Item.query.filter_by(archived=False)
+        .order_by(Item.name)
+        .all()
+        if item.id not in existing_item_ids
+    ]
+    add_form.item_id.choices = available_choices
+
+    if not available_choices:
+        flash("There are no additional items available to add.", "info")
+        return _location_items_redirect(location_id, page, per_page)
+
+    if not add_form.validate_on_submit():
+        flash("Unable to add item to the location.", "error")
+        return _location_items_redirect(location_id, page, per_page)
+
+    item_id = add_form.item_id.data
+    if item_id in existing_item_ids:
+        flash("This item is already tracked at the location.", "info")
+        return _location_items_redirect(location_id, page, per_page)
+
+    item = db.session.get(Item, item_id)
+    if item is None or item.archived:
+        flash("Selected item is no longer available.", "error")
+        return _location_items_redirect(location_id, page, per_page)
+
+    expected = add_form.expected_count.data or 0
+    item_name = item.name
+    new_record = LocationStandItem(
+        location_id=location_id,
+        item_id=item_id,
+        expected_count=float(expected),
+        purchase_gl_code_id=item.purchase_gl_code_id,
+    )
+    db.session.add(new_record)
+    db.session.commit()
+    log_activity(
+        f"Added item {item_name} to location {location_obj.name}"
+    )
+    flash("Item added to location.", "success")
+    return _location_items_redirect(location_id, page, per_page)
+
+
+@location.route(
+    "/locations/<int:location_id>/items/<int:item_id>/delete",
+    methods=["POST"],
+)
+@login_required
+def delete_location_item(location_id: int, item_id: int):
+    """Remove a removable item from a location's stand sheet."""
+
+    location_obj = (
+        Location.query.options(selectinload(Location.products))
+        .filter_by(id=location_id)
+        .first()
+    )
+    if location_obj is None:
+        abort(404)
+
+    form = DeleteForm()
+    page = request.form.get("page")
+    per_page = request.form.get("per_page")
+    if not form.validate_on_submit():
+        flash("Unable to remove the item from the location.", "error")
+        return _location_items_redirect(location_id, page, per_page)
+
+    record = LocationStandItem.query.filter_by(
+        location_id=location_id, item_id=item_id
+    ).first()
+    if record is None:
+        flash("Item not found on location.", "error")
+        return _location_items_redirect(location_id, page, per_page)
+
+    protected_item_ids = _protected_location_item_ids(location_obj)
+    if item_id in protected_item_ids:
+        flash(
+            "This item is required by a product recipe and cannot be removed.",
+            "error",
+        )
+        return _location_items_redirect(location_id, page, per_page)
+
+    item_name = record.item.name
+    db.session.delete(record)
+    db.session.commit()
+    log_activity(
+        f"Removed item {item_name} from location {location_obj.name}"
+    )
+    flash("Item removed from location.", "success")
+    return _location_items_redirect(location_id, page, per_page)
 
 
 @location.route("/locations")

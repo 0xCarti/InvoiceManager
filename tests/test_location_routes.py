@@ -248,6 +248,85 @@ def test_location_items_manage_gl_overrides(client, app):
         assert second.purchase_gl_code_id == override_id
 
 
+def test_location_items_add_and_remove_item(client, app):
+    email, _ = setup_data(app)
+    with app.app_context():
+        location = Location(name="Warehouse")
+        extra_item = Item(name="Napkins", base_unit="each")
+        db.session.add_all([location, extra_item])
+        db.session.commit()
+        location_id = location.id
+        extra_item_id = extra_item.id
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            f"/locations/{location_id}/items/add",
+            data={"item_id": extra_item_id, "expected_count": "4"},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert b"Item added to location" in resp.data
+
+    with app.app_context():
+        record = LocationStandItem.query.filter_by(
+            location_id=location_id, item_id=extra_item_id
+        ).first()
+        assert record is not None
+        assert record.expected_count == 4
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            f"/locations/{location_id}/items/{extra_item_id}/delete",
+            data={"submit": "Delete"},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert b"Item removed from location" in resp.data
+
+    with app.app_context():
+        assert (
+            LocationStandItem.query.filter_by(
+                location_id=location_id, item_id=extra_item_id
+            ).first()
+            is None
+        )
+
+
+def test_location_items_cannot_remove_recipe_item(client, app):
+    email, prod_id = setup_data(app)
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            "/locations/add",
+            data={"name": "Kitchen", "products": str(prod_id)},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        location = Location.query.filter_by(name="Kitchen").first()
+        assert location is not None
+        location_id = location.id
+        protected_item_id = location.stand_items[0].item_id
+
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            f"/locations/{location_id}/items/{protected_item_id}/delete",
+            data={"submit": "Delete"},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert b"cannot be removed" in resp.data
+
+    with app.app_context():
+        assert LocationStandItem.query.filter_by(
+            location_id=location_id, item_id=protected_item_id
+        ).count() == 1
+
+
 def test_copy_stand_sheet_overwrites_and_supports_multiple_targets(client, app):
     email, prod_id = setup_data(app)
     with app.app_context():
