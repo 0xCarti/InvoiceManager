@@ -121,6 +121,26 @@ class LocationForm(FlaskForm):
     submit = SubmitField("Submit")
 
 
+class LocationItemAddForm(FlaskForm):
+    """Form used to add standalone items to a location."""
+
+    item_id = SelectField(
+        "Item", coerce=int, validators=[DataRequired()], validate_choice=False
+    )
+    expected_count = DecimalField(
+        "Expected Count", validators=[Optional()], places=None, default=0
+    )
+    submit = SubmitField("Add Item")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Default choices are populated with all active items. Views using this
+        # form typically override ``item_id.choices`` to remove already-added
+        # items, but setting the base list here ensures the field works when the
+        # view does not provide its own list.
+        self.item_id.choices = load_item_choices()
+
+
 class ItemUnitForm(FlaskForm):
     name = StringField("Unit Name", validators=[DataRequired()])
     factor = DecimalField("Factor", validators=[InputRequired()])
