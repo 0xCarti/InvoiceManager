@@ -18,7 +18,14 @@
             <input type="text" id="productSearch" class="form-control" placeholder="Enter product name" autocomplete="off">
             <div id="productSuggestions" class="list-group"></div>
         </div>
-        <ul id="selectedProducts" class="list-group mb-3"></ul>
+        <ul id="selectedProducts" class="list-group mb-3">
+            {% for product in selected_products %}
+            <li class="list-group-item d-flex justify-content-between align-items-center" data-id="{{ product.id }}" data-name="{{ product.name }}">
+                <span>{{ product.name }}</span>
+                <button type="button" class="btn btn-sm btn-danger remove-product">Remove</button>
+            </li>
+            {% endfor %}
+        </ul>
         {{ form.products(id="products") }}
     </div>
     <div class="modal-footer">
@@ -29,8 +36,8 @@
 <script nonce="{{ csp_nonce }}">
 $(document).ready(function () {
     var selectedProducts = {};
-    var preselected = {{ selected_products|tojson|safe }};
-    preselected.forEach(function(p) { addProduct(p.id, p.name); });
+
+    syncFromDom();
 
     $('#productSearch').keyup(function () {
         var query = $(this).val();
@@ -62,15 +69,41 @@ $(document).ready(function () {
     function addProduct(id, name) {
         if (!selectedProducts[id]) {
             selectedProducts[id] = name;
-            var li = '<li class="list-group-item d-flex justify-content-between align-items-center" data-id="' + id + '">' + name + '<button type="button" class="btn btn-sm btn-danger remove-product">Remove</button></li>';
-            $('#selectedProducts').append(li);
+            $('#selectedProducts').append(createListItem(id, name));
             updateHidden();
         }
+    }
+
+    function createListItem(id, name) {
+        return $('<li>')
+            .addClass('list-group-item d-flex justify-content-between align-items-center')
+            .attr('data-id', id)
+            .attr('data-name', name)
+            .append($('<span>').text(name))
+            .append(
+                $('<button>')
+                    .attr('type', 'button')
+                    .addClass('btn btn-sm btn-danger remove-product')
+                    .text('Remove')
+            );
     }
 
     function updateHidden() {
         var ids = Object.keys(selectedProducts);
         $('#products').val(ids.join(','));
+    }
+
+    function syncFromDom() {
+        selectedProducts = {};
+        $('#selectedProducts li').each(function () {
+            var li = $(this);
+            var id = li.data('id');
+            var name = li.data('name');
+            if (id !== undefined) {
+                selectedProducts[id] = name;
+            }
+        });
+        updateHidden();
     }
 });
 </script>
