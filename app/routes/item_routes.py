@@ -24,6 +24,7 @@ from app.models import (
     InvoiceProduct,
     Item,
     ItemUnit,
+    Location,
     LocationStandItem,
     Product,
     ProductRecipeItem,
@@ -243,18 +244,58 @@ def view_item(item_id):
     )
 
 
-@item.route("/items/<int:item_id>/locations")
+@item.route("/items/<int:item_id>/locations", methods=["GET", "POST"])
 @login_required
 def item_locations(item_id):
     """Show all locations holding a specific item and their quantities."""
     item_obj = db.session.get(Item, item_id)
     if item_obj is None:
         abort(404)
+    form = CSRFOnlyForm()
     page = request.args.get("page", 1, type=int)
     per_page = get_per_page()
-    entries = LocationStandItem.query.filter_by(item_id=item_id).paginate(
-        page=page, per_page=per_page
+
+    query = (
+        LocationStandItem.query.join(Location)
+        .options(
+            selectinload(LocationStandItem.location),
+            selectinload(LocationStandItem.purchase_gl_code),
+        )
+        .filter(LocationStandItem.item_id == item_id)
+        .order_by(Location.name)
     )
+
+    if form.validate_on_submit():
+        updated = 0
+        for record in query.paginate(page=page, per_page=per_page).items:
+            field_name = f"location_gl_code_{record.location_id}"
+            raw_value = request.form.get(field_name, "").strip()
+            if raw_value:
+                try:
+                    new_value = int(raw_value)
+                except ValueError:
+                    continue
+            else:
+                new_value = None
+            current_value = record.purchase_gl_code_id or None
+            if new_value != current_value:
+                record.purchase_gl_code_id = new_value
+                updated += 1
+        if updated:
+            db.session.commit()
+            flash("Location GL codes updated successfully.", "success")
+        else:
+            flash("No changes were made to location GL codes.", "info")
+        return redirect(
+            url_for(
+                "item.item_locations",
+                item_id=item_id,
+                page=page,
+                per_page=per_page,
+            )
+        )
+
+    entries = query.paginate(page=page, per_page=per_page)
     total = (
         db.session.query(db.func.sum(LocationStandItem.expected_count))
         .filter_by(item_id=item_id)
@@ -267,6 +308,8 @@ def item_locations(item_id):
         entries=entries,
         total=total,
         per_page=per_page,
+        form=form,
+        purchase_gl_codes=ItemForm._fetch_purchase_gl_codes(),
         pagination_args=build_pagination_args(per_page),
     )
 
@@ -371,6 +414,17 @@ def edit_item(item_id):
     item = db.session.get(Item, item_id)
     if item is None:
         abort(404)
+    location_stand_items = (
+        LocationStandItem.query.join(Location)
+        .options(
+            selectinload(LocationStandItem.location),
+            selectinload(LocationStandItem.purchase_gl_code),
+        )
+        .filter(LocationStandItem.item_id == item.id)
+        .order_by(Location.name)
+        .all()
+    )
+    purchase_gl_codes = ItemForm._fetch_purchase_gl_codes()
     form = ItemForm(obj=item)
     if request.method == "GET":
         form.gl_code.data = item.gl_code
@@ -432,6 +486,17 @@ def edit_item(item_id):
                     receiving_set = True
                 if transfer_default:
                     transfer_set = True
+        for record in location_stand_items:
+            field_name = f"location_gl_code_{record.location_id}"
+            raw_value = request.form.get(field_name, "").strip()
+            if raw_value:
+                try:
+                    new_value = int(raw_value)
+                except ValueError:
+                    continue
+            else:
+                new_value = None
+            record.purchase_gl_code_id = new_value
         db.session.commit()
         log_activity(f"Edited item {item.id}")
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -441,11 +506,28 @@ def edit_item(item_id):
         return redirect(url_for("item.view_items"))
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         if request.method == "POST":
-            form_html = render_template("items/item_form.html", form=form, item=item)
+            form_html = render_template(
+                "items/item_form.html",
+                form=form,
+                item=item,
+                location_stand_items=location_stand_items,
+                purchase_gl_codes=purchase_gl_codes,
+            )
             return jsonify({"success": False, "form_html": form_html})
-        return render_template("items/item_form.html", form=form, item=item)
+        return render_template(
+            "items/item_form.html",
+            form=form,
+            item=item,
+            location_stand_items=location_stand_items,
+            purchase_gl_codes=purchase_gl_codes,
+        )
     return render_template(
-        "items/item_form_page.html", form=form, item=item, title="Edit Item"
+        "items/item_form_page.html",
+        form=form,
+        item=item,
+        title="Edit Item",
+        location_stand_items=location_stand_items,
+        purchase_gl_codes=purchase_gl_codes,
     )
 
 
