@@ -486,12 +486,20 @@ def search_items():
     """Search items by name for autocomplete fields."""
     search_term = request.args.get("term", "")
     items = (
-        Item.query.filter(Item.name.ilike(f"%{search_term}%"))
+        Item.query.options(selectinload(Item.purchase_gl_code))
+        .filter(Item.name.ilike(f"%{search_term}%"))
         .order_by(Item.name)
         .limit(20)
         .all()
     )
-    items_data = [{"id": item.id, "name": item.name} for item in items]
+    items_data = [
+        {
+            "id": item.id,
+            "name": item.name,
+            "gl_code": item.purchase_gl_code.code if item.purchase_gl_code else "",
+        }
+        for item in items
+    ]
     return jsonify(items_data)
 
 
@@ -601,7 +609,12 @@ def quick_add_item():
     db.session.add_all(units.values())
     db.session.commit()
     log_activity(f"Added item {item.name}")
-    return jsonify({"id": item.id, "name": item.name})
+    gl = db.session.get(GLCode, purchase_gl_code) if purchase_gl_code else None
+    return jsonify({
+        "id": item.id,
+        "name": item.name,
+        "gl_code": gl.code if gl else "",
+    })
 
 
 @item.route("/items/<int:item_id>/units")
