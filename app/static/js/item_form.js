@@ -1,23 +1,51 @@
 (function (window, document) {
     'use strict';
 
-    function getTemplateHtml(templateEl) {
-        if (!templateEl) {
-            return '';
+    function replacePlaceholderValues(node, placeholder, replacement) {
+        if (!node) {
+            return;
         }
-        if (templateEl.tagName === 'TEMPLATE') {
-            return templateEl.innerHTML.trim();
+
+        var ELEMENT_NODE = (window.Node && window.Node.ELEMENT_NODE) || 1;
+        var TEXT_NODE = (window.Node && window.Node.TEXT_NODE) || 3;
+
+        if (node.nodeType === ELEMENT_NODE) {
+            Array.prototype.forEach.call(node.attributes || [], function (attr) {
+                if (attr.value && attr.value.indexOf(placeholder) !== -1) {
+                    node.setAttribute(attr.name, attr.value.split(placeholder).join(replacement));
+                }
+            });
+        } else if (node.nodeType === TEXT_NODE && node.nodeValue.indexOf(placeholder) !== -1) {
+            node.nodeValue = node.nodeValue.split(placeholder).join(replacement);
         }
-        return (templateEl.innerHTML || templateEl.textContent || '').trim();
+
+        Array.prototype.forEach.call(node.childNodes || [], function (child) {
+            replacePlaceholderValues(child, placeholder, replacement);
+        });
     }
 
-    function createUnitRow(templateHtml, index) {
-        if (!templateHtml) {
+    function createUnitRow(templateEl, index) {
+        if (!templateEl) {
             return null;
         }
-        var wrapper = document.createElement('div');
-        wrapper.innerHTML = templateHtml.replace(/__index__/g, String(index));
-        return wrapper.firstElementChild;
+
+        var newRow = null;
+
+        if (templateEl.tagName === 'TEMPLATE' && 'content' in templateEl) {
+            var fragment = templateEl.content.cloneNode(true);
+            newRow = fragment.firstElementChild;
+        } else {
+            var wrapper = document.createElement('div');
+            wrapper.appendChild(templateEl.cloneNode(true));
+            newRow = wrapper.firstElementChild;
+        }
+
+        if (!newRow) {
+            return null;
+        }
+
+        replacePlaceholderValues(newRow, '__index__', String(index));
+        return newRow;
     }
 
     function initDefaultsHandling(unitsContainer) {
@@ -70,7 +98,6 @@
             return;
         }
 
-        var templateHtml = getTemplateHtml(templateEl);
         var nextIndexAttr = form.getAttribute('data-next-index');
         var nextIndex = parseInt(nextIndexAttr || '', 10);
         if (isNaN(nextIndex)) {
@@ -78,7 +105,7 @@
         }
 
         addButton.addEventListener('click', function () {
-            var newRow = createUnitRow(templateHtml, nextIndex);
+            var newRow = createUnitRow(templateEl, nextIndex);
             if (newRow) {
                 unitsContainer.appendChild(newRow);
                 nextIndex += 1;
