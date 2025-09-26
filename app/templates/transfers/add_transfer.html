@@ -84,25 +84,65 @@
             });
             var listItem = document.createElement('div');
             listItem.classList.add('item-container', 'd-flex', 'justify-content-between', 'align-items-center', 'mb-2');
-            listItem.innerHTML = `
-                <div style="padding-left: 15px; font-weight: bold;">${item.name}</div>
-                <div class="d-flex align-items-center">
-                    <input type="hidden" name="items-${itemIndex}-item" value="${item.id}">
-                    <select name="items-${itemIndex}-unit" class="form-control me-2" style="max-width: 160px;">${options}</select>
-                    <input type="number" step="any" class="form-control quantity" name="items-${itemIndex}-quantity" placeholder="Qty" style="max-width: 120px;" data-base-qty="0">
-                    <button type="button" class="btn btn-danger delete-item ml-2">Delete</button>
-                </div>
-            `;
-            const qtyInput = listItem.querySelector('.quantity');
-            const unitSelect = listItem.querySelector('select');
-            qtyInput.addEventListener('input', function(){
-                const factor = parseFloat(unitSelect.selectedOptions[0].dataset.factor);
+
+            // Left column: item name
+            var nameDiv = document.createElement('div');
+            nameDiv.style.paddingLeft = '15px';
+            nameDiv.style.fontWeight = 'bold';
+            nameDiv.textContent = item.name;
+
+            // Right column: controls
+            var controlsDiv = document.createElement('div');
+            controlsDiv.className = 'd-flex align-items-center';
+
+            var inputHidden = document.createElement('input');
+            inputHidden.type = 'hidden';
+            inputHidden.name = `items-${itemIndex}-item`;
+            inputHidden.value = item.id;
+
+            var selectUnit = document.createElement('select');
+            selectUnit.name = `items-${itemIndex}-unit`;
+            selectUnit.className = 'form-control me-2';
+            selectUnit.style.maxWidth = '160px';
+            units.forEach(u => {
+                const label = u.id === 0 ? base : `${u.name} of ${u.factor} ${base}${u.factor != 1 ? 's' : ''}`;
+                var opt = document.createElement('option');
+                opt.value = u.id;
+                opt.setAttribute('data-factor', u.factor);
+                if (u.transfer_default) opt.selected = true;
+                opt.textContent = label;
+                selectUnit.appendChild(opt);
+            });
+
+            var inputQty = document.createElement('input');
+            inputQty.type = 'number';
+            inputQty.step = 'any';
+            inputQty.className = 'form-control quantity';
+            inputQty.name = `items-${itemIndex}-quantity`;
+            inputQty.placeholder = 'Qty';
+            inputQty.style.maxWidth = '120px';
+            inputQty.dataset.baseQty = "0";
+
+            var btnDelete = document.createElement('button');
+            btnDelete.type = 'button';
+            btnDelete.className = 'btn btn-danger delete-item ml-2';
+            btnDelete.textContent = 'Delete';
+
+            controlsDiv.appendChild(inputHidden);
+            controlsDiv.appendChild(selectUnit);
+            controlsDiv.appendChild(inputQty);
+            controlsDiv.appendChild(btnDelete);
+
+            listItem.appendChild(nameDiv);
+            listItem.appendChild(controlsDiv);
+
+            inputQty.addEventListener('input', function(){
+                const factor = parseFloat(selectUnit.selectedOptions[0].dataset.factor);
                 this.dataset.baseQty = (parseFloat(this.value) || 0) * factor;
             });
-            unitSelect.addEventListener('change', function(){
+            selectUnit.addEventListener('change', function(){
                 const factor = parseFloat(this.selectedOptions[0].dataset.factor);
-                const qty = listItem.querySelector('.quantity');
-                qty.value = (parseFloat(qty.dataset.baseQty) || 0) / factor;
+                inputQty.value = (parseFloat(inputQty.dataset.baseQty) || 0) / factor;
             });
             document.getElementById('item-list').appendChild(listItem);
             document.getElementById('suggestions').innerHTML = '';
