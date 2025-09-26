@@ -81,10 +81,6 @@
 .print-signoffs {
   display: none;
 }
-.table tfoot.print-signoffs td {
-  border: none;
-  padding: 12px 0 0;
-}
 .print-signoffs .columns {
   display: flex;
   justify-content: space-between;
@@ -105,12 +101,7 @@
 }
 @media print {
   .no-print { display: none; }
-  .table tfoot.print-signoffs {
-    display: table-footer-group;
-  }
-  .print-signoffs {
-    display: table-footer-group;
-  }
+  .print-signoffs { display: table-footer-group; }
   .signoffs { display: none; }
 }
 </style>
