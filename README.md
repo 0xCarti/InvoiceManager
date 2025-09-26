@@ -7,7 +7,7 @@ A Flask-based application for managing invoices, products and vendors. The proje
 
 ## Installation
 
-You can perform the steps below manually or run one of the setup scripts provided in the repository. `setup.sh` works on Linux/macOS and `setup.ps1` works on Windows. Each script optionally accepts a repository URL and target directory, clones the project, installs dependencies and prepares a `.env` file.
+You can perform the steps below manually or run one of the setup scripts provided in the repository. `setup.sh` works on Linux/macOS and `setup.ps1` works on Windows. Each script optionally accepts a repository URL and target directory, clones the project, installs dependencies, prepares a `.env` file, runs the database migrations, and seeds the default admin account and settings.
 
 
 1. **Clone the repository**
@@ -66,6 +66,8 @@ settings (GST number and timezone) using the provided script:
 ```bash
 python seed_data.py
 ```
+
+> **Note:** Both setup scripts execute these commands automatically after installing the dependencies. Run them manually only if you performed the installation steps yourself.
 
 ## Running the Application
 
