@@ -150,6 +150,11 @@ for every pull request.
 - User authentication and admin features.
 - Reporting and backups.
 
+## Documentation
+
+- [Routes reference](docs/routes.md) – overview of every Flask blueprint,
+  their URL prefixes, dependencies, and shared patterns.
+
 ## Data Import
 
 Administrators can quickly seed the database by uploading CSV files from the
