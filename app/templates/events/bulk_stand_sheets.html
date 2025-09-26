@@ -101,7 +101,13 @@
 }
 @media print {
   .no-print { display: none; }
-  .print-signoffs { display: table-footer-group; }
+  .print-signoffs {
+    display: block;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-before: avoid-page;
+    page-break-before: avoid;
+  }
   .signoffs { display: none; }
 }
 </style>
@@ -180,29 +186,25 @@
         </tr>
         {% endfor %}
       </tbody>
-      <tfoot class="print-signoffs">
-        <tr>
-          <td colspan="11">
-            <div class="columns">
-              <div class="left">
-                <div>Opening Stand Manager  ______________________________</div>
-                <div>Opening Supervisor     ______________________________</div>
-                <div>Closing Stand Manager  ______________________________</div>
-                <div>Closing Supervisor     ______________________________</div>
-                <div>Audit/Review Signature ______________________________</div>
-              </div>
-              <div class="right">
-                <div>Total Sales  ______________________________</div>
-                <div>Total Cash   ______________________________</div>
-                <div>Credit Cards ______________________________</div>
-                <div>Coupons      ______________________________</div>
-                <div>Over/Short   ______________________________</div>
-              </div>
-            </div>
-          </td>
-        </tr>
-      </tfoot>
     </table>
+    <div class="print-signoffs">
+      <div class="columns">
+        <div class="left">
+          <div>Opening Stand Manager  ______________________________</div>
+          <div>Opening Supervisor     ______________________________</div>
+          <div>Closing Stand Manager  ______________________________</div>
+          <div>Closing Supervisor     ______________________________</div>
+          <div>Audit/Review Signature ______________________________</div>
+        </div>
+        <div class="right">
+          <div>Total Sales  ______________________________</div>
+          <div>Total Cash   ______________________________</div>
+          <div>Credit Cards ______________________________</div>
+          <div>Coupons      ______________________________</div>
+          <div>Over/Short   ______________________________</div>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="signoffs no-print">
     <div class="left">
