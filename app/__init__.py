@@ -6,7 +6,7 @@ from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from flask import Flask, Response, g, request
+from flask import Flask, Response, g, render_template, request
 from flask_bootstrap import Bootstrap
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -14,6 +14,7 @@ from flask_login import LoginManager
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import CSRFProtect
+from flask_wtf.csrf import CSRFError
 from werkzeug.security import generate_password_hash
 
 load_dotenv()
@@ -348,5 +349,16 @@ def create_app(args: list):
             pass
 
         CSRFProtect(app)
+
+        @app.errorhandler(CSRFError)
+        def handle_csrf_error(error):
+            """Render a helpful page when CSRF validation fails."""
+            return (
+                render_template(
+                    "errors/csrf_error.html",
+                    reason=error.description,
+                ),
+                400,
+            )
 
     return app, socketio
