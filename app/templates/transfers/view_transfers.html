@@ -213,6 +213,16 @@
         }
     });
 
+    // Escape HTML special characters to prevent XSS
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function addItemToList(id, name) {
         fetch(`/items/${id}/units`).then(r => r.json()).then(data => {
             const base = data.base_unit;
@@ -227,7 +237,7 @@
             var listItem = document.createElement('div');
             listItem.classList.add('item-container','d-flex','justify-content-between','align-items-center','mb-2');
             listItem.innerHTML = `
-                <div style="padding-left: 15px; font-weight: bold;">${name}</div>
+                <div style="padding-left: 15px; font-weight: bold;">${escapeHtml(name)}</div>
                 <div class="d-flex align-items-center">
                     <input type="hidden" name="add-items-${addItemIndex}-item" value="${id}">
                     <select name="add-items-${addItemIndex}-unit" class="form-control me-2" style="max-width: 160px;">${options}</select>
