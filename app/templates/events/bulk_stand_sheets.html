@@ -101,7 +101,10 @@
 }
 @media print {
   .no-print { display: none; }
-  .print-signoffs { display: table-footer-group; }
+  .print-signoffs {
+    display: table-row-group;
+    page-break-inside: avoid;
+  }
   .signoffs { display: none; }
 }
 </style>
