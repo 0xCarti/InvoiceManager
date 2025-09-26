@@ -1,5 +1,5 @@
 param(
-    [string]$RepoUrl = "https://github.com/yourusername/InvoiceManager.git",
+    [string]$RepoUrl = "https://github.com/0xCarti/InvoiceManager.git",
     [string]$TargetDir = "InvoiceManager"
 )
 
@@ -24,12 +24,29 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 
 python -m venv venv
+if (-not (Test-Path ".\venv\Scripts\Activate.ps1")) {
+    Write-Error "Failed to create virtual environment.";
+    exit 1
+}
+
 .\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 
 if (-not (Test-Path ".env")) {
-    Copy-Item ".env.example" ".env"
-    Write-Output "Created .env from example. Edit it with your settings."
+    if (Test-Path ".env.example") {
+        Copy-Item ".env.example" ".env"
+        Write-Output "Created .env from example. Edit it with your settings."
+    }
+    else {
+        Write-Warning ".env.example not found; please create a .env file manually."
+    }
 }
+
+Write-Output "Running database migrations..."
+python -m flask --app run.py db upgrade
+
+Write-Output "Seeding initial data..."
+python seed_data.py
 
 Write-Output "Setup complete. To start the application run:`n.\venv\Scripts\Activate.ps1; python run.py"
