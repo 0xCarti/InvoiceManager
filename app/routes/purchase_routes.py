@@ -2,9 +2,11 @@ from flask import (
     Blueprint,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import current_user, login_required
@@ -31,6 +33,7 @@ from app.models import (
     Vendor,
 )
 from app.utils.activity import log_activity
+from app.utils.forecasting import DemandForecastingHelper
 from app.utils.pagination import build_pagination_args, get_per_page
 
 import datetime
@@ -155,6 +158,48 @@ def view_purchase_orders():
 def create_purchase_order():
     """Create a purchase order."""
     form = PurchaseOrderForm()
+
+    if request.method == "GET":
+        seed = session.pop("po_recommendation_seed", None)
+        if seed:
+            vendor_id = seed.get("vendor_id")
+            if vendor_id and vendor_id in [choice[0] for choice in form.vendor.choices]:
+                form.vendor.data = vendor_id
+            order_date = seed.get("order_date")
+            expected_date = seed.get("expected_date")
+            if order_date:
+                try:
+                    form.order_date.data = datetime.datetime.strptime(
+                        order_date, "%Y-%m-%d"
+                    ).date()
+                except ValueError:
+                    form.order_date.data = datetime.date.today()
+            if expected_date:
+                try:
+                    form.expected_date.data = datetime.datetime.strptime(
+                        expected_date, "%Y-%m-%d"
+                    ).date()
+                except ValueError:
+                    form.expected_date.data = datetime.date.today() + datetime.timedelta(
+                        days=1
+                    )
+
+            items = seed.get("items", [])
+            form.items.min_entries = max(len(items), 1)
+            while len(form.items) < len(items):
+                form.items.append_entry()
+            for idx, entry in enumerate(items):
+                if idx >= len(form.items):
+                    break
+                form.items[idx].item.data = entry.get("item_id")
+                form.items[idx].unit.data = entry.get("unit_id")
+                form.items[idx].quantity.data = entry.get("quantity")
+                form.items[idx].position.data = idx
+
+    if request.method == "GET" and form.order_date.data is None:
+        form.order_date.data = datetime.date.today()
+    if request.method == "GET" and form.expected_date.data is None:
+        form.expected_date.data = datetime.date.today() + datetime.timedelta(days=1)
     if form.validate_on_submit():
         po = PurchaseOrder(
             vendor_id=form.vendor.data,
@@ -244,6 +289,157 @@ def create_purchase_order():
         form=form,
         gl_codes=codes,
         item_lookup=item_lookup,
+    )
+
+
+@purchase.route(
+    "/purchase_orders/recommendations", methods=["GET", "POST"]
+)
+@login_required
+def purchase_order_recommendations():
+    """Display demand-based purchase order recommendations."""
+
+    params = request.values if request.method == "POST" else request.args
+    lookback_days = params.get("lookback_days", type=int) or 30
+    location_id = params.get("location_id", type=int)
+    item_id = params.get("item_id", type=int)
+    attendance_multiplier = params.get("attendance_multiplier", type=float) or 1.0
+    weather_multiplier = params.get("weather_multiplier", type=float) or 1.0
+    promo_multiplier = params.get("promo_multiplier", type=float) or 1.0
+    lead_time_days = params.get("lead_time_days", type=int) or 3
+
+    helper = DemandForecastingHelper(
+        lookback_days=lookback_days, lead_time_days=lead_time_days
+    )
+    recommendations = helper.build_recommendations(
+        location_ids=[location_id] if location_id else None,
+        item_ids=[item_id] if item_id else None,
+        attendance_multiplier=attendance_multiplier,
+        weather_multiplier=weather_multiplier,
+        promo_multiplier=promo_multiplier,
+    )
+
+    vendors = Vendor.query.filter_by(archived=False).all()
+    locations = Location.query.filter_by(archived=False).all()
+
+    wants_json = (
+        request.args.get("format") == "json"
+        or request.accept_mimetypes["application/json"]
+        > request.accept_mimetypes["text/html"]
+    )
+
+    if wants_json:
+        payload = {
+            "meta": {
+                "lookback_days": lookback_days,
+                "attendance_multiplier": attendance_multiplier,
+                "weather_multiplier": weather_multiplier,
+                "promo_multiplier": promo_multiplier,
+                "lead_time_days": lead_time_days,
+            },
+            "data": [
+                {
+                    "item_id": rec.item.id,
+                    "item_name": rec.item.name,
+                    "location_id": rec.location.id,
+                    "location_name": rec.location.name,
+                    "history": {
+                        key: round(value, 6)
+                        for key, value in rec.history.items()
+                        if key != "last_activity_ts"
+                    },
+                    "base_consumption": round(rec.base_consumption, 6),
+                    "adjusted_demand": round(rec.adjusted_demand, 6),
+                    "recommended_quantity": round(rec.recommended_quantity, 6),
+                    "suggested_delivery_date": rec.suggested_delivery_date.isoformat(),
+                    "default_unit_id": rec.default_unit_id,
+                }
+                for rec in recommendations
+            ],
+        }
+        return jsonify(payload)
+
+    chart_rows = [
+        {
+            "label": f"{rec.item.name} @ {rec.location.name}",
+            "recommended": rec.recommended_quantity,
+            "consumption": rec.base_consumption,
+            "incoming": rec.history["transfer_in_qty"]
+            + rec.history["invoice_qty"]
+            + rec.history["open_po_qty"],
+        }
+        for rec in recommendations
+    ]
+
+    if request.method == "POST" and request.form.get("action") == "seed":
+        selected_keys = request.form.getlist("selected_lines")
+        if not selected_keys:
+            flash("No recommendation lines were selected.", "warning")
+        else:
+            seed_items = []
+            override_map = {
+                key: request.form.get(f"override-{key}", type=float)
+                for key in selected_keys
+            }
+            rec_map = {
+                f"{rec.item.id}:{rec.location.id}": rec for rec in recommendations
+            }
+            for key in selected_keys:
+                rec = rec_map.get(key)
+                if not rec:
+                    continue
+                quantity = override_map.get(key)
+                if quantity is None or quantity <= 0:
+                    quantity = rec.recommended_quantity
+                if quantity <= 0:
+                    continue
+                seed_items.append(
+                    {
+                        "item_id": rec.item.id,
+                        "unit_id": rec.default_unit_id,
+                        "quantity": float(quantity),
+                    }
+                )
+
+            vendor_id = request.form.get("seed_vendor_id", type=int)
+            expected_date = request.form.get("seed_expected_date")
+            order_date = request.form.get("seed_order_date") or datetime.date.today().isoformat()
+
+            if seed_items and vendor_id:
+                session["po_recommendation_seed"] = {
+                    "vendor_id": vendor_id,
+                    "expected_date": expected_date
+                    or (recommendations[0].suggested_delivery_date.isoformat()
+                        if recommendations
+                        else datetime.date.today().isoformat()),
+                    "order_date": order_date,
+                    "items": seed_items,
+                }
+                session.modified = True
+                flash("Purchase order draft populated from recommendations.", "success")
+                return redirect(url_for("purchase.create_purchase_order"))
+            if not vendor_id:
+                flash("Select a vendor before creating a draft purchase order.", "warning")
+            if not seed_items:
+                flash("No recommendation lines were eligible to push to a draft.", "warning")
+
+    today = datetime.date.today()
+
+    return render_template(
+        "purchase_orders/recommendations.html",
+        recommendations=recommendations,
+        vendors=vendors,
+        locations=locations,
+        selected_vendor=params.get("seed_vendor_id", type=int),
+        selected_location=location_id,
+        selected_item=item_id,
+        lookback_days=lookback_days,
+        attendance_multiplier=attendance_multiplier,
+        weather_multiplier=weather_multiplier,
+        promo_multiplier=promo_multiplier,
+        lead_time_days=lead_time_days,
+        chart_rows=chart_rows,
+        today=today,
     )
 
 
