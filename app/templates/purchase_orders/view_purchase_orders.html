@@ -5,6 +5,9 @@
     <div class="row justify-content-between">
         <div class="col-auto">
             <a class="btn btn-primary mb-3" href="{{ url_for('purchase.create_purchase_order') }}">Create Purchase Order</a>
+            <a class="btn btn-outline-primary mb-3 ms-2" href="{{ url_for('purchase.purchase_order_recommendations') }}">
+                View Recommendations
+            </a>
         </div>
         <div class="col-auto text-end">
             <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="purchase-orders-table" data-storage-key="purchaseOrderTableColumnVisibility">
