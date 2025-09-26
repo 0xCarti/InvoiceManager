@@ -85,6 +85,10 @@ For production deployments using Gunicorn, use the provided configuration to ena
 gunicorn -c gunicorn.conf.py run:app
 ```
 
+## Project Architecture
+
+A high-level overview of the Flask application structure, shared services, and key data models is available in [docs/architecture.md](docs/architecture.md).
+
 ## Docker Setup
 
 The project includes a `Dockerfile` and a `docker-compose.yml` to make running
