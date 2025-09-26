@@ -1,4 +1,8 @@
+import csv
+import io
+import json
 import os
+from collections import defaultdict
 from datetime import datetime
 
 from flask import (
@@ -6,6 +10,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    make_response,
     redirect,
     render_template,
     request,
@@ -26,6 +31,7 @@ from app.models import (
     Event,
     EventLocation,
     EventStandSheetItem,
+    Item,
     Location,
     LocationStandItem,
     Product,
@@ -444,6 +450,126 @@ def _get_stand_items(location_id, event_id=None):
     return location, stand_items
 
 
+def build_sustainability_report(event_id: int) -> dict:
+    """Aggregate waste, cost, and carbon metrics for an event."""
+
+    carbon_per_unit = float(
+        current_app.config.get("CARBON_EQ_PER_UNIT", 0.5)
+    )
+    query = (
+        db.session.query(
+            EventStandSheetItem,
+            EventLocation,
+            Location,
+            Item,
+        )
+        .join(EventStandSheetItem.event_location)
+        .join(EventLocation.location)
+        .join(EventStandSheetItem.item)
+        .filter(EventLocation.event_id == event_id)
+    )
+
+    totals = {"waste": 0.0, "cost": 0.0, "carbon": 0.0}
+    location_totals = defaultdict(
+        lambda: {"waste": 0.0, "cost": 0.0, "carbon": 0.0}
+    )
+    item_totals = defaultdict(lambda: {"waste": 0.0, "cost": 0.0, "carbon": 0.0})
+
+    for sheet, _, location, item in query.all():
+        eaten = sheet.eaten or 0.0
+        spoiled = sheet.spoiled or 0.0
+        waste_units = eaten + spoiled
+        if waste_units == 0:
+            continue
+
+        unit_cost = item.cost or 0.0
+        carbon_factor = getattr(item, "carbon_factor", None)
+        if carbon_factor is None:
+            carbon_factor = carbon_per_unit
+
+        waste_cost = waste_units * unit_cost
+        carbon_eq = waste_units * carbon_factor
+
+        totals["waste"] += waste_units
+        totals["cost"] += waste_cost
+        totals["carbon"] += carbon_eq
+
+        loc_bucket = location_totals[location.name]
+        loc_bucket["waste"] += waste_units
+        loc_bucket["cost"] += waste_cost
+        loc_bucket["carbon"] += carbon_eq
+
+        item_bucket = item_totals[item.name]
+        item_bucket["waste"] += waste_units
+        item_bucket["cost"] += waste_cost
+        item_bucket["carbon"] += carbon_eq
+
+    location_breakdown = [
+        {
+            "location": name,
+            "waste": values["waste"],
+            "cost": values["cost"],
+            "carbon": values["carbon"],
+        }
+        for name, values in sorted(
+            location_totals.items(), key=lambda item: item[1]["waste"], reverse=True
+        )
+    ]
+
+    item_leaderboard = [
+        {
+            "item": name,
+            "waste": values["waste"],
+            "cost": values["cost"],
+            "carbon": values["carbon"],
+        }
+        for name, values in sorted(
+            item_totals.items(), key=lambda item: item[1]["waste"], reverse=True
+        )
+    ]
+
+    goal_target = float(
+        current_app.config.get("SUSTAINABILITY_WASTE_GOAL", 0) or 0.0
+    )
+    goal_progress = None
+    goal_remaining = None
+    goal_met = None
+    if goal_target > 0:
+        goal_remaining = max(goal_target - totals["waste"], 0.0)
+        consumed_pct = min((totals["waste"] / goal_target) * 100, 100)
+        goal_progress = round(100 - consumed_pct, 2)
+        goal_met = totals["waste"] <= goal_target
+
+    chart_data = {
+        "labels": [entry["location"] for entry in location_breakdown],
+        "datasets": [
+            {
+                "label": "Waste (units)",
+                "backgroundColor": "#198754",
+                "data": [entry["waste"] for entry in location_breakdown],
+            },
+            {
+                "label": "Carbon (kg CO₂e)",
+                "backgroundColor": "#0d6efd",
+                "data": [entry["carbon"] for entry in location_breakdown],
+            },
+        ],
+    }
+
+    return {
+        "totals": totals,
+        "location_breakdown": location_breakdown,
+        "item_leaderboard": item_leaderboard,
+        "goal": {
+            "target": goal_target if goal_target > 0 else None,
+            "remaining": goal_remaining,
+            "progress_pct": goal_progress,
+            "met": goal_met,
+        },
+        "chart_data": chart_data,
+    }
+
+
 @event.route(
     "/events/<int:event_id>/stand_sheet/<int:location_id>",
     methods=["GET", "POST"],
@@ -509,6 +635,88 @@ def stand_sheet(event_id, location_id):
         location=location,
         stand_items=stand_items,
     )
+
+
+@event.route("/events/<int:event_id>/sustainability")
+@login_required
+def sustainability_dashboard(event_id):
+    ev = db.session.get(Event, event_id)
+    if ev is None:
+        abort(404)
+
+    report = build_sustainability_report(event_id)
+    chart_json = json.dumps(report["chart_data"])
+
+    return render_template(
+        "events/sustainability_dashboard.html",
+        event=ev,
+        report=report,
+        chart_json=chart_json,
+        print_view=False,
+    )
+
+
+@event.route("/events/<int:event_id>/sustainability/print")
+@login_required
+def sustainability_dashboard_print(event_id):
+    ev = db.session.get(Event, event_id)
+    if ev is None:
+        abort(404)
+
+    report = build_sustainability_report(event_id)
+    chart_json = json.dumps(report["chart_data"])
+
+    return render_template(
+        "events/sustainability_dashboard.html",
+        event=ev,
+        report=report,
+        chart_json=chart_json,
+        print_view=True,
+    )
+
+
+@event.route("/events/<int:event_id>/sustainability/export.csv")
+@login_required
+def sustainability_dashboard_csv(event_id):
+    ev = db.session.get(Event, event_id)
+    if ev is None:
+        abort(404)
+
+    report = build_sustainability_report(event_id)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Location", "Waste (units)", "Cost", "Carbon (kg CO₂e)"])
+    for entry in report["location_breakdown"]:
+        writer.writerow(
+            [
+                entry["location"],
+                f"{entry['waste']:.2f}",
+                f"{entry['cost']:.2f}",
+                f"{entry['carbon']:.2f}",
+            ]
+        )
+
+    writer.writerow([])
+    writer.writerow(["Item", "Waste (units)", "Cost", "Carbon (kg CO₂e)"])
+    for entry in report["item_leaderboard"]:
+        writer.writerow(
+            [
+                entry["item"],
+                f"{entry['waste']:.2f}",
+                f"{entry['cost']:.2f}",
+                f"{entry['carbon']:.2f}",
+            ]
+        )
+
+    writer.writerow([])
+    writer.writerow(["Totals", f"{report['totals']['waste']:.2f}", f"{report['totals']['cost']:.2f}", f"{report['totals']['carbon']:.2f}"])
+
+    csv_response = make_response(output.getvalue())
+    csv_response.headers["Content-Type"] = "text/csv"
+    filename = f"sustainability-event-{event_id}.csv"
+    csv_response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    return csv_response
 
 
 @event.route(
