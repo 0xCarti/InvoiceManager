@@ -19,6 +19,8 @@
                 <th>Transferred In</th>
                 <th>Transferred Out</th>
                 <th>Sales</th>
+                <th>Eaten</th>
+                <th>Spoiled</th>
                 <th>Closing Count</th>
                 <th>Variance</th>
             </tr>
@@ -32,6 +34,8 @@
                 <td><input type="number" class="form-control" name="in_{{ entry.item.id }}" value="{{ entry.sheet.transferred_in if entry.sheet else '' }}"></td>
                 <td><input type="number" class="form-control" name="out_{{ entry.item.id }}" value="{{ entry.sheet.transferred_out if entry.sheet else '' }}"></td>
                 <td class="sales" data-sales="{{ entry.sales }}">{{ entry.sales }}</td>
+                <td><input type="number" step="0.01" class="form-control" name="eaten_{{ entry.item.id }}" value="{{ entry.sheet.eaten if entry.sheet else '' }}"></td>
+                <td><input type="number" step="0.01" class="form-control" name="spoiled_{{ entry.item.id }}" value="{{ entry.sheet.spoiled if entry.sheet else '' }}"></td>
                 <td><input type="number" class="form-control" name="close_{{ entry.item.id }}" value="{{ entry.sheet.closing_count if entry.sheet else '' }}"></td>
                 <td class="variance">0</td>
             </tr>
@@ -48,8 +52,10 @@
         const pre = parseFloat(row.querySelector('input[name^="open_"]').value) || 0;
         const tin = parseFloat(row.querySelector('input[name^="in_"]').value) || 0;
         const tout = parseFloat(row.querySelector('input[name^="out_"]').value) || 0;
+        const eaten = parseFloat(row.querySelector('input[name^="eaten_"]').value) || 0;
+        const spoiled = parseFloat(row.querySelector('input[name^="spoiled_"]').value) || 0;
         const close = parseFloat(row.querySelector('input[name^="close_"]').value) || 0;
-        const variance = pre + tin - tout - sales - close;
+        const variance = pre + tin - tout - sales - eaten - spoiled - close;
         row.querySelector('.variance').textContent = variance.toFixed(2);
     }
 
