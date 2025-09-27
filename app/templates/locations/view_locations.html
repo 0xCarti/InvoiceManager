@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'macros/column_visibility.html' import column_visibility_dropdown %}
 
 {% block content %}
 <div class="container mt-5">
@@ -7,7 +8,15 @@
         <div class="col-auto">
             <button id="addLocationBtn" class="btn btn-primary mb-3" type="button">Add New Location</button>
         </div>
-        <div class="col-auto">
+        <div class="col-auto text-end">
+            {{ column_visibility_dropdown(
+                table_id='locations-table',
+                storage_key='locationsTableColumnVisibility',
+                columns=[
+                    {'id': 'toggle-location-name', 'target': 'col-location-name', 'label': 'Name', 'checked': True},
+                    {'id': 'toggle-location-actions', 'target': 'col-location-actions', 'label': 'Actions', 'checked': True},
+                ]
+            ) }}
             <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
                 Filters
             </button>
@@ -23,18 +32,18 @@
     <div class="mb-3"><strong>Viewing:</strong> All locations</div>
     {% endif %}
     <div class="table-responsive">
-    <table class="table sortable">
+    <table class="table sortable" id="locations-table">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Actions</th>
+                <th scope="col" class="col-location-name">Name</th>
+                <th scope="col" class="col-location-actions">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for location in locations.items %}
             <tr data-id="{{ location.id }}">
-                <td>{{ location.name }}</td>
-                <td>
+                <td class="col-location-name">{{ location.name }}</td>
+                <td class="col-location-actions">
                     <button type="button" class="btn btn-info edit-location-btn" data-id="{{ location.id }}">Edit</button>
                     <a href="{{ url_for('locations.view_stand_sheet', location_id=location.id) }}" class="btn btn-secondary">Stand Sheet</a>
                     <a href="{{ url_for('locations.location_items', location_id=location.id) }}" class="btn btn-outline-secondary">Manage Items</a>
@@ -298,8 +307,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function addRow(loc) {
         const row = `<tr data-id="${loc.id}">
-            <td>${loc.name}</td>
-            <td>
+            <td class=\"col-location-name\">${loc.name}</td>
+            <td class=\"col-location-actions\">
                 <button type="button" class="btn btn-info edit-location-btn" data-id="${loc.id}">Edit</button>
                 <a href="/locations/${loc.id}/stand_sheet" class="btn btn-secondary">Stand Sheet</a>
                 <a href="/locations/${loc.id}/items" class="btn btn-outline-secondary">Manage Items</a>
@@ -310,17 +319,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 </form>
             </td>
         </tr>`;
-        $('table tbody').append(row);
+        $('#locations-table tbody').append(row);
     }
 
     function updateRow(loc) {
         const row = $(`tr[data-id='${loc.id}']`);
-        row.find('td:first').text(loc.name);
+        row.find('.col-location-name').text(loc.name);
     }
 
     $(document).on('click', '.copy-location-btn', function() {
         currentSourceId = $(this).data('id');
-        const options = $('table tbody tr').map(function() {
+        const options = $('#locations-table tbody tr').map(function() {
             const id = $(this).data('id');
             const name = $(this).find('td:first').text();
             if (id === currentSourceId) {

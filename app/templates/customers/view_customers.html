@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/column_visibility.html" import column_visibility_dropdown %}
 
 {% block title %}View Customers{% endblock %}
 
@@ -9,7 +10,17 @@
         <div class="col-auto">
             <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createCustomerModal">Create Customer</button>
         </div>
-        <div class="col-auto">
+        <div class="col-auto text-end">
+            {{ column_visibility_dropdown(
+                table_id='customerTable',
+                storage_key='customerTableColumnVisibility',
+                columns=[
+                    {'id': 'toggle-customer-name', 'target': 'col-customer-name', 'label': 'Name', 'checked': True},
+                    {'id': 'toggle-customer-gst', 'target': 'col-customer-gst', 'label': 'GST Exempt', 'checked': True},
+                    {'id': 'toggle-customer-pst', 'target': 'col-customer-pst', 'label': 'PST Exempt', 'checked': True},
+                    {'id': 'toggle-customer-actions', 'target': 'col-customer-actions', 'label': 'Actions', 'checked': True},
+                ]
+            ) }}
             <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button>
         </div>
     </div>
@@ -74,22 +85,22 @@
     <p>Filtering by PST Exempt: {{ 'Yes' if pst_exempt == 'yes' else 'No' }}</p>
     {% endif %}
     <div class="table-responsive">
-    <table class="table">
+    <table class="table" id="customerTable">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>GST Exempt</th>
-                <th>PST Exempt</th>
-                <th>Action</th>
+                <th scope="col" class="col-customer-name">Name</th>
+                <th scope="col" class="col-customer-gst">GST Exempt</th>
+                <th scope="col" class="col-customer-pst">PST Exempt</th>
+                <th scope="col" class="col-customer-actions">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for customer in customers.items %}
             <tr>
-                <td>{{ customer.first_name }} {{ customer.last_name }}</td>
-                <td>{{ 'Yes' if customer.gst_exempt else 'No' }}</td>
-                <td>{{ 'Yes' if customer.pst_exempt else 'No' }}</td>
-                <td>
+                <td class="col-customer-name">{{ customer.first_name }} {{ customer.last_name }}</td>
+                <td class="col-customer-gst">{{ 'Yes' if customer.gst_exempt else 'No' }}</td>
+                <td class="col-customer-pst">{{ 'Yes' if customer.pst_exempt else 'No' }}</td>
+                <td class="col-customer-actions">
                     <a href="{{ url_for('customer.edit_customer', customer_id=customer.id) }}" class="btn btn-primary mr-2">Edit</a>
                     <form action="{{ url_for('customer.delete_customer', customer_id=customer.id) }}" method="post" class="d-inline">
                         {{ delete_form.hidden_tag() }}
@@ -164,10 +175,10 @@
                     const tbody = document.querySelector('table tbody');
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td>${data.customer.first_name} ${data.customer.last_name}</td>
-                        <td>${data.customer.gst_exempt ? 'Yes' : 'No'}</td>
-                        <td>${data.customer.pst_exempt ? 'Yes' : 'No'}</td>
-                        <td>
+                        <td class="col-customer-name">${data.customer.first_name} ${data.customer.last_name}</td>
+                        <td class="col-customer-gst">${data.customer.gst_exempt ? 'Yes' : 'No'}</td>
+                        <td class="col-customer-pst">${data.customer.pst_exempt ? 'Yes' : 'No'}</td>
+                        <td class="col-customer-actions">
                             <a href="/customers/${data.customer.id}/edit" class="btn btn-primary mr-2">Edit</a>
                             <form action="/customers/${data.customer.id}/delete" method="post" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="${data.delete_csrf_token}">

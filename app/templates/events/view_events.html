@@ -1,12 +1,38 @@
 {% extends 'base.html' %}
+{% from 'macros/column_visibility.html' import column_visibility_dropdown %}
 {% block content %}
 <h2>Events</h2>
-<button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createEventModal">Create Event</button>
-<button class="btn btn-secondary ml-2" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+    <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createEventModal">Create Event</button>
+        <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
+    </div>
+    <div class="text-sm-end">
+        {{ column_visibility_dropdown(
+            table_id='events-table',
+            storage_key='eventsTableColumnVisibility',
+            columns=[
+                {'id': 'toggle-event-name', 'target': 'col-event-name', 'label': 'Name', 'checked': True},
+                {'id': 'toggle-event-type', 'target': 'col-event-type', 'label': 'Type', 'checked': True},
+                {'id': 'toggle-event-start', 'target': 'col-event-start', 'label': 'Start', 'checked': True},
+                {'id': 'toggle-event-end', 'target': 'col-event-end', 'label': 'End', 'checked': True},
+                {'id': 'toggle-event-closed', 'target': 'col-event-closed', 'label': 'Closed', 'checked': True},
+                {'id': 'toggle-event-actions', 'target': 'col-event-actions', 'label': 'Actions', 'checked': True},
+            ]
+        ) }}
+    </div>
+</div>
 <div class="table-responsive">
-<table class="table mt-3 sortable">
+<table class="table mt-3 sortable" id="events-table">
     <thead>
-        <tr><th>Name</th><th>Type</th><th>Start</th><th>End</th><th>Closed</th><th></th></tr>
+        <tr>
+            <th scope="col" class="col-event-name">Name</th>
+            <th scope="col" class="col-event-type">Type</th>
+            <th scope="col" class="col-event-start">Start</th>
+            <th scope="col" class="col-event-end">End</th>
+            <th scope="col" class="col-event-closed">Closed</th>
+            <th scope="col" class="col-event-actions">Actions</th>
+        </tr>
     </thead>
     <tbody id="events-table-body">
         {% include 'events/_events_table.html' %}
