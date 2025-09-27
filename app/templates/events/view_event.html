@@ -32,7 +32,10 @@
                     <td>
                         {% if not el.confirmed and not event.closed %}
                             <a href="{{ url_for('event.stand_sheet', event_id=event.id, location_id=el.location_id) }}">Stand Sheet</a>
-                            {% if event.event_type == 'inventory' %}| <a href="{{ url_for('event.count_sheet', event_id=event.id, location_id=el.location_id) }}">Count Sheet</a>{% endif %} |
+                            {% if event.event_type == 'inventory' %}
+                                | <a href="{{ url_for('event.count_sheet', event_id=event.id, location_id=el.location_id) }}">Count Sheet</a>
+                                | <a href="{{ url_for('event.scan_counts', event_id=event.id, location_id=el.location_id) }}">Scan Counts</a>
+                            {% endif %} |
                             <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Enter Sales</a> |
                             <a href="{{ url_for('event.confirm_location', event_id=event.id, el_id=el.id) }}">Confirm</a>
                         {% else %}

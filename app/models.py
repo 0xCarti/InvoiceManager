@@ -123,6 +123,7 @@ class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     base_unit = db.Column(db.String(20), nullable=False)
+    upc = db.Column(db.String(32), unique=True, nullable=True)
     gl_code = db.Column(db.String(10), nullable=True)
     gl_code_id = db.Column(
         db.Integer, db.ForeignKey("gl_code.id"), nullable=True
