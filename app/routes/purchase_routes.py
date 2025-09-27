@@ -17,6 +17,7 @@ from app.forms import (
     DeleteForm,
     PurchaseOrderForm,
     ReceiveInvoiceForm,
+    load_purchase_gl_code_choices,
 )
 from app.models import (
     GLCode,
@@ -601,6 +602,7 @@ def receive_invoice(po_id):
             item_form.unit.choices = [
                 (u.id, u.name) for u in ItemUnit.query.all()
             ]
+            item_form.gl_code.choices = load_purchase_gl_code_choices()
         for i, poi in enumerate(po.items):
             form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
