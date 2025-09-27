@@ -52,6 +52,15 @@ The GST number can now be set from the application control panel after installat
 
 These can be placed in a `.env` file or exported in your shell before starting the app.
 
+### Optional Environment Variables
+
+- `SESSION_COOKIE_SECURE` – set to `false` when running over plain HTTP (for
+  example in local development). Defaults to `true` so cookies are only sent
+  over HTTPS in production.
+- `ENFORCE_HTTPS` – set to `true` to always send the
+  `Strict-Transport-Security` header, even if the request is not detected as
+  secure (useful when SSL termination happens upstream). Defaults to `false`.
+
 ## Database Setup
 
 Run the database migrations to create the tables:
