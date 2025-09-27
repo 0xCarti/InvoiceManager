@@ -180,7 +180,7 @@
                 <td class="col-po-received" data-sort-value="{{ '1' if order.received else '0' }}">{{ 'Yes' if order.received else 'No' }}</td>
                 {% set order_item_count = order.items | length %}
                 <td class="col-po-item-count" data-sort-value="{{ order_item_count }}">{{ order_item_count }}</td>
-                <td class="col-po-items">
+                <td class="col-po-items text-wrap">
                     {% if order.items %}
                         <ul class="mb-0 ps-3">
                             {% for line in order.items %}

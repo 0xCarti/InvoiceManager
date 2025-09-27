@@ -227,7 +227,7 @@
                 <td class="col-invoice-total" data-sort-value="{{ '%.6f'|format(inv.total or 0) }}">{{ '%.2f'|format(inv.total or 0) }}</td>
                 {% set invoice_item_count = inv.items | length %}
                 <td class="col-invoice-item-count" data-sort-value="{{ invoice_item_count }}">{{ invoice_item_count }}</td>
-                <td class="col-invoice-item-details">
+                <td class="col-invoice-item-details text-wrap">
                     {% if inv.items %}
                         <ul class="mb-0 ps-3">
                             {% for item in inv.items %}

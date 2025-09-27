@@ -13,7 +13,7 @@
     <td class="col-product-sales-gl-desc">{{ product.sales_gl_code.description if product.sales_gl_code and product.sales_gl_code.description else '—' }}</td>
     <td class="col-product-gl-code">{{ product.gl_code_rel.code if product.gl_code_rel else product.gl_code or '—' }}</td>
     <td class="col-product-gl-desc">{{ product.gl_code_rel.description if product.gl_code_rel and product.gl_code_rel.description else '—' }}</td>
-    <td class="col-product-locations">
+    <td class="col-product-locations text-wrap">
         {% if product.locations %}
             {% for location in product.locations %}
                 <div>{{ location.name }}</div>
@@ -24,7 +24,7 @@
     </td>
     {% set recipe_count = product.recipe_items | length %}
     <td class="col-product-recipe-count" data-sort-value="{{ recipe_count }}">{{ recipe_count }}</td>
-    <td class="col-product-recipe-details">
+    <td class="col-product-recipe-details text-wrap">
         {% if product.recipe_items %}
             <ul class="mb-0 ps-3">
                 {% for recipe_item in product.recipe_items %}
