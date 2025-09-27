@@ -9,7 +9,7 @@
     <td class="col-gl-desc">{{ item.gl_code_rel.description if item.gl_code_rel and item.gl_code_rel.description else '—' }}</td>
     <td class="col-purchase-gl-code">{{ item.purchase_gl_code.code if item.purchase_gl_code else '—' }}</td>
     <td class="col-purchase-gl-desc">{{ item.purchase_gl_code.description if item.purchase_gl_code and item.purchase_gl_code.description else '—' }}</td>
-    <td class="col-units">
+    <td class="col-units text-wrap">
         {% if item.units %}
             {% for unit in item.units %}
                 <div>{{ unit.name }} (&times;{{ '%.4f'|format(unit.factor) }})</div>
