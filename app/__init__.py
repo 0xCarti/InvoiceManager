@@ -24,6 +24,15 @@ login_manager.login_view = "auth.login"
 storage_uri = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
 limiter = Limiter(key_func=get_remote_address, storage_uri=storage_uri)
 socketio = None
+
+
+def _get_bool_env(var_name: str, default: bool = False) -> bool:
+    """Return a boolean environment variable value."""
+
+    value = os.getenv(var_name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 DEFAULT_CSP_TEMPLATE = (
     "default-src 'self'; "
     "img-src 'self' data:; "
@@ -104,8 +113,15 @@ def create_app(args: list):
     global socketio, GST, DEFAULT_TIMEZONE
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
+    default_secure_cookies = "--demo" not in args
+    session_cookie_secure = _get_bool_env(
+        "SESSION_COOKIE_SECURE", default=default_secure_cookies
+    )
+    enforce_https = _get_bool_env("ENFORCE_HTTPS", default=False)
+    app.config["ENFORCE_HTTPS"] = enforce_https
     app.config.update(
-        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_SECURE=session_cookie_secure,
+        REMEMBER_COOKIE_SECURE=session_cookie_secure,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
