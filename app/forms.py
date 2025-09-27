@@ -150,6 +150,7 @@ class ItemUnitForm(FlaskForm):
 
 class ItemForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired()])
+    upc = StringField("UPC", validators=[Optional(), Length(max=32)])
     gl_code = SelectField("GL Code", validators=[Optional()])
     base_unit = SelectField(
         "Base Unit",
@@ -668,6 +669,14 @@ class EventLocationForm(FlaskForm):
 
 class EventLocationConfirmForm(FlaskForm):
     submit = SubmitField("Confirm")
+
+
+class ScanCountForm(FlaskForm):
+    upc = StringField("UPC", validators=[DataRequired(), Length(max=32)])
+    quantity = DecimalField(
+        "Quantity", validators=[InputRequired()], default=1
+    )
+    submit = SubmitField("Add Count")
 
 
 class ConfirmForm(FlaskForm):

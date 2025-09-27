@@ -23,6 +23,10 @@
             {{ form.purchase_gl_code.label(class="form-label") }}
             {{ form.purchase_gl_code(class="form-control") }}
         </div>
+        <div class="col-md-6 mb-3">
+            {{ form.upc.label(class="form-label") }}
+            {{ form.upc(class="form-control", placeholder="Scan or enter UPC") }}
+        </div>
     </div>
     {% if current_item %}
     <div class="form-group">

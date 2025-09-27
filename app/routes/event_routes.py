@@ -10,6 +10,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    jsonify,
     make_response,
     redirect,
     render_template,
@@ -25,6 +26,7 @@ from app.forms import (
     EventForm,
     EventLocationConfirmForm,
     EventLocationForm,
+    ScanCountForm,
     TerminalSalesUploadForm,
 )
 from app.models import (
@@ -225,6 +227,217 @@ def add_terminal_sale(event_id, el_id):
         "events/add_terminal_sales.html",
         event_location=el,
         existing_sales=existing_sales,
+    )
+
+
+def _wants_json_response() -> bool:
+    """Return True when the current request prefers a JSON response."""
+
+    if request.is_json:
+        return True
+    accept_mimetypes = request.accept_mimetypes
+    return (
+        accept_mimetypes["application/json"]
+        > accept_mimetypes["text/html"]
+    )
+
+
+def _serialize_scan_totals(event_location: EventLocation):
+    """Return the location and summaries of counted items."""
+
+    location, stand_items = _get_stand_items(
+        event_location.location_id, event_location.event_id
+    )
+    totals = []
+    seen_item_ids = set()
+
+    for entry in stand_items:
+        item = entry["item"]
+        sheet = entry.get("sheet")
+        counted = float(sheet.closing_count or 0.0) if sheet else 0.0
+        totals.append(
+            {
+                "item_id": item.id,
+                "name": item.name,
+                "upc": item.upc,
+                "expected": float(entry.get("expected") or 0.0),
+                "counted": counted,
+                "base_unit": item.base_unit,
+            }
+        )
+        seen_item_ids.add(item.id)
+
+    for sheet in event_location.stand_sheet_items:
+        if sheet.item_id in seen_item_ids:
+            continue
+        item = sheet.item
+        totals.append(
+            {
+                "item_id": item.id,
+                "name": item.name,
+                "upc": item.upc,
+                "expected": 0.0,
+                "counted": float(sheet.closing_count or 0.0),
+                "base_unit": item.base_unit,
+            }
+        )
+
+    totals.sort(key=lambda record: record["name"].lower())
+    return location, totals
+
+
+@event.route(
+    "/events/<int:event_id>/locations/<int:location_id>/scan_counts",
+    methods=["GET", "POST"],
+)
+@login_required
+def scan_counts(event_id, location_id):
+    ev = db.session.get(Event, event_id)
+    if ev is None:
+        abort(404)
+    if ev.event_type != "inventory":
+        abort(404)
+
+    el = EventLocation.query.filter_by(
+        event_id=event_id, location_id=location_id
+    ).first()
+    if el is None:
+        abort(404)
+
+    wants_json = _wants_json_response()
+
+    if ev.closed:
+        if wants_json:
+            return (
+                jsonify(
+                    success=False, error="This event is closed to updates."
+                ),
+                403,
+            )
+        abort(403, description="This event is closed to updates.")
+
+    form = ScanCountForm()
+    if form.quantity.data is None:
+        form.quantity.data = 1
+
+    if request.method == "GET" and wants_json:
+        location, totals = _serialize_scan_totals(el)
+        return jsonify(
+            success=True,
+            location={"id": location.id, "name": location.name},
+            totals=totals,
+        )
+
+    if request.method == "POST":
+        if wants_json:
+            payload = request.get_json(silent=True) or {}
+            upc = (payload.get("upc") or "").strip()
+            raw_quantity = payload.get("quantity", 1)
+            try:
+                quantity = float(raw_quantity)
+            except (TypeError, ValueError):
+                quantity = None
+
+            if not upc:
+                return (
+                    jsonify(success=False, error="A UPC value is required."),
+                    400,
+                )
+            if quantity is None:
+                return (
+                    jsonify(
+                        success=False,
+                        error="Quantity must be a numeric value.",
+                    ),
+                    400,
+                )
+        else:
+            if not form.validate_on_submit():
+                location, totals = _serialize_scan_totals(el)
+                return (
+                    render_template(
+                        "events/scan_count.html",
+                        event=ev,
+                        location=location,
+                        form=form,
+                        totals=totals,
+                    ),
+                    400,
+                )
+            upc = (form.upc.data or "").strip()
+            quantity = float(form.quantity.data or 0)
+
+        item = Item.query.filter_by(upc=upc).first()
+        if item is None:
+            if wants_json:
+                return (
+                    jsonify(
+                        success=False,
+                        error=f"No item found for UPC {upc}.",
+                    ),
+                    404,
+                )
+            flash(f"No item found for UPC {upc}.", "danger")
+            location, totals = _serialize_scan_totals(el)
+            return (
+                render_template(
+                    "events/scan_count.html",
+                    event=ev,
+                    location=location,
+                    form=form,
+                    totals=totals,
+                ),
+                404,
+            )
+
+        sheet = EventStandSheetItem.query.filter_by(
+            event_location_id=el.id, item_id=item.id
+        ).first()
+        if sheet is None:
+            sheet = EventStandSheetItem(
+                event_location_id=el.id, item_id=item.id
+            )
+            db.session.add(sheet)
+
+        sheet.transferred_out = (sheet.transferred_out or 0.0) + quantity
+        sheet.closing_count = (sheet.closing_count or 0.0) + quantity
+        db.session.commit()
+
+        location, totals = _serialize_scan_totals(el)
+
+        if wants_json:
+            return jsonify(
+                success=True,
+                item={
+                    "id": item.id,
+                    "name": item.name,
+                    "upc": item.upc,
+                    "quantity": quantity,
+                    "total": float(sheet.transferred_out or 0.0),
+                    "base_unit": item.base_unit,
+                },
+                totals=totals,
+            )
+
+        flash(
+            f"Recorded {quantity:g} {item.base_unit} for {item.name}.",
+            "success",
+        )
+        return redirect(
+            url_for(
+                "event.scan_counts",
+                event_id=event_id,
+                location_id=location_id,
+            )
+        )
+
+    location, totals = _serialize_scan_totals(el)
+    return render_template(
+        "events/scan_count.html",
+        event=ev,
+        location=location,
+        form=form,
+        totals=totals,
     )
 
 
