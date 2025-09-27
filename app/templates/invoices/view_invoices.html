@@ -1,18 +1,31 @@
 <!-- templates/view_invoices.html -->
 
 {% extends "base.html" %}
+{% from "macros/column_visibility.html" import column_visibility_dropdown %}
 
 {% block title %}Home{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
     <h2>Invoices</h2>
-    <div class="row mb-3">
+    <div class="row mb-3 align-items-start justify-content-between">
         <div class="col">
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createInvoiceModal">Create Invoice</button>
-            <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
-            <a href="{{ url_for('report.vendor_invoice_report') }}" class="btn btn-secondary">Vendor Report</a>
-            <a href="{{ url_for('report.product_sales_report') }}" class="btn btn-secondary">Revenue Report</a>
+            <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createInvoiceModal">Create Invoice</button>
+            <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
+            <a href="{{ url_for('report.vendor_invoice_report') }}" class="btn btn-secondary mb-3">Vendor Report</a>
+            <a href="{{ url_for('report.product_sales_report') }}" class="btn btn-secondary mb-3">Revenue Report</a>
+        </div>
+        <div class="col-auto text-end">
+            {{ column_visibility_dropdown(
+                table_id='invoiceTable',
+                storage_key='invoiceTableColumnVisibility',
+                columns=[
+                    {'id': 'toggle-invoice-number', 'target': 'col-invoice-number', 'label': 'Invoice Number', 'checked': True},
+                    {'id': 'toggle-invoice-date', 'target': 'col-invoice-date', 'label': 'Date', 'checked': True},
+                    {'id': 'toggle-invoice-customer', 'target': 'col-invoice-customer', 'label': 'Customer Name', 'checked': True},
+                    {'id': 'toggle-invoice-actions', 'target': 'col-invoice-actions', 'label': 'Actions', 'checked': True},
+                ]
+            ) }}
         </div>
     </div>
 
@@ -20,19 +33,19 @@
     <table class="table" id="invoiceTable">
         <thead>
             <tr>
-                <th>Invoice Number</th>
-                <th>Date</th>
-                <th>Customer Name</th>
-                <th>Action</th>
+                <th scope="col" class="col-invoice-number">Invoice Number</th>
+                <th scope="col" class="col-invoice-date">Date</th>
+                <th scope="col" class="col-invoice-customer">Customer Name</th>
+                <th scope="col" class="col-invoice-actions">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for invoice in invoices.items %}
             <tr>
-                <td>{{ invoice.id }}</td>
-                <td>{{ invoice.date_created|format_datetime('%Y-%m-%d') }}</td>
-                <td>{{ invoice.customer.first_name }} {{ invoice.customer.last_name }}</td>
-                <td>
+                <td class="col-invoice-number">{{ invoice.id }}</td>
+                <td class="col-invoice-date">{{ invoice.date_created|format_datetime('%Y-%m-%d') }}</td>
+                <td class="col-invoice-customer">{{ invoice.customer.first_name }} {{ invoice.customer.last_name }}</td>
+                <td class="col-invoice-actions">
                     <a href="{{ url_for('invoice.view_invoice', invoice_id=invoice.id) }}" class="btn btn-primary mr-2">View</a>
                     <form action="{{ url_for('invoice.delete_invoice', invoice_id=invoice.id) }}" method="post" class="d-inline">
                         {{ delete_form.hidden_tag() }}
@@ -135,14 +148,14 @@ $(document).ready(function(){
         const tbody = $('#invoiceTable tbody');
         tbody.empty();
         invoices.forEach(function(inv){
-            const row = `<tr>
-                <td>${inv.id}</td>
-                <td>${inv.date}</td>
-                <td>${inv.customer}</td>
-                <td>
-                    <a href="/view_invoice/${inv.id}" class="btn btn-primary mr-2">View</a>
-                    <form action="/delete_invoice/${inv.id}" method="post" class="d-inline">
-                        ${deleteFormHTML}
+        const row = `<tr>
+            <td class="col-invoice-number">${inv.id}</td>
+            <td class="col-invoice-date">${inv.date}</td>
+            <td class="col-invoice-customer">${inv.customer}</td>
+            <td class="col-invoice-actions">
+                <a href="/view_invoice/${inv.id}" class="btn btn-primary mr-2">View</a>
+                <form action="/delete_invoice/${inv.id}" method="post" class="d-inline">
+                    ${deleteFormHTML}
                         <button type="submit" class="btn btn-danger">Delete</button>
                     </form>
                 </td>

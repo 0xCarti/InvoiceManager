@@ -1,23 +1,36 @@
 {% extends 'base.html' %}
+{% from 'macros/column_visibility.html' import column_visibility_dropdown %}
 
 {% block content %}
 <div class="container mt-4">
     <h2>Activity Logs</h2>
+    <div class="d-flex justify-content-end mb-3">
+        {{ column_visibility_dropdown(
+            table_id='activity-logs-table',
+            storage_key='activityLogsTableColumnVisibility',
+            align='end',
+            columns=[
+                {'id': 'toggle-log-timestamp', 'target': 'col-log-timestamp', 'label': 'Timestamp', 'checked': True},
+                {'id': 'toggle-log-user', 'target': 'col-log-user', 'label': 'User', 'checked': True},
+                {'id': 'toggle-log-activity', 'target': 'col-log-activity', 'label': 'Activity', 'checked': True},
+            ]
+        ) }}
+    </div>
     <div class="table-responsive">
-    <table class="table">
+    <table class="table" id="activity-logs-table">
         <thead>
             <tr>
-                <th>Timestamp</th>
-                <th>User</th>
-                <th>Activity</th>
+                <th scope="col" class="col-log-timestamp">Timestamp</th>
+                <th scope="col" class="col-log-user">User</th>
+                <th scope="col" class="col-log-activity">Activity</th>
             </tr>
         </thead>
         <tbody>
             {% for log in logs %}
             <tr>
-                <td>{{ log.timestamp|format_datetime('%Y-%m-%d %H:%M:%S') }}</td>
-                <td>{{ log.user.email if log.user else 'System' }}</td>
-                <td>{{ log.activity }}</td>
+                <td class="col-log-timestamp">{{ log.timestamp|format_datetime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td class="col-log-user">{{ log.user.email if log.user else 'System' }}</td>
+                <td class="col-log-activity">{{ log.activity }}</td>
             </tr>
             {% endfor %}
         </tbody>

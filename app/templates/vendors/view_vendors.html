@@ -1,20 +1,37 @@
 <!-- templates=view_vendors.html -->
 {% extends "base.html" %}
+{% from "macros/column_visibility.html" import column_visibility_dropdown %}
 
 {% block title %}View Vendors{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
     <h2>Vendors</h2>
-    <button type="button" class="btn btn-primary mb-3" id="createVendorBtn">Create Vendor</button>
+    <div class="row justify-content-between">
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary mb-3" id="createVendorBtn">Create Vendor</button>
+        </div>
+        <div class="col-auto text-end">
+            {{ column_visibility_dropdown(
+                table_id='vendorTable',
+                storage_key='vendorTableColumnVisibility',
+                columns=[
+                    {'id': 'toggle-vendor-name', 'target': 'col-vendor-name', 'label': 'Name', 'checked': True},
+                    {'id': 'toggle-vendor-gst', 'target': 'col-vendor-gst', 'label': 'GST Exempt', 'checked': True},
+                    {'id': 'toggle-vendor-pst', 'target': 'col-vendor-pst', 'label': 'PST Exempt', 'checked': True},
+                    {'id': 'toggle-vendor-actions', 'target': 'col-vendor-actions', 'label': 'Actions', 'checked': True},
+                ]
+            ) }}
+        </div>
+    </div>
     <div class="table-responsive">
     <table class="table" id="vendorTable">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>GST Exempt</th>
-                <th>PST Exempt</th>
-                <th>Action</th>
+                <th scope="col" class="col-vendor-name">Name</th>
+                <th scope="col" class="col-vendor-gst">GST Exempt</th>
+                <th scope="col" class="col-vendor-pst">PST Exempt</th>
+                <th scope="col" class="col-vendor-actions">Actions</th>
             </tr>
         </thead>
         <tbody>

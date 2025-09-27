@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'macros/column_visibility.html' import column_visibility_dropdown %}
 
 {% block content %}
 <div class="container mt-4">
@@ -10,24 +11,38 @@
             <button type="submit" class="btn btn-success">{{ invite_form.submit.label.text }}</button>
         </div>
     </form>
+    <div class="d-flex justify-content-end mb-2">
+        {{ column_visibility_dropdown(
+            table_id='admin-users-table',
+            storage_key='adminUsersTableColumnVisibility',
+            align='end',
+            columns=[
+                {'id': 'toggle-user-email', 'target': 'col-user-email', 'label': 'Email', 'checked': True},
+                {'id': 'toggle-user-active', 'target': 'col-user-active', 'label': 'Active', 'checked': True},
+                {'id': 'toggle-user-admin', 'target': 'col-user-admin', 'label': 'Admin', 'checked': True},
+                {'id': 'toggle-user-actions', 'target': 'col-user-actions', 'label': 'Actions', 'checked': True},
+                {'id': 'toggle-user-profile', 'target': 'col-user-profile', 'label': 'Profile', 'checked': True},
+            ]
+        ) }}
+    </div>
     <div class="table-responsive">
-    <table class="table">
+    <table class="table" id="admin-users-table">
         <thead>
         <tr>
-            <th>Email</th>
-            <th>Active</th>
-            <th>Admin</th>
-            <th>Actions</th>
-            <th>Profile</th>
+            <th scope="col" class="col-user-email">Email</th>
+            <th scope="col" class="col-user-active">Active</th>
+            <th scope="col" class="col-user-admin">Admin</th>
+            <th scope="col" class="col-user-actions">Actions</th>
+            <th scope="col" class="col-user-profile">Profile</th>
         </tr>
         </thead>
         <tbody>
         {% for user in users %}
         <tr>
-            <td>{{ user.email }}</td>
-            <td>{{ user.active }}</td>
-            <td>{{ user.is_admin }}</td>
-            <td>
+            <td class="col-user-email">{{ user.email }}</td>
+            <td class="col-user-active">{{ user.active }}</td>
+            <td class="col-user-admin">{{ user.is_admin }}</td>
+            <td class="col-user-actions">
                 <form action="{{ url_for('admin.users', user_id=user.id) }}" method="post" class="d-inline">
                     {{ form.hidden_tag() }}
                     <button type="submit" name="action" value="toggle_active" class="btn btn-sm btn-primary"
@@ -51,7 +66,7 @@
                     </button>
                 </form>
             </td>
-            <td>
+            <td class="col-user-profile">
                 <a href="{{ url_for('admin.user_profile', user_id=user.id) }}" class="btn btn-sm btn-info">View Profile</a>
             </td>
         </tr>

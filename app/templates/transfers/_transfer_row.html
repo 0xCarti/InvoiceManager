@@ -1,8 +1,8 @@
 <tr id="transfer-row-{{ transfer.id }}">
-    <th scope="row">{{ transfer.id }}</th>
-    <td>{{ transfer.from_location.name }}</td>
-    <td>{{ transfer.to_location.name }}</td>
-    <td>
+    <th scope="row" class="col-transfer-id">{{ transfer.id }}</th>
+    <td class="col-transfer-from">{{ transfer.from_location.name }}</td>
+    <td class="col-transfer-to">{{ transfer.to_location.name }}</td>
+    <td class="col-transfer-actions">
         <a href="{{ url_for('transfer.view_transfer', transfer_id=transfer.id) }}" class="btn btn-primary" target="_blank">View</a>
         <button type="button" class="btn btn-secondary edit-transfer-btn" data-id="{{ transfer.id }}">Edit</button>
         {% if transfer.completed %}
