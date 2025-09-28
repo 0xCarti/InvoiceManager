@@ -632,6 +632,7 @@ def receive_invoice(po_id):
             location_name=db.session.get(Location, form.location_id.data).name,
             received_date=form.received_date.data,
             invoice_number=form.invoice_number.data,
+            department=form.department.data or None,
             gst=form.gst.data or 0.0,
             pst=form.pst.data or 0.0,
             delivery_charge=form.delivery_charge.data or 0.0,

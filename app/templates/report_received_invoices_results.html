@@ -18,6 +18,7 @@
                 <th scope="col">Received By</th>
                 <th scope="col">Received Date</th>
                 <th scope="col">Vendor</th>
+                <th scope="col">Department</th>
                 <th scope="col" class="text-end">Invoice Total</th>
                 <th scope="col">Invoice Number</th>
             </tr>
@@ -31,6 +32,7 @@
                     <td>{{ row.received_by }}</td>
                     <td>{{ row.invoice.received_date|format_datetime('%Y-%m-%d') }}</td>
                     <td>{{ row.invoice.vendor_name }}</td>
+                    <td>{{ row.invoice.department or '—' }}</td>
                     <td class="text-end">${{ '%.2f'|format(row.invoice.total) }}</td>
                     <td>{{ row.invoice.invoice_number or '' }}</td>
                 </tr>
@@ -38,7 +40,7 @@
         </tbody>
         <tfoot>
             <tr>
-                <th colspan="4" class="text-end">Total for {{ results|length }} invoice{% if results|length != 1 %}s{% endif %}:</th>
+                <th colspan="5" class="text-end">Total for {{ results|length }} invoice{% if results|length != 1 %}s{% endif %}:</th>
                 <th class="text-end">${{ '%.2f'|format(totals.amount) }}</th>
                 <th></th>
             </tr>

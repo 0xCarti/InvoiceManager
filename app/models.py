@@ -484,6 +484,7 @@ class PurchaseInvoice(db.Model):
     )
     received_date = db.Column(db.Date, nullable=False)
     invoice_number = db.Column(db.String(50), nullable=True)
+    department = db.Column(db.String(50), nullable=True)
     gst = db.Column(db.Float, nullable=False, default=0.0)
     pst = db.Column(db.Float, nullable=False, default=0.0)
     delivery_charge = db.Column(db.Float, nullable=False, default=0.0)
