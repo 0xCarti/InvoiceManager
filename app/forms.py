@@ -20,6 +20,7 @@ from wtforms import (
     SelectField,
     SelectMultipleField,
     StringField,
+    TextAreaField,
     SubmitField,
 )
 from wtforms.validators import (
@@ -762,4 +763,12 @@ class NotificationForm(FlaskForm):
     )
     notify_transfers = BooleanField("Send text on new transfer")
     submit = SubmitField("Update Notifications")
+
+
+class NoteForm(FlaskForm):
+    content = TextAreaField(
+        "Note", validators=[DataRequired(), Length(max=2000)]
+    )
+    pinned = BooleanField("Pin note")
+    submit = SubmitField("Save Note")
 

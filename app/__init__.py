@@ -286,6 +286,7 @@ def create_app(args: list):
         from app.routes.item_routes import item
         from app.routes.location_routes import location
         from app.routes.main_routes import main
+        from app.routes.note_routes import notes
         from app.routes.product_routes import product
         from app.routes.purchase_routes import purchase
         from app.routes.report_routes import report
@@ -303,6 +304,7 @@ def create_app(args: list):
         app.register_blueprint(customer)
         app.register_blueprint(invoice)
         app.register_blueprint(product)
+        app.register_blueprint(notes)
         app.register_blueprint(purchase)
         app.register_blueprint(report)
         app.register_blueprint(vendor)

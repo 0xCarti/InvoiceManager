@@ -12,7 +12,10 @@
                 style="margin-bottom: 50px; margin-top: -30px; max-width: 500px; width: 100%; height: auto;">
         </div>
     </div>
-    <h1>Invoice - {{ invoice.customer.first_name }} {{ invoice.customer.last_name }}</h1>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-2">
+        <h1 class="mb-0">Invoice - {{ invoice.customer.first_name }} {{ invoice.customer.last_name }}</h1>
+        <a class="btn btn-outline-secondary" href="{{ url_for('notes.entity_notes', entity_type='sales_invoice', entity_id=invoice.id) }}">View Notes</a>
+    </div>
     <div class="row">
         <div class="col">
             <p><strong>Invoice Number:</strong> {{ invoice.id }}</p>
