@@ -39,6 +39,7 @@ from app.models import (
     Product,
     TerminalSale,
 )
+from app.utils.activity import log_activity
 
 event = Blueprint("event", __name__)
 
@@ -75,6 +76,7 @@ def create_event():
         )
         db.session.add(ev)
         db.session.commit()
+        log_activity(f"Created event {ev.id}")
         flash("Event created")
         return redirect(url_for("event.view_events"))
     return render_template("events/create_event.html", form=form)
@@ -108,6 +110,7 @@ def create_event_ajax():
         )
         db.session.add(ev)
         db.session.commit()
+        log_activity(f"Created event {ev.id}")
         return render_template(
             "events/_event_row.html", e=ev, type_labels=dict(EVENT_TYPES)
         )
@@ -127,6 +130,7 @@ def edit_event(event_id):
         ev.end_date = form.end_date.data
         ev.event_type = form.event_type.data
         db.session.commit()
+        log_activity(f"Edited event {ev.id}")
         flash("Event updated")
         return redirect(url_for("event.view_events"))
     return render_template("events/edit_event.html", form=form, event=ev)
@@ -138,8 +142,10 @@ def delete_event(event_id):
     ev = db.session.get(Event, event_id)
     if ev is None:
         abort(404)
+    event_id = ev.id
     db.session.delete(ev)
     db.session.commit()
+    log_activity(f"Deleted event {event_id}")
     flash("Event deleted")
     return redirect(url_for("event.view_events"))
 
@@ -171,6 +177,14 @@ def add_location(event_id):
         ]
         db.session.add_all(event_locations)
         db.session.commit()
+        location_names = []
+        for location_id in selected_ids:
+            location = db.session.get(Location, location_id)
+            location_names.append(location.name if location else str(location_id))
+        location_list = ", ".join(location_names)
+        log_activity(
+            f"Assigned locations {location_list} to event {event_id}"
+        )
         flash(
             "Locations assigned"
             if len(event_locations) > 1
@@ -193,6 +207,7 @@ def add_terminal_sale(event_id, el_id):
         flash("This location is closed and cannot accept new sales.")
         return redirect(url_for("event.view_event", event_id=event_id))
     if request.method == "POST":
+        updated = False
         for product in el.location.products:
             qty = request.form.get(f"qty_{product.id}")
             try:
@@ -206,7 +221,9 @@ def add_terminal_sale(event_id, el_id):
 
             if amount:
                 if sale:
-                    sale.quantity = amount
+                    if sale.quantity != amount:
+                        sale.quantity = amount
+                        updated = True
                 else:
                     sale = TerminalSale(
                         event_location_id=el_id,
@@ -215,10 +232,14 @@ def add_terminal_sale(event_id, el_id):
                         sold_at=datetime.utcnow(),
                     )
                     db.session.add(sale)
+                    updated = True
             elif sale:
                 db.session.delete(sale)
+                updated = True
 
         db.session.commit()
+        if updated:
+            log_activity(f"Updated terminal sales for event location {el_id}")
         flash("Sales recorded")
         return redirect(url_for("event.view_event", event_id=event_id))
 
@@ -402,6 +423,10 @@ def scan_counts(event_id, location_id):
         sheet.transferred_out = (sheet.transferred_out or 0.0) + quantity
         sheet.closing_count = (sheet.closing_count or 0.0) + quantity
         db.session.commit()
+        log_activity(
+            f"Recorded scan count for event {event_id}"
+            f" location {location_id} item {item.id}"
+        )
 
         location, totals = _serialize_scan_totals(el)
 
@@ -557,6 +582,10 @@ def upload_terminal_sales(event_id):
                     )
                 )
         db.session.commit()
+        if rows:
+            log_activity(
+                f"Uploaded terminal sales for event {event_id} from {filename}"
+            )
 
     return render_template(
         "events/upload_terminal_sales.html",
@@ -579,6 +608,9 @@ def confirm_location(event_id, el_id):
     if form.validate_on_submit():
         el.confirmed = True
         db.session.commit()
+        log_activity(
+            f"Confirmed event location {el_id} for event {event_id}"
+        )
         flash("Location confirmed")
         return redirect(url_for("event.view_event", event_id=event_id))
     return render_template(
@@ -839,6 +871,9 @@ def stand_sheet(event_id, location_id):
                 or 0
             )
         db.session.commit()
+        log_activity(
+            f"Updated stand sheet for event {event_id} location {location_id}"
+        )
         flash("Stand sheet saved")
         location, stand_items = _get_stand_items(location_id, event_id)
 
@@ -988,6 +1023,9 @@ def count_sheet(event_id, location_id):
             sheet.transferred_out = base_qty
             sheet.closing_count = total
         db.session.commit()
+        log_activity(
+            f"Updated count sheet for event {event_id} location {location_id}"
+        )
         flash("Count sheet saved")
         return redirect(url_for("event.view_event", event_id=event_id))
 
@@ -1080,6 +1118,7 @@ def close_event(event_id):
         TerminalSale.query.filter_by(event_location_id=el.id).delete()
     ev.closed = True
     db.session.commit()
+    log_activity(f"Closed event {event_id}")
     flash("Event closed")
     return redirect(url_for("event.view_events"))
 
