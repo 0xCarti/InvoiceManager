@@ -579,6 +579,19 @@ class ReceiveInvoiceForm(FlaskForm):
     location_id = SelectField(
         "Location", coerce=int, validators=[DataRequired()]
     )
+    department = SelectField(
+        "Department",
+        choices=[
+            ("", "—"),
+            ("Kitchen", "Kitchen"),
+            ("Concessions", "Concessions"),
+            ("Banquets", "Banquets"),
+            ("Beverages", "Beverages"),
+            ("Office", "Office"),
+            ("Other", "Other"),
+        ],
+        validators=[Optional()],
+    )
     gst = DecimalField("GST Amount", validators=[Optional()], default=0)
     pst = DecimalField("PST Amount", validators=[Optional()], default=0)
     delivery_charge = DecimalField(
