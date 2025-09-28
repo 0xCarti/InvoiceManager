@@ -17,6 +17,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy.orm import selectinload
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.exceptions import NotFound
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -24,6 +25,7 @@ from werkzeug.utils import safe_join, secure_filename
 
 from app import limiter
 from app.forms import (
+    ActivityLogFilterForm,
     ChangePasswordForm,
     CreateBackupForm,
     ImportForm,
@@ -518,8 +520,39 @@ def activity_logs():
     """Display a log of user actions."""
     if not current_user.is_admin:
         abort(403)
-    logs = ActivityLog.query.order_by(ActivityLog.timestamp.desc()).all()
-    return render_template("admin/activity_logs.html", logs=logs)
+    form = ActivityLogFilterForm(meta={"csrf": False})
+    user_choices = [(-1, "All Users"), (-2, "System Activity")]
+    user_choices.extend(
+        (user.id, user.email) for user in User.query.order_by(User.email)
+    )
+    form.user_id.choices = user_choices
+    form.process(request.args)
+    if form.user_id.data is None:
+        form.user_id.data = -1
+
+    query = ActivityLog.query.options(selectinload(ActivityLog.user))
+
+    user_filter = form.user_id.data
+    if user_filter is not None and user_filter != -1:
+        if user_filter == -2:
+            query = query.filter(ActivityLog.user_id.is_(None))
+        else:
+            query = query.filter(ActivityLog.user_id == user_filter)
+
+    activity_filter = (form.activity.data or "").strip()
+    if activity_filter:
+        query = query.filter(ActivityLog.activity.ilike(f"%{activity_filter}%"))
+
+    if form.start_date.data:
+        start_dt = datetime.combine(form.start_date.data, datetime.min.time())
+        query = query.filter(ActivityLog.timestamp >= start_dt)
+
+    if form.end_date.data:
+        end_dt = datetime.combine(form.end_date.data, datetime.max.time())
+        query = query.filter(ActivityLog.timestamp <= end_dt)
+
+    logs = query.order_by(ActivityLog.timestamp.desc()).all()
+    return render_template("admin/activity_logs.html", logs=logs, form=form)
 
 
 @admin.route("/controlpanel/system", methods=["GET"])
