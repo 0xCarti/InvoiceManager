@@ -584,6 +584,39 @@ class ActivityLog(db.Model):
     user = relationship("User", backref="activity_logs")
 
 
+class Note(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    entity_type = db.Column(db.String(50), nullable=False)
+    entity_id = db.Column(db.String(64), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+    pinned = db.Column(
+        db.Boolean, default=False, nullable=False, server_default="0"
+    )
+    pinned_at = db.Column(db.DateTime, nullable=True)
+
+    user = relationship("User", backref="notes")
+
+    __table_args__ = (
+        db.Index("ix_note_entity", "entity_type", "entity_id"),
+        db.Index("ix_note_pinned", "entity_type", "pinned"),
+    )
+
+    def set_pinned(self, value: bool) -> None:
+        """Update the pinned state and timestamp."""
+
+        if value and not self.pinned:
+            self.pinned = True
+            self.pinned_at = datetime.utcnow()
+        elif not value and self.pinned:
+            self.pinned = False
+            self.pinned_at = None
+
+
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
