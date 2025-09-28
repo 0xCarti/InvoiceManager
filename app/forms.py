@@ -489,6 +489,19 @@ class InvoiceFilterForm(FlaskForm):
     submit = SubmitField("Filter")
 
 
+class ActivityLogFilterForm(FlaskForm):
+    user_id = SelectField(
+        "User",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+    )
+    activity = StringField("Activity Contains", validators=[Optional()])
+    start_date = DateField("Start Date", validators=[Optional()])
+    end_date = DateField("End Date", validators=[Optional()])
+    submit = SubmitField("Filter")
+
+
 class CreateBackupForm(FlaskForm):
     submit = SubmitField("Create Backup")
 

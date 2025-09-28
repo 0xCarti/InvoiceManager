@@ -4,17 +4,46 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Activity Logs</h2>
-    <div class="d-flex justify-content-end mb-3">
-        {{ column_visibility_dropdown(
-            table_id='activity-logs-table',
-            storage_key='activityLogsTableColumnVisibility',
-            align='end',
-            columns=[
-                {'id': 'toggle-log-timestamp', 'target': 'col-log-timestamp', 'label': 'Timestamp', 'checked': True},
-                {'id': 'toggle-log-user', 'target': 'col-log-user', 'label': 'User', 'checked': True},
-                {'id': 'toggle-log-activity', 'target': 'col-log-activity', 'label': 'Activity', 'checked': True},
-            ]
-        ) }}
+    <div class="row g-3 align-items-end mb-3">
+        <div class="col-12 col-xl">
+            <form method="get" class="row g-3 align-items-end">
+                {{ form.hidden_tag() }}
+                <div class="col-12 col-md-6 col-xl-3">
+                    {{ form.user_id.label(class="form-label") }}
+                    {{ form.user_id(class="form-select") }}
+                </div>
+                <div class="col-12 col-md-6 col-xl-3">
+                    {{ form.activity.label(class="form-label") }}
+                    {{ form.activity(class="form-control", placeholder="Contains text") }}
+                </div>
+                <div class="col-12 col-md-6 col-xl-3">
+                    {{ form.start_date.label(class="form-label") }}
+                    {{ form.start_date(class="form-control", type="date") }}
+                </div>
+                <div class="col-12 col-md-6 col-xl-3">
+                    {{ form.end_date.label(class="form-label") }}
+                    {{ form.end_date(class="form-control", type="date") }}
+                </div>
+                <div class="col-12 col-md-auto">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Apply</button>
+                        <a href="{{ url_for('admin.activity_logs') }}" class="btn btn-secondary">Clear</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="col-12 col-xl-auto text-xl-end">
+            {{ column_visibility_dropdown(
+                table_id='activity-logs-table',
+                storage_key='activityLogsTableColumnVisibility',
+                align='end',
+                columns=[
+                    {'id': 'toggle-log-timestamp', 'target': 'col-log-timestamp', 'label': 'Timestamp', 'checked': True},
+                    {'id': 'toggle-log-user', 'target': 'col-log-user', 'label': 'User', 'checked': True},
+                    {'id': 'toggle-log-activity', 'target': 'col-log-activity', 'label': 'Activity', 'checked': True},
+                ]
+            ) }}
+        </div>
     </div>
     <div class="table-responsive">
     <table class="table" id="activity-logs-table">
