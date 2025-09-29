@@ -29,7 +29,7 @@ def _has_fk(table_name: str, fk_name: str, bind) -> bool:
 
 
 # revision identifiers, used by Alembic.
-revision = "add_purchase_gl_code_to_location_stand_item"
+revision = "202407171234"
 down_revision = None
 branch_labels = None
 depends_on = None
