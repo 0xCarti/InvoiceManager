@@ -11,6 +11,7 @@ from threading import Event, Thread
 from flask import current_app
 
 from app import db
+from app.utils.activity import log_activity
 
 UNIT_SECONDS = {
     "hour": 60 * 60,
@@ -32,14 +33,22 @@ def _get_db_path():
     raise RuntimeError("Only sqlite databases are supported")
 
 
-def create_backup():
-    """Create a timestamped copy of the database."""
+def create_backup(*, initiated_by_system: bool = False):
+    """Create a timestamped copy of the database.
+
+    Parameters
+    ----------
+    initiated_by_system:
+        When ``True`` the activity log will record that the system created a
+        backup (as opposed to a user triggered backup).
+    """
     backups_dir = current_app.config["BACKUP_FOLDER"]
     os.makedirs(backups_dir, exist_ok=True)
     try:
         os.chmod(backups_dir, 0o777)
     except OSError:
         pass
+    logger = current_app.logger if current_app else logging.getLogger(__name__)
     max_backups = current_app.config.get("MAX_BACKUPS")
     files = sorted(f for f in os.listdir(backups_dir) if f.endswith(".db"))
     if max_backups:
@@ -47,8 +56,13 @@ def create_backup():
             oldest = files.pop(0)
             try:
                 os.remove(os.path.join(backups_dir, oldest))
+                if initiated_by_system:
+                    log_activity(
+                        f"System automatically deleted backup {oldest}"
+                    )
+                logger.info("Deleted oldest backup %s", oldest)
             except OSError:
-                pass
+                logger.warning("Failed to delete backup %s", oldest, exc_info=True)
     db_path = _get_db_path()
     filename = f"backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.db"
     backup_path = os.path.join(backups_dir, filename)
@@ -56,8 +70,9 @@ def create_backup():
     db.engine.dispose()
     shutil.copyfile(db_path, backup_path)
 
-    logger = current_app.logger if current_app else logging.getLogger(__name__)
     logger.info("Created backup %s", filename)
+    if initiated_by_system:
+        log_activity(f"System automatically created backup {filename}")
 
     return filename
 
@@ -65,7 +80,7 @@ def create_backup():
 def _backup_loop(app, interval: int):
     while not _stop_event.wait(interval):
         with app.app_context():
-            create_backup()
+            create_backup(initiated_by_system=True)
 
 
 def start_auto_backup_thread(app):
