@@ -198,7 +198,6 @@ class ItemForm(FlaskForm):
             for g in codes
         ]
         self.gl_code_id.choices = purchase_codes
-        self.purchase_gl_code.choices = purchase_codes
 
     @staticmethod
     def _fetch_purchase_gl_codes():
@@ -209,6 +208,78 @@ class ItemForm(FlaskForm):
             .order_by(GLCode.code)
             .all()
         )
+
+
+class PurchaseCostForecastForm(FlaskForm):
+    """Form used to generate purchase cost forecast reports."""
+
+    forecast_period = SelectField(
+        "Forecast Period",
+        coerce=int,
+        choices=[
+            (7, "7 Days"),
+            (14, "14 Days"),
+            (30, "30 Days"),
+            (60, "60 Days"),
+            (90, "90 Days"),
+            (182, "6 Months"),
+            (365, "1 Year"),
+        ],
+        validators=[DataRequired()],
+    )
+    location_id = SelectField(
+        "Location",
+        coerce=int,
+        validators=[Optional()],
+        default=0,
+    )
+    purchase_gl_code_ids = SelectMultipleField(
+        "Purchase GL Codes",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+        default=[0],
+    )
+    item_id = SelectField(
+        "Item",
+        coerce=int,
+        validators=[Optional()],
+        default=0,
+    )
+    submit = SubmitField("Generate Forecast")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        location_choices = [(0, "All Locations")]
+        location_choices.extend(
+            (
+                loc.id,
+                loc.name,
+            )
+            for loc in Location.query.filter_by(archived=False)
+            .order_by(Location.name)
+            .all()
+        )
+        self.location_id.choices = location_choices
+
+        item_choices = [(0, "All Items")]
+        item_choices.extend(load_item_choices())
+        self.item_id.choices = item_choices
+
+        gl_code_choices = [(0, "All Purchase GL Codes")]
+        gl_code_choices.extend(
+            (
+                code.id,
+                f"{code.code} - {code.description}" if code.description else code.code,
+            )
+            for code in GLCode.query.filter(
+                or_(GLCode.code.like("5%"), GLCode.code.like("6%"))
+            ).order_by(GLCode.code)
+        )
+        self.purchase_gl_code_ids.choices = gl_code_choices
+
+        if not self.purchase_gl_code_ids.data:
+            self.purchase_gl_code_ids.data = [0]
 
 
 class TransferItemForm(FlaskForm):
