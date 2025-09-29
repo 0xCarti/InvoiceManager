@@ -206,15 +206,15 @@ def test_purchase_cost_forecast_report(client, app):
     assert b"No forecast data was available" in resp.data
 
 
-def test_purchased_items_report(client, app):
+def test_purchase_inventory_summary_report(client, app):
     email, received_date, item_name = setup_purchase_invoice(app)
     login(client, email, "pass")
 
-    resp = client.get("/reports/purchased-items")
+    resp = client.get("/reports/purchase-inventory-summary")
     assert resp.status_code == 200
 
     resp = client.post(
-        "/reports/purchased-items",
+        "/reports/purchase-inventory-summary",
         data={
             "start_date": "2023-01-01",
             "end_date": "2023-12-31",
@@ -222,6 +222,6 @@ def test_purchased_items_report(client, app):
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    assert b"Purchased Items Report" in resp.data
+    assert b"Purchase Inventory Summary" in resp.data
     assert item_name.encode() in resp.data
     assert b"$15.00" in resp.data

@@ -244,15 +244,15 @@ that developers should keep in mind when working on or extending the routes.
 - **Blueprint name and prefix:** `report` (no additional prefix).
 - **Primary endpoints:**
   - `/reports/vendor-invoices`, `/reports/received-invoices`,
-    `/reports/purchased-items`, `/reports/product-sales`,
+    `/reports/purchase-inventory-summary`, `/reports/product-sales`,
     `/reports/product-recipes`, and `/reports/product-location-sales` each
     expose a GET/POST form for selecting
     filters and redirect to result views when submitted.
   - Result routes (e.g. `/reports/vendor-invoices/results`) compute aggregates
     based on the selected criteria.
 - **Key dependencies:** Uses specialized report forms
-  (`VendorInvoiceReportForm`, `ReceivedInvoiceReportForm`, `ProductSalesReportForm`,
-  `ProductRecipeReportForm`) and queries models including `Invoice`,
+  (`VendorInvoiceReportForm`, `ReceivedInvoiceReportForm`, `PurchaseInventorySummaryForm`,
+  `ProductSalesReportForm`, `ProductRecipeReportForm`) and queries models including `Invoice`,
   `InvoiceProduct`, `Product`, `PurchaseInvoice`, `PurchaseOrder`, `Customer`,
   `TerminalSale`, `User`, `EventLocation`, and `Location`.
 - **Cross-cutting behaviors:** All routes require authentication. The forms are
