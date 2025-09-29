@@ -7,6 +7,7 @@
         <div class="col-auto d-flex flex-wrap gap-2">
             <a href="{{ url_for('item.add_item') }}" class="btn btn-primary mb-3" id="createItemBtn">Add New Item</a>
             <a href="{{ url_for('item.recipe_cost_calculator') }}" class="btn btn-outline-primary mb-3" id="recipeCostCalculatorBtn">Recipe Cost Calculator</a>
+            <a href="{{ url_for('report.purchase_cost_forecast') }}" class="btn btn-outline-primary mb-3" id="forecastedStockItemSalesBtn">Forecasted Stock Item Sales</a>
         </div>
         <div class="col-auto">
             <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="itemsTable" data-storage-key="itemsTableColumnVisibility">
