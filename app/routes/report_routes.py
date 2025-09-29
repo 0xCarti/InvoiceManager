@@ -14,6 +14,9 @@ from app.models import (
     Customer,
     Invoice,
     InvoiceProduct,
+    Item,
+    ItemUnit,
+    ProductRecipeItem,
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseOrder,
@@ -433,6 +436,137 @@ def product_sales_report():
 
     return render_template(
         "report_product_sales.html",
+        form=form,
+        report=report_data,
+        totals=totals,
+        start=start,
+        end=end,
+        selected_product_names=selected_product_names,
+        selected_gl_labels=selected_gl_labels,
+    )
+
+
+@report.route("/reports/product-stock-usage", methods=["GET", "POST"])
+@login_required
+def product_stock_usage_report():
+    """Report showing stock items consumed by product sales."""
+
+    form = ProductSalesReportForm()
+    product_choices = list(form.products.choices)
+    gl_code_choices = list(form.gl_codes.choices)
+    report_data = None
+    totals = None
+    start = None
+    end = None
+    selected_product_names = []
+    selected_gl_labels = []
+
+    if form.validate_on_submit():
+        start = form.start_date.data
+        end = form.end_date.data
+
+        if end < start:
+            form.end_date.errors.append(
+                "End date must be on or after the start date."
+            )
+        else:
+            selected_product_ids = form.products.data or []
+            selected_gl_code_ids = form.gl_codes.data or []
+
+            items_query = (
+                db.session.query(
+                    Item.id.label("item_id"),
+                    Item.name.label("item_name"),
+                    Item.base_unit.label("base_unit"),
+                    Item.cost.label("item_cost"),
+                    db.func.sum(
+                        InvoiceProduct.quantity
+                        * ProductRecipeItem.quantity
+                        * db.func.coalesce(ItemUnit.factor, 1)
+                    ).label("total_quantity"),
+                )
+                .join(ProductRecipeItem, ProductRecipeItem.item_id == Item.id)
+                .join(Product, Product.id == ProductRecipeItem.product_id)
+                .join(InvoiceProduct, InvoiceProduct.product_id == Product.id)
+                .join(Invoice, Invoice.id == InvoiceProduct.invoice_id)
+                .outerjoin(ItemUnit, ItemUnit.id == ProductRecipeItem.unit_id)
+                .filter(
+                    InvoiceProduct.product_id.isnot(None),
+                    Invoice.date_created >= start,
+                    Invoice.date_created <= end,
+                )
+            )
+
+            if selected_product_ids:
+                items_query = items_query.filter(Product.id.in_(selected_product_ids))
+
+            if selected_gl_code_ids:
+                included_ids = [gid for gid in selected_gl_code_ids if gid != -1]
+                conditions = []
+                if included_ids:
+                    conditions.append(Product.sales_gl_code_id.in_(included_ids))
+                if -1 in selected_gl_code_ids:
+                    conditions.append(Product.sales_gl_code_id.is_(None))
+                if conditions:
+                    items_query = items_query.filter(or_(*conditions))
+
+            items = (
+                items_query.group_by(Item.id)
+                .order_by(Item.name)
+                .all()
+            )
+
+            report_data = []
+            total_quantity = 0.0
+            total_cost = 0.0
+
+            for item_row in items:
+                quantity = float(item_row.total_quantity or 0.0)
+                cost_each = float(item_row.item_cost or 0.0)
+                total_item_cost = quantity * cost_each
+
+                total_quantity += quantity
+                total_cost += total_item_cost
+
+                report_data.append(
+                    {
+                        "id": item_row.item_id,
+                        "name": item_row.item_name,
+                        "unit": item_row.base_unit or "",
+                        "quantity": quantity,
+                        "cost": cost_each,
+                        "total_cost": total_item_cost,
+                    }
+                )
+
+            totals = {
+                "quantity": total_quantity,
+                "cost": total_cost,
+            }
+
+            if selected_product_ids:
+                selected_product_names = [
+                    label
+                    for value, label in product_choices
+                    if value in selected_product_ids
+                ]
+                form.products.choices = [
+                    choice
+                    for choice in product_choices
+                    if choice[0] in selected_product_ids
+                ]
+            else:
+                form.products.choices = product_choices
+
+            if selected_gl_code_ids:
+                selected_gl_labels = [
+                    label
+                    for value, label in gl_code_choices
+                    if value in selected_gl_code_ids
+                ]
+
+    return render_template(
+        "report_product_stock_usage.html",
         form=form,
         report=report_data,
         totals=totals,
