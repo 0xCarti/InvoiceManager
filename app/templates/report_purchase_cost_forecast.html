@@ -10,6 +10,11 @@
             {{ form.forecast_period(class="form-select", id="forecastPeriod") }}
         </div>
         <div class="col-md-3">
+            <label class="form-label" for="historyWindow">{{ form.history_window.label.text }}</label>
+            {{ form.history_window(class="form-select", id="historyWindow") }}
+            <div class="form-text">Choose how much past activity to include (up to one year).</div>
+        </div>
+        <div class="col-md-3">
             <label class="form-label" for="locationSelect">{{ form.location_id.label.text }}</label>
             {{ form.location_id(class="form-select", id="locationSelect") }}
         </div>
