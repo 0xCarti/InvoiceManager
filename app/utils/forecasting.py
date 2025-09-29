@@ -188,6 +188,7 @@ class DemandForecastingHelper:
         attendance_multiplier: float = 1.0,
         weather_multiplier: float = 1.0,
         promo_multiplier: float = 1.0,
+        purchase_gl_code_ids: Optional[Sequence[int]] = None,
     ) -> List[ForecastRecommendation]:
         """Return forecast recommendations for the supplied filters."""
 
@@ -278,6 +279,14 @@ class DemandForecastingHelper:
             location = locations.get(location_id)
             if item is None or location is None:
                 continue
+
+            if purchase_gl_code_ids:
+                effective_code = item.purchase_gl_code_for_location(location.id)
+                if (
+                    effective_code is None
+                    or effective_code.id not in purchase_gl_code_ids
+                ):
+                    continue
 
             base_consumption = history["sales_qty"] + history["transfer_out_qty"]
             adjusted_demand = base_consumption * multiplier

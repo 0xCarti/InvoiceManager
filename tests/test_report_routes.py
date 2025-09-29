@@ -9,36 +9,56 @@ from tests.utils import login
 
 def setup_invoice(app):
     with app.app_context():
-        user = User(
-            email="report@example.com",
-            password=generate_password_hash("pass"),
-            active=True,
-        )
-        customer = Customer(first_name="Jane", last_name="Doe")
-        product = Product(name="Widget", price=10.0, cost=5.0)
-        db.session.add_all([user, customer, product])
-        db.session.commit()
-        invoice = Invoice(
-            id="INVREP001",
-            user_id=user.id,
-            customer_id=customer.id,
-            date_created=date(2023, 1, 1),
-        )
-        db.session.add(invoice)
-        db.session.commit()
-        db.session.add(
-            InvoiceProduct(
-                invoice_id=invoice.id,
-                quantity=2,
-                product_id=product.id,
-                product_name=product.name,
-                unit_price=product.price,
-                line_subtotal=20,
-                line_gst=0,
-                line_pst=0,
+        user = User.query.filter_by(email="report@example.com").first()
+        if not user:
+            user = User(
+                email="report@example.com",
+                password=generate_password_hash("pass"),
+                active=True,
             )
-        )
+            db.session.add(user)
+
+        customer = Customer.query.filter_by(first_name="Jane", last_name="Doe").first()
+        if not customer:
+            customer = Customer(first_name="Jane", last_name="Doe")
+            db.session.add(customer)
+
+        product = Product.query.filter_by(name="Widget").first()
+        if not product:
+            product = Product(name="Widget", price=10.0, cost=5.0)
+            db.session.add(product)
+
         db.session.commit()
+        invoice = Invoice.query.get("INVREP001")
+        if not invoice:
+            invoice = Invoice(
+                id="INVREP001",
+                user_id=user.id,
+                customer_id=customer.id,
+                date_created=date(2023, 1, 1),
+            )
+            db.session.add(invoice)
+            db.session.commit()
+
+        has_line_item = (
+            InvoiceProduct.query.filter_by(invoice_id=invoice.id, product_id=product.id)
+            .first()
+            is not None
+        )
+        if not has_line_item:
+            db.session.add(
+                InvoiceProduct(
+                    invoice_id=invoice.id,
+                    quantity=2,
+                    product_id=product.id,
+                    product_name=product.name,
+                    unit_price=product.price,
+                    line_subtotal=20,
+                    line_gst=0,
+                    line_pst=0,
+                )
+            )
+            db.session.commit()
         return customer.id
 
 
@@ -67,3 +87,24 @@ def test_vendor_and_sales_reports(client, app):
     )
     assert resp.status_code == 200
     assert b"Widget" in resp.data
+
+
+def test_purchase_cost_forecast_report(client, app):
+    setup_invoice(app)
+    login(client, "report@example.com", "pass")
+
+    resp = client.get("/reports/purchase-cost-forecast")
+    assert resp.status_code == 200
+
+    resp = client.post(
+        "/reports/purchase-cost-forecast",
+        data={
+            "forecast_period": "7",
+            "location_id": "0",
+            "purchase_gl_code_ids": ["0"],
+            "item_id": "0",
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"No forecast data was available" in resp.data

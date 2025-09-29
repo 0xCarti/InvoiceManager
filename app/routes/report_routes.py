@@ -3,6 +3,7 @@ from flask_login import login_required
 
 from app import db
 from app.forms import (
+    PurchaseCostForecastForm,
     ProductRecipeReportForm,
     ProductSalesReportForm,
     ReceivedInvoiceReportForm,
@@ -20,6 +21,7 @@ from app.models import (
     EventLocation,
     Location,
 )
+from app.utils.forecasting import DemandForecastingHelper
 
 report = Blueprint("report", __name__)
 
@@ -352,4 +354,91 @@ def product_location_sales_report():
 
     return render_template(
         "report_product_location_sales.html", form=form, report=report_data
+    )
+
+
+@report.route("/reports/purchase-cost-forecast", methods=["GET", "POST"])
+@login_required
+def purchase_cost_forecast():
+    """Forecast purchase costs for inventory items over a future period."""
+
+    form = PurchaseCostForecastForm()
+    report_rows = None
+    totals = {"quantity": 0.0, "cost": 0.0}
+    forecast_days = None
+    lookback_days = None
+
+    if form.validate_on_submit():
+        forecast_days = form.forecast_period.data
+        location_id = form.location_id.data or None
+        item_id = form.item_id.data or None
+        purchase_gl_code_ids = [
+            code_id
+            for code_id in (form.purchase_gl_code_ids.data or [])
+            if code_id
+        ]
+
+        if location_id == 0:
+            location_id = None
+        if item_id == 0:
+            item_id = None
+
+        lookback_days = max(forecast_days, 30)
+        helper = DemandForecastingHelper(lookback_days=lookback_days)
+        recommendations = helper.build_recommendations(
+            location_ids=[location_id] if location_id else None,
+            item_ids=[item_id] if item_id else None,
+            purchase_gl_code_ids=purchase_gl_code_ids or None,
+        )
+
+        report_rows = []
+        for rec in recommendations:
+            if lookback_days <= 0:
+                continue
+
+            consumption_per_day = rec.base_consumption / lookback_days
+            incoming_total = (
+                rec.history.get("transfer_in_qty", 0.0)
+                + rec.history.get("invoice_qty", 0.0)
+                + rec.history.get("open_po_qty", 0.0)
+            )
+            incoming_per_day = incoming_total / lookback_days
+
+            forecast_consumption = consumption_per_day * forecast_days
+            forecast_incoming = incoming_per_day * forecast_days
+            net_quantity = max(forecast_consumption - forecast_incoming, 0.0)
+
+            unit_cost = rec.item.cost or 0.0
+            projected_cost = net_quantity * unit_cost
+
+            if net_quantity <= 0 and projected_cost <= 0:
+                continue
+
+            totals["quantity"] += net_quantity
+            totals["cost"] += projected_cost
+
+            report_rows.append(
+                {
+                    "item": rec.item,
+                    "location": rec.location,
+                    "consumption_per_day": consumption_per_day,
+                    "incoming_per_day": incoming_per_day,
+                    "forecast_consumption": forecast_consumption,
+                    "forecast_incoming": forecast_incoming,
+                    "net_quantity": net_quantity,
+                    "unit_cost": unit_cost,
+                    "projected_cost": projected_cost,
+                    "last_activity": rec.history.get("last_activity_ts"),
+                }
+            )
+
+        report_rows.sort(key=lambda row: row["projected_cost"], reverse=True)
+
+    return render_template(
+        "report_purchase_cost_forecast.html",
+        form=form,
+        report_rows=report_rows,
+        totals=totals,
+        forecast_days=forecast_days,
+        lookback_days=lookback_days,
     )
