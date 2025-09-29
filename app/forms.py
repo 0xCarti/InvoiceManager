@@ -227,6 +227,19 @@ class PurchaseCostForecastForm(FlaskForm):
         ],
         validators=[DataRequired()],
     )
+    history_window = SelectField(
+        "History Window",
+        coerce=int,
+        choices=[
+            (30, "30 Days"),
+            (60, "60 Days"),
+            (90, "90 Days"),
+            (182, "6 Months"),
+            (365, "1 Year"),
+        ],
+        default=30,
+        validators=[DataRequired()],
+    )
     location_id = SelectField(
         "Location",
         coerce=int,

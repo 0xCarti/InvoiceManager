@@ -367,9 +367,11 @@ def purchase_cost_forecast():
     totals = {"quantity": 0.0, "cost": 0.0}
     forecast_days = None
     lookback_days = None
+    history_window = None
 
     if form.validate_on_submit():
         forecast_days = form.forecast_period.data
+        history_window = form.history_window.data
         location_id = form.location_id.data or None
         item_id = form.item_id.data or None
         purchase_gl_code_ids = [
@@ -383,7 +385,7 @@ def purchase_cost_forecast():
         if item_id == 0:
             item_id = None
 
-        lookback_days = max(forecast_days, 30)
+        lookback_days = max(history_window, 30)
         helper = DemandForecastingHelper(lookback_days=lookback_days)
         recommendations = helper.build_recommendations(
             location_ids=[location_id] if location_id else None,
