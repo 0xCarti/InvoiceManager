@@ -41,6 +41,16 @@ from app.models import (
 )
 from app.utils.activity import log_activity
 
+STANDSHEET_PAGE_SIZE = 20
+
+
+def _chunk_stand_sheet_items(items, chunk_size=STANDSHEET_PAGE_SIZE):
+    """Split stand sheet items into page-sized chunks."""
+
+    if not items:
+        return [items]
+    return [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
+
 event = Blueprint("event", __name__)
 
 
@@ -73,6 +83,7 @@ def create_event():
             start_date=form.start_date.data,
             end_date=form.end_date.data,
             event_type=form.event_type.data,
+            estimated_sales=form.estimated_sales.data,
         )
         db.session.add(ev)
         db.session.commit()
@@ -107,6 +118,7 @@ def create_event_ajax():
             start_date=form.start_date.data,
             end_date=form.end_date.data,
             event_type=form.event_type.data,
+            estimated_sales=form.estimated_sales.data,
         )
         db.session.add(ev)
         db.session.commit()
@@ -129,6 +141,7 @@ def edit_event(event_id):
         ev.start_date = form.start_date.data
         ev.end_date = form.end_date.data
         ev.event_type = form.event_type.data
+        ev.estimated_sales = form.estimated_sales.data
         db.session.commit()
         log_activity(f"Edited event {ev.id}")
         flash("Event updated")
@@ -1051,7 +1064,17 @@ def bulk_stand_sheets(event_id):
     data = []
     for el in ev.locations:
         loc, items = _get_stand_items(el.location_id, event_id)
-        data.append({"location": loc, "stand_items": items})
+        chunks = _chunk_stand_sheet_items(items)
+        page_count = len(chunks)
+        for page_number, chunk in enumerate(chunks, start=1):
+            data.append(
+                {
+                    "location": loc,
+                    "stand_items": chunk,
+                    "page_number": page_number,
+                    "page_count": page_count,
+                }
+            )
     dt = datetime.now()
     generated_at_local = (
         f"{dt.month}/{dt.day}/{dt.year} {dt.strftime('%I:%M %p').lstrip('0')}"
@@ -1073,7 +1096,17 @@ def bulk_count_sheets(event_id):
     data = []
     for el in ev.locations:
         loc, items = _get_stand_items(el.location_id, event_id)
-        data.append({"location": loc, "stand_items": items})
+        chunks = _chunk_stand_sheet_items(items)
+        page_count = len(chunks)
+        for page_number, chunk in enumerate(chunks, start=1):
+            data.append(
+                {
+                    "location": loc,
+                    "stand_items": chunk,
+                    "page_number": page_number,
+                    "page_count": page_count,
+                }
+            )
     return render_template(
         "events/bulk_count_sheets.html", event=ev, data=data
     )

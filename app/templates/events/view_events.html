@@ -16,6 +16,7 @@
                 {'id': 'toggle-event-type', 'target': 'col-event-type', 'label': 'Type', 'checked': True},
                 {'id': 'toggle-event-start', 'target': 'col-event-start', 'label': 'Start', 'checked': True},
                 {'id': 'toggle-event-end', 'target': 'col-event-end', 'label': 'End', 'checked': True},
+                {'id': 'toggle-event-estimated-sales', 'target': 'col-event-estimated-sales', 'label': 'Estimated Sales', 'checked': True},
                 {'id': 'toggle-event-closed', 'target': 'col-event-closed', 'label': 'Closed', 'checked': True},
                 {'id': 'toggle-event-actions', 'target': 'col-event-actions', 'label': 'Actions', 'checked': True},
             ]
@@ -30,6 +31,7 @@
             <th scope="col" class="col-event-type">Type</th>
             <th scope="col" class="col-event-start">Start</th>
             <th scope="col" class="col-event-end">End</th>
+            <th scope="col" class="col-event-estimated-sales">Estimated Sales</th>
             <th scope="col" class="col-event-closed">Closed</th>
             <th scope="col" class="col-event-actions">Actions</th>
         </tr>
@@ -81,6 +83,7 @@
           {{ create_form.start_date.label }} {{ create_form.start_date(class='form-control') }}
           {{ create_form.end_date.label }} {{ create_form.end_date(class='form-control') }}
           {{ create_form.event_type.label }} {{ create_form.event_type(class='form-control') }}
+          {{ create_form.estimated_sales.label }} {{ create_form.estimated_sales(class='form-control', placeholder='Optional') }}
         </div>
         <div class="modal-footer">
           <button type="submit" class="btn btn-primary">Create</button>

@@ -10,7 +10,12 @@
 </style>
 <h2 class="no-print">Inventory Count Sheets - {{ event.name }}</h2>
 {% for block in data %}
-    <h4 class="mt-4">{{ block.location.name }}</h4>
+    <h4 class="mt-4">
+        {{ block.location.name }}
+        {% if block.page_count > 1 %}
+            <small class="text-muted">Page {{ block.page_number }} of {{ block.page_count }}</small>
+        {% endif %}
+    </h4>
     <div class="table-responsive">
     <table class="table table-bordered">
         <thead>

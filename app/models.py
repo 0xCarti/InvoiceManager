@@ -633,6 +633,7 @@ class Event(db.Model):
     event_type = db.Column(
         db.String(20), nullable=False, default="other", server_default="other"
     )
+    estimated_sales = db.Column(db.Numeric(12, 2), nullable=True)
 
     locations = relationship(
         "EventLocation", back_populates="event", cascade="all, delete-orphan"
