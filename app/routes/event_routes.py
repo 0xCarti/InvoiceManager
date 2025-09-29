@@ -54,22 +54,80 @@ def _chunk_stand_sheet_items(items, chunk_size=STANDSHEET_PAGE_SIZE):
 event = Blueprint("event", __name__)
 
 
+def _parse_date(value):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _get_event_filters(source):
+    return {
+        "type": (source.get("type") or "").strip(),
+        "name_contains": (source.get("name_contains") or "").strip(),
+        "name_not_contains": (source.get("name_not_contains") or "").strip(),
+        "start_date_from": (source.get("start_date_from") or "").strip(),
+        "start_date_to": (source.get("start_date_to") or "").strip(),
+        "end_date_from": (source.get("end_date_from") or "").strip(),
+        "end_date_to": (source.get("end_date_to") or "").strip(),
+        "closed_status": (source.get("closed_status") or "").strip(),
+    }
+
+
+def _apply_event_filters(query, filters):
+    event_type = filters.get("type")
+    if event_type:
+        query = query.filter_by(event_type=event_type)
+
+    name_contains = filters.get("name_contains")
+    if name_contains:
+        query = query.filter(Event.name.ilike(f"%{name_contains}%"))
+
+    name_not_contains = filters.get("name_not_contains")
+    if name_not_contains:
+        query = query.filter(~Event.name.ilike(f"%{name_not_contains}%"))
+
+    start_date_from = _parse_date(filters.get("start_date_from"))
+    if start_date_from:
+        query = query.filter(Event.start_date >= start_date_from)
+
+    start_date_to = _parse_date(filters.get("start_date_to"))
+    if start_date_to:
+        query = query.filter(Event.start_date <= start_date_to)
+
+    end_date_from = _parse_date(filters.get("end_date_from"))
+    if end_date_from:
+        query = query.filter(Event.end_date >= end_date_from)
+
+    end_date_to = _parse_date(filters.get("end_date_to"))
+    if end_date_to:
+        query = query.filter(Event.end_date <= end_date_to)
+
+    closed_status = filters.get("closed_status")
+    if closed_status == "open":
+        query = query.filter(Event.closed.is_(False))
+    elif closed_status == "closed":
+        query = query.filter(Event.closed.is_(True))
+
+    return query
+
+
 @event.route("/events")
 @login_required
 def view_events():
-    event_type = request.args.get("type")
-    query = Event.query
-    if event_type:
-        query = query.filter_by(event_type=event_type)
+    filters = _get_event_filters(request.args)
+    query = _apply_event_filters(Event.query, filters)
     events = query.all()
     create_form = EventForm()
     return render_template(
         "events/view_events.html",
         events=events,
-        event_type=event_type,
         event_types=EVENT_TYPES,
         type_labels=dict(EVENT_TYPES),
         create_form=create_form,
+        filter_values=filters,
     )
 
 
@@ -96,11 +154,8 @@ def create_event():
 @event.route("/events/filter", methods=["POST"])
 @login_required
 def filter_events_ajax():
-    event_type = request.form.get("type")
-    query = Event.query
-    if event_type:
-        query = query.filter_by(event_type=event_type)
-    events = query.all()
+    filters = _get_event_filters(request.form)
+    events = _apply_event_filters(Event.query, filters).all()
     return render_template(
         "events/_events_table.html",
         events=events,
