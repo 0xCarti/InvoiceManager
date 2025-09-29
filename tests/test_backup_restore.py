@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash
 from app import db
 from app.forms import MAX_BACKUP_SIZE
 from app.models import (
+    ActivityLog,
     Event,
     EventLocation,
     EventStandSheetItem,
@@ -26,6 +27,7 @@ from app.models import (
     User,
     Vendor,
 )
+from app.utils.activity import flush_activity_logs
 from app.utils.backup import create_backup, restore_backup
 from tests.utils import login
 
@@ -194,6 +196,34 @@ def test_backup_retention(app):
             time.sleep(1)
         files = sorted(os.listdir(backups_dir))
         assert len(files) == 2
+
+
+def test_auto_backup_activity_logging(app):
+    with app.app_context():
+        backups_dir = app.config["BACKUP_FOLDER"]
+        for f in os.listdir(backups_dir):
+            os.remove(os.path.join(backups_dir, f))
+
+        ActivityLog.query.delete()
+        db.session.commit()
+
+        app.config["MAX_BACKUPS"] = 1
+
+        filename1 = create_backup(initiated_by_system=True)
+        flush_activity_logs()
+
+        logs = [log.activity for log in ActivityLog.query.order_by(ActivityLog.id)]
+        assert logs[-1] == f"System automatically created backup {filename1}"
+
+        time.sleep(1)
+        filename2 = create_backup(initiated_by_system=True)
+        flush_activity_logs()
+
+        logs = [log.activity for log in ActivityLog.query.order_by(ActivityLog.id)]
+        assert (
+            f"System automatically deleted backup {filename1}" in logs
+        )
+        assert logs[-1] == f"System automatically created backup {filename2}"
 
 
 def test_restore_backup_route_rejects_large_file(client, app):
