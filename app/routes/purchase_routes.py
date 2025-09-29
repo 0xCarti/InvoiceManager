@@ -858,59 +858,6 @@ def view_purchase_invoice(invoice_id):
     )
 
 
-@purchase.route("/purchase_invoices/<int:invoice_id>/report")
-@login_required
-def purchase_invoice_report(invoice_id):
-    """Generate a GL code summary for a purchase invoice."""
-    invoice = db.session.get(PurchaseInvoice, invoice_id)
-    if invoice is None:
-        abort(404)
-
-    invoice_user = db.session.get(User, invoice.user_id) if invoice.user_id else None
-
-    gl_totals = {}
-    item_total = 0
-    item_details = []
-    for it in invoice.items:
-        line_total = it.line_total
-        item_total += line_total
-        gl = it.resolved_purchase_gl_code(invoice.location_id)
-        code = gl.code if gl and gl.code else None
-        description = gl.description if gl and gl.description else ""
-        display_code = code or "Unassigned"
-        gl_totals[display_code] = gl_totals.get(display_code, 0) + line_total
-        item_details.append(
-            {
-                "name": it.item_name,
-                "unit": it.unit_name or (it.unit.name if it.unit else None),
-                "quantity": it.quantity,
-                "cost": it.cost,
-                "line_total": line_total,
-                "gl_code": display_code,
-                "gl_description": description,
-            }
-        )
-
-    if item_total:
-        for code, value in list(gl_totals.items()):
-            share = value / item_total
-            gl_totals[code] = (
-                value + share * invoice.pst + share * invoice.delivery_charge
-            )
-
-    if invoice.gst:
-        gl_totals["102702"] = gl_totals.get("102702", 0) + invoice.gst
-
-    report = sorted(gl_totals.items())
-    return render_template(
-        "purchase_invoices/invoice_gl_report.html",
-        invoice=invoice,
-        invoice_user=invoice_user,
-        item_details=item_details,
-        report=report,
-    )
-
-
 @purchase.route(
     "/purchase_invoices/<int:invoice_id>/reverse", methods=["GET", "POST"]
 )
