@@ -56,6 +56,19 @@
         </div>
 
         {% if results %}
+        {% if selected_item_names or selected_gl_labels %}
+        <div class="alert alert-secondary" role="status">
+            <div class="fw-semibold">Filters Applied</div>
+            <ul class="mb-0 small">
+                {% if selected_item_names %}
+                <li><span class="fw-semibold">Items:</span> {{ selected_item_names | join(', ') }}</li>
+                {% endif %}
+                {% if selected_gl_labels %}
+                <li><span class="fw-semibold">GL Codes:</span> {{ selected_gl_labels | join(', ') }}</li>
+                {% endif %}
+            </ul>
+        </div>
+        {% endif %}
         <div class="table-responsive">
             <table class="table table-bordered table-striped align-middle">
                 <thead class="table-light">
