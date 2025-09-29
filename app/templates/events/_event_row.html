@@ -3,6 +3,13 @@
     <td class="col-event-type">{{ type_labels.get(e.event_type, e.event_type) }}</td>
     <td class="col-event-start">{{ e.start_date }}</td>
     <td class="col-event-end">{{ e.end_date }}</td>
+    <td class="col-event-estimated-sales">
+        {% if e.estimated_sales is not none %}
+            ${{ '{:,.2f}'.format(e.estimated_sales) }}
+        {% else %}
+            —
+        {% endif %}
+    </td>
     <td class="col-event-closed">{{ 'Yes' if e.closed else 'No' }}</td>
     <td class="col-event-actions">
         <a href="{{ url_for('event.view_event', event_id=e.id) }}">View</a>

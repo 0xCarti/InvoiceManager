@@ -119,7 +119,12 @@
     <div class="generated">Generated {{ generated_at_local }}</div>
   </div>
   <div class="meta">
-    <div>Location: {{ entry.location.name }}</div>
+    <div>
+      Location: {{ entry.location.name }}
+      {% if entry.page_count > 1 %}
+        <span class="text-muted">(Page {{ entry.page_number }} of {{ entry.page_count }})</span>
+      {% endif %}
+    </div>
     <div>Event: {{ event.name }}</div>
     <div>Event Date/Time: {{ event.start_date|format_datetime('%-m/%-d/%Y %-I:%M %p') }}</div>
   </div>

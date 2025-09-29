@@ -681,6 +681,9 @@ class EventForm(FlaskForm):
     event_type = SelectField(
         "Event Type", choices=EVENT_TYPES, validators=[DataRequired()]
     )
+    estimated_sales = DecimalField(
+        "Estimated Sales", validators=[Optional(), NumberRange(min=0)], places=2
+    )
     submit = SubmitField("Submit")
 
 
