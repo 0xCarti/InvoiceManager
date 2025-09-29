@@ -1,7 +1,7 @@
 """add indexes
 
 Revision ID: bbdaf2ebdf4c
-Revises: 202407171234
+Revises: 202408010001
 Create Date: 2025-09-06 05:37:39.070861
 
 """
@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "bbdaf2ebdf4c"
-down_revision = "202407171234"
+down_revision = "202408010001"
 branch_labels = None
 depends_on = None
 
