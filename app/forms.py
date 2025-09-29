@@ -614,12 +614,6 @@ class ProductSalesReportForm(FlaskForm):
     submit = SubmitField("Generate Report")
 
 
-class PurchasedItemsReportForm(FlaskForm):
-    start_date = DateField("Start Date", validators=[DataRequired()])
-    end_date = DateField("End Date", validators=[DataRequired()])
-    submit = SubmitField("Generate Report")
-
-
 class ProductRecipeReportForm(FlaskForm):
     products = SelectMultipleField(
         "Products",
