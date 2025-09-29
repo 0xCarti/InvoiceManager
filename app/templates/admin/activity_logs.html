@@ -4,35 +4,13 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Activity Logs</h2>
-    <div class="row g-3 align-items-end mb-3">
-        <div class="col-12 col-xl">
-            <form method="get" class="row g-3 align-items-end">
-                {{ form.hidden_tag() }}
-                <div class="col-12 col-md-6 col-xl-3">
-                    {{ form.user_id.label(class="form-label") }}
-                    {{ form.user_id(class="form-select") }}
-                </div>
-                <div class="col-12 col-md-6 col-xl-3">
-                    {{ form.activity.label(class="form-label") }}
-                    {{ form.activity(class="form-control", placeholder="Contains text") }}
-                </div>
-                <div class="col-12 col-md-6 col-xl-3">
-                    {{ form.start_date.label(class="form-label") }}
-                    {{ form.start_date(class="form-control", type="date") }}
-                </div>
-                <div class="col-12 col-md-6 col-xl-3">
-                    {{ form.end_date.label(class="form-label") }}
-                    {{ form.end_date(class="form-control", type="date") }}
-                </div>
-                <div class="col-12 col-md-auto">
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">Apply</button>
-                        <a href="{{ url_for('admin.activity_logs') }}" class="btn btn-secondary">Clear</a>
-                    </div>
-                </div>
-            </form>
+    <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-center gap-2 mb-3">
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#filterModal">
+                Filters
+            </button>
         </div>
-        <div class="col-12 col-xl-auto text-xl-end">
+        <div class="text-xl-end">
             {{ column_visibility_dropdown(
                 table_id='activity-logs-table',
                 storage_key='activityLogsTableColumnVisibility',
@@ -45,6 +23,64 @@
             ) }}
         </div>
     </div>
+
+    <div class="modal fade" id="filterModal" tabindex="-1" aria-labelledby="filterModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="filterModalLabel">Filters</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="activity-log-filter-form" method="get">
+                        {{ form.hidden_tag() }}
+                        <div class="mb-3">
+                            {{ form.user_id.label(class="form-label") }}
+                            {{ form.user_id(class="form-select") }}
+                        </div>
+                        <div class="mb-3">
+                            {{ form.activity.label(class="form-label") }}
+                            {{ form.activity(class="form-control", placeholder="Contains text") }}
+                        </div>
+                        <div class="mb-3">
+                            {{ form.start_date.label(class="form-label") }}
+                            {{ form.start_date(class="form-control", type="date") }}
+                        </div>
+                        <div class="mb-3">
+                            {{ form.end_date.label(class="form-label") }}
+                            {{ form.end_date(class="form-control", type="date") }}
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <a href="{{ url_for('admin.activity_logs') }}" class="btn btn-outline-secondary">Reset</a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="activity-log-filter-form" class="btn btn-primary">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if form.user_id.data == -2 %}
+        <p class="mb-1"><strong>Filtering by User:</strong> System Activity</p>
+    {% elif form.user_id.data not in [-1, None] %}
+        {% set selected_user_label = '' %}
+        {% for value, label in form.user_id.choices %}
+            {% if value == form.user_id.data %}
+                {% set selected_user_label = label %}
+            {% endif %}
+        {% endfor %}
+        <p class="mb-1"><strong>Filtering by User:</strong> {{ selected_user_label }}</p>
+    {% endif %}
+    {% if form.activity.data %}
+        <p class="mb-1"><strong>Filtering by Activity:</strong> {{ form.activity.data }}</p>
+    {% endif %}
+    {% if form.start_date.data or form.end_date.data %}
+        <p class="mb-3">
+            <strong>Filtering by Date:</strong>
+            {{ form.start_date.data or '...' }} - {{ form.end_date.data or '...' }}
+        </p>
+    {% endif %}
     <div class="table-responsive">
     <table class="table" id="activity-logs-table">
         <thead>
