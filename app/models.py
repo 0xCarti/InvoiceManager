@@ -301,6 +301,10 @@ class Product(db.Model):
     quantity = db.Column(
         db.Float, nullable=False, default=0.0, server_default="0.0"
     )
+    recipe_yield_quantity = db.Column(
+        db.Float, nullable=False, default=1.0, server_default="1.0"
+    )
+    recipe_yield_unit = db.Column(db.String(50), nullable=True)
     sales_gl_code_id = db.Column(
         db.Integer, db.ForeignKey("gl_code.id"), nullable=True
     )

@@ -26,6 +26,9 @@
     <td class="col-product-recipe-count" data-sort-value="{{ recipe_count }}">{{ recipe_count }}</td>
     <td class="col-product-recipe-details text-wrap">
         {% if product.recipe_items %}
+            {% if product.recipe_yield_quantity %}
+                <div><strong>Yield:</strong> {{ '{:g}'.format(product.recipe_yield_quantity) }}{% if product.recipe_yield_unit %} {{ product.recipe_yield_unit }}{% endif %}</div>
+            {% endif %}
             <ul class="mb-0 ps-3">
                 {% for recipe_item in product.recipe_items %}
                     <li>
