@@ -2,8 +2,17 @@
 {% block content %}
 {% set unconfirmed_count = event.locations | selectattr('confirmed', 'equalto', False) | list | length %}
 <div class="container mt-4">
-    <h2>{{ event.name }}</h2>
-    <p>Start: {{ event.start_date }} End: {{ event.end_date }}</p>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+        <div>
+            <h2 class="mb-1">{{ event.name }}</h2>
+            <p class="mb-0">Start: {{ event.start_date }} | End: {{ event.end_date }}</p>
+            <p class="mb-0">Type: {{ event_type_label }}</p>
+        </div>
+        <div class="text-md-end">
+            <a class="btn btn-secondary" href="{{ url_for('event.edit_event', event_id=event.id) }}">Edit Event</a>
+        </div>
+    </div>
+    <hr>
     <div class="mb-3">
         {% if not event.closed %}
         <a class="btn btn-primary me-2" href="{{ url_for('event.add_location', event_id=event.id) }}">Add Location</a>
