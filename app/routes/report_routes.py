@@ -363,16 +363,19 @@ def product_sales_report():
             total_quantity = 0.0
             total_revenue = 0.0
             total_profit = 0.0
+            total_cost = 0.0
 
             for product_row in products:
                 quantity = float(product_row.total_quantity or 0.0)
                 cost = float(product_row.cost or 0.0)
                 price = float(product_row.price or 0.0)
                 profit_each = price - cost
+                total_item_cost = quantity * cost
                 revenue = quantity * price
                 profit = quantity * profit_each
 
                 total_quantity += quantity
+                total_cost += total_item_cost
                 total_revenue += revenue
                 total_profit += profit
 
@@ -383,6 +386,7 @@ def product_sales_report():
                         "quantity": quantity,
                         "cost": cost,
                         "price": price,
+                        "total_cost": total_item_cost,
                         "profit_each": profit_each,
                         "revenue": revenue,
                         "profit": profit,
@@ -391,6 +395,7 @@ def product_sales_report():
 
             totals = {
                 "quantity": total_quantity,
+                "cost": total_cost,
                 "revenue": total_revenue,
                 "profit": total_profit,
             }
