@@ -306,7 +306,10 @@ def purchase_inventory_summary():
 def product_sales_report():
     """Generate a report on product sales and profit."""
     form = ProductSalesReportForm()
-    report_data = []
+    product_choices = list(form.products.choices)
+    gl_code_choices = list(form.gl_codes.choices)
+    report_data = None
+    totals = None
     start = None
     end = None
     selected_product_names = []
@@ -315,82 +318,124 @@ def product_sales_report():
     if form.validate_on_submit():
         start = form.start_date.data
         end = form.end_date.data
-        selected_product_ids = form.products.data or []
-        selected_gl_code_ids = form.gl_codes.data or []
 
-        # Query all relevant InvoiceProduct entries
-        products_query = (
-            db.session.query(
-                Product.id,
-                Product.name,
-                Product.cost,
-                Product.price,
-                db.func.sum(InvoiceProduct.quantity).label("total_quantity"),
+        if end < start:
+            form.end_date.errors.append(
+                "End date must be on or after the start date."
             )
-            .join(InvoiceProduct, InvoiceProduct.product_id == Product.id)
-            .join(Invoice, Invoice.id == InvoiceProduct.invoice_id)
-            .filter(Invoice.date_created >= start, Invoice.date_created <= end)
-        )
+        else:
+            selected_product_ids = form.products.data or []
+            selected_gl_code_ids = form.gl_codes.data or []
 
-        if selected_product_ids:
-            products_query = products_query.filter(Product.id.in_(selected_product_ids))
-
-        if selected_gl_code_ids:
-            included_ids = [gid for gid in selected_gl_code_ids if gid != -1]
-            conditions = []
-            if included_ids:
-                conditions.append(Product.sales_gl_code_id.in_(included_ids))
-            if -1 in selected_gl_code_ids:
-                conditions.append(Product.sales_gl_code_id.is_(None))
-            if conditions:
-                products_query = products_query.filter(or_(*conditions))
-
-        products = (
-            products_query.group_by(Product.id).order_by(Product.name).all()
-        )
-
-        # Format the report
-        for p in products:
-            profit_each = p.price - p.cost
-            total_revenue = p.total_quantity * p.price
-            total_profit = p.total_quantity * profit_each
-            report_data.append(
-                {
-                    "name": p.name,
-                    "quantity": p.total_quantity,
-                    "cost": p.cost,
-                    "price": p.price,
-                    "profit_each": profit_each,
-                    "revenue": total_revenue,
-                    "profit": total_profit,
-                }
+            products_query = (
+                db.session.query(
+                    Product.id,
+                    Product.name,
+                    Product.cost,
+                    Product.price,
+                    db.func.sum(InvoiceProduct.quantity).label("total_quantity"),
+                )
+                .join(InvoiceProduct, InvoiceProduct.product_id == Product.id)
+                .join(Invoice, Invoice.id == InvoiceProduct.invoice_id)
+                .filter(Invoice.date_created >= start, Invoice.date_created <= end)
             )
 
-        if selected_product_ids:
-            selected_product_names = [
-                label
-                for value, label in form.products.choices
-                if value in selected_product_ids
-            ]
+            if selected_product_ids:
+                products_query = products_query.filter(
+                    Product.id.in_(selected_product_ids)
+                )
 
-        if selected_gl_code_ids:
-            selected_gl_labels = [
-                label
-                for value, label in form.gl_codes.choices
-                if value in selected_gl_code_ids
-            ]
+            if selected_gl_code_ids:
+                included_ids = [gid for gid in selected_gl_code_ids if gid != -1]
+                conditions = []
+                if included_ids:
+                    conditions.append(Product.sales_gl_code_id.in_(included_ids))
+                if -1 in selected_gl_code_ids:
+                    conditions.append(Product.sales_gl_code_id.is_(None))
+                if conditions:
+                    products_query = products_query.filter(or_(*conditions))
 
-        return render_template(
-            "report_product_sales_results.html",
-            form=form,
-            report=report_data,
-            start=start,
-            end=end,
-            selected_product_names=selected_product_names,
-            selected_gl_labels=selected_gl_labels,
-        )
+            products = (
+                products_query.group_by(Product.id).order_by(Product.name).all()
+            )
 
-    return render_template("report_product_sales.html", form=form)
+            report_data = []
+            total_quantity = 0.0
+            total_revenue = 0.0
+            total_profit = 0.0
+
+            for product_row in products:
+                quantity = float(product_row.total_quantity or 0.0)
+                cost = float(product_row.cost or 0.0)
+                price = float(product_row.price or 0.0)
+                profit_each = price - cost
+                revenue = quantity * price
+                profit = quantity * profit_each
+
+                total_quantity += quantity
+                total_revenue += revenue
+                total_profit += profit
+
+                report_data.append(
+                    {
+                        "id": product_row.id,
+                        "name": product_row.name,
+                        "quantity": quantity,
+                        "cost": cost,
+                        "price": price,
+                        "profit_each": profit_each,
+                        "revenue": revenue,
+                        "profit": profit,
+                    }
+                )
+
+            totals = {
+                "quantity": total_quantity,
+                "revenue": total_revenue,
+                "profit": total_profit,
+            }
+
+            visible_product_ids = {row["id"] for row in report_data}
+
+            if selected_product_ids:
+                selected_product_names = [
+                    label
+                    for value, label in product_choices
+                    if value in selected_product_ids
+                ]
+                form.products.choices = [
+                    choice
+                    for choice in product_choices
+                    if choice[0] in selected_product_ids
+                ]
+            else:
+                form.products.choices = (
+                    [
+                        choice
+                        for choice in product_choices
+                        if choice[0] in visible_product_ids
+                    ]
+                    if visible_product_ids
+                    else product_choices
+                )
+
+            if selected_gl_code_ids:
+                selected_gl_labels = [
+                    label
+                    for value, label in gl_code_choices
+                    if value in selected_gl_code_ids
+                ]
+
+    return render_template(
+        "report_product_sales.html",
+        form=form,
+        report=report_data,
+        totals=totals,
+        start=start,
+        end=end,
+        selected_product_names=selected_product_names,
+        selected_gl_labels=selected_gl_labels,
+    )
 
 
 @report.route("/reports/product-recipes", methods=["GET", "POST"])
