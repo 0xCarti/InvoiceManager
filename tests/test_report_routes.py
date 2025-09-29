@@ -3,7 +3,19 @@ from datetime import date
 from werkzeug.security import generate_password_hash
 
 from app import db
-from app.models import Customer, Invoice, InvoiceProduct, Product, User
+from app.models import (
+    Customer,
+    Invoice,
+    InvoiceProduct,
+    Item,
+    Location,
+    Product,
+    PurchaseInvoice,
+    PurchaseInvoiceItem,
+    PurchaseOrder,
+    User,
+    Vendor,
+)
 from tests.utils import login
 
 
@@ -62,6 +74,90 @@ def setup_invoice(app):
         return customer.id
 
 
+def setup_purchase_invoice(app):
+    with app.app_context():
+        user = User.query.filter_by(email="purchasereport@example.com").first()
+        if not user:
+            user = User(
+                email="purchasereport@example.com",
+                password=generate_password_hash("pass"),
+                active=True,
+            )
+            db.session.add(user)
+
+        vendor = Vendor.query.filter_by(first_name="Report", last_name="Vendor").first()
+        if not vendor:
+            vendor = Vendor(first_name="Report", last_name="Vendor")
+            db.session.add(vendor)
+
+        location = Location.query.filter_by(name="Report Location").first()
+        if not location:
+            location = Location(name="Report Location")
+            db.session.add(location)
+
+        item = Item.query.filter_by(name="Purchase Widget").first()
+        if not item:
+            item = Item(name="Purchase Widget", base_unit="each", cost=3.0)
+            db.session.add(item)
+
+        db.session.commit()
+
+        po = PurchaseOrder.query.filter_by(
+            vendor_id=vendor.id,
+            user_id=user.id,
+            vendor_name=f"{vendor.first_name} {vendor.last_name}",
+        ).first()
+        if not po:
+            po = PurchaseOrder(
+                vendor_id=vendor.id,
+                user_id=user.id,
+                vendor_name=f"{vendor.first_name} {vendor.last_name}",
+                order_date=date(2023, 1, 1),
+                expected_date=date(2023, 1, 1),
+            )
+            db.session.add(po)
+            db.session.commit()
+
+        invoice = PurchaseInvoice.query.filter_by(
+            invoice_number="PINVREP001"
+        ).first()
+        if not invoice:
+            invoice = PurchaseInvoice(
+                purchase_order_id=po.id,
+                user_id=user.id,
+                location_id=location.id,
+                location_name=location.name,
+                vendor_name=f"{vendor.first_name} {vendor.last_name}",
+                received_date=date(2023, 1, 15),
+                invoice_number="PINVREP001",
+                gst=0,
+                pst=0,
+                delivery_charge=0,
+            )
+            db.session.add(invoice)
+            db.session.commit()
+
+        line_exists = (
+            PurchaseInvoiceItem.query.filter_by(
+                invoice_id=invoice.id, item_id=item.id
+            ).first()
+            is not None
+        )
+        if not line_exists:
+            db.session.add(
+                PurchaseInvoiceItem(
+                    invoice_id=invoice.id,
+                    item_id=item.id,
+                    item_name=item.name,
+                    quantity=5,
+                    cost=3.0,
+                )
+            )
+            db.session.commit()
+
+        return user.email, invoice.received_date, item.name
+
+
 def test_vendor_and_sales_reports(client, app):
     cid = setup_invoice(app)
     login(client, "report@example.com", "pass")
@@ -108,3 +204,24 @@ def test_purchase_cost_forecast_report(client, app):
     )
     assert resp.status_code == 200
     assert b"No forecast data was available" in resp.data
+
+
+def test_purchased_items_report(client, app):
+    email, received_date, item_name = setup_purchase_invoice(app)
+    login(client, email, "pass")
+
+    resp = client.get("/reports/purchased-items")
+    assert resp.status_code == 200
+
+    resp = client.post(
+        "/reports/purchased-items",
+        data={
+            "start_date": "2023-01-01",
+            "end_date": "2023-12-31",
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"Purchased Items Report" in resp.data
+    assert item_name.encode() in resp.data
+    assert b"$15.00" in resp.data

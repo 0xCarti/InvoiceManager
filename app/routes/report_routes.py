@@ -5,6 +5,7 @@ from app import db
 from app.forms import (
     PurchaseCostForecastForm,
     PurchaseInventorySummaryForm,
+    PurchasedItemsReportForm,
     ProductRecipeReportForm,
     ProductSalesReportForm,
     ReceivedInvoiceReportForm,
@@ -297,6 +298,98 @@ def purchase_inventory_summary():
         end=end,
         selected_item_names=selected_item_names,
         selected_gl_labels=selected_gl_labels,
+    )
+
+
+@report.route("/reports/purchased-items", methods=["GET", "POST"])
+@login_required
+def purchased_items_report():
+    """Summarize purchased items for a date range."""
+
+    form = PurchasedItemsReportForm()
+    purchases = None
+    totals = None
+    start = None
+    end = None
+
+    if form.validate_on_submit():
+        start = form.start_date.data
+        end = form.end_date.data
+
+        if end < start:
+            form.end_date.errors.append(
+                "End date must be on or after the start date."
+            )
+        else:
+            invoice_items = (
+                PurchaseInvoiceItem.query.join(PurchaseInvoice)
+                .options(
+                    selectinload(PurchaseInvoiceItem.item),
+                    selectinload(PurchaseInvoiceItem.unit),
+                )
+                .filter(PurchaseInvoice.received_date >= start)
+                .filter(PurchaseInvoice.received_date <= end)
+                .all()
+            )
+
+            aggregates = {}
+
+            for inv_item in invoice_items:
+                if inv_item.item and inv_item.unit:
+                    quantity = inv_item.quantity * inv_item.unit.factor
+                    unit_name = inv_item.item.base_unit or inv_item.unit.name
+                elif inv_item.item:
+                    quantity = inv_item.quantity
+                    unit_name = inv_item.item.base_unit or (
+                        inv_item.unit_name or ""
+                    )
+                else:
+                    quantity = inv_item.quantity
+                    unit_name = inv_item.unit_name or ""
+
+                item_name = (
+                    inv_item.item.name if inv_item.item else inv_item.item_name
+                )
+                key = (
+                    inv_item.item_id
+                    if inv_item.item_id is not None
+                    else f"missing-{item_name}"
+                )
+
+                entry = aggregates.setdefault(
+                    key,
+                    {
+                        "item_name": item_name,
+                        "unit_name": unit_name,
+                        "total_quantity": 0.0,
+                        "total_spend": 0.0,
+                    },
+                )
+
+                entry["total_quantity"] += quantity
+                entry["total_spend"] += inv_item.quantity * abs(inv_item.cost)
+                if not entry["unit_name"] and unit_name:
+                    entry["unit_name"] = unit_name
+
+            purchases = sorted(
+                aggregates.values(),
+                key=lambda row: row["item_name"].lower(),
+            )
+            totals = {
+                "quantity": sum(row["total_quantity"] for row in purchases),
+                "spend": sum(row["total_spend"] for row in purchases),
+            }
+
+            if not purchases:
+                totals = {"quantity": 0.0, "spend": 0.0}
+
+    return render_template(
+        "report_purchased_items.html",
+        form=form,
+        purchases=purchases,
+        totals=totals,
+        start=start,
+        end=end,
     )
 
 
