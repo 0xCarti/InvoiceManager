@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Create Event</h2>
+<h2>Edit Event</h2>
 <form method="post">
     {{ form.csrf_token }}
     {{ form.name.label }} {{ form.name(class='form-control') }}
     {{ form.start_date.label }} {{ form.start_date(class='form-control') }}
     {{ form.end_date.label }} {{ form.end_date(class='form-control') }}
     {{ form.event_type.label }} {{ form.event_type(class='form-control') }}
-    {{ form.submit(class='btn btn-primary mt-2') }}
+    {{ form.submit(class='btn btn-primary mt-2', value='Update Event') }}
 </form>
 {% endblock %}

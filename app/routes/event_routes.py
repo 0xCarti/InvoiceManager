@@ -156,7 +156,12 @@ def view_event(event_id):
     ev = db.session.get(Event, event_id)
     if ev is None:
         abort(404)
-    return render_template("events/view_event.html", event=ev)
+    type_labels = dict(EVENT_TYPES)
+    return render_template(
+        "events/view_event.html",
+        event=ev,
+        event_type_label=type_labels.get(ev.event_type, ev.event_type),
+    )
 
 
 @event.route("/events/<int:event_id>/add_location", methods=["GET", "POST"])
