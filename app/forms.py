@@ -85,6 +85,29 @@ def load_purchase_gl_code_choices():
     return g.purchase_gl_code_choices
 
 
+def load_expense_gl_code_choices(include_unassigned: bool = False):
+    """Return GL code choices limited to expense accounts."""
+    if "expense_gl_code_choices" not in g:
+        codes = (
+            GLCode.query.filter(
+                or_(GLCode.code.like("5%"), GLCode.code.like("6%"))
+            )
+            .order_by(GLCode.code)
+            .all()
+        )
+        g.expense_gl_code_choices = [
+            (
+                code.id,
+                f"{code.code} - {code.description}" if code.description else code.code,
+            )
+            for code in codes
+        ]
+    choices = list(g.expense_gl_code_choices)
+    if include_unassigned:
+        choices.append((-1, "Unassigned GL Code"))
+    return choices
+
+
 @lru_cache(maxsize=1)
 def get_timezone_choices():
     """Return a sorted list of available time zones.
@@ -556,6 +579,32 @@ class ReceivedInvoiceReportForm(FlaskForm):
     start_date = DateField("Start Date", validators=[DataRequired()])
     end_date = DateField("End Date", validators=[DataRequired()])
     submit = SubmitField("Generate Report")
+
+
+# forms.py
+class PurchaseInventorySummaryForm(FlaskForm):
+    start_date = DateField("Start Date", validators=[DataRequired()])
+    end_date = DateField("End Date", validators=[DataRequired()])
+    items = SelectMultipleField(
+        "Items",
+        coerce=int,
+        validators=[Optional()],
+        render_kw={"size": 10},
+    )
+    gl_codes = SelectMultipleField(
+        "GL Codes",
+        coerce=int,
+        validators=[Optional()],
+        render_kw={"size": 10},
+    )
+    submit = SubmitField("Generate Report")
+
+    def __init__(self, *args, **kwargs):
+        super(PurchaseInventorySummaryForm, self).__init__(*args, **kwargs)
+        self.items.choices = load_item_choices()
+        self.gl_codes.choices = load_expense_gl_code_choices(
+            include_unassigned=True
+        )
 
 
 # forms.py

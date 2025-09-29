@@ -4,6 +4,7 @@ from flask_login import login_required
 from app import db
 from app.forms import (
     PurchaseCostForecastForm,
+    PurchaseInventorySummaryForm,
     ProductRecipeReportForm,
     ProductSalesReportForm,
     ReceivedInvoiceReportForm,
@@ -14,6 +15,7 @@ from app.models import (
     Invoice,
     InvoiceProduct,
     PurchaseInvoice,
+    PurchaseInvoiceItem,
     PurchaseOrder,
     Product,
     TerminalSale,
@@ -22,6 +24,7 @@ from app.models import (
     Location,
 )
 from app.utils.forecasting import DemandForecastingHelper
+from sqlalchemy.orm import selectinload
 
 report = Blueprint("report", __name__)
 
@@ -155,6 +158,127 @@ def received_invoice_report():
         )
 
     return render_template("report_received_invoices.html", form=form)
+
+
+@report.route("/reports/purchase-inventory-summary", methods=["GET", "POST"])
+@login_required
+def purchase_inventory_summary():
+    """Summarize purchased inventory quantities and spend for a date range."""
+
+    form = PurchaseInventorySummaryForm()
+    results = None
+    totals = None
+    start = None
+    end = None
+
+    if form.validate_on_submit():
+        start = form.start_date.data
+        end = form.end_date.data
+
+        if end < start:
+            form.end_date.errors.append(
+                "End date must be on or after the start date."
+            )
+        else:
+            query = (
+                PurchaseInvoiceItem.query.join(PurchaseInvoice)
+                .options(
+                    selectinload(PurchaseInvoiceItem.invoice),
+                    selectinload(PurchaseInvoiceItem.item),
+                    selectinload(PurchaseInvoiceItem.unit),
+                    selectinload(PurchaseInvoiceItem.purchase_gl_code),
+                )
+                .filter(PurchaseInvoice.received_date >= start)
+                .filter(PurchaseInvoice.received_date <= end)
+            )
+
+            if form.items.data:
+                query = query.filter(
+                    PurchaseInvoiceItem.item_id.in_(form.items.data)
+                )
+
+            invoice_items = query.all()
+            selected_gl_codes = set(form.gl_codes.data or [])
+            aggregates = {}
+
+            for inv_item in invoice_items:
+                invoice = inv_item.invoice
+                location_id = invoice.location_id if invoice else None
+                resolved_gl = inv_item.resolved_purchase_gl_code(location_id)
+                gl_id = resolved_gl.id if resolved_gl else None
+
+                if selected_gl_codes:
+                    if gl_id is None:
+                        if -1 not in selected_gl_codes:
+                            continue
+                    elif gl_id not in selected_gl_codes:
+                        continue
+
+                if inv_item.item and inv_item.unit:
+                    quantity = inv_item.quantity * inv_item.unit.factor
+                    unit_name = inv_item.item.base_unit or inv_item.unit.name
+                elif inv_item.item:
+                    quantity = inv_item.quantity
+                    unit_name = inv_item.item.base_unit or (
+                        inv_item.unit_name or ""
+                    )
+                else:
+                    quantity = inv_item.quantity
+                    unit_name = inv_item.unit_name or ""
+
+                item_name = (
+                    inv_item.item.name if inv_item.item else inv_item.item_name
+                )
+                key = (
+                    inv_item.item_id
+                    if inv_item.item_id is not None
+                    else f"missing-{item_name}"
+                )
+                gl_key = gl_id if gl_id is not None else -1
+                aggregate_key = (key, gl_key)
+
+                if aggregate_key not in aggregates:
+                    gl_code = (
+                        resolved_gl.code
+                        if resolved_gl and resolved_gl.code
+                        else "Unassigned"
+                    )
+                    gl_description = (
+                        resolved_gl.description if resolved_gl else ""
+                    )
+                    aggregates[aggregate_key] = {
+                        "item_name": item_name,
+                        "gl_code": gl_code,
+                        "gl_description": gl_description,
+                        "total_quantity": 0.0,
+                        "unit_name": unit_name,
+                        "total_spend": 0.0,
+                    }
+
+                entry = aggregates[aggregate_key]
+                entry["total_quantity"] += quantity
+                entry["total_spend"] += inv_item.quantity * abs(inv_item.cost)
+                if not entry["unit_name"] and unit_name:
+                    entry["unit_name"] = unit_name
+
+            results = sorted(
+                aggregates.values(),
+                key=lambda row: (row["item_name"].lower(), row["gl_code"]),
+            )
+
+            totals = {
+                "quantity": sum(row["total_quantity"] for row in results),
+                "spend": sum(row["total_spend"] for row in results),
+            }
+
+    return render_template(
+        "report_purchase_inventory_summary.html",
+        form=form,
+        results=results,
+        totals=totals,
+        start=start,
+        end=end,
+    )
 
 
 @report.route("/reports/product-sales", methods=["GET", "POST"])
