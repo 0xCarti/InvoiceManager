@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash
 from app import db
 from app.models import (
     Customer,
+    GLCode,
     Invoice,
     InvoiceProduct,
     Item,
@@ -35,10 +36,39 @@ def setup_invoice(app):
             customer = Customer(first_name="Jane", last_name="Doe")
             db.session.add(customer)
 
+        sales_gl_4000 = GLCode.query.filter_by(code="4000").first()
+        if not sales_gl_4000:
+            sales_gl_4000 = GLCode(code="4000", description="Food Sales")
+            db.session.add(sales_gl_4000)
+
+        sales_gl_4010 = GLCode.query.filter_by(code="4010").first()
+        if not sales_gl_4010:
+            sales_gl_4010 = GLCode(code="4010", description="Beverage Sales")
+            db.session.add(sales_gl_4010)
+
         product = Product.query.filter_by(name="Widget").first()
         if not product:
-            product = Product(name="Widget", price=10.0, cost=5.0)
+            product = Product(
+                name="Widget",
+                price=10.0,
+                cost=5.0,
+                sales_gl_code=sales_gl_4000,
+            )
             db.session.add(product)
+        else:
+            product.sales_gl_code = sales_gl_4000
+
+        second_product = Product.query.filter_by(name="Gadget").first()
+        if not second_product:
+            second_product = Product(
+                name="Gadget",
+                price=8.0,
+                cost=3.0,
+                sales_gl_code=sales_gl_4010,
+            )
+            db.session.add(second_product)
+        else:
+            second_product.sales_gl_code = sales_gl_4010
 
         db.session.commit()
         invoice = Invoice.query.get("INVREP001")
@@ -52,12 +82,12 @@ def setup_invoice(app):
             db.session.add(invoice)
             db.session.commit()
 
-        has_line_item = (
+        has_widget = (
             InvoiceProduct.query.filter_by(invoice_id=invoice.id, product_id=product.id)
             .first()
             is not None
         )
-        if not has_line_item:
+        if not has_widget:
             db.session.add(
                 InvoiceProduct(
                     invoice_id=invoice.id,
@@ -66,6 +96,28 @@ def setup_invoice(app):
                     product_name=product.name,
                     unit_price=product.price,
                     line_subtotal=20,
+                    line_gst=0,
+                    line_pst=0,
+                )
+            )
+            db.session.commit()
+
+        has_gadget = (
+            InvoiceProduct.query.filter_by(
+                invoice_id=invoice.id, product_id=second_product.id
+            )
+            .first()
+            is not None
+        )
+        if not has_gadget:
+            db.session.add(
+                InvoiceProduct(
+                    invoice_id=invoice.id,
+                    quantity=1,
+                    product_id=second_product.id,
+                    product_name=second_product.name,
+                    unit_price=second_product.price,
+                    line_subtotal=8,
                     line_gst=0,
                     line_pst=0,
                 )
@@ -183,6 +235,37 @@ def test_vendor_and_sales_reports(client, app):
     )
     assert resp.status_code == 200
     assert b"Widget" in resp.data
+    assert b"Gadget" in resp.data
+
+    with app.app_context():
+        widget = Product.query.filter_by(name="Widget").first()
+        widget_gl = widget.sales_gl_code_id
+
+    resp = client.post(
+        "/reports/product-sales",
+        data={
+            "start_date": "2022-12-31",
+            "end_date": "2023-12-31",
+            "products": [str(widget.id)],
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"Widget" in resp.data
+    assert b"Gadget" not in resp.data
+
+    resp = client.post(
+        "/reports/product-sales",
+        data={
+            "start_date": "2022-12-31",
+            "end_date": "2023-12-31",
+            "gl_codes": [str(widget_gl)],
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"Widget" in resp.data
+    assert b"Gadget" not in resp.data
 
 
 def test_purchase_cost_forecast_report(client, app):

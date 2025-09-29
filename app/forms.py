@@ -63,6 +63,15 @@ def load_unit_choices():
     return [(u.id, u.name) for u in ItemUnit.query.all()]
 
 
+def load_product_choices():
+    """Return a list of product choices, cached per request."""
+    if "product_choices" not in g:
+        g.product_choices = [
+            (p.id, p.name) for p in Product.query.order_by(Product.name).all()
+        ]
+    return g.product_choices
+
+
 def load_purchase_gl_code_choices():
     """Return purchase GL code options filtered for expense accounts."""
     if "purchase_gl_code_choices" not in g:
@@ -105,6 +114,27 @@ def load_expense_gl_code_choices(include_unassigned: bool = False):
     choices = list(g.expense_gl_code_choices)
     if include_unassigned:
         choices.append((-1, "Unassigned GL Code"))
+    return choices
+
+
+def load_sales_gl_code_choices(include_unassigned: bool = False):
+    """Return GL code choices limited to sales accounts."""
+    if "sales_gl_code_choices" not in g:
+        codes = (
+            GLCode.query.filter(GLCode.code.like("4%"))
+            .order_by(GLCode.code)
+            .all()
+        )
+        g.sales_gl_code_choices = [
+            (
+                code.id,
+                f"{code.code} - {code.description}" if code.description else code.code,
+            )
+            for code in codes
+        ]
+    choices = list(g.sales_gl_code_choices)
+    if include_unassigned:
+        choices.append((-1, "Unassigned Sales GL Code"))
     return choices
 
 
@@ -611,7 +641,24 @@ class PurchaseInventorySummaryForm(FlaskForm):
 class ProductSalesReportForm(FlaskForm):
     start_date = DateField("Start Date", validators=[DataRequired()])
     end_date = DateField("End Date", validators=[DataRequired()])
+    products = SelectMultipleField(
+        "Products",
+        coerce=int,
+        validators=[Optional()],
+        render_kw={"size": 10},
+    )
+    gl_codes = SelectMultipleField(
+        "Sales GL Codes",
+        coerce=int,
+        validators=[Optional()],
+        render_kw={"size": 10},
+    )
     submit = SubmitField("Generate Report")
+
+    def __init__(self, *args, **kwargs):
+        super(ProductSalesReportForm, self).__init__(*args, **kwargs)
+        self.products.choices = load_product_choices()
+        self.gl_codes.choices = load_sales_gl_code_choices(include_unassigned=True)
 
 
 class ProductRecipeReportForm(FlaskForm):

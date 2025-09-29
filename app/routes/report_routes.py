@@ -24,6 +24,7 @@ from app.models import (
     Location,
 )
 from app.utils.forecasting import DemandForecastingHelper
+from sqlalchemy import or_
 from sqlalchemy.orm import selectinload
 
 report = Blueprint("report", __name__)
@@ -306,13 +307,19 @@ def product_sales_report():
     """Generate a report on product sales and profit."""
     form = ProductSalesReportForm()
     report_data = []
+    start = None
+    end = None
+    selected_product_names = []
+    selected_gl_labels = []
 
     if form.validate_on_submit():
         start = form.start_date.data
         end = form.end_date.data
+        selected_product_ids = form.products.data or []
+        selected_gl_code_ids = form.gl_codes.data or []
 
         # Query all relevant InvoiceProduct entries
-        products = (
+        products_query = (
             db.session.query(
                 Product.id,
                 Product.name,
@@ -323,8 +330,23 @@ def product_sales_report():
             .join(InvoiceProduct, InvoiceProduct.product_id == Product.id)
             .join(Invoice, Invoice.id == InvoiceProduct.invoice_id)
             .filter(Invoice.date_created >= start, Invoice.date_created <= end)
-            .group_by(Product.id)
-            .all()
+        )
+
+        if selected_product_ids:
+            products_query = products_query.filter(Product.id.in_(selected_product_ids))
+
+        if selected_gl_code_ids:
+            included_ids = [gid for gid in selected_gl_code_ids if gid != -1]
+            conditions = []
+            if included_ids:
+                conditions.append(Product.sales_gl_code_id.in_(included_ids))
+            if -1 in selected_gl_code_ids:
+                conditions.append(Product.sales_gl_code_id.is_(None))
+            if conditions:
+                products_query = products_query.filter(or_(*conditions))
+
+        products = (
+            products_query.group_by(Product.id).order_by(Product.name).all()
         )
 
         # Format the report
@@ -344,8 +366,28 @@ def product_sales_report():
                 }
             )
 
+        if selected_product_ids:
+            selected_product_names = [
+                label
+                for value, label in form.products.choices
+                if value in selected_product_ids
+            ]
+
+        if selected_gl_code_ids:
+            selected_gl_labels = [
+                label
+                for value, label in form.gl_codes.choices
+                if value in selected_gl_code_ids
+            ]
+
         return render_template(
-            "report_product_sales_results.html", form=form, report=report_data
+            "report_product_sales_results.html",
+            form=form,
+            report=report_data,
+            start=start,
+            end=end,
+            selected_product_names=selected_product_names,
+            selected_gl_labels=selected_gl_labels,
         )
 
     return render_template("report_product_sales.html", form=form)
