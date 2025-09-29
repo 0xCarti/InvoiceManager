@@ -17,7 +17,9 @@ RUN groupadd -r app && useradd -r -g app app
 # Copy application code
 COPY . .
 
-RUN chown -R app:app /app && chmod +x /app/entrypoint.sh
+RUN mkdir -p /app/data /app/uploads /app/backups \
+    && chown -R app:app /app \
+    && chmod +x /app/entrypoint.sh
 
 ARG PORT=5000
 ENV PORT=${PORT}
@@ -27,7 +29,12 @@ ENV DATABASE_PATH=/app/data/inventory.db
 
 EXPOSE ${PORT}
 
+# Run database migrations during the image build so freshly built
+# containers always start with the latest schema. Running the command as the
+# non-root application user mirrors how the application executes at runtime
+# and ensures the generated SQLite database file has the correct ownership.
 USER app
+RUN flask db upgrade
 
 ENTRYPOINT ["./entrypoint.sh"]
 CMD ["gunicorn", "-c", "gunicorn.conf.py", "run:app"]
