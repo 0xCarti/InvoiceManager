@@ -170,6 +170,8 @@ def purchase_inventory_summary():
     totals = None
     start = None
     end = None
+    selected_item_names = []
+    selected_gl_labels = []
 
     if form.validate_on_submit():
         start = form.start_date.data
@@ -271,6 +273,21 @@ def purchase_inventory_summary():
                 "spend": sum(row["total_spend"] for row in results),
             }
 
+            selected_item_ids = set(form.items.data or [])
+            if selected_item_ids:
+                selected_item_names = [
+                    label
+                    for value, label in form.items.choices
+                    if value in selected_item_ids
+                ]
+
+            if selected_gl_codes:
+                selected_gl_labels = [
+                    label
+                    for value, label in form.gl_codes.choices
+                    if value in selected_gl_codes
+                ]
+
     return render_template(
         "report_purchase_inventory_summary.html",
         form=form,
@@ -278,6 +295,8 @@ def purchase_inventory_summary():
         totals=totals,
         start=start,
         end=end,
+        selected_item_names=selected_item_names,
+        selected_gl_labels=selected_gl_labels,
     )
 
 
