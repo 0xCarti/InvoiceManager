@@ -84,6 +84,7 @@
                         <th scope="col" class="text-end">Quantity Sold</th>
                         <th scope="col" class="text-end">Cost (each)</th>
                         <th scope="col" class="text-end">Price (each)</th>
+                        <th scope="col" class="text-end">Total Cost</th>
                         <th scope="col" class="text-end">Profit per Item</th>
                         <th scope="col" class="text-end">Total Revenue</th>
                         <th scope="col" class="text-end">Total Profit</th>
@@ -96,6 +97,7 @@
                         <td class="text-end">{{ '%.2f'|format(row.quantity) }}</td>
                         <td class="text-end">${{ '%.2f'|format(row.cost) }}</td>
                         <td class="text-end">${{ '%.2f'|format(row.price) }}</td>
+                        <td class="text-end">${{ '%.2f'|format(row.total_cost) }}</td>
                         <td class="text-end">${{ '%.2f'|format(row.profit_each) }}</td>
                         <td class="text-end">${{ '%.2f'|format(row.revenue) }}</td>
                         <td class="text-end">${{ '%.2f'|format(row.profit) }}</td>
@@ -109,6 +111,7 @@
                         <td class="text-end">{{ '%.2f'|format(totals.quantity) }}</td>
                         <td></td>
                         <td></td>
+                        <td class="text-end">${{ '%.2f'|format(totals.cost) }}</td>
                         <td></td>
                         <td class="text-end">${{ '%.2f'|format(totals.revenue) }}</td>
                         <td class="text-end">${{ '%.2f'|format(totals.profit) }}</td>
