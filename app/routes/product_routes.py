@@ -201,6 +201,9 @@ def create_product():
     """Add a new product definition."""
     form = ProductWithRecipeForm()
     if form.validate_on_submit():
+        yield_quantity = form.recipe_yield_quantity.data
+        if yield_quantity is None or yield_quantity <= 0:
+            yield_quantity = 1
         product = Product(
             name=form.name.data,
             price=form.price.data,
@@ -208,6 +211,8 @@ def create_product():
             gl_code=form.gl_code.data,
             gl_code_id=form.gl_code_id.data,
             sales_gl_code_id=form.sales_gl_code.data or None,
+            recipe_yield_quantity=float(yield_quantity),
+            recipe_yield_unit=form.recipe_yield_unit.data or None,
         )
         if not product.gl_code and product.gl_code_id:
             gl = db.session.get(GLCode, product.gl_code_id)
@@ -235,6 +240,8 @@ def create_product():
         log_activity(f"Created product {product.name}")
         flash("Product created successfully!", "success")
         return redirect(url_for("product.view_products"))
+    if form.recipe_yield_quantity.data is None:
+        form.recipe_yield_quantity.data = 1
     return render_template(
         "products/create_product.html", form=form, product_id=None
     )
@@ -246,6 +253,9 @@ def ajax_create_product():
     """Create a product via AJAX."""
     form = ProductWithRecipeForm()
     if form.validate_on_submit():
+        yield_quantity = form.recipe_yield_quantity.data
+        if yield_quantity is None or yield_quantity <= 0:
+            yield_quantity = 1
         product = Product(
             name=form.name.data,
             price=form.price.data,
@@ -253,6 +263,8 @@ def ajax_create_product():
             gl_code=form.gl_code.data,
             gl_code_id=form.gl_code_id.data,
             sales_gl_code_id=form.sales_gl_code.data or None,
+            recipe_yield_quantity=float(yield_quantity),
+            recipe_yield_unit=form.recipe_yield_unit.data or None,
         )
         if not product.gl_code and product.gl_code_id:
             gl = db.session.get(GLCode, product.gl_code_id)
@@ -308,6 +320,8 @@ def copy_product(product_id):
     form.gl_code.data = product_obj.gl_code
     form.gl_code_id.data = product_obj.gl_code_id
     form.sales_gl_code.data = product_obj.sales_gl_code_id
+    form.recipe_yield_quantity.data = product_obj.recipe_yield_quantity or 1.0
+    form.recipe_yield_unit.data = product_obj.recipe_yield_unit
     form.items.min_entries = len(product_obj.recipe_items)
     item_choices = [
         (itm.id, itm.name) for itm in Item.query.filter_by(archived=False).all()
@@ -345,6 +359,11 @@ def edit_product(product_id):
         product.gl_code = form.gl_code.data
         product.gl_code_id = form.gl_code_id.data
         product.sales_gl_code_id = form.sales_gl_code.data or None
+        yield_quantity = form.recipe_yield_quantity.data
+        if yield_quantity is None or yield_quantity <= 0:
+            yield_quantity = 1
+        product.recipe_yield_quantity = float(yield_quantity)
+        product.recipe_yield_unit = form.recipe_yield_unit.data or None
         if not product.gl_code and product.gl_code_id:
             gl = db.session.get(GLCode, product.gl_code_id)
             if gl:
@@ -377,6 +396,8 @@ def edit_product(product_id):
         form.gl_code.data = product.gl_code
         form.gl_code_id.data = product.gl_code_id
         form.sales_gl_code.data = product.sales_gl_code_id
+        form.recipe_yield_quantity.data = product.recipe_yield_quantity or 1.0
+        form.recipe_yield_unit.data = product.recipe_yield_unit
         form.items.min_entries = len(product.recipe_items)
         item_choices = [
             (itm.id, itm.name)
@@ -412,6 +433,11 @@ def edit_product_recipe(product_id):
         abort(404)
     form = ProductRecipeForm()
     if form.validate_on_submit():
+        yield_quantity = form.recipe_yield_quantity.data
+        if yield_quantity is None or yield_quantity <= 0:
+            yield_quantity = 1
+        product.recipe_yield_quantity = float(yield_quantity)
+        product.recipe_yield_unit = form.recipe_yield_unit.data or None
         ProductRecipeItem.query.filter_by(product_id=product.id).delete()
         items = [
             key
@@ -438,6 +464,8 @@ def edit_product_recipe(product_id):
         flash("Recipe updated successfully!", "success")
         return redirect(url_for("product.view_products"))
     elif request.method == "GET":
+        form.recipe_yield_quantity.data = product.recipe_yield_quantity or 1.0
+        form.recipe_yield_unit.data = product.recipe_yield_unit
         form.items.min_entries = max(1, len(product.recipe_items))
         item_choices = [
             (itm.id, itm.name)
@@ -477,7 +505,21 @@ def calculate_product_cost(product_id):
             qty = 0
         factor = ri.unit.factor if ri.unit else 1
         total += (item_cost or 0) * qty * factor
-    return jsonify({"cost": total})
+    yield_override = request.args.get("yield_quantity", type=float)
+    yield_quantity = product.recipe_yield_quantity or 0
+    if yield_override is not None and yield_override > 0:
+        yield_quantity = yield_override
+    if not yield_quantity or yield_quantity <= 0:
+        yield_quantity = 1.0
+    per_unit_cost = total / yield_quantity if yield_quantity else total
+    return jsonify(
+        {
+            "cost": per_unit_cost,
+            "batch_cost": total,
+            "yield_quantity": yield_quantity,
+            "yield_unit": product.recipe_yield_unit,
+        }
+    )
 
 
 @product.route("/products/bulk_set_cost_from_recipe", methods=["POST"])
@@ -520,7 +562,10 @@ def bulk_set_cost_from_recipe():
                 quantity = 0.0
             factor = recipe_item.unit.factor if recipe_item.unit else 1
             total += (item_cost or 0.0) * quantity * factor
-        product_obj.cost = total
+        yield_quantity = product_obj.recipe_yield_quantity or 0
+        if not yield_quantity or yield_quantity <= 0:
+            yield_quantity = 1.0
+        product_obj.cost = total / yield_quantity if yield_quantity else total
         updated += 1
 
     db.session.commit()

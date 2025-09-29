@@ -184,6 +184,9 @@ that developers should keep in mind when working on or extending the routes.
     `/products/<id>/edit`, and `/products/<id>/delete`.
   - Recipe management lives under `/products/<id>/recipe` and cost helpers
     (`/products/<id>/calculate_cost`, `/products/bulk_set_cost_from_recipe`).
+    The cost calculator divides the batch total by the recipe yield (override via
+    `?yield_quantity=`) and returns both batch and per-unit values so pricing can
+    be aligned with output volume.
   - `/search_products` powers autocomplete searches.
 - **Key dependencies:** Forms include `ProductWithRecipeForm`,
   `ProductRecipeForm`, `BulkProductCostForm`, and `DeleteForm`. Models span

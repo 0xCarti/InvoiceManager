@@ -20,6 +20,17 @@
             {{ form.gl_code_id(class="form-control") }}
         </div>
     </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            {{ form.recipe_yield_quantity.label(class="form-label") }}
+            {{ form.recipe_yield_quantity(class="form-control", id="recipe_yield_quantity") }}
+            <div class="form-text">Number of products produced by this recipe batch.</div>
+        </div>
+        <div class="col-md-6 mb-3">
+            {{ form.recipe_yield_unit.label(class="form-label") }}
+            {{ form.recipe_yield_unit(class="form-control", placeholder="e.g. cups") }}
+        </div>
+    </div>
     <div id="item-list">
         {% for item in form.items %}
         {% set selected_name = item.item.choices | selectattr('0', 'equalto', item.item.data) | map(attribute=1) | first %}
@@ -54,9 +65,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const pid = btn.getAttribute('data-product-id');
         if (pid) {
             btn.addEventListener('click', function() {
-                fetch(`/products/${pid}/calculate_cost`).then(resp => resp.json()).then(data => {
+                const yieldInput = document.getElementById('recipe_yield_quantity');
+                let url = `/products/${pid}/calculate_cost`;
+                if (yieldInput) {
+                    const parsedYield = parseFloat(yieldInput.value);
+                    if (!Number.isNaN(parsedYield) && parsedYield > 0) {
+                        url += `?yield_quantity=${encodeURIComponent(parsedYield)}`;
+                    }
+                }
+                fetch(url).then(resp => resp.json()).then(data => {
                     const costInput = document.getElementById('cost');
-                    if (costInput) costInput.value = data.cost;
+                    if (costInput && typeof data.cost !== 'undefined') {
+                        costInput.value = data.cost;
+                    }
+                    if (yieldInput && typeof data.yield_quantity !== 'undefined') {
+                        yieldInput.value = data.yield_quantity;
+                    }
                 });
             });
         } else {

@@ -54,6 +54,8 @@ def test_additional_product_routes(client, app):
                 "price": 2,
                 "cost": 1,
                 "gl_code_id": gl_id,
+                "recipe_yield_quantity": 35,
+                "recipe_yield_unit": "cups",
                 "items-0-item": item_id,
                 "items-0-unit": unit_id,
                 "items-0-quantity": 1,
@@ -65,6 +67,8 @@ def test_additional_product_routes(client, app):
     with app.app_context():
         prod = Product.query.filter_by(name="Candy").first()
         assert prod.gl_code == "4000"
+        assert prod.recipe_yield_quantity == pytest.approx(35.0)
+        assert prod.recipe_yield_unit == "cups"
         pid = prod.id
         # add second recipe item for append_entry path
         db.session.add(
@@ -95,6 +99,8 @@ def test_additional_product_routes(client, app):
                 "price": 3,
                 "cost": 1,
                 "gl_code_id": gl_id,
+                "recipe_yield_quantity": 35,
+                "recipe_yield_unit": "cups",
                 "items-0-item": item_id,
                 "items-0-unit": unit_id,
                 "items-0-quantity": 1,
@@ -107,7 +113,10 @@ def test_additional_product_routes(client, app):
         assert client.get(f"/products/{pid}/recipe").status_code == 200
         # Calculate cost
         resp = client.get(f"/products/{pid}/calculate_cost")
-        assert b"cost" in resp.data
+        data = resp.get_json()
+        assert data["cost"] == pytest.approx(1 / 35)
+        assert data["batch_cost"] == pytest.approx(1.0)
+        assert data["yield_quantity"] == pytest.approx(35.0)
         assert client.get("/products/999/calculate_cost").status_code == 404
         # Search products
         resp = client.get("/search_products?query=cand")
@@ -196,7 +205,13 @@ def test_view_products_customer_filter(client, app):
 def test_bulk_set_cost_from_recipe(client, app):
     email, item_id, unit_id = setup_data(app)
     with app.app_context():
-        product = Product(name="BulkProd", price=5, cost=0)
+        product = Product(
+            name="BulkProd",
+            price=5,
+            cost=0,
+            recipe_yield_quantity=3,
+            recipe_yield_unit="cups",
+        )
         db.session.add(product)
         db.session.commit()
         db.session.add(
@@ -222,4 +237,4 @@ def test_bulk_set_cost_from_recipe(client, app):
 
     with app.app_context():
         updated = db.session.get(Product, product_id)
-        assert updated.cost == pytest.approx(3.0)
+        assert updated.cost == pytest.approx(1.0)

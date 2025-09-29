@@ -175,6 +175,58 @@ def view_items():
     )
 
 
+@item.route("/items/recipe-cost-calculator")
+@login_required
+def recipe_cost_calculator():
+    """Display an interactive tool to estimate recipe costs."""
+    items = (
+        Item.query.options(selectinload(Item.units))
+        .filter(Item.archived.is_(False))
+        .order_by(Item.name)
+        .all()
+    )
+    items_payload = []
+    for item in items:
+        units = []
+        seen = set()
+        for unit in sorted(
+            item.units, key=lambda u: (float(u.factor or 0.0), u.name.lower())
+        ):
+            key = (unit.name.lower(), round(float(unit.factor or 0.0), 6))
+            if key in seen:
+                continue
+            seen.add(key)
+            units.append(
+                {
+                    "id": unit.id,
+                    "name": unit.name,
+                    "factor": float(unit.factor or 1.0),
+                    "is_base": unit.name == item.base_unit
+                    or abs(float(unit.factor or 0.0) - 1.0) < 1e-6,
+                }
+            )
+        if not any(u.get("is_base") for u in units):
+            units.insert(
+                0,
+                {
+                    "id": None,
+                    "name": item.base_unit,
+                    "factor": 1.0,
+                    "is_base": True,
+                },
+            )
+        items_payload.append(
+            {
+                "id": item.id,
+                "name": item.name,
+                "base_unit": item.base_unit,
+                "cost": float(item.cost or 0.0),
+                "units": units,
+            }
+        )
+    return render_template("items/recipe_calculator.html", items=items_payload)
+
+
 @item.route("/items/<int:item_id>")
 @login_required
 def view_item(item_id):

@@ -402,6 +402,14 @@ class RecipeItemForm(FlaskForm):
 
 
 class ProductRecipeForm(FlaskForm):
+    recipe_yield_quantity = DecimalField(
+        "Recipe Yield Quantity",
+        validators=[Optional(), NumberRange(min=0.0001)],
+        default=1,
+    )
+    recipe_yield_unit = StringField(
+        "Recipe Yield Unit", validators=[Optional(), Length(max=50)]
+    )
     items = FieldList(FormField(RecipeItemForm), min_entries=1)
     submit = SubmitField("Submit")
 
@@ -417,6 +425,14 @@ class ProductRecipeForm(FlaskForm):
 class ProductWithRecipeForm(ProductForm):
     """Form used on product create/edit pages to also manage recipe items."""
 
+    recipe_yield_quantity = DecimalField(
+        "Recipe Yield Quantity",
+        validators=[Optional(), NumberRange(min=0.0001)],
+        default=1,
+    )
+    recipe_yield_unit = StringField(
+        "Recipe Yield Unit", validators=[Optional(), Length(max=50)]
+    )
     items = FieldList(FormField(RecipeItemForm), min_entries=0)
 
     def __init__(self, *args, **kwargs):
