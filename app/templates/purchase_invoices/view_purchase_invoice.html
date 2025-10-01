@@ -23,6 +23,7 @@
                 <th>Unit</th>
                 <th>Qty</th>
                 <th>Cost</th>
+                <th>Location</th>
                 <th>GL Code</th>
                 <th>Line Total</th>
             </tr>
@@ -37,7 +38,16 @@
                 <td>{{ it.quantity }}</td>
                 <td>{{ '%.2f'|format(it.cost) }}</td>
                 <td>
-                    {% set gl_obj = it.resolved_purchase_gl_code(invoice.location_id) %}
+                    {% if it.location %}
+                        {{ it.location.name }}
+                    {% elif it.location_id %}
+                        Deleted Location (#{{ it.location_id }})
+                    {% else %}
+                        {{ invoice.location_name }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% set gl_obj = it.resolved_purchase_gl_code(it.location_id or invoice.location_id) %}
                     {% if gl_obj and gl_obj.code %}
                         {{ gl_obj.code }}{% if gl_obj.description %} - {{ gl_obj.description }}{% endif %}
                     {% else %}

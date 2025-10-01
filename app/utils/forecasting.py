@@ -140,20 +140,24 @@ class DemandForecastingHelper:
         self, location_ids: Optional[Sequence[int]], item_ids: Optional[Sequence[int]]
     ) -> Iterable[Tuple[int, int, float]]:
         factor = _coalesce_factor(ItemUnit.factor)
+        effective_location = func.coalesce(
+            PurchaseInvoiceItem.location_id, PurchaseInvoice.location_id
+        )
+
         query = (
             self.session.query(
                 PurchaseInvoiceItem.item_id,
-                PurchaseInvoice.location_id,
+                effective_location.label("location_id"),
                 func.sum(PurchaseInvoiceItem.quantity * factor).label("quantity"),
             )
             .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id)
             .outerjoin(ItemUnit, PurchaseInvoiceItem.unit_id == ItemUnit.id)
             .filter(PurchaseInvoice.received_date >= self._since)
-            .group_by(PurchaseInvoiceItem.item_id, PurchaseInvoice.location_id)
+            .group_by(PurchaseInvoiceItem.item_id, effective_location)
         )
 
         if location_ids:
-            query = query.filter(PurchaseInvoice.location_id.in_(location_ids))
+            query = query.filter(effective_location.in_(location_ids))
         if item_ids:
             query = query.filter(PurchaseInvoiceItem.item_id.in_(item_ids))
 

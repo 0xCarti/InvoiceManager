@@ -66,19 +66,22 @@ def check_negative_invoice_reverse(invoice_obj):
                 factor = unit.factor
         itm = db.session.get(Item, inv_item.item_id)
         if itm:
+            loc_id = inv_item.location_id or invoice_obj.location_id
             record = LocationStandItem.query.filter_by(
-                location_id=invoice_obj.location_id,
+                location_id=loc_id,
                 item_id=itm.id,
             ).first()
             current = record.expected_count if record else 0
             new_count = current - inv_item.quantity * factor
             if new_count < 0:
-                loc = (
-                    record.location
-                    if record
-                    else db.session.get(Location, invoice_obj.location_id)
-                )
-                location_name = loc.name if loc else invoice_obj.location_name
+                if record and record.location:
+                    location_name = record.location.name
+                else:
+                    fallback_location = db.session.get(Location, loc_id)
+                    if fallback_location:
+                        location_name = fallback_location.name
+                    else:
+                        location_name = invoice_obj.location_name
                 warnings.append(
                     f"Reversing this invoice will result in negative inventory for {itm.name} at {location_name}"
                 )
@@ -609,6 +612,7 @@ def receive_invoice(po_id):
             form.items[i].quantity.data = poi.quantity
             form.items[i].position.data = poi.position
             form.items[i].gl_code.data = 0
+            form.items[i].location_id.data = 0
     if form.validate_on_submit():
         if not PurchaseOrderItemArchive.query.filter_by(
             purchase_order_id=po.id
@@ -659,6 +663,10 @@ def receive_invoice(po_id):
             position = request.form.get(f"items-{index}-position", type=int)
             gl_code_id = request.form.get(f"items-{index}-gl_code", type=int)
             gl_code_id = gl_code_id or None
+            line_location_id = request.form.get(
+                f"items-{index}-location_id", type=int
+            )
+            line_location_id = line_location_id or None
             if item_id and quantity is not None and cost is not None:
                 item_entries.append(
                     {
@@ -669,6 +677,7 @@ def receive_invoice(po_id):
                         "position": position,
                         "fallback": fallback_counter,
                         "gl_code_id": gl_code_id,
+                        "location_id": line_location_id,
                     }
                 )
                 fallback_counter += 1
@@ -704,6 +713,7 @@ def receive_invoice(po_id):
                     prev_cost=prev_cost,
                     position=order_index,
                     purchase_gl_code_id=entry["gl_code_id"],
+                    location_id=entry["location_id"],
                 )
             )
 
@@ -735,12 +745,13 @@ def receive_invoice(po_id):
                 # Explicitly mark the item as dirty so cost updates persist
                 db.session.add(item_obj)
 
+                line_location_id = entry["location_id"] or invoice.location_id
                 record = LocationStandItem.query.filter_by(
-                    location_id=invoice.location_id, item_id=item_obj.id
+                    location_id=line_location_id, item_id=item_obj.id
                 ).first()
                 if not record:
                     record = LocationStandItem(
-                        location_id=invoice.location_id,
+                        location_id=line_location_id,
                         item_id=item_obj.id,
                         expected_count=0,
                         purchase_gl_code_id=item_obj.purchase_gl_code_id,
@@ -804,7 +815,14 @@ def view_purchase_invoices():
 
     query = PurchaseInvoice.query.options(
         selectinload(PurchaseInvoice.purchase_order).selectinload(PurchaseOrder.vendor),
-        selectinload(PurchaseInvoice.items),
+        selectinload(PurchaseInvoice.items)
+        .selectinload(PurchaseInvoiceItem.item),
+        selectinload(PurchaseInvoice.items)
+        .selectinload(PurchaseInvoiceItem.unit),
+        selectinload(PurchaseInvoice.items)
+        .selectinload(PurchaseInvoiceItem.location),
+        selectinload(PurchaseInvoice.items)
+        .selectinload(PurchaseInvoiceItem.purchase_gl_code),
     )
     if invoice_id:
         query = query.filter(PurchaseInvoice.id == invoice_id)
@@ -850,7 +868,22 @@ def view_purchase_invoices():
 @login_required
 def view_purchase_invoice(invoice_id):
     """Display a purchase invoice."""
-    invoice = db.session.get(PurchaseInvoice, invoice_id)
+    invoice = (
+        PurchaseInvoice.query.options(
+            selectinload(PurchaseInvoice.items)
+            .selectinload(PurchaseInvoiceItem.item),
+            selectinload(PurchaseInvoice.items)
+            .selectinload(PurchaseInvoiceItem.unit),
+            selectinload(PurchaseInvoice.items)
+            .selectinload(PurchaseInvoiceItem.location),
+            selectinload(PurchaseInvoice.items)
+            .selectinload(PurchaseInvoiceItem.purchase_gl_code),
+            selectinload(PurchaseInvoice.purchase_order).selectinload(
+                PurchaseOrder.vendor
+            ),
+            selectinload(PurchaseInvoice.location),
+        ).get(invoice_id)
+    )
     if invoice is None:
         abort(404)
     return render_template(
@@ -914,13 +947,14 @@ def reverse_purchase_invoice(invoice_id):
         itm.cost = inv_item.prev_cost or 0.0
 
         # Update expected count for the location where items were received
+        line_location_id = inv_item.location_id or invoice.location_id
         record = LocationStandItem.query.filter_by(
-            location_id=invoice.location_id,
+            location_id=line_location_id,
             item_id=itm.id,
         ).first()
         if not record:
             record = LocationStandItem(
-                location_id=invoice.location_id,
+                location_id=line_location_id,
                 item_id=itm.id,
                 expected_count=0,
                 purchase_gl_code_id=itm.purchase_gl_code_id,
@@ -934,10 +968,17 @@ def reverse_purchase_invoice(invoice_id):
         new_count = record.expected_count - removed_qty
         record.expected_count = new_count
 
-    loc = db.session.get(Location, invoice.location_id)
-    if not loc:
+    location_ids = {
+        inv_item.location_id or invoice.location_id for inv_item in invoice.items
+    }
+    missing_locations = [
+        loc_id
+        for loc_id in location_ids
+        if loc_id and not db.session.get(Location, loc_id)
+    ]
+    if missing_locations:
         flash(
-            "Cannot reverse invoice because location no longer exists.",
+            "Cannot reverse invoice because one or more receiving locations no longer exist.",
             "error",
         )
         return redirect(url_for("purchase.view_purchase_invoices"))

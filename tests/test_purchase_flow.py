@@ -116,6 +116,7 @@ def test_purchase_and_receive(client, app):
                 "items-0-unit": unit_id,
                 "items-0-quantity": 3,
                 "items-0-cost": 2.5,
+                "items-0-location_id": 0,
             },
             follow_redirects=True,
         )
@@ -172,6 +173,7 @@ def test_item_cost_visible_on_items_page(client, app):
                 "items-0-unit": unit_id,
                 "items-0-quantity": 3,
                 "items-0-cost": 2.5,
+                "items-0-location_id": 0,
             },
             follow_redirects=True,
         )
@@ -252,6 +254,124 @@ def test_purchase_order_multiple_items(client, app):
         ids = {i.item_id for i in po.items}
         assert ids == {item1_id, item2_id}
 
+
+def test_receive_invoice_line_locations(client, app):
+    with app.app_context():
+        user = User(
+            email="locations@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        vendor = Vendor(first_name="Local", last_name="Vendor")
+        item1 = Item(name="Apples", base_unit="each")
+        item2 = Item(name="Bananas", base_unit="each")
+        unit1 = ItemUnit(
+            item=item1,
+            name="each",
+            factor=1,
+            receiving_default=True,
+            transfer_default=True,
+        )
+        unit2 = ItemUnit(
+            item=item2,
+            name="each",
+            factor=1,
+            receiving_default=True,
+            transfer_default=True,
+        )
+        loc_main = Location(name="Main")
+        loc_secondary = Location(name="Secondary")
+        db.session.add_all(
+            [user, vendor, item1, item2, unit1, unit2, loc_main, loc_secondary]
+        )
+        db.session.commit()
+        for itm in (item1, item2):
+            for loc in (loc_main, loc_secondary):
+                db.session.add(
+                    LocationStandItem(
+                        location_id=loc.id,
+                        item_id=itm.id,
+                        expected_count=0,
+                    )
+                )
+        db.session.commit()
+
+        vendor_id = vendor.id
+        item1_id = item1.id
+        item2_id = item2.id
+        unit1_id = unit1.id
+        unit2_id = unit2.id
+        loc_main_id = loc_main.id
+        loc_secondary_id = loc_secondary.id
+
+    with client:
+        login(client, "locations@example.com", "pass")
+        resp = client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-03-01",
+                "expected_date": "2023-03-05",
+                "items-0-item": item1_id,
+                "items-0-unit": unit1_id,
+                "items-0-quantity": 5,
+                "items-1-item": item2_id,
+                "items-1-unit": unit2_id,
+                "items-1-quantity": 7,
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        po_id = PurchaseOrder.query.filter_by(vendor_id=vendor_id).first().id
+
+    with client:
+        login(client, "locations@example.com", "pass")
+        resp = client.post(
+            f"/purchase_orders/{po_id}/receive",
+            data={
+                "received_date": "2023-03-06",
+                "gst": 0,
+                "pst": 0,
+                "delivery_charge": 0,
+                "location_id": loc_main_id,
+                "items-0-item": item1_id,
+                "items-0-unit": unit1_id,
+                "items-0-quantity": 5,
+                "items-0-cost": 1.5,
+                "items-0-location_id": 0,
+                "items-1-item": item2_id,
+                "items-1-unit": unit2_id,
+                "items-1-quantity": 7,
+                "items-1-cost": 2.0,
+                "items-1-location_id": loc_secondary_id,
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        invoice = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).first()
+        assert invoice is not None
+        line_locations = {item.position: item.location_id for item in invoice.items}
+        assert line_locations[0] is None
+        assert line_locations[1] == loc_secondary_id
+
+        main_apples = LocationStandItem.query.filter_by(
+            location_id=loc_main_id, item_id=item1_id
+        ).first()
+        assert main_apples.expected_count == 5
+
+        secondary_bananas = LocationStandItem.query.filter_by(
+            location_id=loc_secondary_id, item_id=item2_id
+        ).first()
+        assert secondary_bananas.expected_count == 7
+
+        main_bananas = LocationStandItem.query.filter_by(
+            location_id=loc_main_id, item_id=item2_id
+        ).first()
+        assert main_bananas.expected_count == 0
 
 def test_receive_form_prefills_delivery_charge(client, app):
     email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)

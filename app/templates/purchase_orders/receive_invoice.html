@@ -28,6 +28,11 @@
             min-width: 180px;
         }
 
+        .item-row .location-col {
+            flex: 1 1 200px;
+            min-width: 180px;
+        }
+
         .item-row .line-total-col {
             flex: 0 0 110px;
             min-width: 100px;
@@ -42,6 +47,7 @@
             .item-row .unit-col,
             .item-row .quantity-col,
             .item-row .cost-col,
+            .item-row .location-col,
             .item-row .gl-code-col,
             .item-row .line-total-col {
                 flex: 0 0 100%;
@@ -98,6 +104,7 @@
             <div class="col-auto unit-col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data }}"></select></div>
             <div class="col quantity-col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col cost-col">{{ item.cost(class="form-control cost") }}</div>
+            <div class="col location-col">{{ item.location_id(class="form-select location-select", **{"data-selected": item.location_id.data}) }}</div>
             <div class="col gl-code-col">{{ item.gl_code(class="form-control gl-code-select") }}</div>
             <div class="col line-total-col"><span class="line-total">0.00</span></div>
             <div class="col-auto">
@@ -125,6 +132,7 @@
 <script nonce="{{ csp_nonce }}">
     const itemOptions = `<option value="">Select Item</option>{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
     const glCodeOptions = `{% for val, label in form.items[0].gl_code.choices %}<option value="{{ val }}">{{ label|e }}</option>{% endfor %}`;
+    const locationOptions = `{% for val, label in form.items[0].location_id.choices %}<option value="{{ val }}">{{ label|e }}</option>{% endfor %}`;
     let itemIndex = {{ form.items|length }};
 
     function createRow(index) {
@@ -138,6 +146,7 @@
             <div class="col-auto unit-col"><select name="items-${index}-unit" id="items-${index}-unit" class="form-control unit-select" data-selected=""></select></div>
             <div class="col quantity-col"><input type="number" step="any" name="items-${index}-quantity" id="items-${index}-quantity" class="form-control quantity"></div>
             <div class="col cost-col"><input type="number" step="any" name="items-${index}-cost" id="items-${index}-cost" class="form-control cost"></div>
+            <div class="col location-col"><select name="items-${index}-location_id" id="items-${index}-location_id" class="form-select location-select">${locationOptions}</select></div>
             <div class="col gl-code-col"><select name="items-${index}-gl_code" id="items-${index}-gl_code" class="form-control gl-code-select">${glCodeOptions}</select></div>
             <div class="col line-total-col"><span class="line-total">0.00</span></div>
             <div class="col-auto">
@@ -149,6 +158,22 @@
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
         `;
         return row;
+    }
+
+    function getInvoiceLocationValue() {
+        const field = document.getElementById('location_id');
+        return field ? field.value : '';
+    }
+
+    function getRowLocationId(row) {
+        const select = row.querySelector('.location-select');
+        if (select) {
+            const value = select.value;
+            if (value && value !== '0') {
+                return value;
+            }
+        }
+        return getInvoiceLocationValue();
     }
 
     function updatePositions() {
@@ -184,17 +209,17 @@
 
     function fetchUnits(selectEl, selectedUnitId=null) {
         const itemId = selectEl.value;
-        const unitSelect = selectEl.closest('.item-row').querySelector('.unit-select');
         const row = selectEl.closest('.item-row');
+        const unitSelect = row.querySelector('.unit-select');
         if (!itemId) {
             unitSelect.innerHTML = '';
             applyDefaultGlCode(row, null);
             return;
         }
-        const locationField = document.getElementById('location_id');
         const params = new URLSearchParams();
-        if (locationField && locationField.value) {
-            params.append('location_id', locationField.value);
+        const effectiveLocation = getRowLocationId(row);
+        if (effectiveLocation) {
+            params.append('location_id', effectiveLocation);
         }
         const url = params.toString() ? `/items/${itemId}/units?${params.toString()}` : `/items/${itemId}/units`;
         fetch(url).then(r => r.json()).then(data => {
@@ -244,6 +269,10 @@
         if (glSelect) {
             glSelect.value = '0';
         }
+        const locationSelect = row.querySelector('.location-select');
+        if (locationSelect) {
+            locationSelect.value = '0';
+        }
         itemIndex++;
         updatePositions();
     });
@@ -279,6 +308,22 @@
         }
         if (e.target && e.target.classList.contains('gl-code-select')) {
             e.target.dataset.userSelected = '1';
+        }
+        if (e.target && e.target.classList.contains('location-select')) {
+            if (e.target.value === '0') {
+                delete e.target.dataset.userSelected;
+            } else {
+                e.target.dataset.userSelected = '1';
+            }
+            const row = e.target.closest('.item-row');
+            const itemSelect = row.querySelector('.item-select');
+            if (itemSelect && itemSelect.value) {
+                const unitSelect = row.querySelector('.unit-select');
+                const selectedUnit = unitSelect ? unitSelect.value : null;
+                fetchUnits(itemSelect, selectedUnit);
+            } else {
+                applyDefaultGlCode(row, null);
+            }
         }
         if (e.target && (e.target.classList.contains('quantity') || e.target.classList.contains('cost'))) {
             updateTotals();
@@ -334,6 +379,18 @@
     document.querySelectorAll('.item-select').forEach(sel => {
         const row = sel.closest('.item-row');
         const selectedUnit = row.querySelector('.unit-select').dataset.selected;
+        const locationSelect = row.querySelector('.location-select');
+        if (locationSelect) {
+            const selectedLocation = locationSelect.dataset.selected;
+            if (selectedLocation) {
+                locationSelect.value = selectedLocation;
+                if (selectedLocation !== '0') {
+                    locationSelect.dataset.userSelected = '1';
+                }
+            } else {
+                locationSelect.value = '0';
+            }
+        }
         fetchUnits(sel, selectedUnit);
         const glSelect = row.querySelector('.gl-code-select');
         if (glSelect && !glSelect.value) {
