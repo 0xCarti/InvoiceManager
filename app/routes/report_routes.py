@@ -1,4 +1,7 @@
-from flask import Blueprint, redirect, render_template, request, url_for
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
+from typing import Dict
+
+from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import login_required
 
 from app import db
@@ -12,25 +15,78 @@ from app.forms import (
 )
 from app.models import (
     Customer,
+    EventLocation,
+    GLCode,
     Invoice,
     InvoiceProduct,
     Item,
     ItemUnit,
+    Location,
+    Product,
     ProductRecipeItem,
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseOrder,
-    Product,
     TerminalSale,
     User,
-    EventLocation,
-    Location,
 )
 from app.utils.forecasting import DemandForecastingHelper
 from sqlalchemy import or_
 from sqlalchemy.orm import selectinload
 
 report = Blueprint("report", __name__)
+
+
+_CENT = Decimal("0.01")
+
+
+def _to_decimal(value) -> Decimal:
+    return Decimal(str(value or 0))
+
+
+def _quantize(value: Decimal) -> Decimal:
+    return value.quantize(_CENT, rounding=ROUND_HALF_UP)
+
+
+def _allocate_amount(total: Decimal, weights: Dict[str, Decimal]):
+    """Allocate a currency amount across buckets using proportional rounding."""
+
+    allocations = {key: Decimal("0.00") for key in weights}
+    total = _quantize(total)
+
+    if not weights or total == 0:
+        return allocations
+
+    total_weight = sum(weights.values())
+    if total_weight == 0:
+        return allocations
+
+    remainder = total
+    fractional_shares = []
+
+    for key, weight in weights.items():
+        if weight <= 0:
+            fractional_shares.append((key, Decimal("0")))
+            continue
+
+        raw_share = (total * weight) / total_weight
+        rounded_share = raw_share.quantize(_CENT, rounding=ROUND_DOWN)
+        allocations[key] = rounded_share
+        remainder -= rounded_share
+        fractional_shares.append((key, raw_share - rounded_share))
+
+    cents_remaining = int(
+        ((remainder / _CENT).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    )
+    cents_remaining = max(cents_remaining, 0)
+    fractional_shares.sort(key=lambda item: item[1], reverse=True)
+
+    if fractional_shares and cents_remaining:
+        for i in range(cents_remaining):
+            key, _ = fractional_shares[i % len(fractional_shares)]
+            allocations[key] += _CENT
+
+    return allocations
 
 
 @report.route("/reports/vendor-invoices", methods=["GET", "POST"])
@@ -301,6 +357,168 @@ def purchase_inventory_summary():
         end=end,
         selected_item_names=selected_item_names,
         selected_gl_labels=selected_gl_labels,
+    )
+
+
+def _invoice_gl_code_rows(invoice: PurchaseInvoice):
+    buckets: Dict[str, Dict[str, Decimal]] = {}
+
+    for item in invoice.items:
+        gl = item.resolved_purchase_gl_code(invoice.location_id)
+        if gl is not None:
+            code_key = gl.code
+            display_code = gl.code
+            description = gl.description or ""
+        else:
+            code_key = "__unassigned__"
+            display_code = "Unassigned"
+            description = ""
+
+        entry = buckets.setdefault(
+            code_key,
+            {
+                "code": display_code,
+                "description": description,
+                "base_amount": Decimal("0.00"),
+                "delivery": Decimal("0.00"),
+                "pst": Decimal("0.00"),
+                "gst": Decimal("0.00"),
+            },
+        )
+
+        line_total = _quantize(_to_decimal(item.quantity) * _to_decimal(item.cost))
+        entry["base_amount"] += line_total
+
+    if not buckets:
+        buckets["__unassigned__"] = {
+            "code": "Unassigned",
+            "description": "",
+            "base_amount": Decimal("0.00"),
+            "delivery": Decimal("0.00"),
+            "pst": Decimal("0.00"),
+            "gst": Decimal("0.00"),
+        }
+
+    gst_code = "102702"
+    gst_gl = GLCode.query.filter_by(code=gst_code).first()
+    gst_entry = buckets.get(gst_code)
+    if gst_entry is None:
+        buckets[gst_code] = {
+            "code": gst_code,
+            "description": (gst_gl.description if gst_gl else ""),
+            "base_amount": Decimal("0.00"),
+            "delivery": Decimal("0.00"),
+            "pst": Decimal("0.00"),
+            "gst": Decimal("0.00"),
+        }
+        gst_entry = buckets[gst_code]
+    elif gst_gl and not gst_entry.get("description"):
+        gst_entry["description"] = gst_gl.description
+
+    pst_total = _quantize(_to_decimal(invoice.pst))
+    delivery_total = _quantize(_to_decimal(invoice.delivery_charge))
+    gst_total = _quantize(_to_decimal(invoice.gst))
+
+    proration_weights = {
+        key: data["base_amount"]
+        for key, data in buckets.items()
+        if key != gst_code and data["base_amount"] > 0
+    }
+
+    if (not proration_weights) and (pst_total > 0 or delivery_total > 0):
+        proration_weights = {"__unassigned__": Decimal("1.00")}
+        if "__unassigned__" not in buckets:
+            buckets["__unassigned__"] = {
+                "code": "Unassigned",
+                "description": "",
+                "base_amount": Decimal("0.00"),
+                "delivery": Decimal("0.00"),
+                "pst": Decimal("0.00"),
+                "gst": Decimal("0.00"),
+            }
+
+    pst_allocations = _allocate_amount(pst_total, proration_weights)
+    delivery_allocations = _allocate_amount(delivery_total, proration_weights)
+
+    rows = []
+    totals = {
+        "base_amount": Decimal("0.00"),
+        "delivery": Decimal("0.00"),
+        "pst": Decimal("0.00"),
+        "gst": Decimal("0.00"),
+        "total": Decimal("0.00"),
+    }
+
+    for key in sorted(
+        buckets.keys(), key=lambda c: (c == gst_code, c == "__unassigned__", c)
+    ):
+        data = buckets[key]
+        data["pst"] = pst_allocations.get(key, Decimal("0.00"))
+        data["delivery"] = delivery_allocations.get(key, Decimal("0.00"))
+        if key == gst_code:
+            data["gst"] = gst_total
+
+        line_total = (
+            data["base_amount"]
+            + data["delivery"]
+            + data["pst"]
+            + data["gst"]
+        )
+        line_total = _quantize(line_total)
+
+        totals["base_amount"] += data["base_amount"]
+        totals["delivery"] += data["delivery"]
+        totals["pst"] += data["pst"]
+        totals["gst"] += data["gst"]
+        totals["total"] += line_total
+
+        rows.append(
+            {
+                "code": data["code"],
+                "description": data["description"],
+                "base_amount": data["base_amount"],
+                "delivery": data["delivery"],
+                "pst": data["pst"],
+                "gst": data["gst"],
+                "total": line_total,
+            }
+        )
+
+    totals = {key: _quantize(value) for key, value in totals.items()}
+
+    return rows, totals
+
+
+@report.route("/reports/purchase-invoices/<int:invoice_id>/gl-code")
+@login_required
+def invoice_gl_code_report(invoice_id: int):
+    """Display the GL code allocation report for a purchase invoice."""
+
+    invoice = (
+        PurchaseInvoice.query.options(
+            selectinload(PurchaseInvoice.items)
+            .selectinload(PurchaseInvoiceItem.item),
+            selectinload(PurchaseInvoice.items)
+            .selectinload(PurchaseInvoiceItem.purchase_gl_code),
+            selectinload(PurchaseInvoice.purchase_order).selectinload(
+                PurchaseOrder.vendor
+            ),
+            selectinload(PurchaseInvoice.location),
+        )
+        .filter_by(id=invoice_id)
+        .first()
+    )
+
+    if invoice is None:
+        abort(404)
+
+    rows, totals = _invoice_gl_code_rows(invoice)
+
+    return render_template(
+        "report_invoice_gl_code.html",
+        invoice=invoice,
+        rows=rows,
+        totals=totals,
     )
 
 

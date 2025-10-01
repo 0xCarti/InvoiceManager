@@ -210,6 +210,142 @@ def setup_purchase_invoice(app):
         return user.email, invoice.received_date, item.name
 
 
+def setup_purchase_invoice_with_gl_allocations(app):
+    with app.app_context():
+        user = User.query.filter_by(email="glreport@example.com").first()
+        if not user:
+            user = User(
+                email="glreport@example.com",
+                password=generate_password_hash("pass"),
+                active=True,
+            )
+            db.session.add(user)
+
+        vendor = Vendor.query.filter_by(first_name="GL", last_name="Vendor").first()
+        if not vendor:
+            vendor = Vendor(first_name="GL", last_name="Vendor")
+            db.session.add(vendor)
+
+        location = Location.query.filter_by(name="GL Report Location").first()
+        if not location:
+            location = Location(name="GL Report Location")
+            db.session.add(location)
+
+        gl_food = GLCode.query.filter_by(code="5000").first()
+        if not gl_food:
+            gl_food = GLCode(code="5000", description="Food Expense")
+            db.session.add(gl_food)
+
+        gl_supplies = GLCode.query.filter_by(code="6000").first()
+        if not gl_supplies:
+            gl_supplies = GLCode(code="6000", description="Supplies Expense")
+            db.session.add(gl_supplies)
+
+        gst_gl = GLCode.query.filter_by(code="102702").first()
+        if not gst_gl:
+            gst_gl = GLCode(code="102702", description="GST Payable")
+            db.session.add(gst_gl)
+
+        db.session.commit()
+
+        food_item = Item.query.filter_by(name="GL Food Item").first()
+        if not food_item:
+            food_item = Item(
+                name="GL Food Item",
+                base_unit="each",
+                cost=2.0,
+                purchase_gl_code=gl_food,
+            )
+            db.session.add(food_item)
+        else:
+            food_item.purchase_gl_code = gl_food
+
+        supply_item = Item.query.filter_by(name="GL Supply Item").first()
+        if not supply_item:
+            supply_item = Item(
+                name="GL Supply Item",
+                base_unit="each",
+                cost=4.0,
+                purchase_gl_code=gl_supplies,
+            )
+            db.session.add(supply_item)
+        else:
+            supply_item.purchase_gl_code = gl_supplies
+
+        db.session.commit()
+
+        po = PurchaseOrder.query.filter_by(
+            vendor_id=vendor.id,
+            user_id=user.id,
+            vendor_name=f"{vendor.first_name} {vendor.last_name}",
+        ).first()
+        if not po:
+            po = PurchaseOrder(
+                vendor_id=vendor.id,
+                user_id=user.id,
+                vendor_name=f"{vendor.first_name} {vendor.last_name}",
+                order_date=date(2023, 2, 1),
+                expected_date=date(2023, 2, 1),
+            )
+            db.session.add(po)
+            db.session.commit()
+
+        invoice = PurchaseInvoice.query.filter_by(invoice_number="PINVGL001").first()
+        if not invoice:
+            invoice = PurchaseInvoice(
+                purchase_order_id=po.id,
+                user_id=user.id,
+                location_id=location.id,
+                location_name=location.name,
+                vendor_name=f"{vendor.first_name} {vendor.last_name}",
+                received_date=date(2023, 2, 5),
+                invoice_number="PINVGL001",
+                gst=5.00,
+                pst=7.50,
+                delivery_charge=10.00,
+            )
+            db.session.add(invoice)
+            db.session.commit()
+
+        if (
+            PurchaseInvoiceItem.query.filter_by(
+                invoice_id=invoice.id, item_id=food_item.id
+            ).first()
+            is None
+        ):
+            db.session.add(
+                PurchaseInvoiceItem(
+                    invoice_id=invoice.id,
+                    item_id=food_item.id,
+                    item_name=food_item.name,
+                    quantity=10,
+                    cost=2.0,
+                    purchase_gl_code=gl_food,
+                )
+            )
+
+        if (
+            PurchaseInvoiceItem.query.filter_by(
+                invoice_id=invoice.id, item_id=supply_item.id
+            ).first()
+            is None
+        ):
+            db.session.add(
+                PurchaseInvoiceItem(
+                    invoice_id=invoice.id,
+                    item_id=supply_item.id,
+                    item_name=supply_item.name,
+                    quantity=5,
+                    cost=4.0,
+                    purchase_gl_code=gl_supplies,
+                )
+            )
+
+        db.session.commit()
+
+        return user.email, invoice.id
+
+
 def test_vendor_and_sales_reports(client, app):
     cid = setup_invoice(app)
     login(client, "report@example.com", "pass")
@@ -308,3 +444,19 @@ def test_purchase_inventory_summary_report(client, app):
     assert b"Purchase Inventory Summary" in resp.data
     assert item_name.encode() in resp.data
     assert b"$15.00" in resp.data
+
+
+def test_invoice_gl_code_report(client, app):
+    email, invoice_id = setup_purchase_invoice_with_gl_allocations(app)
+    login(client, email, "pass")
+
+    resp = client.get(f"/reports/purchase-invoices/{invoice_id}/gl-code")
+    assert resp.status_code == 200
+    assert b"Invoice GL Code Report" in resp.data
+    assert b"5000" in resp.data
+    assert b"6000" in resp.data
+    assert b"102702" in resp.data
+    assert b"$20.00" in resp.data
+    assert b"$5.00" in resp.data
+    assert b"$3.75" in resp.data
+    assert b"$62.50" in resp.data
