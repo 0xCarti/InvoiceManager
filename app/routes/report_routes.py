@@ -265,7 +265,7 @@ def purchase_inventory_summary():
 
             for inv_item in invoice_items:
                 invoice = inv_item.invoice
-                location_id = invoice.location_id if invoice else None
+                location_id = inv_item.location_id or (invoice.location_id if invoice else None)
                 resolved_gl = inv_item.resolved_purchase_gl_code(location_id)
                 gl_id = resolved_gl.id if resolved_gl else None
 
@@ -364,7 +364,8 @@ def _invoice_gl_code_rows(invoice: PurchaseInvoice):
     buckets: Dict[str, Dict[str, Decimal]] = {}
 
     for item in invoice.items:
-        gl = item.resolved_purchase_gl_code(invoice.location_id)
+        line_location_id = item.location_id or invoice.location_id
+        gl = item.resolved_purchase_gl_code(line_location_id)
         if gl is not None:
             code_key = gl.code
             display_code = gl.code

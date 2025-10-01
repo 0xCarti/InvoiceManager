@@ -535,6 +535,12 @@ class PurchaseInvoiceItem(db.Model):
     prev_cost = db.Column(db.Float, nullable=False, default=0.0)
     item = relationship("Item")
     unit = relationship("ItemUnit")
+    location_id = db.Column(
+        db.Integer,
+        db.ForeignKey("location.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    location = relationship("Location")
     purchase_gl_code_id = db.Column(
         db.Integer,
         db.ForeignKey("gl_code.id"),
@@ -556,7 +562,7 @@ class PurchaseInvoiceItem(db.Model):
         if not self.item:
             return None
 
-        loc_id = location_id
+        loc_id = self.location_id if self.location_id is not None else location_id
         if loc_id is None and self.invoice is not None:
             loc_id = self.invoice.location_id
 

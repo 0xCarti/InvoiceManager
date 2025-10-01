@@ -235,11 +235,12 @@
                         <ul class="mb-0 ps-3">
                             {% for item in inv.items %}
                                 <li>
+                                    {% set location_label = item.location.name if item.location else (inv.location_name if not item.location_id else 'Deleted Location (#' ~ item.location_id ~ ')') %}
                                     {{ item.item_name }} — {{ '%.4f'|format(item.quantity) }}
                                     {% if item.unit_name %}
                                         {{ item.unit_name }}
                                     {% endif %}
-                                    @ {{ '%.2f'|format(item.cost) }}
+                                    @ {{ '%.2f'|format(item.cost) }} — {{ location_label }}
                                 </li>
                             {% endfor %}
                         </ul>

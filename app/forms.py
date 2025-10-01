@@ -774,6 +774,12 @@ class InvoiceItemReceiveForm(FlaskForm):
     quantity = DecimalField("Quantity", validators=[InputRequired()])
     cost = DecimalField("Cost", validators=[InputRequired()])
     position = HiddenField("Position")
+    location_id = SelectField(
+        "Location",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+    )
     gl_code = SelectField(
         "GL Code",
         coerce=int,
@@ -818,9 +824,15 @@ class ReceiveInvoiceForm(FlaskForm):
         items = load_item_choices()
         units = load_unit_choices()
         gl_codes = load_purchase_gl_code_choices()
+        location_choices = [(0, "Use Invoice Location")] + [
+            (loc_id, label) for loc_id, label in self.location_id.choices
+        ]
         for item_form in self.items:
             item_form.item.choices = items
             item_form.unit.choices = units
+            item_form.location_id.choices = location_choices
+            if item_form.location_id.data is None:
+                item_form.location_id.data = 0
             item_form.gl_code.choices = gl_codes
 
 
