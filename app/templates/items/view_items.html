@@ -404,8 +404,10 @@ if (createItemBtn) {
 const itemsTableEl = document.querySelector('#itemsTable');
 if (itemsTableEl) {
     itemsTableEl.addEventListener('click', function(e) {
-        if (e.target.classList.contains('edit-item-btn')) {
-            const itemId = e.target.getAttribute('data-item-id');
+        const editButton = e.target.closest('.edit-item-btn');
+        if (editButton) {
+            e.preventDefault();
+            const itemId = editButton.getAttribute('data-item-id');
             const url = '{{ url_for('item.edit_item', item_id=0) }}'.replace('0', itemId);
             fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                 .then(r => r.text())
@@ -418,8 +420,11 @@ if (itemsTableEl) {
                     modal.show();
                     bindItemForm(url);
                 });
-        } else if (e.target.classList.contains('copy-item-btn')) {
-            const itemId = e.target.getAttribute('data-item-id');
+        }
+
+        const copyButton = e.target.closest('.copy-item-btn');
+        if (copyButton) {
+            const itemId = copyButton.getAttribute('data-item-id');
             const url = '{{ url_for('item.copy_item', item_id=0) }}'.replace('0', itemId);
             const actionUrl = '{{ url_for('item.add_item') }}';
             fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
