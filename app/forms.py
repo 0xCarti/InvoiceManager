@@ -833,7 +833,9 @@ class ReceiveInvoiceForm(FlaskForm):
             item_form.location_id.choices = location_choices
             if item_form.location_id.data is None:
                 item_form.location_id.data = 0
-            item_form.gl_code.choices = gl_codes
+            item_form.gl_code.choices = [
+                (value, label) for value, label in gl_codes
+            ]
 
 
 class DeleteForm(FlaskForm):

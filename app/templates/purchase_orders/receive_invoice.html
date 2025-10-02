@@ -131,7 +131,7 @@
 </div>
 <script nonce="{{ csp_nonce }}">
     const itemOptions = `<option value="">Select Item</option>{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
-    const glCodeOptions = `{% for val, label in form.items[0].gl_code.choices %}<option value="{{ val }}">{{ label|e }}</option>{% endfor %}`;
+    const glCodeOptions = `{% for val, label in gl_code_choices %}<option value="{{ val }}">{{ label|e }}</option>{% endfor %}`;
     const locationOptions = `{% for val, label in form.items[0].location_id.choices %}<option value="{{ val }}">{{ label|e }}</option>{% endfor %}`;
     let itemIndex = {{ form.items|length }};
 

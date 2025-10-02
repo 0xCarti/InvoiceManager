@@ -592,6 +592,7 @@ def receive_invoice(po_id):
     if po is None:
         abort(404)
     form = ReceiveInvoiceForm()
+    gl_code_choices = load_purchase_gl_code_choices()
     if request.method == "GET":
         form.delivery_charge.data = po.delivery_charge
         form.items.min_entries = max(1, len(po.items))
@@ -605,7 +606,9 @@ def receive_invoice(po_id):
             item_form.unit.choices = [
                 (u.id, u.name) for u in ItemUnit.query.all()
             ]
-            item_form.gl_code.choices = load_purchase_gl_code_choices()
+            item_form.gl_code.choices = [
+                (value, label) for value, label in gl_code_choices
+            ]
         for i, poi in enumerate(po.items):
             form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
@@ -778,7 +781,10 @@ def receive_invoice(po_id):
         return redirect(url_for("purchase.view_purchase_invoices"))
 
     return render_template(
-        "purchase_orders/receive_invoice.html", form=form, po=po
+        "purchase_orders/receive_invoice.html",
+        form=form,
+        po=po,
+        gl_code_choices=gl_code_choices,
     )
 
 
