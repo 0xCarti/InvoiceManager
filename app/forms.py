@@ -188,7 +188,11 @@ class LocationForm(FlaskForm):
         "Location Name", validators=[DataRequired(), Length(min=2, max=100)]
     )
     menu_id = SelectField(
-        "Menu", coerce=int, validators=[Optional()], validate_choice=False
+        "Menu",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+        default=0,
     )
     is_spoilage = BooleanField("Spoilage Location")
     submit = SubmitField("Submit")
@@ -196,6 +200,8 @@ class LocationForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.menu_id.choices = load_menu_choices()
+        if self.menu_id.data is None:
+            self.menu_id.data = 0
 
 
 class LocationItemAddForm(FlaskForm):
