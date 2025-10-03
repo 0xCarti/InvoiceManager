@@ -21,7 +21,7 @@ from app.forms import (
     LocationForm,
     LocationItemAddForm,
 )
-from app.models import GLCode, Item, Location, LocationStandItem, Menu, Product
+from app.models import GLCode, Item, Location, LocationStandItem, Menu
 from app.utils.activity import log_activity
 from app.utils.menu_assignments import apply_menu_products, set_location_menu
 from app.utils.pagination import build_pagination_args, get_per_page
@@ -54,36 +54,6 @@ def _location_items_redirect(location_id: int, page: str | None, per_page: str |
     if per_page and per_page.isdigit():
         args["per_page"] = int(per_page)
     return redirect(url_for("locations.location_items", **args))
-
-
-def _parse_product_ids_param(raw_value: str | None) -> list[int]:
-    """Parse a comma separated list of product ids."""
-
-    if not raw_value:
-        return []
-    ids: list[int] = []
-    for value in raw_value.split(','):
-        value = value.strip()
-        if not value:
-            continue
-        try:
-            ids.append(int(value))
-        except ValueError:
-            continue
-    return ids
-
-
-def _load_products_from_ids(product_ids: list[int]) -> list[Product]:
-    """Return Product objects matching the provided ids preserving order."""
-
-    if not product_ids:
-        return []
-    unique_ids = list(dict.fromkeys(product_ids))
-    products = Product.query.filter(Product.id.in_(unique_ids)).all()
-    by_id = {product.id: product for product in products}
-    return [by_id[pid] for pid in unique_ids if pid in by_id]
-
-
 @location.route("/locations/add", methods=["GET", "POST"])
 @login_required
 def add_location():
@@ -97,9 +67,6 @@ def add_location():
             if menu_obj is None:
                 form.menu_id.errors.append("Selected menu is no longer available.")
                 return render_template("locations/add_location.html", form=form)
-        selected_products = _load_products_from_ids(
-            _parse_product_ids_param(request.form.get("products"))
-        )
         new_location = Location(
             name=form.name.data, is_spoilage=form.is_spoilage.data
         )
@@ -108,7 +75,7 @@ def add_location():
         if menu_obj is not None:
             set_location_menu(new_location, menu_obj)
         else:
-            apply_menu_products(new_location, None, products=selected_products)
+            apply_menu_products(new_location, None)
         db.session.commit()
         log_activity(f"Added location {new_location.name}")
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -129,10 +96,7 @@ def add_location():
         return redirect(url_for("locations.view_locations"))
     if request.method == "GET" and form.menu_id.data is None:
         form.menu_id.data = 0
-    return render_template(
-        "locations/add_location.html",
-        form=form,
-    )
+    return render_template("locations/add_location.html", form=form)
 
 
 @location.route("/locations/edit/<int:location_id>", methods=["GET", "POST"])
@@ -154,16 +118,13 @@ def edit_location(location_id):
             if menu_obj is None:
                 form.menu_id.errors.append("Selected menu is no longer available.")
                 return render_template("locations/edit_location.html", form=form, location=location)
-        selected_products = _load_products_from_ids(
-            _parse_product_ids_param(request.form.get("products"))
-        )
         location.name = form.name.data
         location.is_spoilage = form.is_spoilage.data
         if menu_obj is not None:
             set_location_menu(location, menu_obj)
         else:
             set_location_menu(location, None)
-            apply_menu_products(location, None, products=selected_products)
+            apply_menu_products(location, None)
         db.session.commit()
         log_activity(f"Edited location {location.id}")
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":

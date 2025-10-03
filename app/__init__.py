@@ -52,6 +52,7 @@ NAV_LINKS = {
     "transfer.view_transfers": "Transfers",
     "item.view_items": "Items",
     "locations.view_locations": "Locations",
+    "menu.view_menus": "Menus",
     "product.view_products": "Products",
     "spoilage.view_spoilage": "Spoilage",
     "glcode.view_gl_codes": "GL Codes",
@@ -287,6 +288,7 @@ def create_app(args: list):
         from app.routes.item_routes import item
         from app.routes.location_routes import location
         from app.routes.main_routes import main
+        from app.routes.menu_routes import menu as menu_bp
         from app.routes.note_routes import notes
         from app.routes.product_routes import product
         from app.routes.purchase_routes import purchase
@@ -297,6 +299,7 @@ def create_app(args: list):
 
         app.register_blueprint(auth, url_prefix="/auth")
         app.register_blueprint(main)
+        app.register_blueprint(menu_bp)
         app.register_blueprint(location)
         app.register_blueprint(item)
         app.register_blueprint(transfer)

@@ -14,6 +14,7 @@
                 storage_key='locationsTableColumnVisibility',
                 columns=[
                     {'id': 'toggle-location-name', 'target': 'col-location-name', 'label': 'Name', 'checked': True},
+                    {'id': 'toggle-location-menu', 'target': 'col-location-menu', 'label': 'Menu', 'checked': True},
                     {'id': 'toggle-location-actions', 'target': 'col-location-actions', 'label': 'Actions', 'checked': True},
                 ]
             ) }}
@@ -36,6 +37,7 @@
         <thead>
             <tr>
                 <th scope="col" class="col-location-name">Name</th>
+                <th scope="col" class="col-location-menu">Menu</th>
                 <th scope="col" class="col-location-actions">Actions</th>
             </tr>
         </thead>
@@ -43,6 +45,13 @@
             {% for location in locations.items %}
             <tr data-id="{{ location.id }}">
                 <td class="col-location-name">{{ location.name }}</td>
+                <td class="col-location-menu">
+                    {% if location.current_menu %}
+                    {{ location.current_menu.name }}
+                    {% else %}
+                    <span class="text-muted">No Menu</span>
+                    {% endif %}
+                </td>
                 <td class="col-location-actions">
                     <button type="button" class="btn btn-info edit-location-btn" data-id="{{ location.id }}">Edit</button>
                     <a href="{{ url_for('locations.view_stand_sheet', location_id=location.id) }}" class="btn btn-secondary">Stand Sheet</a>
@@ -307,8 +316,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function addRow(loc) {
+        const menuLabel = loc.menu_name ? loc.menu_name : '<span class="text-muted">No Menu</span>';
         const row = `<tr data-id="${loc.id}">
             <td class=\"col-location-name\">${loc.name}</td>
+            <td class=\"col-location-menu\">${menuLabel}</td>
             <td class=\"col-location-actions\">
                 <button type="button" class="btn btn-info edit-location-btn" data-id="${loc.id}">Edit</button>
                 <a href="/locations/${loc.id}/stand_sheet" class="btn btn-secondary">Stand Sheet</a>
@@ -326,6 +337,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateRow(loc) {
         const row = $(`tr[data-id='${loc.id}']`);
         row.find('.col-location-name').text(loc.name);
+        const menuCell = row.find('.col-location-menu');
+        if (loc.menu_name) {
+            menuCell.text(loc.menu_name);
+        } else {
+            menuCell.html('<span class="text-muted">No Menu</span>');
+        }
     }
 
     $(document).on('click', '.copy-location-btn', function() {

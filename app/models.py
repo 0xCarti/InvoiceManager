@@ -37,6 +37,14 @@ location_products = db.Table(
     ),
 )
 
+menu_products = db.Table(
+    "menu_products",
+    db.Column("menu_id", db.Integer, db.ForeignKey("menu.id"), primary_key=True),
+    db.Column(
+        "product_id", db.Integer, db.ForeignKey("product.id"), primary_key=True
+    ),
+)
+
 
 class LocationStandItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -102,6 +110,7 @@ class Location(db.Model):
     is_spoilage = db.Column(
         db.Boolean, default=False, nullable=False, server_default="0"
     )
+    current_menu_id = db.Column(db.Integer, db.ForeignKey("menu.id"), nullable=True)
     products = db.relationship(
         "Product", secondary=location_products, backref="locations"
     )
@@ -113,6 +122,15 @@ class Location(db.Model):
     event_locations = db.relationship(
         "EventLocation",
         back_populates="location",
+        cascade="all, delete-orphan",
+    )
+    current_menu = relationship(
+        "Menu", back_populates="locations", foreign_keys="Location.current_menu_id"
+    )
+    menu_assignments = relationship(
+        "MenuAssignment",
+        back_populates="location",
+        order_by="MenuAssignment.assigned_at.desc()",
         cascade="all, delete-orphan",
     )
 
@@ -323,6 +341,9 @@ class Product(db.Model):
     terminal_sales = relationship(
         "TerminalSale", back_populates="product", cascade="all, delete-orphan"
     )
+    menus = relationship(
+        "Menu", secondary=menu_products, back_populates="products"
+    )
 
     @hybrid_property
     def last_sold_at(self):
@@ -342,6 +363,53 @@ class Product(db.Model):
         if self.price:
             return (self.cost / self.price) * 100
         return 0.0
+
+
+class Menu(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, server_default=func.now()
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=func.now(),
+        onupdate=datetime.utcnow,
+    )
+    last_used_at = db.Column(db.DateTime, nullable=True)
+
+    products = relationship(
+        "Product", secondary=menu_products, back_populates="menus"
+    )
+    assignments = relationship(
+        "MenuAssignment",
+        back_populates="menu",
+        order_by="MenuAssignment.assigned_at.desc()",
+        cascade="all, delete-orphan",
+    )
+    locations = relationship(
+        "Location", back_populates="current_menu", foreign_keys="Location.current_menu_id"
+    )
+
+
+class MenuAssignment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    menu_id = db.Column(db.Integer, db.ForeignKey("menu.id"), nullable=False)
+    location_id = db.Column(db.Integer, db.ForeignKey("location.id"), nullable=False)
+    assigned_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, server_default=func.now()
+    )
+    unassigned_at = db.Column(db.DateTime, nullable=True)
+
+    menu = relationship("Menu", back_populates="assignments")
+    location = relationship("Location", back_populates="menu_assignments")
+
+    __table_args__ = (
+        db.Index("ix_menu_assignment_active", "location_id", "unassigned_at"),
+    )
 
 
 class Invoice(db.Model):
