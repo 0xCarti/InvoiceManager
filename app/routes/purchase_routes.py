@@ -34,6 +34,10 @@ from app.models import (
     Vendor,
 )
 from app.utils.activity import log_activity
+from app.routes.report_routes import (
+    _invoice_gl_code_rows,
+    invoice_gl_code_report,
+)
 from app.utils.forecasting import DemandForecastingHelper
 from app.utils.pagination import build_pagination_args, get_per_page
 
@@ -900,6 +904,41 @@ def view_purchase_invoice(invoice_id):
         abort(404)
     return render_template(
         "purchase_invoices/view_purchase_invoice.html", invoice=invoice
+    )
+
+
+@purchase.route("/purchase_invoices/<int:invoice_id>/report")
+@login_required
+def legacy_purchase_invoice_report(invoice_id: int):
+    """Backwards compatible endpoint for purchase invoice GL reports."""
+
+    invoice = (
+        PurchaseInvoice.query.options(
+            selectinload(PurchaseInvoice.items)
+            .selectinload(PurchaseInvoiceItem.item),
+            selectinload(PurchaseInvoice.items)
+            .selectinload(PurchaseInvoiceItem.purchase_gl_code),
+            selectinload(PurchaseInvoice.purchase_order).selectinload(
+                PurchaseOrder.vendor
+            ),
+            selectinload(PurchaseInvoice.location),
+        )
+        .filter_by(id=invoice_id)
+        .first()
+    )
+
+    if invoice is None:
+        abort(404)
+
+    rows, totals = _invoice_gl_code_rows(invoice)
+    report_data = {row["code"]: row for row in rows}
+
+    return render_template(
+        "report_invoice_gl_code.html",
+        invoice=invoice,
+        rows=rows,
+        totals=totals,
+        report=report_data,
     )
 
 
