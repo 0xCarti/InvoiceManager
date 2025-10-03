@@ -41,6 +41,7 @@ from app.models import (
     Item,
     ItemUnit,
     Location,
+    Menu,
     Product,
     Vendor,
 )
@@ -76,6 +77,16 @@ def load_product_choices():
             (p.id, p.name) for p in Product.query.order_by(Product.name).all()
         ]
     return g.product_choices
+
+
+def load_menu_choices(include_blank: bool = True):
+    """Return menu options for selection fields."""
+
+    menus = Menu.query.order_by(Menu.name).all()
+    choices = [(menu.id, menu.name) for menu in menus]
+    if include_blank:
+        return [(0, "No Menu")] + choices
+    return choices
 
 
 def load_purchase_gl_code_choices():
@@ -176,9 +187,21 @@ class LocationForm(FlaskForm):
     name = StringField(
         "Location Name", validators=[DataRequired(), Length(min=2, max=100)]
     )
-    products = HiddenField("Products")
+    menu_id = SelectField(
+        "Menu",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+        default=0,
+    )
     is_spoilage = BooleanField("Spoilage Location")
     submit = SubmitField("Submit")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.menu_id.choices = load_menu_choices()
+        if self.menu_id.data is None:
+            self.menu_id.data = 0
 
 
 class LocationItemAddForm(FlaskForm):
@@ -260,6 +283,41 @@ class ItemForm(FlaskForm):
             .order_by(GLCode.code)
             .all()
         )
+
+
+class MenuForm(FlaskForm):
+    name = StringField("Menu Name", validators=[DataRequired(), Length(max=100)])
+    description = TextAreaField("Description", validators=[Optional()])
+    product_ids = SelectMultipleField(
+        "Products", coerce=int, validators=[Optional()], validate_choice=False
+    )
+    submit = SubmitField("Save Menu")
+
+    def validate_name(self, field):
+        query = Menu.query.filter(Menu.name == field.data)
+        if self.obj_id is not None:
+            query = query.filter(Menu.id != self.obj_id)
+        if query.first() is not None:
+            raise ValidationError("A menu with this name already exists.")
+
+    def __init__(self, *args, **kwargs):
+        self.obj_id = kwargs.pop("obj_id", None)
+        super().__init__(*args, **kwargs)
+        self.product_ids.choices = load_product_choices()
+
+
+class MenuAssignmentForm(FlaskForm):
+    location_ids = SelectMultipleField(
+        "Locations", coerce=int, validators=[Optional()], validate_choice=False
+    )
+    submit = SubmitField("Assign Menu")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.location_ids.choices = [
+            (loc.id, f"{loc.name} (archived)" if loc.archived else loc.name)
+            for loc in Location.query.order_by(Location.name).all()
+        ]
 
 
 class PurchaseCostForecastForm(FlaskForm):

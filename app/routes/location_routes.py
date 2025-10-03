@@ -21,8 +21,9 @@ from app.forms import (
     LocationForm,
     LocationItemAddForm,
 )
-from app.models import GLCode, Item, Location, LocationStandItem, Product
+from app.models import GLCode, Item, Location, LocationStandItem, Menu
 from app.utils.activity import log_activity
+from app.utils.menu_assignments import apply_menu_products, set_location_menu
 from app.utils.pagination import build_pagination_args, get_per_page
 from app.utils.units import (
     DEFAULT_BASE_UNIT_CONVERSIONS,
@@ -53,50 +54,28 @@ def _location_items_redirect(location_id: int, page: str | None, per_page: str |
     if per_page and per_page.isdigit():
         args["per_page"] = int(per_page)
     return redirect(url_for("locations.location_items", **args))
-
-
 @location.route("/locations/add", methods=["GET", "POST"])
 @login_required
 def add_location():
     """Create a new location."""
     form = LocationForm()
     if form.validate_on_submit():
+        menu_obj = None
+        menu_id = form.menu_id.data or 0
+        if menu_id:
+            menu_obj = db.session.get(Menu, menu_id)
+            if menu_obj is None:
+                form.menu_id.errors.append("Selected menu is no longer available.")
+                return render_template("locations/add_location.html", form=form)
         new_location = Location(
             name=form.name.data, is_spoilage=form.is_spoilage.data
         )
-        product_ids = (
-            [int(pid) for pid in form.products.data.split(",") if pid]
-            if form.products.data
-            else []
-        )
-        selected_products = [
-            db.session.get(Product, pid) for pid in product_ids
-        ]
-        new_location.products = selected_products
         db.session.add(new_location)
-        db.session.commit()
-
-        # Add stand sheet items for countable recipe items
-        existing_items = {
-            item.item_id: item
-            for item in LocationStandItem.query.filter_by(
-                location_id=new_location.id
-            ).all()
-        }
-        for product_obj in selected_products:
-            for recipe_item in product_obj.recipe_items:
-                if (
-                    recipe_item.countable
-                    and recipe_item.item_id not in existing_items
-                ):
-                    new_item = LocationStandItem(
-                        location_id=new_location.id,
-                        item_id=recipe_item.item_id,
-                        expected_count=0,
-                        purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
-                    )
-                    db.session.add(new_item)
-                    existing_items[recipe_item.item_id] = new_item
+        db.session.flush()
+        if menu_obj is not None:
+            set_location_menu(new_location, menu_obj)
+        else:
+            apply_menu_products(new_location, None)
         db.session.commit()
         log_activity(f"Added location {new_location.name}")
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -107,21 +86,17 @@ def add_location():
                     "location": {
                         "id": new_location.id,
                         "name": new_location.name,
+                        "menu_name": new_location.current_menu.name
+                        if new_location.current_menu
+                        else None,
                     },
                 }
             )
         flash("Location added successfully!")
         return redirect(url_for("locations.view_locations"))
-    selected_products = []
-    if form.products.data:
-        ids = [int(pid) for pid in form.products.data.split(",") if pid]
-        selected_products = Product.query.filter(Product.id.in_(ids)).all()
-    selected_data = [{"id": p.id, "name": p.name} for p in selected_products]
-    return render_template(
-        "locations/add_location.html",
-        form=form,
-        selected_products=selected_data,
-    )
+    if request.method == "GET" and form.menu_id.data is None:
+        form.menu_id.data = 0
+    return render_template("locations/add_location.html", form=form)
 
 
 @location.route("/locations/edit/<int:location_id>", methods=["GET", "POST"])
@@ -133,43 +108,22 @@ def edit_location(location_id):
         abort(404)
     form = LocationForm(obj=location)
     if request.method == "GET":
-        form.products.data = ",".join(str(p.id) for p in location.products)
+        form.menu_id.data = location.current_menu_id or 0
 
     if form.validate_on_submit():
+        menu_obj = None
+        menu_id = form.menu_id.data or 0
+        if menu_id:
+            menu_obj = db.session.get(Menu, menu_id)
+            if menu_obj is None:
+                form.menu_id.errors.append("Selected menu is no longer available.")
+                return render_template("locations/edit_location.html", form=form, location=location)
         location.name = form.name.data
         location.is_spoilage = form.is_spoilage.data
-        product_ids = (
-            [int(pid) for pid in form.products.data.split(",") if pid]
-            if form.products.data
-            else []
-        )
-        selected_products = [
-            db.session.get(Product, pid) for pid in product_ids
-        ]
-        location.products = selected_products
-        db.session.commit()
-
-        # Ensure stand sheet items exist for new products
-        existing_items = {
-            item.item_id: item
-            for item in LocationStandItem.query.filter_by(
-                location_id=location.id
-            ).all()
-        }
-        for product_obj in selected_products:
-            for recipe_item in product_obj.recipe_items:
-                if (
-                    recipe_item.countable
-                    and recipe_item.item_id not in existing_items
-                ):
-                    new_item = LocationStandItem(
-                        location_id=location.id,
-                        item_id=recipe_item.item_id,
-                        expected_count=0,
-                        purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
-                    )
-                    db.session.add(new_item)
-                    existing_items[recipe_item.item_id] = new_item
+        if menu_obj is not None:
+            set_location_menu(location, menu_obj)
+        elif location.current_menu is not None:
+            set_location_menu(location, None)
         db.session.commit()
         log_activity(f"Edited location {location.id}")
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -177,7 +131,7 @@ def edit_location(location_id):
                 {
                     "success": True,
                     "action": "update",
-                    "location": {"id": location.id, "name": location.name},
+                    "location": {"id": location.id, "name": location.name, "menu_name": location.current_menu.name if location.current_menu else None},
                 }
             )
         flash("Location updated successfully.", "success")
@@ -185,12 +139,12 @@ def edit_location(location_id):
             url_for("locations.edit_location", location_id=location.id)
         )
 
-    selected_data = [{"id": p.id, "name": p.name} for p in location.products]
+    if form.menu_id.data is None:
+        form.menu_id.data = location.current_menu_id or 0
     return render_template(
         "locations/edit_location.html",
         form=form,
         location=location,
-        selected_products=selected_data,
     )
 
 
@@ -225,9 +179,9 @@ def copy_location_items(source_id: int):
 
     # Cache source products and stand items for reuse
     source_products = list(source.products)
-    source_item_counts = {
-        item.item_id: item.expected_count
-        for item in LocationStandItem.query.filter_by(location_id=source.id).all()
+    source_stand_items = {
+        record.item_id: record
+        for record in LocationStandItem.query.filter_by(location_id=source.id).all()
     }
 
     processed_targets = []
@@ -236,27 +190,46 @@ def copy_location_items(source_id: int):
         if target is None:
             abort(404)
 
-        # Overwrite products
-        target.products = list(source_products)
-
-        # Remove existing stand sheet items
-        LocationStandItem.query.filter_by(location_id=target.id).delete()
-
-        # Recreate stand sheet items matching the source without duplicates
-        existing_items = set()
-        for product in source_products:
-            for recipe_item in product.recipe_items:
-                if recipe_item.countable and recipe_item.item_id not in existing_items:
-                    expected = source_item_counts.get(recipe_item.item_id, 0)
+        if source.current_menu is not None:
+            set_location_menu(target, source.current_menu)
+            db.session.flush()
+            for record in list(target.stand_items):
+                source_record = source_stand_items.get(record.item_id)
+                if source_record is not None:
+                    record.expected_count = source_record.expected_count
+                    record.purchase_gl_code_id = source_record.purchase_gl_code_id
+        else:
+            set_location_menu(target, None)
+            db.session.flush()
+            target.products = list(source_products)
+            existing_items: set[int] = set()
+            for product in source_products:
+                for recipe_item in product.recipe_items:
+                    if not recipe_item.countable:
+                        continue
+                    item_id = recipe_item.item_id
+                    if item_id in existing_items:
+                        continue
+                    source_record = source_stand_items.get(item_id)
+                    expected = (
+                        source_record.expected_count
+                        if source_record is not None
+                        else 0
+                    )
+                    purchase_gl_code_id = (
+                        source_record.purchase_gl_code_id
+                        if source_record is not None
+                        else recipe_item.item.purchase_gl_code_id
+                    )
                     db.session.add(
                         LocationStandItem(
-                            location_id=target.id,
-                            item_id=recipe_item.item_id,
+                            location=target,
+                            item_id=item_id,
                             expected_count=expected,
-                            purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+                            purchase_gl_code_id=purchase_gl_code_id,
                         )
                     )
-                    existing_items.add(recipe_item.item_id)
+                    existing_items.add(item_id)
 
         processed_targets.append(str(tid))
 
@@ -572,7 +545,7 @@ def view_locations():
     match_mode = request.args.get("match_mode", "contains")
     archived = request.args.get("archived", "active")
 
-    query = Location.query
+    query = Location.query.options(selectinload(Location.current_menu))
     if archived == "active":
         query = query.filter(Location.archived.is_(False))
     elif archived == "archived":

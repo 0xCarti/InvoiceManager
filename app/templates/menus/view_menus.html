@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container my-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">Menus</h1>
+        <a href="{{ url_for('menu.add_menu') }}" class="btn btn-primary">Create Menu</a>
+    </div>
+    {% if menus %}
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Description</th>
+                    <th scope="col">Products</th>
+                    <th scope="col">Active Locations</th>
+                    <th scope="col">Last Used</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for menu in menus %}
+                {% set active_assignments = menu.assignments | selectattr('unassigned_at', 'equalto', None) | list %}
+                <tr>
+                    <td class="fw-semibold">{{ menu.name }}</td>
+                    <td class="text-wrap">{{ menu.description or '—' }}</td>
+                    <td>
+                        {% if menu.products %}
+                        <ul class="mb-0 ps-3 small">
+                            {% for product in menu.products %}
+                            <li>{{ product.name }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <span class="text-muted">No products</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if active_assignments %}
+                        <ul class="mb-0 ps-3 small">
+                            {% for assignment in active_assignments %}
+                            <li>{{ assignment.location.name }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <span class="text-muted">Not assigned</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if menu.last_used_at %}
+                        {{ menu.last_used_at.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group" role="group">
+                            <a href="{{ url_for('menu.edit_menu', menu_id=menu.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                            <a href="{{ url_for('menu.assign_menu', menu_id=menu.id) }}" class="btn btn-sm btn-outline-primary">Assign</a>
+                            <form method="post" action="{{ url_for('menu.delete_menu', menu_id=menu.id) }}" class="d-inline">
+                                {{ delete_form.hidden_tag() }}
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this menu?');">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info">No menus have been created yet.</div>
+    {% endif %}
+</div>
+{% endblock %}

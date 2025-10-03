@@ -10,6 +10,7 @@ from app.models import (
     ItemUnit,
     Location,
     LocationStandItem,
+    Menu,
     Product,
     ProductRecipeItem,
     User,
@@ -64,7 +65,11 @@ def setup_data(app):
             )
         )
         db.session.commit()
-        return user.email, product.id
+        menu = Menu(name="Bakery Regular", description="Default offerings")
+        menu.products.append(product)
+        db.session.add(menu)
+        db.session.commit()
+        return user.email, product.id, menu.id
 
 
 @contextmanager
@@ -82,13 +87,13 @@ def captured_templates(app):
 
 
 def test_location_flow(client, app):
-    email, prod_id = setup_data(app)
+    email, prod_id, menu_id = setup_data(app)
     with client:
         login(client, email, "pass")
         assert client.get("/locations/add").status_code == 200
         resp = client.post(
             "/locations/add",
-            data={"name": "Kitchen", "products": str(prod_id)},
+            data={"name": "Kitchen", "menu_id": str(menu_id)},
             follow_redirects=True,
         )
         assert resp.status_code == 200
@@ -111,7 +116,14 @@ def test_location_flow(client, app):
             )
         )
         db.session.commit()
-        prod2_id = prod2.id
+        expanded_menu = Menu(name="Bakery Expanded", description="With pie")
+        expanded_menu.products.extend([
+            Product.query.get(prod_id),
+            prod2,
+        ])
+        db.session.add(expanded_menu)
+        db.session.commit()
+        expanded_menu_id = expanded_menu.id
     with client:
         login(client, email, "pass")
         resp = client.get("/locations")
@@ -119,13 +131,20 @@ def test_location_flow(client, app):
         resp = client.get(f"/locations/{lid}/stand_sheet")
         assert resp.status_code == 200
         assert b"Location: Kitchen" in resp.data
-        # edit to add second product triggers stand item creation
         resp = client.post(
             f"/locations/edit/{lid}",
-            data={"name": "Kitchen2", "products": f"{prod_id},{prod2_id}"},
+            data={"name": "Kitchen2", "menu_id": str(expanded_menu_id)},
             follow_redirects=True,
         )
         assert resp.status_code == 200
+    with app.app_context():
+        loc = db.session.get(Location, lid)
+        assert loc.current_menu_id == expanded_menu_id
+        stand_items = LocationStandItem.query.filter_by(location_id=lid).all()
+        assert len(stand_items) == 1
+        assert stand_items[0].item_id == Item.query.first().id
+    with client:
+        login(client, email, "pass")
         resp = client.post(
             f"/locations/delete/{lid}",
             follow_redirects=True,
@@ -139,8 +158,50 @@ def test_location_flow(client, app):
         assert loc.archived
 
 
+def test_edit_location_without_menu_preserves_products(client, app):
+    email, product_id, _ = setup_data(app)
+    with app.app_context():
+        product = db.session.get(Product, product_id)
+        location = Location(name="Standalone")
+        location.products.append(product)
+        db.session.add(location)
+        db.session.flush()
+        recipe_item = product.recipe_items[0]
+        expected_item_id = recipe_item.item_id
+        db.session.add(
+            LocationStandItem(
+                location_id=location.id,
+                item_id=expected_item_id,
+                expected_count=5,
+                purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+            )
+        )
+        db.session.commit()
+        location_id = location.id
+
+    with client:
+        login(client, email, "pass")
+        response = client.post(
+            f"/locations/edit/{location_id}",
+            data={
+                "name": "Standalone Updated",
+                "menu_id": "0",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+    with app.app_context():
+        location = db.session.get(Location, location_id)
+        assert location.current_menu_id is None
+        assert [product.id for product in location.products] == [product_id]
+        stand_items = LocationStandItem.query.filter_by(location_id=location_id).all()
+        assert len(stand_items) == 1
+        assert stand_items[0].item_id == expected_item_id
+
+
 def test_location_filters(client, app):
-    email, _ = setup_data(app)
+    email, *_ = setup_data(app)
     with app.app_context():
         active = Location(name="ActiveLoc")
         archived_loc = Location(name="OldLoc", archived=True)
@@ -168,7 +229,7 @@ def test_location_filters(client, app):
 
 
 def test_location_items_manage_gl_overrides(client, app):
-    email, _ = setup_data(app)
+    email, *_ = setup_data(app)
     with app.app_context():
         gl_default = (
             GLCode.query.filter(GLCode.code.like("5%"))
@@ -249,7 +310,7 @@ def test_location_items_manage_gl_overrides(client, app):
 
 
 def test_location_items_add_and_remove_item(client, app):
-    email, _ = setup_data(app)
+    email, *_ = setup_data(app)
     with app.app_context():
         location = Location(name="Warehouse")
         extra_item = Item(name="Napkins", base_unit="each")
@@ -295,12 +356,12 @@ def test_location_items_add_and_remove_item(client, app):
 
 
 def test_location_items_cannot_remove_recipe_item(client, app):
-    email, prod_id = setup_data(app)
+    email, prod_id, menu_id = setup_data(app)
     with client:
         login(client, email, "pass")
         resp = client.post(
             "/locations/add",
-            data={"name": "Kitchen", "products": str(prod_id)},
+            data={"name": "Kitchen", "menu_id": str(menu_id)},
             follow_redirects=True,
         )
         assert resp.status_code == 200
@@ -328,7 +389,7 @@ def test_location_items_cannot_remove_recipe_item(client, app):
 
 
 def test_copy_stand_sheet_overwrites_and_supports_multiple_targets(client, app):
-    email, prod_id = setup_data(app)
+    email, prod_id, menu_id = setup_data(app)
     with app.app_context():
         # second product to show overwrite behaviour
         prod2 = Product(name="Pie", price=4.0, cost=2.0)
@@ -345,23 +406,28 @@ def test_copy_stand_sheet_overwrites_and_supports_multiple_targets(client, app):
         )
         db.session.commit()
         prod2_id = prod2.id
+        menu_target = Menu(name="Target Menu", description="Second product")
+        menu_target.products.append(prod2)
+        db.session.add(menu_target)
+        db.session.commit()
+        target_menu_id = menu_target.id
     with client:
         login(client, email, "pass")
         # Source location with product 1
         client.post(
             "/locations/add",
-            data={"name": "Source", "products": str(prod_id)},
+            data={"name": "Source", "menu_id": str(menu_id)},
             follow_redirects=True,
         )
         # Targets initially with product 2
         client.post(
             "/locations/add",
-            data={"name": "Target1", "products": str(prod2_id)},
+            data={"name": "Target1", "menu_id": str(target_menu_id)},
             follow_redirects=True,
         )
         client.post(
             "/locations/add",
-            data={"name": "Target2", "products": str(prod2_id)},
+            data={"name": "Target2", "menu_id": str(target_menu_id)},
             follow_redirects=True,
         )
 
@@ -390,7 +456,8 @@ def test_copy_stand_sheet_overwrites_and_supports_multiple_targets(client, app):
     with app.app_context():
         for loc_id in (t1_id, t2_id):
             loc = db.session.get(Location, loc_id)
-            # products overwritten to match source exactly
+            # menu and products overwritten to match source exactly
+            assert loc.current_menu_id == menu_id
             assert [p.id for p in loc.products] == [prod_id]
             stand_items = LocationStandItem.query.filter_by(location_id=loc.id).all()
             assert len(stand_items) == 1

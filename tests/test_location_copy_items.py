@@ -7,6 +7,7 @@ from app.models import (
     ItemUnit,
     Location,
     LocationStandItem,
+    Menu,
     Product,
     ProductRecipeItem,
     User,
@@ -49,7 +50,11 @@ def setup_data(app):
             )
         )
         db.session.commit()
-        return user.email, product.id
+        menu = Menu(name="Copy Menu", description="Single product menu")
+        menu.products.append(product)
+        db.session.add(menu)
+        db.session.commit()
+        return user.email, product.id, menu.id
 
 
 def setup_multi_product_data(app):
@@ -98,24 +103,28 @@ def setup_multi_product_data(app):
             ]
         )
         db.session.commit()
-        return user.email, [prod1.id, prod2.id]
+        menu = Menu(name="Copy Menu Multi", description="Two product menu")
+        menu.products.extend([prod1, prod2])
+        db.session.add(menu)
+        db.session.commit()
+        return user.email, [prod1.id, prod2.id], menu.id
 
 
 def test_copy_location_items(client, app):
-    email, prod_id = setup_data(app)
+    email, prod_id, menu_id = setup_data(app)
     with client:
         login(client, email, "pass")
         # create source location with product
         resp = client.post(
             "/locations/add",
-            data={"name": "Source", "products": str(prod_id)},
+            data={"name": "Source", "menu_id": str(menu_id)},
             follow_redirects=True,
         )
         assert resp.status_code == 200
         # create target location without products
         resp = client.post(
             "/locations/add",
-            data={"name": "Target", "products": ""},
+            data={"name": "Target", "menu_id": "0"},
             follow_redirects=True,
         )
         assert resp.status_code == 200
@@ -136,6 +145,7 @@ def test_copy_location_items(client, app):
         with app.app_context():
             refreshed = db.session.get(Location, target_id)
             assert len(refreshed.products) == 1
+            assert refreshed.current_menu_id == menu_id
             assert (
                 LocationStandItem.query.filter_by(location_id=target_id).count()
                 == 1
@@ -143,13 +153,13 @@ def test_copy_location_items(client, app):
 
 
 def test_copy_button_visible(client, app):
-    email, prod_id = setup_data(app)
+    email, prod_id, menu_id = setup_data(app)
     with client:
         login(client, email, "pass")
         # create a location so the listing renders at least one row
         resp = client.post(
             "/locations/add",
-            data={"name": "Source", "products": str(prod_id)},
+            data={"name": "Source", "menu_id": str(menu_id)},
             follow_redirects=True,
         )
         assert resp.status_code == 200
@@ -159,26 +169,26 @@ def test_copy_button_visible(client, app):
 
 def test_copy_location_items_multiple_targets(client, app):
     """Copy stand items to multiple targets without duplicates."""
-    email, prod_ids = setup_multi_product_data(app)
+    email, prod_ids, menu_id = setup_multi_product_data(app)
     with client:
         login(client, email, "pass")
         # create source location with both products
         resp = client.post(
             "/locations/add",
-            data={"name": "Source", "products": ",".join(str(pid) for pid in prod_ids)},
+            data={"name": "Source", "menu_id": str(menu_id)},
             follow_redirects=True,
         )
         assert resp.status_code == 200
         # create two target locations without products
         resp = client.post(
             "/locations/add",
-            data={"name": "Target1", "products": ""},
+            data={"name": "Target1", "menu_id": "0"},
             follow_redirects=True,
         )
         assert resp.status_code == 200
         resp = client.post(
             "/locations/add",
-            data={"name": "Target2", "products": ""},
+            data={"name": "Target2", "menu_id": "0"},
             follow_redirects=True,
         )
         assert resp.status_code == 200
@@ -200,6 +210,8 @@ def test_copy_location_items_multiple_targets(client, app):
         with app.app_context():
             refreshed1 = db.session.get(Location, t1_id)
             refreshed2 = db.session.get(Location, t2_id)
+            assert refreshed1.current_menu_id == menu_id
+            assert refreshed2.current_menu_id == menu_id
             assert len(refreshed1.products) == 2
             assert len(refreshed2.products) == 2
             assert LocationStandItem.query.filter_by(location_id=t1_id).count() == 1
