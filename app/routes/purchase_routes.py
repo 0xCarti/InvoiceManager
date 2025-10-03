@@ -598,6 +598,9 @@ def receive_invoice(po_id):
         form.items.min_entries = max(1, len(po.items))
         while len(form.items) < len(po.items):
             form.items.append_entry()
+        location_choices = [(0, "Use Invoice Location")] + [
+            (value, label) for value, label in form.location_id.choices
+        ]
         for item_form in form.items:
             item_form.item.choices = [
                 (i.id, i.name)
@@ -606,6 +609,9 @@ def receive_invoice(po_id):
             item_form.unit.choices = [
                 (u.id, u.name) for u in ItemUnit.query.all()
             ]
+            item_form.location_id.choices = location_choices
+            if item_form.location_id.data is None:
+                item_form.location_id.data = 0
             item_form.gl_code.choices = [
                 (value, label) for value, label in gl_code_choices
             ]
