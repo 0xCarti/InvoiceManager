@@ -158,6 +158,48 @@ def test_location_flow(client, app):
         assert loc.archived
 
 
+def test_edit_location_without_menu_preserves_products(client, app):
+    email, product_id, _ = setup_data(app)
+    with app.app_context():
+        product = db.session.get(Product, product_id)
+        location = Location(name="Standalone")
+        location.products.append(product)
+        db.session.add(location)
+        db.session.flush()
+        recipe_item = product.recipe_items[0]
+        expected_item_id = recipe_item.item_id
+        db.session.add(
+            LocationStandItem(
+                location_id=location.id,
+                item_id=expected_item_id,
+                expected_count=5,
+                purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+            )
+        )
+        db.session.commit()
+        location_id = location.id
+
+    with client:
+        login(client, email, "pass")
+        response = client.post(
+            f"/locations/edit/{location_id}",
+            data={
+                "name": "Standalone Updated",
+                "menu_id": "0",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+    with app.app_context():
+        location = db.session.get(Location, location_id)
+        assert location.current_menu_id is None
+        assert [product.id for product in location.products] == [product_id]
+        stand_items = LocationStandItem.query.filter_by(location_id=location_id).all()
+        assert len(stand_items) == 1
+        assert stand_items[0].item_id == expected_item_id
+
+
 def test_location_filters(client, app):
     email, *_ = setup_data(app)
     with app.app_context():

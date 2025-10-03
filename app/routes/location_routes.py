@@ -122,9 +122,8 @@ def edit_location(location_id):
         location.is_spoilage = form.is_spoilage.data
         if menu_obj is not None:
             set_location_menu(location, menu_obj)
-        else:
+        elif location.current_menu is not None:
             set_location_menu(location, None)
-            apply_menu_products(location, None)
         db.session.commit()
         log_activity(f"Edited location {location.id}")
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
