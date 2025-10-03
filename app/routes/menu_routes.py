@@ -4,6 +4,7 @@ from flask import (
     Blueprint,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -51,6 +52,7 @@ def view_menus():
 @login_required
 def add_menu():
     form = MenuForm()
+    copy_menus = Menu.query.order_by(Menu.name).all()
     if form.validate_on_submit():
         menu = Menu(
             name=form.name.data,
@@ -62,7 +64,7 @@ def add_menu():
         log_activity(f"Created menu {menu.name}")
         flash("Menu created successfully.", "success")
         return redirect(url_for("menu.view_menus"))
-    return render_template("menus/edit_menu.html", form=form, menu=None)
+    return render_template("menus/edit_menu.html", form=form, menu=None, copy_menus=copy_menus)
 
 
 @menu.route("/menus/<int:menu_id>/edit", methods=["GET", "POST"])
@@ -72,6 +74,9 @@ def edit_menu(menu_id: int):
     if menu is None:
         abort(404)
     form = MenuForm(obj=menu, obj_id=menu.id)
+    copy_menus = (
+        Menu.query.filter(Menu.id != menu.id).order_by(Menu.name).all()
+    )
     if request.method == "GET":
         form.product_ids.data = [product.id for product in menu.products]
     if form.validate_on_submit():
@@ -84,7 +89,7 @@ def edit_menu(menu_id: int):
         log_activity(f"Updated menu {menu.name}")
         flash("Menu updated successfully.", "success")
         return redirect(url_for("menu.view_menus"))
-    return render_template("menus/edit_menu.html", form=form, menu=menu)
+    return render_template("menus/edit_menu.html", form=form, menu=menu, copy_menus=copy_menus)
 
 
 @menu.route("/menus/<int:menu_id>/delete", methods=["POST"])
@@ -133,3 +138,21 @@ def assign_menu(menu_id: int):
         flash("Menu assignments updated.", "success")
         return redirect(url_for("menu.view_menus"))
     return render_template("menus/assign_menu.html", form=form, menu=menu)
+
+
+@menu.route("/menus/products")
+@login_required
+def get_menu_products():
+    menu_id = request.args.get("menu_id", type=int)
+    if menu_id is None:
+        abort(400)
+    menu = db.session.get(Menu, menu_id)
+    if menu is None:
+        abort(404)
+    return jsonify(
+        {
+            "id": menu.id,
+            "name": menu.name,
+            "product_ids": [product.id for product in menu.products],
+        }
+    )
