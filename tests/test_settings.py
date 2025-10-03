@@ -1,9 +1,8 @@
 import os
-
-from werkzeug.security import generate_password_hash
+from threading import Event
 
 from app import db
-from app.models import Setting, User
+from app.models import Setting
 from app.utils.backup import UNIT_SECONDS
 from app.utils.units import parse_conversion_setting
 from tests.utils import login
@@ -78,3 +77,61 @@ def test_admin_can_update_settings(client, app):
         assert app.config["AUTO_BACKUP_INTERVAL"] == 2 * UNIT_SECONDS["week"]
         assert app.config["MAX_BACKUPS"] == 5
         assert app.config["BASE_UNIT_CONVERSIONS"] == mapping
+
+
+def test_auto_backup_thread_uses_real_app(client, app, monkeypatch):
+    from app.utils import backup as backup_module
+
+    calls = {}
+
+    def fake_loop(app_obj, interval):
+        with app_obj.app_context():
+            calls["entered_context"] = True
+            calls["interval"] = interval
+
+    class ImmediateThread:
+        def __init__(self, target=None, args=(), daemon=None):
+            self._target = target
+            self._args = args
+            self.daemon = daemon
+
+        def is_alive(self):
+            return False
+
+        def join(self):
+            return None
+
+        def start(self):
+            if self._target:
+                self._target(*self._args)
+
+    monkeypatch.setattr(backup_module, "_backup_loop", fake_loop)
+    monkeypatch.setattr(backup_module, "Thread", ImmediateThread)
+    monkeypatch.setattr(backup_module, "_backup_thread", None)
+    monkeypatch.setattr(backup_module, "_stop_event", Event())
+
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login(client, admin_email, admin_pass)
+        resp = client.post(
+            "/controlpanel/settings",
+            data={
+                "gst_number": "",  # keep defaults minimal for this test
+                "default_timezone": "UTC",
+                "auto_backup_enabled": "y",
+                "auto_backup_interval_value": "1",
+                "auto_backup_interval_unit": "day",
+                "max_backups": "3",
+                "convert_ounce": "gram",
+                "convert_gram": "ounce",
+                "convert_each": "each",
+                "convert_millilitre": "ounce",
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    assert calls.get("entered_context") is True
+    assert calls.get("interval") == UNIT_SECONDS["day"]

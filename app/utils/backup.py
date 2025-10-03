@@ -86,6 +86,8 @@ def _backup_loop(app, interval: int):
 def start_auto_backup_thread(app):
     """Start or restart the automatic backup thread based on app config."""
     global _backup_thread, _stop_event
+    if hasattr(app, "_get_current_object"):
+        app = app._get_current_object()
     if _backup_thread and _backup_thread.is_alive():
         _stop_event.set()
         _backup_thread.join()

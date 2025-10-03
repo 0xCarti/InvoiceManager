@@ -813,7 +813,7 @@ def settings():
         conversion_mapping = parse_conversion_setting(conversions_setting.value)
         app.BASE_UNIT_CONVERSIONS = conversion_mapping
         current_app.config["BASE_UNIT_CONVERSIONS"] = conversion_mapping
-        start_auto_backup_thread(current_app)
+        start_auto_backup_thread(current_app._get_current_object())
         flash("Settings updated.", "success")
         return redirect(url_for("admin.settings"))
 
