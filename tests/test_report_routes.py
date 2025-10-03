@@ -14,9 +14,11 @@ from app.models import (
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseOrder,
+    Setting,
     User,
     Vendor,
 )
+from app.utils.units import serialize_conversion_setting
 from tests.utils import login
 
 
@@ -344,6 +346,85 @@ def setup_purchase_invoice_with_gl_allocations(app):
         db.session.commit()
 
         return user.email, invoice.id
+
+
+def test_purchase_inventory_summary_converts_units(client, app):
+    with app.app_context():
+        admin_user = User.query.filter_by(email="admin@example.com").first()
+        if not admin_user:
+            admin_user = User(
+                email="admin@example.com",
+                password=generate_password_hash("adminpass"),
+                active=True,
+                is_admin=True,
+            )
+            db.session.add(admin_user)
+            db.session.commit()
+        vendor = Vendor(first_name="Convert", last_name="Vendor")
+        location = Location(name="Convert Location")
+        item = Item(name="Converted Item", base_unit="gram", cost=0.5)
+        db.session.add_all([vendor, location, item])
+        db.session.flush()
+
+        po = PurchaseOrder(
+            vendor_id=vendor.id,
+            user_id=admin_user.id,
+            vendor_name=f"{vendor.first_name} {vendor.last_name}",
+            order_date=date(2024, 1, 1),
+            expected_date=date(2024, 1, 2),
+        )
+        db.session.add(po)
+        db.session.flush()
+
+        invoice = PurchaseInvoice(
+            purchase_order_id=po.id,
+            user_id=admin_user.id,
+            location_id=location.id,
+            location_name=location.name,
+            vendor_name=f"{vendor.first_name} {vendor.last_name}",
+            received_date=date(2024, 1, 15),
+            invoice_number="CONV001",
+            gst=0,
+            pst=0,
+            delivery_charge=0,
+        )
+        db.session.add(invoice)
+        db.session.flush()
+
+        db.session.add(
+            PurchaseInvoiceItem(
+                invoice_id=invoice.id,
+                item_id=item.id,
+                item_name=item.name,
+                quantity=1000,
+                cost=0.5,
+            )
+        )
+
+        setting = Setting.query.filter_by(name="BASE_UNIT_CONVERSIONS").first()
+        mapping = {
+            "ounce": "ounce",
+            "gram": "ounce",
+            "each": "each",
+            "millilitre": "millilitre",
+        }
+        setting.value = serialize_conversion_setting(mapping)
+        db.session.commit()
+        app.config["BASE_UNIT_CONVERSIONS"] = mapping
+
+    login(client, "admin@example.com", "adminpass")
+    response = client.post(
+        "/reports/purchase-inventory-summary",
+        data={
+            "start_date": "2024-01-01",
+            "end_date": "2024-01-31",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert b"Converted Item" in response.data
+    assert b"35.27" in response.data
+    assert b"Ounce" in response.data
 
 
 def test_vendor_and_sales_reports(client, app):

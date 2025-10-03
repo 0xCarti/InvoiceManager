@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, date
 from io import BytesIO
 from tempfile import NamedTemporaryFile
 
+import pytest
 from openpyxl import Workbook
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -22,6 +23,7 @@ from app.models import (
     TerminalSale,
     User,
 )
+from app.utils.units import DEFAULT_BASE_UNIT_CONVERSIONS, convert_quantity
 from tests.utils import login
 
 
@@ -41,7 +43,7 @@ def setup_upload_env(app):
         return user.email, east.id, west.id, prod1.id, prod2.id
 
 
-def setup_event_env(app):
+def setup_event_env(app, base_unit="each"):
     with app.app_context():
         user = User(
             email="event@example.com",
@@ -49,13 +51,14 @@ def setup_event_env(app):
             active=True,
         )
         loc = Location(name="EventLoc")
-        item = Item(name="EItem", base_unit="each")
+        item = Item(name="EItem", base_unit=base_unit)
         product = Product(name="EProd", price=1.0, cost=0.5)
         db.session.add_all([user, loc, item, product])
         db.session.commit()
+        unit_name = base_unit or "each"
         iu = ItemUnit(
             item_id=item.id,
-            name="each",
+            name=unit_name,
             factor=1,
             receiving_default=True,
             transfer_default=True,
@@ -144,7 +147,11 @@ def test_event_lifecycle(client, app):
 
 
 def test_bulk_stand_sheet(client, app):
-    email, loc_id, prod_id, item_id = setup_event_env(app)
+    email, loc_id, prod_id, item_id = setup_event_env(app, base_unit="ounce")
+    with app.app_context():
+        conversions = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
+        conversions["ounce"] = "gram"
+        app.config["BASE_UNIT_CONVERSIONS"] = conversions
     with app.app_context():
         loc2 = Location(name="EventLoc2")
         db.session.add(loc2)
@@ -194,6 +201,10 @@ def test_bulk_stand_sheet(client, app):
         resp = client.get(f"/events/{eid}/stand_sheets")
         assert resp.status_code == 200
         assert b"EventLoc" in resp.data and b"EventLoc2" in resp.data
+        assert b"EItem (Gram)" in resp.data
+        assert b"283.50" in resp.data
+    with app.app_context():
+        app.config["BASE_UNIT_CONVERSIONS"] = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
 
 
 def test_no_sales_after_confirmation(client, app):
@@ -305,7 +316,11 @@ def test_bulk_stand_sheets_render_multiple_pages(client, app):
 
 
 def test_save_stand_sheet(client, app):
-    email, loc_id, prod_id, item_id = setup_event_env(app)
+    email, loc_id, prod_id, item_id = setup_event_env(app, base_unit="ounce")
+    with app.app_context():
+        conversions = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
+        conversions["ounce"] = "gram"
+        app.config["BASE_UNIT_CONVERSIONS"] = conversions
     with client:
         login(client, email, "pass")
         client.post(
@@ -333,15 +348,20 @@ def test_save_stand_sheet(client, app):
 
     with client:
         login(client, email, "pass")
+        open_report = convert_quantity(5, "ounce", "gram")
+        in_report = convert_quantity(2, "ounce", "gram")
+        out_report = convert_quantity(1, "ounce", "gram")
+        eaten_report = convert_quantity(1, "ounce", "gram")
+        close_report = convert_quantity(3, "ounce", "gram")
         client.post(
             f"/events/{eid}/stand_sheet/{loc_id}",
             data={
-                f"open_{item_id}": 5,
-                f"in_{item_id}": 2,
-                f"out_{item_id}": 1,
-                f"eaten_{item_id}": 1,
-                f"spoiled_{item_id}": 0,
-                f"close_{item_id}": 3,
+                f"open_{item_id}": f"{open_report:.4f}",
+                f"in_{item_id}": f"{in_report:.4f}",
+                f"out_{item_id}": f"{out_report:.4f}",
+                f"eaten_{item_id}": f"{eaten_report:.4f}",
+                f"spoiled_{item_id}": "0",
+                f"close_{item_id}": f"{close_report:.4f}",
             },
             follow_redirects=True,
         )
@@ -354,12 +374,14 @@ def test_save_stand_sheet(client, app):
             event_location_id=el.id, item_id=item_id
         ).first()
         assert sheet is not None
-        assert sheet.opening_count == 5
-        assert sheet.transferred_in == 2
-        assert sheet.transferred_out == 1
-        assert sheet.eaten == 1
-        assert sheet.spoiled == 0
-        assert sheet.closing_count == 3
+        assert sheet.opening_count == pytest.approx(5)
+        assert sheet.transferred_in == pytest.approx(2)
+        assert sheet.transferred_out == pytest.approx(1)
+        assert sheet.eaten == pytest.approx(1)
+        assert sheet.spoiled == pytest.approx(0)
+        assert sheet.closing_count == pytest.approx(3)
+    with app.app_context():
+        app.config["BASE_UNIT_CONVERSIONS"] = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
 
 
 def test_terminal_sales_prefill(client, app):

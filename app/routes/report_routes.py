@@ -1,7 +1,15 @@
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 from typing import Dict
 
-from flask import Blueprint, abort, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import login_required
 
 from app import db
@@ -31,6 +39,12 @@ from app.models import (
     User,
 )
 from app.utils.forecasting import DemandForecastingHelper
+from app.utils.units import (
+    DEFAULT_BASE_UNIT_CONVERSIONS,
+    convert_cost_for_reporting,
+    convert_quantity_for_reporting,
+    get_unit_label,
+)
 from sqlalchemy import or_
 from sqlalchemy.orm import selectinload
 
@@ -46,6 +60,14 @@ def _to_decimal(value) -> Decimal:
 
 def _quantize(value: Decimal) -> Decimal:
     return value.quantize(_CENT, rounding=ROUND_HALF_UP)
+
+
+def _get_base_unit_conversions():
+    conversions = current_app.config.get("BASE_UNIT_CONVERSIONS")
+    merged = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
+    if conversions:
+        merged.update(conversions)
+    return merged
 
 
 def _allocate_amount(total: Decimal, weights: Dict[str, Decimal]):
@@ -262,6 +284,7 @@ def purchase_inventory_summary():
             invoice_items = query.all()
             selected_gl_codes = set(form.gl_codes.data or [])
             aggregates = {}
+            conversions = _get_base_unit_conversions()
 
             for inv_item in invoice_items:
                 invoice = inv_item.invoice
@@ -314,14 +337,23 @@ def purchase_inventory_summary():
                         "gl_description": gl_description,
                         "total_quantity": 0.0,
                         "unit_name": unit_name,
+                        "_unit_key": unit_name,
                         "total_spend": 0.0,
                     }
 
                 entry = aggregates[aggregate_key]
                 entry["total_quantity"] += quantity
                 entry["total_spend"] += inv_item.quantity * abs(inv_item.cost)
-                if not entry["unit_name"] and unit_name:
-                    entry["unit_name"] = unit_name
+                if not entry.get("_unit_key") and unit_name:
+                    entry["_unit_key"] = unit_name
+
+            for entry in aggregates.values():
+                unit_key = entry.get("_unit_key") or ""
+                quantity, report_unit = convert_quantity_for_reporting(
+                    entry["total_quantity"], unit_key, conversions
+                )
+                entry["total_quantity"] = quantity
+                entry["unit_name"] = get_unit_label(report_unit)
 
             results = sorted(
                 aggregates.values(),
@@ -738,10 +770,16 @@ def product_stock_usage_report():
             report_data = []
             total_quantity = 0.0
             total_cost = 0.0
+            conversions = _get_base_unit_conversions()
 
             for item_row in items:
                 quantity = float(item_row.total_quantity or 0.0)
                 cost_each = float(item_row.item_cost or 0.0)
+                base_unit = item_row.base_unit or ""
+                quantity, report_unit = convert_quantity_for_reporting(
+                    quantity, base_unit, conversions
+                )
+                cost_each = convert_cost_for_reporting(cost_each, base_unit, conversions)
                 total_item_cost = quantity * cost_each
 
                 total_quantity += quantity
@@ -751,7 +789,7 @@ def product_stock_usage_report():
                     {
                         "id": item_row.item_id,
                         "name": item_row.item_name,
-                        "unit": item_row.base_unit or "",
+                        "unit": get_unit_label(report_unit),
                         "quantity": quantity,
                         "cost": cost_each,
                         "total_cost": total_item_cost,

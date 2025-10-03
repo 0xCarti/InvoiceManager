@@ -44,6 +44,12 @@ from app.models import (
     Product,
     Vendor,
 )
+from app.utils.units import (
+    BASE_UNIT_CHOICES,
+    BASE_UNITS,
+    get_allowed_target_units,
+    get_unit_label,
+)
 
 # Uploaded backup files are capped at 10MB to prevent excessive memory usage
 MAX_BACKUP_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -207,14 +213,7 @@ class ItemForm(FlaskForm):
     upc = StringField("UPC", validators=[Optional(), Length(max=32)])
     gl_code = SelectField("GL Code", validators=[Optional()])
     base_unit = SelectField(
-        "Base Unit",
-        choices=[
-            ("ounce", "Ounce"),
-            ("gram", "Gram"),
-            ("each", "Each"),
-            ("millilitre", "Millilitre"),
-        ],
-        validators=[DataRequired()],
+        "Base Unit", choices=BASE_UNIT_CHOICES, validators=[DataRequired()]
     )
     gl_code_id = SelectField(
         "GL Code", coerce=int, validators=[Optional()], validate_choice=False
@@ -976,13 +975,31 @@ class SettingsForm(FlaskForm):
         "Max Stored Backups",
         validators=[DataRequired(), NumberRange(min=1)],
     )
+    convert_ounce = SelectField("Ounce")
+    convert_gram = SelectField("Gram")
+    convert_each = SelectField("Each")
+    convert_millilitre = SelectField("Millilitre")
     submit = SubmitField("Update")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, base_unit_mapping=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.default_timezone.choices = [
             (tz, tz) for tz in get_timezone_choices()
         ]
+        mapping = base_unit_mapping or {}
+        for unit in BASE_UNITS:
+            field = getattr(self, f"convert_{unit}")
+            field.choices = [
+                (target, get_unit_label(target))
+                for target in get_allowed_target_units(unit)
+            ]
+            if not self.is_submitted():
+                field.data = mapping.get(unit, unit)
+
+    def iter_base_unit_conversions(self):
+        for unit in BASE_UNITS:
+            field = getattr(self, f"convert_{unit}")
+            yield unit, get_unit_label(unit), field
 
 
 class TimezoneForm(FlaskForm):

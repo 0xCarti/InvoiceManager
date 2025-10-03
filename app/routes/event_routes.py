@@ -4,6 +4,7 @@ import json
 import os
 from collections import defaultdict
 from datetime import datetime
+from types import SimpleNamespace
 
 from flask import (
     Blueprint,
@@ -40,8 +41,110 @@ from app.models import (
     TerminalSale,
 )
 from app.utils.activity import log_activity
+from app.utils.units import (
+    DEFAULT_BASE_UNIT_CONVERSIONS,
+    convert_quantity,
+    convert_quantity_for_reporting,
+    get_unit_label,
+)
 
 STANDSHEET_PAGE_SIZE = 20
+
+
+_STAND_SHEET_FIELDS = (
+    "opening_count",
+    "transferred_in",
+    "transferred_out",
+    "eaten",
+    "spoiled",
+    "closing_count",
+)
+
+
+def _conversion_mapping():
+    """Return the configured reporting-unit conversions."""
+
+    configured = current_app.config.get("BASE_UNIT_CONVERSIONS") or {}
+    merged = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
+    merged.update(configured)
+    return merged
+
+
+def _convert_value_for_reporting(value, base_unit, conversions):
+    """Convert a stored base-unit value for presentation."""
+
+    if value is None or not base_unit:
+        return value
+    try:
+        converted, _ = convert_quantity_for_reporting(
+            float(value), base_unit, conversions
+        )
+    except (TypeError, ValueError):
+        return value
+    return converted
+
+
+def _build_sheet_values(sheet, base_unit, conversions):
+    """Return reporting-unit stand sheet values for display."""
+
+    values = {}
+    for field in _STAND_SHEET_FIELDS:
+        raw = getattr(sheet, field, None) if sheet else None
+        values[field] = (
+            _convert_value_for_reporting(raw, base_unit, conversions)
+            if raw is not None
+            else None
+        )
+    return SimpleNamespace(**values)
+
+
+def _build_stand_item_entry(
+    *,
+    item,
+    expected=0.0,
+    sales=0.0,
+    sheet=None,
+    recv_unit=None,
+    trans_unit=None,
+    conversions=None,
+):
+    """Assemble a stand-sheet entry enriched with reporting metadata."""
+
+    conversions = conversions or _conversion_mapping()
+    base_unit = item.base_unit
+    report_unit = conversions.get(base_unit, base_unit)
+    report_label = get_unit_label(report_unit)
+    expected_display = _convert_value_for_reporting(expected, base_unit, conversions)
+    sales_display = _convert_value_for_reporting(sales, base_unit, conversions)
+    if sales_display is None:
+        sales_display = 0.0
+    return {
+        "item": item,
+        "expected": expected_display,
+        "expected_base": expected,
+        "sales": sales_display,
+        "sales_base": sales,
+        "sheet": sheet,
+        "sheet_values": _build_sheet_values(sheet, base_unit, conversions),
+        "base_unit": base_unit,
+        "report_unit": report_unit,
+        "report_unit_label": report_label,
+        "recv_unit": recv_unit,
+        "trans_unit": trans_unit,
+    }
+
+
+def _convert_report_value_to_base(value, base_unit, report_unit):
+    """Convert a reporting-unit form value back into the base unit."""
+
+    if value is None:
+        return 0.0
+    if not base_unit or not report_unit or base_unit == report_unit:
+        return value
+    try:
+        return convert_quantity(value, report_unit, base_unit)
+    except (TypeError, ValueError):
+        return value
 
 
 def _chunk_stand_sheet_items(items, chunk_size=STANDSHEET_PAGE_SIZE):
@@ -693,6 +796,7 @@ def confirm_location(event_id, el_id):
 
 def _get_stand_items(location_id, event_id=None):
     location = db.session.get(Location, location_id)
+    conversions = _conversion_mapping()
     stand_items = []
     seen = set()
 
@@ -733,14 +837,15 @@ def _get_stand_items(location_id, event_id=None):
                     (u for u in item.units if u.transfer_default), None
                 )
                 stand_items.append(
-                    {
-                        "item": item,
-                        "expected": expected,
-                        "sales": sales,
-                        "sheet": sheet_map.get(recipe_item.item_id),
-                        "recv_unit": recv_unit,
-                        "trans_unit": trans_unit,
-                    }
+                    _build_stand_item_entry(
+                        item=item,
+                        expected=expected,
+                        sales=sales,
+                        sheet=sheet_map.get(recipe_item.item_id),
+                        recv_unit=recv_unit,
+                        trans_unit=trans_unit,
+                        conversions=conversions,
+                    )
                 )
 
     # Include any items directly assigned to the location that may not be
@@ -754,14 +859,15 @@ def _get_stand_items(location_id, event_id=None):
         recv_unit = next((u for u in item.units if u.receiving_default), None)
         trans_unit = next((u for u in item.units if u.transfer_default), None)
         stand_items.append(
-            {
-                "item": item,
-                "expected": record.expected_count,
-                "sales": sales_by_item.get(record.item_id, 0),
-                "sheet": sheet_map.get(record.item_id),
-                "recv_unit": recv_unit,
-                "trans_unit": trans_unit,
-            }
+            _build_stand_item_entry(
+                item=item,
+                expected=record.expected_count,
+                sales=sales_by_item.get(record.item_id, 0),
+                sheet=sheet_map.get(record.item_id),
+                recv_unit=recv_unit,
+                trans_unit=trans_unit,
+                conversions=conversions,
+            )
         )
         seen.add(record.item_id)
 
@@ -913,6 +1019,8 @@ def stand_sheet(event_id, location_id):
     if request.method == "POST":
         for entry in stand_items:
             item_id = entry["item"].id
+            base_unit = entry.get("base_unit")
+            report_unit = entry.get("report_unit") or base_unit
             sheet = EventStandSheetItem.query.filter_by(
                 event_location_id=el.id,
                 item_id=item_id,
@@ -922,26 +1030,41 @@ def stand_sheet(event_id, location_id):
                     event_location_id=el.id, item_id=item_id
                 )
                 db.session.add(sheet)
-            sheet.opening_count = (
-                request.form.get(f"open_{item_id}", type=float, default=0) or 0
+            opening = request.form.get(
+                f"open_{item_id}", type=float, default=0
             )
-            sheet.transferred_in = (
-                request.form.get(f"in_{item_id}", type=float, default=0) or 0
+            transferred_in = request.form.get(
+                f"in_{item_id}", type=float, default=0
             )
-            sheet.transferred_out = (
-                request.form.get(f"out_{item_id}", type=float, default=0) or 0
+            transferred_out = request.form.get(
+                f"out_{item_id}", type=float, default=0
             )
-            sheet.eaten = (
-                request.form.get(f"eaten_{item_id}", type=float, default=0)
-                or 0
+            eaten = request.form.get(
+                f"eaten_{item_id}", type=float, default=0
             )
-            sheet.spoiled = (
-                request.form.get(f"spoiled_{item_id}", type=float, default=0)
-                or 0
+            spoiled = request.form.get(
+                f"spoiled_{item_id}", type=float, default=0
             )
-            sheet.closing_count = (
-                request.form.get(f"close_{item_id}", type=float, default=0)
-                or 0
+            closing = request.form.get(
+                f"close_{item_id}", type=float, default=0
+            )
+            sheet.opening_count = _convert_report_value_to_base(
+                opening or 0, base_unit, report_unit
+            )
+            sheet.transferred_in = _convert_report_value_to_base(
+                transferred_in or 0, base_unit, report_unit
+            )
+            sheet.transferred_out = _convert_report_value_to_base(
+                transferred_out or 0, base_unit, report_unit
+            )
+            sheet.eaten = _convert_report_value_to_base(
+                eaten or 0, base_unit, report_unit
+            )
+            sheet.spoiled = _convert_report_value_to_base(
+                spoiled or 0, base_unit, report_unit
+            )
+            sheet.closing_count = _convert_report_value_to_base(
+                closing or 0, base_unit, report_unit
             )
         db.session.commit()
         log_activity(

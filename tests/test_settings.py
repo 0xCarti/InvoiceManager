@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash
 from app import db
 from app.models import Setting, User
 from app.utils.backup import UNIT_SECONDS
+from app.utils.units import parse_conversion_setting
 from tests.utils import login
 
 
@@ -28,6 +29,10 @@ def test_admin_can_update_settings(client, app):
                 "auto_backup_interval_value": "2",
                 "auto_backup_interval_unit": "week",
                 "max_backups": "5",
+                "convert_ounce": "gram",
+                "convert_gram": "ounce",
+                "convert_each": "each",
+                "convert_millilitre": "ounce",
             },
             follow_redirects=True,
         )
@@ -57,8 +62,19 @@ def test_admin_can_update_settings(client, app):
         assert interval_unit.value == "week"
         max_setting = Setting.query.filter_by(name="MAX_BACKUPS").first()
         assert max_setting.value == "5"
+        conversion_setting = Setting.query.filter_by(
+            name="BASE_UNIT_CONVERSIONS"
+        ).first()
+        mapping = parse_conversion_setting(conversion_setting.value)
+        assert mapping == {
+            "ounce": "gram",
+            "gram": "ounce",
+            "each": "each",
+            "millilitre": "ounce",
+        }
         assert app.config["AUTO_BACKUP_ENABLED"] is True
         assert app.config["AUTO_BACKUP_INTERVAL_VALUE"] == 2
         assert app.config["AUTO_BACKUP_INTERVAL_UNIT"] == "week"
         assert app.config["AUTO_BACKUP_INTERVAL"] == 2 * UNIT_SECONDS["week"]
         assert app.config["MAX_BACKUPS"] == 5
+        assert app.config["BASE_UNIT_CONVERSIONS"] == mapping

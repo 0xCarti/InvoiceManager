@@ -1,6 +1,7 @@
 from flask import (
     Blueprint,
     abort,
+    current_app,
     flash,
     jsonify,
     redirect,
@@ -23,6 +24,11 @@ from app.forms import (
 from app.models import GLCode, Item, Location, LocationStandItem, Product
 from app.utils.activity import log_activity
 from app.utils.pagination import build_pagination_args, get_per_page
+from app.utils.units import (
+    DEFAULT_BASE_UNIT_CONVERSIONS,
+    convert_quantity_for_reporting,
+    get_unit_label,
+)
 
 location = Blueprint("locations", __name__)
 
@@ -275,6 +281,9 @@ def view_stand_sheet(location_id):
     location = db.session.get(Location, location_id)
     if location is None:
         abort(404)
+    configured = current_app.config.get("BASE_UNIT_CONVERSIONS") or {}
+    conversions = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
+    conversions.update(configured)
 
     # Preload all stand sheet records for the location to avoid querying for
     # each individual item when building the stand sheet. Mapping the records by
@@ -293,8 +302,19 @@ def view_stand_sheet(location_id):
                 seen.add(recipe_item.item_id)
                 record = stand_by_item_id.get(recipe_item.item_id)
                 expected = record.expected_count if record else 0
+                item_obj = recipe_item.item
+                if item_obj.base_unit:
+                    display_expected, report_unit = convert_quantity_for_reporting(
+                        float(expected), item_obj.base_unit, conversions
+                    )
+                else:
+                    display_expected, report_unit = expected, item_obj.base_unit
                 stand_items.append(
-                    {"item": recipe_item.item, "expected": expected}
+                    {
+                        "item": item_obj,
+                        "expected": display_expected,
+                        "report_unit_label": get_unit_label(report_unit),
+                    }
                 )
 
     return render_template(
