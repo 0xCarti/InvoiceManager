@@ -7,6 +7,10 @@ from flask_migrate import upgrade
 
 from app import create_app, create_admin_user, db
 from app.models import GLCode, Setting
+from app.utils.units import (
+    DEFAULT_BASE_UNIT_CONVERSIONS,
+    serialize_conversion_setting,
+)
 
 # Ensure the app package is importable when tests change directories
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -47,6 +51,15 @@ def app(tmp_path):
             db.session.add(Setting(name="GST", value=""))
         if Setting.query.filter_by(name="DEFAULT_TIMEZONE").count() == 0:
             db.session.add(Setting(name="DEFAULT_TIMEZONE", value="UTC"))
+        if Setting.query.filter_by(name="BASE_UNIT_CONVERSIONS").count() == 0:
+            db.session.add(
+                Setting(
+                    name="BASE_UNIT_CONVERSIONS",
+                    value=serialize_conversion_setting(
+                        DEFAULT_BASE_UNIT_CONVERSIONS
+                    ),
+                )
+            )
         db.session.commit()
 
         yield app

@@ -145,7 +145,7 @@
       </colgroup>
       <thead>
         <tr>
-          <th rowspan="2">Stock Item (Base Unit)</th>
+          <th rowspan="2">Stock Item (Report Unit)</th>
           <th rowspan="2">Expected Opening Count</th>
           <th rowspan="2">Opening Count</th>
           <th colspan="2" class="border-right">Event Transfers</th>
@@ -174,16 +174,22 @@
           {% endif %}
         {% endfor %}
         {% set expected_open = s.expected %}
-        {% set variance = (s.sheet.closing_count if s.sheet else 0) - expected_open %}
+        {% set opening_count = s.sheet_values.opening_count if s.sheet_values else None %}
+        {% set transferred_in = s.sheet_values.transferred_in if s.sheet_values else None %}
+        {% set transferred_out = s.sheet_values.transferred_out if s.sheet_values else None %}
+        {% set eaten_val = s.sheet_values.eaten if s.sheet_values else None %}
+        {% set spoiled_val = s.sheet_values.spoiled if s.sheet_values else None %}
+        {% set closing_count = s.sheet_values.closing_count if s.sheet_values else None %}
+        {% set variance = (closing_count or 0) - (expected_open or 0) %}
         <tr>
-          <td>{{ s.item.name }} ({{ s.item.base_unit }})</td>
-          <td>{{ expected_open }}</td>
-          <td>{{ s.sheet.opening_count if s.sheet else '' }}</td>
-          <td class="border-right">{{ s.sheet.transferred_in if s.sheet else '' }}</td>
-          <td>{{ s.sheet.transferred_out if s.sheet else '' }}</td>
-          <td>{{ s.sheet.eaten if s.sheet else '' }}</td>
-          <td class="border-right">{{ s.sheet.spoiled if s.sheet else '' }}</td>
-          <td>{{ s.sheet.closing_count if s.sheet else '' }}</td>
+          <td>{{ s.item.name }}{% if s.report_unit_label %} ({{ s.report_unit_label }}){% endif %}</td>
+          <td>{% if expected_open is not none %}{{ '%.2f'|format(expected_open) }}{% endif %}</td>
+          <td>{% if opening_count is not none %}{{ '%.2f'|format(opening_count) }}{% endif %}</td>
+          <td class="border-right">{% if transferred_in is not none %}{{ '%.2f'|format(transferred_in) }}{% endif %}</td>
+          <td>{% if transferred_out is not none %}{{ '%.2f'|format(transferred_out) }}{% endif %}</td>
+          <td>{% if eaten_val is not none %}{{ '%.2f'|format(eaten_val) }}{% endif %}</td>
+          <td class="border-right">{% if spoiled_val is not none %}{{ '%.2f'|format(spoiled_val) }}{% endif %}</td>
+          <td>{% if closing_count is not none %}{{ '%.2f'|format(closing_count) }}{% endif %}</td>
           <td></td>
           <td>{% if price.value is not none %}${{ '%.2f'|format(price.value) }}{% endif %}</td>
           <td>{% if s.sheet %}{{ '%.2f'|format(variance) }}{% endif %}</td>

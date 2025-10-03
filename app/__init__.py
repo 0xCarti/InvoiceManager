@@ -47,6 +47,7 @@ DEFAULT_CSP_TEMPLATE = (
 )
 GST = ""
 DEFAULT_TIMEZONE = "UTC"
+BASE_UNIT_CONVERSIONS = {}
 NAV_LINKS = {
     "transfer.view_transfers": "Transfers",
     "item.view_items": "Items",
@@ -110,7 +111,7 @@ def create_admin_user():
 
 def create_app(args: list):
     """Application factory used by Flask."""
-    global socketio, GST, DEFAULT_TIMEZONE
+    global socketio, GST, DEFAULT_TIMEZONE, BASE_UNIT_CONVERSIONS
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
     default_secure_cookies = "--demo" not in args
@@ -337,8 +338,15 @@ def create_app(args: list):
             max_backups_setting = Setting.query.filter_by(
                 name="MAX_BACKUPS"
             ).first()
+            conversions_setting = Setting.query.filter_by(
+                name="BASE_UNIT_CONVERSIONS"
+            ).first()
 
             from app.utils.backup import UNIT_SECONDS, start_auto_backup_thread
+            from app.utils.units import (
+                DEFAULT_BASE_UNIT_CONVERSIONS,
+                parse_conversion_setting,
+            )
 
             app.config["AUTO_BACKUP_ENABLED"] = (
                 auto_setting.value == "1" if auto_setting else False
@@ -358,6 +366,13 @@ def create_app(args: list):
                 if max_backups_setting and max_backups_setting.value
                 else 5
             )
+            if conversions_setting is not None and conversions_setting.value:
+                BASE_UNIT_CONVERSIONS = parse_conversion_setting(
+                    conversions_setting.value
+                )
+            else:
+                BASE_UNIT_CONVERSIONS = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
+            app.config["BASE_UNIT_CONVERSIONS"] = BASE_UNIT_CONVERSIONS
             app.config["AUTO_BACKUP_INTERVAL"] = (
                 app.config["AUTO_BACKUP_INTERVAL_VALUE"]
                 * UNIT_SECONDS[app.config["AUTO_BACKUP_INTERVAL_UNIT"]]

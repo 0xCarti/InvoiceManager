@@ -65,6 +65,12 @@ from app.utils.imports import (
     _import_locations,
     _import_products,
 )
+from app.utils.units import (
+    DEFAULT_BASE_UNIT_CONVERSIONS,
+    get_allowed_target_units,
+    parse_conversion_setting,
+    serialize_conversion_setting,
+)
 
 auth = Blueprint("auth", __name__)
 admin = Blueprint("admin", __name__)
@@ -734,7 +740,19 @@ def settings():
         max_backups_setting = Setting(name="MAX_BACKUPS", value="5")
         db.session.add(max_backups_setting)
 
+    conversions_setting = Setting.query.filter_by(
+        name="BASE_UNIT_CONVERSIONS"
+    ).first()
+    if conversions_setting is None:
+        conversions_setting = Setting(
+            name="BASE_UNIT_CONVERSIONS",
+            value=serialize_conversion_setting(DEFAULT_BASE_UNIT_CONVERSIONS),
+        )
+        db.session.add(conversions_setting)
+
     db.session.commit()
+
+    conversion_mapping = parse_conversion_setting(conversions_setting.value)
 
     form = SettingsForm(
         gst_number=gst_setting.value,
@@ -743,8 +761,25 @@ def settings():
         auto_backup_interval_value=int(interval_value_setting.value),
         auto_backup_interval_unit=interval_unit_setting.value,
         max_backups=int(max_backups_setting.value),
+        base_unit_mapping=conversion_mapping,
     )
     if form.validate_on_submit():
+        conversion_updates = {}
+        has_conversion_error = False
+        for unit, _, field in form.iter_base_unit_conversions():
+            target = field.data
+            if target not in get_allowed_target_units(unit):
+                field.errors.append("Unsupported conversion selected.")
+                has_conversion_error = True
+            else:
+                conversion_updates[unit] = target
+
+        for unit in DEFAULT_BASE_UNIT_CONVERSIONS:
+            conversion_updates.setdefault(unit, unit)
+
+        if has_conversion_error:
+            return render_template("admin/settings.html", form=form)
+
         gst_setting.value = form.gst_number.data or ""
         tz_setting.value = form.default_timezone.data or "UTC"
         auto_setting.value = "1" if form.auto_backup_enabled.data else "0"
@@ -753,6 +788,9 @@ def settings():
         )
         interval_unit_setting.value = form.auto_backup_interval_unit.data
         max_backups_setting.value = str(form.max_backups.data)
+        conversions_setting.value = serialize_conversion_setting(
+            conversion_updates
+        )
         db.session.commit()
         import app
 
@@ -772,6 +810,9 @@ def settings():
             form.auto_backup_interval_value.data
             * UNIT_SECONDS[form.auto_backup_interval_unit.data]
         )
+        conversion_mapping = parse_conversion_setting(conversions_setting.value)
+        app.BASE_UNIT_CONVERSIONS = conversion_mapping
+        current_app.config["BASE_UNIT_CONVERSIONS"] = conversion_mapping
         start_auto_backup_thread(current_app)
         flash("Settings updated.", "success")
         return redirect(url_for("admin.settings"))

@@ -92,7 +92,7 @@ body {
       </colgroup>
       <thead>
         <tr>
-          <th rowspan="2">Stock Item (Base Unit)</th>
+          <th rowspan="2">Stock Item (Report Unit)</th>
           <th rowspan="2">Expected Opening Count</th>
           <th rowspan="2">Opening Count</th>
           <th colspan="2" class="border-right">Event Transfers</th>
@@ -121,8 +121,8 @@ body {
           {% endif %}
         {% endfor %}
         <tr>
-          <td>{{ s.item.name }} ({{ s.item.base_unit }})</td>
-          <td>{{ s.expected }}</td>
+          <td>{{ s.item.name }}{% if s.report_unit_label %} ({{ s.report_unit_label }}){% endif %}</td>
+          <td>{% if s.expected is not none %}{{ '%.2f'|format(s.expected) }}{% endif %}</td>
           <td></td>
           <td class="border-right"></td>
           <td></td>

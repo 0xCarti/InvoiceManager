@@ -13,7 +13,7 @@
     <table class="table table-bordered">
         <thead>
             <tr>
-                <th>Item</th>
+                <th>Item (Report Unit)</th>
                 <th>Prior Event Close</th>
                 <th>Pre-Event Count</th>
                 <th>Transferred In</th>
@@ -27,17 +27,45 @@
         </thead>
         <tbody>
             {% for entry in stand_items %}
+            {% set opening_val = entry.sheet_values.opening_count or 0 %}
+            {% set in_val = entry.sheet_values.transferred_in or 0 %}
+            {% set out_val = entry.sheet_values.transferred_out or 0 %}
+            {% set eaten_val = entry.sheet_values.eaten or 0 %}
+            {% set spoiled_val = entry.sheet_values.spoiled or 0 %}
+            {% set close_val = entry.sheet_values.closing_count or 0 %}
+            {% set variance = opening_val + in_val - out_val - entry.sales - eaten_val - spoiled_val - close_val %}
             <tr>
-                <td>{{ entry.item.name }}</td>
-                <td>{{ entry.expected }}</td>
-                <td><input type="number" class="form-control" name="open_{{ entry.item.id }}" value="{{ entry.sheet.opening_count if entry.sheet else '' }}"></td>
-                <td><input type="number" class="form-control" name="in_{{ entry.item.id }}" value="{{ entry.sheet.transferred_in if entry.sheet else '' }}"></td>
-                <td><input type="number" class="form-control" name="out_{{ entry.item.id }}" value="{{ entry.sheet.transferred_out if entry.sheet else '' }}"></td>
-                <td class="sales" data-sales="{{ entry.sales }}">{{ entry.sales }}</td>
-                <td><input type="number" step="0.01" class="form-control" name="eaten_{{ entry.item.id }}" value="{{ entry.sheet.eaten if entry.sheet else '' }}"></td>
-                <td><input type="number" step="0.01" class="form-control" name="spoiled_{{ entry.item.id }}" value="{{ entry.sheet.spoiled if entry.sheet else '' }}"></td>
-                <td><input type="number" class="form-control" name="close_{{ entry.item.id }}" value="{{ entry.sheet.closing_count if entry.sheet else '' }}"></td>
-                <td class="variance">0</td>
+                <td>
+                    {{ entry.item.name }}
+                    {% if entry.report_unit_label %}
+                        ({{ entry.report_unit_label }})
+                    {% endif %}
+                </td>
+                <td>
+                    {% if entry.expected is not none %}
+                        {{ '%.2f'|format(entry.expected) }}
+                    {% endif %}
+                </td>
+                <td>
+                    <input type="number" step="any" class="form-control" name="open_{{ entry.item.id }}" value="{% if entry.sheet_values.opening_count is not none %}{{ '%.4f'|format(entry.sheet_values.opening_count) }}{% endif %}">
+                </td>
+                <td>
+                    <input type="number" step="any" class="form-control" name="in_{{ entry.item.id }}" value="{% if entry.sheet_values.transferred_in is not none %}{{ '%.4f'|format(entry.sheet_values.transferred_in) }}{% endif %}">
+                </td>
+                <td>
+                    <input type="number" step="any" class="form-control" name="out_{{ entry.item.id }}" value="{% if entry.sheet_values.transferred_out is not none %}{{ '%.4f'|format(entry.sheet_values.transferred_out) }}{% endif %}">
+                </td>
+                <td class="sales" data-sales="{{ '%.4f'|format(entry.sales) }}">{{ '%.2f'|format(entry.sales) }}</td>
+                <td>
+                    <input type="number" step="any" class="form-control" name="eaten_{{ entry.item.id }}" value="{% if entry.sheet_values.eaten is not none %}{{ '%.4f'|format(entry.sheet_values.eaten) }}{% endif %}">
+                </td>
+                <td>
+                    <input type="number" step="any" class="form-control" name="spoiled_{{ entry.item.id }}" value="{% if entry.sheet_values.spoiled is not none %}{{ '%.4f'|format(entry.sheet_values.spoiled) }}{% endif %}">
+                </td>
+                <td>
+                    <input type="number" step="any" class="form-control" name="close_{{ entry.item.id }}" value="{% if entry.sheet_values.closing_count is not none %}{{ '%.4f'|format(entry.sheet_values.closing_count) }}{% endif %}">
+                </td>
+                <td class="variance">{% if entry.sheet %}{{ '%.2f'|format(variance) }}{% else %}0.00{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>

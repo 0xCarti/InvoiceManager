@@ -38,6 +38,7 @@ from app.models import (
 )
 from app.utils.activity import log_activity
 from app.utils.pagination import build_pagination_args, get_per_page
+from app.utils.units import BASE_UNITS
 
 item = Blueprint("item", __name__)
 
@@ -676,7 +677,7 @@ def quick_add_item():
                 "transfer_default": transfer_default,
             }
         )
-    valid_units = {"ounce", "gram", "each", "millilitre"}
+    valid_units = set(BASE_UNITS)
     if (
         not name
         or base_unit not in valid_units
