@@ -4,7 +4,9 @@ import logging
 import os
 import shutil
 import sqlite3
+import tempfile
 import time
+from contextlib import suppress
 from datetime import datetime
 from threading import Event, Thread
 
@@ -66,9 +68,20 @@ def create_backup(*, initiated_by_system: bool = False):
     db_path = _get_db_path()
     filename = f"backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.db"
     backup_path = os.path.join(backups_dir, filename)
+    fd, temp_path = tempfile.mkstemp(
+        dir=backups_dir, prefix="tmp_backup_", suffix=".db"
+    )
+    os.close(fd)
+
     db.session.commit()
     db.engine.dispose()
-    shutil.copyfile(db_path, backup_path)
+    try:
+        shutil.copyfile(db_path, temp_path)
+        os.replace(temp_path, backup_path)
+    except Exception:
+        with suppress(OSError):
+            os.remove(temp_path)
+        raise
 
     logger.info("Created backup %s", filename)
     if initiated_by_system:
@@ -78,9 +91,22 @@ def create_backup(*, initiated_by_system: bool = False):
 
 
 def _backup_loop(app, interval: int):
-    while not _stop_event.wait(interval):
+    next_run = time.monotonic() + interval
+    while True:
+        remaining = next_run - time.monotonic()
+        if remaining > 0:
+            if _stop_event.wait(remaining):
+                break
+        elif _stop_event.is_set():
+            break
+
         with app.app_context():
             create_backup(initiated_by_system=True)
+
+        next_run += interval
+        current_time = time.monotonic()
+        while next_run <= current_time:
+            next_run += interval
 
 
 def start_auto_backup_thread(app):

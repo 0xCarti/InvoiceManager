@@ -1,4 +1,5 @@
 import os
+import shutil
 import time
 from datetime import date
 from io import BytesIO
@@ -28,7 +29,7 @@ from app.models import (
     Vendor,
 )
 from app.utils.activity import flush_activity_logs
-from app.utils.backup import create_backup, restore_backup
+from app.utils.backup import _backup_loop, create_backup, restore_backup
 from tests.utils import login
 
 
@@ -224,6 +225,86 @@ def test_auto_backup_activity_logging(app):
             f"System automatically deleted backup {filename1}" in logs
         )
         assert logs[-1] == f"System automatically created backup {filename2}"
+
+
+def test_create_backup_is_atomic(app, monkeypatch):
+    with app.app_context():
+        backups_dir = app.config["BACKUP_FOLDER"]
+        for f in os.listdir(backups_dir):
+            os.remove(os.path.join(backups_dir, f))
+
+        recorded = {}
+
+        real_copyfile = shutil.copyfile
+        real_replace = os.replace
+
+        def recording_copyfile(src, dst, *args, **kwargs):
+            recorded["copy_dst"] = dst
+            return real_copyfile(src, dst, *args, **kwargs)
+
+        def recording_replace(src, dst, *args, **kwargs):
+            recorded["replace_src"] = src
+            recorded["replace_dst"] = dst
+            return real_replace(src, dst, *args, **kwargs)
+
+        monkeypatch.setattr(shutil, "copyfile", recording_copyfile)
+        monkeypatch.setattr(os, "replace", recording_replace)
+
+        filename = create_backup()
+        backup_path = os.path.join(backups_dir, filename)
+
+        assert os.path.exists(backup_path)
+        assert recorded["copy_dst"] != backup_path
+        assert recorded["replace_dst"] == backup_path
+        assert not os.path.exists(recorded["replace_src"])
+
+
+def test_backup_loop_runs_on_interval(app, monkeypatch):
+    from app.utils import backup as backup_module
+
+    call_times: list[float] = []
+    wait_calls: list[float] = []
+    now = {"value": 0.0}
+
+    class DummyEvent:
+        def __init__(self):
+            self._is_set = False
+
+        def wait(self, timeout):
+            if self._is_set:
+                return True
+            wait_calls.append(timeout)
+            if timeout > 0:
+                now["value"] += timeout
+            return False
+
+        def set(self):
+            self._is_set = True
+
+        def is_set(self):
+            return self._is_set
+
+    stop_event = DummyEvent()
+
+    def fake_create_backup(*, initiated_by_system=False):
+        call_times.append(now["value"])
+        now["value"] += 120  # backups take two minutes
+        if len(call_times) >= 3:
+            stop_event.set()
+
+    def fake_monotonic():
+        return now["value"]
+
+    monkeypatch.setattr(backup_module, "_stop_event", stop_event)
+    monkeypatch.setattr(backup_module, "create_backup", fake_create_backup)
+    monkeypatch.setattr(backup_module.time, "monotonic", fake_monotonic)
+
+    _backup_loop(app, 3600)
+
+    assert call_times == [3600, 7200, 10800]
+    assert len(wait_calls) >= 3
+    assert wait_calls[0] == 3600
+    assert all(call > 0 for call in wait_calls[:3])
 
 
 def test_restore_backup_route_rejects_large_file(client, app):
