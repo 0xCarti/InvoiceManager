@@ -34,17 +34,57 @@ def _load_products(product_ids: list[int]) -> list[Product]:
 @menu.route("/menus")
 @login_required
 def view_menus():
-    menus = (
-        Menu.query.options(
-            selectinload(Menu.products),
-            selectinload(Menu.assignments).selectinload(MenuAssignment.location),
-        )
-        .order_by(Menu.name)
-        .all()
+    name_query = request.args.get("name_query", "").strip()
+    match_mode = request.args.get("match_mode", "contains")
+    assigned_status = request.args.get("assigned_status", "all")
+    product_status = request.args.get("product_status", "all")
+
+    query = Menu.query.options(
+        selectinload(Menu.products),
+        selectinload(Menu.assignments).selectinload(MenuAssignment.location),
     )
+
+    if name_query:
+        if match_mode == "exact":
+            query = query.filter(Menu.name == name_query)
+        elif match_mode == "startswith":
+            query = query.filter(Menu.name.like(f"{name_query}%"))
+        elif match_mode == "not_contains":
+            query = query.filter(Menu.name.notlike(f"%{name_query}%"))
+        else:  # default to contains
+            match_mode = "contains"
+            query = query.filter(Menu.name.like(f"%{name_query}%"))
+    else:
+        match_mode = "contains"
+
+    if assigned_status == "assigned":
+        query = query.filter(
+            Menu.assignments.any(MenuAssignment.unassigned_at.is_(None))
+        )
+    elif assigned_status == "unassigned":
+        query = query.filter(
+            ~Menu.assignments.any(MenuAssignment.unassigned_at.is_(None))
+        )
+    else:
+        assigned_status = "all"
+
+    if product_status == "with":
+        query = query.filter(Menu.products.any())
+    elif product_status == "without":
+        query = query.filter(~Menu.products.any())
+    else:
+        product_status = "all"
+
+    menus = query.order_by(Menu.name).all()
     delete_form = CSRFOnlyForm()
     return render_template(
-        "menus/view_menus.html", menus=menus, delete_form=delete_form
+        "menus/view_menus.html",
+        menus=menus,
+        delete_form=delete_form,
+        name_query=name_query,
+        match_mode=match_mode,
+        assigned_status=assigned_status,
+        product_status=product_status,
     )
 
 
