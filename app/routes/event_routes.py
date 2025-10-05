@@ -1242,12 +1242,14 @@ def bulk_stand_sheets(event_id):
     data = []
     for el in ev.locations:
         loc, items = _get_stand_items(el.location_id, event_id)
-        data.append(
-            {
-                "location": loc,
-                "stand_items": items,
-            }
-        )
+        chunks = _chunk_stand_sheet_items(items)
+        for chunk in chunks:
+            data.append(
+                {
+                    "location": loc,
+                    "stand_items": chunk,
+                }
+            )
     dt = datetime.now()
     generated_at_local = (
         f"{dt.month}/{dt.day}/{dt.year} {dt.strftime('%I:%M %p').lstrip('0')}"

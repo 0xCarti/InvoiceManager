@@ -2,6 +2,7 @@ import os
 import shutil
 import time
 from datetime import date
+import json
 from io import BytesIO
 
 from werkzeug.security import generate_password_hash
@@ -20,6 +21,7 @@ from app.models import (
     Product,
     ProductRecipeItem,
     PurchaseInvoice,
+    PurchaseInvoiceDraft,
     PurchaseInvoiceItem,
     PurchaseOrder,
     PurchaseOrderItem,
@@ -115,6 +117,31 @@ def populate_data():
         event_location=event_loc, item=item, opening_count=0, closing_count=0
     )
 
+    draft = PurchaseInvoiceDraft(
+        purchase_order_id=po.id,
+        payload=json.dumps(
+            {
+                "invoice_number": "VN001",
+                "received_date": "2023-01-03",
+                "location_id": location.id,
+                "gst": 0.1,
+                "pst": 0.2,
+                "delivery_charge": 1.0,
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "unit_id": unit.id,
+                        "quantity": 1,
+                        "cost": 2.0,
+                        "position": 0,
+                        "gl_code_id": None,
+                        "location_id": None,
+                    }
+                ],
+            }
+        ),
+    )
+
     db.session.add_all(
         [
             poi,
@@ -125,6 +152,7 @@ def populate_data():
             event_loc,
             sale,
             stand_item,
+            draft,
         ]
     )
     db.session.commit()
@@ -143,6 +171,7 @@ def populate_data():
         PurchaseOrderItemArchive,
         PurchaseInvoice,
         PurchaseInvoiceItem,
+        PurchaseInvoiceDraft,
         Event,
         EventLocation,
         TerminalSale,
