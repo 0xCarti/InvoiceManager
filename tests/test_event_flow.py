@@ -1,7 +1,5 @@
 import os
-import re
 from datetime import datetime, timedelta, date
-from html import unescape
 from io import BytesIO
 from tempfile import NamedTemporaryFile
 
@@ -486,11 +484,7 @@ def test_upload_sales_xls(client, app):
             follow_redirects=True,
         )
         assert resp.status_code == 200
-        body = resp.data.decode()
-        assert "Pizza" in body and "Grand Valley Dog" in body
-        match = re.search(r'name="payload" value="([^"]+)"', body)
-        assert match
-        payload = unescape(match.group(1))
+        assert b"Pizza" in resp.data and b"Grand Valley Dog" in resp.data
 
     with app.app_context():
         east_el = EventLocation.query.filter_by(
@@ -499,22 +493,6 @@ def test_upload_sales_xls(client, app):
         west_el = EventLocation.query.filter_by(
             event_id=eid, location_id=west_id
         ).first()
-
-    with client:
-        login(client, email, "pass")
-        resp = client.post(
-            f"/events/{eid}/sales/upload",
-            data={
-                "step": "map",
-                "payload": payload,
-                f"mapping-{east_el.id}": "Popcorn East",
-                f"mapping-{west_el.id}": "Popcorn West",
-            },
-            follow_redirects=True,
-        )
-        assert resp.status_code == 200
-
-    with app.app_context():
         prod1 = db.session.get(Product, prod1_id)
         sale_e = TerminalSale.query.filter_by(
             event_location_id=east_el.id, product_id=prod1.id
@@ -587,11 +565,7 @@ def test_upload_sales_pdf(client, app):
             follow_redirects=True,
         )
         assert resp.status_code == 200
-        body = resp.data.decode()
-        assert "Pizza" in body and "Grand Valley Dog" in body
-        match = re.search(r'name="payload" value="([^"]+)"', body)
-        assert match
-        payload = unescape(match.group(1))
+        assert b"Pizza" in resp.data and b"Grand Valley Dog" in resp.data
 
     with app.app_context():
         east_el = EventLocation.query.filter_by(
@@ -600,22 +574,6 @@ def test_upload_sales_pdf(client, app):
         west_el = EventLocation.query.filter_by(
             event_id=eid, location_id=west_id
         ).first()
-
-    with client:
-        login(client, email, "pass")
-        resp = client.post(
-            f"/events/{eid}/sales/upload",
-            data={
-                "step": "map",
-                "payload": payload,
-                f"mapping-{east_el.id}": "Popcorn East",
-                f"mapping-{west_el.id}": "Popcorn West",
-            },
-            follow_redirects=True,
-        )
-        assert resp.status_code == 200
-
-    with app.app_context():
         prod1 = db.session.get(Product, prod1_id)
         sale_e = TerminalSale.query.filter_by(
             event_location_id=east_el.id, product_id=prod1.id
