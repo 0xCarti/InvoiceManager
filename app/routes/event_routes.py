@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import os
+import re
 from collections import defaultdict
 from datetime import datetime
 from types import SimpleNamespace
@@ -39,6 +40,7 @@ from app.models import (
     LocationStandItem,
     Product,
     TerminalSale,
+    TerminalSaleProductAlias,
 )
 from app.utils.activity import log_activity
 from app.utils.units import (
@@ -650,6 +652,17 @@ def upload_terminal_sales(event_id):
     sales_summary: dict[str, dict] = {}
     sales_location_names: list[str] = []
     default_mapping: dict[int, str] = {}
+    unresolved_products: list[dict] = []
+    resolution_errors: list[str] = []
+    product_resolution_required = False
+    product_choices: list[Product] = []
+
+    def _normalize_product_name(value: str) -> str:
+        if not value:
+            return ""
+        value = value.strip().lower()
+        value = re.sub(r"[^a-z0-9]+", " ", value)
+        return re.sub(r"\s+", " ", value).strip()
 
     def _group_rows(row_data):
         grouped: dict[str, dict] = {}
@@ -689,15 +702,136 @@ def upload_terminal_sales(event_id):
             for data in sales_summary.values()
             for product_name in data["products"].keys()
         }
+        product_lookup: dict[str, Product] = {}
+        normalized_lookup = {
+            name: _normalize_product_name(name) for name in product_names
+        }
+
         if product_names:
-            product_lookup = {
-                p.name: p
-                for p in Product.query.filter(
-                    Product.name.in_(product_names)
-                ).all()
-            }
+            product_lookup.update(
+                {
+                    p.name: p
+                    for p in Product.query.filter(
+                        Product.name.in_(product_names)
+                    ).all()
+                }
+            )
+
+            normalized_values = [
+                norm for norm in normalized_lookup.values() if norm
+            ]
+            alias_lookup: dict[str, TerminalSaleProductAlias] = {}
+            if normalized_values:
+                alias_rows = (
+                    TerminalSaleProductAlias.query.filter(
+                        TerminalSaleProductAlias.normalized_name.in_(
+                            normalized_values
+                        )
+                    ).all()
+                )
+                alias_lookup = {
+                    alias.normalized_name: alias for alias in alias_rows
+                }
+                for original_name, normalized in normalized_lookup.items():
+                    if (
+                        normalized
+                        and original_name not in product_lookup
+                        and normalized in alias_lookup
+                    ):
+                        product_lookup[original_name] = alias_lookup[
+                            normalized
+                        ].product
         else:
-            product_lookup = {}
+            alias_lookup = {}
+
+        unmatched_names = [
+            name for name in product_names if name not in product_lookup
+        ]
+
+        if unmatched_names:
+            product_resolution_required = True
+            resolution_requested = request.form.get(
+                "product-resolution-step"
+            ) == "1"
+            if not product_choices:
+                product_choices = Product.query.order_by(Product.name).all()
+
+            manual_mappings: dict[str, Product] = {}
+            for idx, original_name in enumerate(unmatched_names):
+                field_name = f"product-match-{idx}"
+                selected_value = request.form.get(field_name)
+                selected_product = None
+                if selected_value:
+                    try:
+                        product_id = int(selected_value)
+                    except (TypeError, ValueError):
+                        resolution_errors.append(
+                            f"Invalid product selection for {original_name}."
+                        )
+                    else:
+                        selected_product = db.session.get(
+                            Product, product_id
+                        )
+                        if selected_product is None:
+                            resolution_errors.append(
+                                f"Selected product is no longer available for {original_name}."
+                            )
+                elif resolution_requested:
+                    resolution_errors.append(
+                        f"Select a product for '{original_name}' to continue."
+                    )
+
+                if selected_product:
+                    product_lookup[original_name] = selected_product
+                    manual_mappings[original_name] = selected_product
+
+                unresolved_products.append(
+                    {
+                        "field": field_name,
+                        "name": original_name,
+                        "selected": selected_value or "",
+                    }
+                )
+
+            if manual_mappings and normalized_lookup:
+                for original_name, product in manual_mappings.items():
+                    normalized = normalized_lookup.get(original_name, "")
+                    if not normalized:
+                        continue
+                    alias = alias_lookup.get(normalized)
+                    if alias is None:
+                        alias = TerminalSaleProductAlias(
+                            source_name=original_name,
+                            normalized_name=normalized,
+                            product=product,
+                        )
+                        db.session.add(alias)
+                        alias_lookup[normalized] = alias
+                    else:
+                        alias.source_name = original_name
+                        alias.product = product
+
+            if resolution_errors or len(manual_mappings) != len(unmatched_names):
+                return render_template(
+                    "events/upload_terminal_sales.html",
+                    form=form,
+                    event=ev,
+                    open_locations=open_locations,
+                    mapping_payload=payload,
+                    mapping_filename=mapping_filename,
+                    sales_summary=sales_summary,
+                    sales_location_names=list(sales_summary.keys()),
+                    default_mapping={
+                        el.id: request.form.get(f"mapping-{el.id}", "")
+                        for el in open_locations
+                    },
+                    unresolved_products=unresolved_products,
+                    product_choices=product_choices,
+                    resolution_errors=resolution_errors,
+                    product_resolution_required=True,
+                )
+
+            product_resolution_required = False
 
         updated_locations = []
         for el in open_locations:
@@ -926,6 +1060,10 @@ def upload_terminal_sales(event_id):
         sales_summary=sales_summary,
         sales_location_names=sales_location_names,
         default_mapping=default_mapping,
+        unresolved_products=unresolved_products,
+        product_choices=product_choices,
+        resolution_errors=resolution_errors,
+        product_resolution_required=product_resolution_required,
     )
 
 

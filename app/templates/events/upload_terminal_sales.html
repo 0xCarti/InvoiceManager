@@ -45,6 +45,41 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <input type="hidden" name="step" value="map">
         <input type="hidden" name="payload" value="{{ mapping_payload }}">
+        {% if product_resolution_required %}
+            <input type="hidden" name="product-resolution-step" value="1">
+            <div class="alert alert-warning">
+                <p class="mb-2">
+                    We couldn't automatically match every product in the terminal
+                    sales file. Please select the matching product from the app
+                    for each unknown entry below.
+                </p>
+                {% if resolution_errors %}
+                    <ul class="mb-0 ps-3">
+                        {% for message in resolution_errors %}
+                            <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+            <div class="card mb-3">
+                <div class="card-header">Match Unknown Products</div>
+                <div class="card-body">
+                    {% for product in unresolved_products %}
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ product.field }}">
+                                {{ product.name }}
+                            </label>
+                            <select class="form-select" id="{{ product.field }}" name="{{ product.field }}">
+                                <option value="">Select a product</option>
+                                {% for choice in product_choices %}
+                                    <option value="{{ choice.id }}" {% if product.selected and product.selected|int == choice.id %}selected{% endif %}>{{ choice.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
         {% if open_locations %}
             <div class="card mb-3">
                 <div class="card-header">Link Event Locations</div>
