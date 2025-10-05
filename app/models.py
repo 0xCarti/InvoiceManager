@@ -640,6 +640,36 @@ class PurchaseInvoiceItem(db.Model):
         return self.item.purchase_gl_code
 
 
+class PurchaseInvoiceDraft(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    purchase_order_id = db.Column(
+        db.Integer, db.ForeignKey("purchase_order.id"), nullable=False, unique=True
+    )
+    payload = db.Column(db.Text, nullable=False)
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, server_default=func.now()
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=func.now(),
+    )
+
+    purchase_order = relationship("PurchaseOrder")
+
+    @property
+    def data(self):
+        try:
+            return json.loads(self.payload)
+        except (TypeError, ValueError):
+            return {}
+
+    def update_payload(self, data: dict):
+        self.payload = json.dumps(data)
+
+
 class PurchaseOrderItemArchive(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     purchase_order_id = db.Column(db.Integer, nullable=False)

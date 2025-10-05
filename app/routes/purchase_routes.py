@@ -26,6 +26,7 @@ from app.models import (
     Location,
     LocationStandItem,
     PurchaseInvoice,
+    PurchaseInvoiceDraft,
     PurchaseInvoiceItem,
     PurchaseOrder,
     PurchaseOrderItem,
@@ -42,6 +43,7 @@ from app.utils.forecasting import DemandForecastingHelper
 from app.utils.pagination import build_pagination_args, get_per_page
 
 import datetime
+import json
 
 from sqlalchemy import or_
 from sqlalchemy.orm import selectinload
@@ -598,20 +600,67 @@ def receive_invoice(po_id):
     form = ReceiveInvoiceForm()
     gl_code_choices = load_purchase_gl_code_choices()
     department_defaults = Setting.get_receive_location_defaults()
+    draft = PurchaseInvoiceDraft.query.filter_by(purchase_order_id=po.id).first()
+    draft_data = draft.data if draft else None
     if request.method == "GET":
-        form.delivery_charge.data = po.delivery_charge
-        if not form.received_date.data:
-            form.received_date.data = datetime.date.today()
-        selected_department = form.department.data or ""
-        default_location_id = department_defaults.get(selected_department)
-        if default_location_id and any(
-            choice_id == default_location_id
-            for choice_id, _ in form.location_id.choices
-        ):
-            form.location_id.data = default_location_id
-        form.items.min_entries = max(1, len(po.items))
-        while len(form.items) < len(po.items):
+        prefill_items = []
+        if draft_data:
+            prefill_items = draft_data.get("items", []) or []
+        if not prefill_items:
+            prefill_items = [
+                {
+                    "item_id": poi.item_id,
+                    "unit_id": poi.unit_id,
+                    "quantity": poi.quantity,
+                    "position": poi.position,
+                    "gl_code_id": None,
+                    "cost": None,
+                    "location_id": None,
+                }
+                for poi in po.items
+            ]
+
+        form.items.min_entries = max(1, len(prefill_items))
+        while len(form.items) < len(prefill_items):
             form.items.append_entry()
+
+        if draft_data:
+            form.invoice_number.data = draft_data.get("invoice_number")
+            if draft_data.get("received_date"):
+                try:
+                    form.received_date.data = datetime.date.fromisoformat(
+                        draft_data["received_date"]
+                    )
+                except ValueError:
+                    pass
+            if draft_data.get("department"):
+                form.department.data = draft_data.get("department")
+            if draft_data.get("gst") is not None:
+                form.gst.data = draft_data.get("gst")
+            if draft_data.get("pst") is not None:
+                form.pst.data = draft_data.get("pst")
+            if draft_data.get("delivery_charge") is not None:
+                form.delivery_charge.data = draft_data.get("delivery_charge")
+            invoice_location_id = draft_data.get("location_id")
+            if invoice_location_id and any(
+                choice_id == invoice_location_id
+                for choice_id, _ in form.location_id.choices
+            ):
+                form.location_id.data = invoice_location_id
+        else:
+            form.delivery_charge.data = po.delivery_charge
+            if not form.received_date.data:
+                form.received_date.data = datetime.date.today()
+
+        selected_department = form.department.data or ""
+        if not form.location_id.data:
+            default_location_id = department_defaults.get(selected_department)
+            if default_location_id and any(
+                choice_id == default_location_id
+                for choice_id, _ in form.location_id.choices
+            ):
+                form.location_id.data = default_location_id
+
         location_choices = [(0, "Use Invoice Location")] + [
             (value, label) for value, label in form.location_id.choices
         ]
@@ -629,13 +678,20 @@ def receive_invoice(po_id):
             item_form.gl_code.choices = [
                 (value, label) for value, label in gl_code_choices
             ]
-        for i, poi in enumerate(po.items):
-            form.items[i].item.data = poi.item_id
-            form.items[i].unit.data = poi.unit_id
-            form.items[i].quantity.data = poi.quantity
-            form.items[i].position.data = poi.position
-            form.items[i].gl_code.data = 0
-            form.items[i].location_id.data = 0
+        for index, item_data in enumerate(prefill_items):
+            if index >= len(form.items):
+                break
+            form.items[index].item.data = item_data.get("item_id")
+            form.items[index].unit.data = item_data.get("unit_id")
+            if item_data.get("quantity") is not None:
+                form.items[index].quantity.data = item_data.get("quantity")
+            if item_data.get("cost") is not None:
+                form.items[index].cost.data = item_data.get("cost")
+            form.items[index].position.data = item_data.get("position")
+            gl_code_value = item_data.get("gl_code_id")
+            form.items[index].gl_code.data = gl_code_value or 0
+            location_value = item_data.get("location_id")
+            form.items[index].location_id.data = location_value or 0
     if form.validate_on_submit():
         location_obj = db.session.get(Location, form.location_id.data)
         if not PurchaseOrderItemArchive.query.filter_by(
@@ -794,6 +850,8 @@ def receive_invoice(po_id):
                 db.session.flush()
         po.received = True
         db.session.add(po)
+        if draft:
+            db.session.delete(draft)
         # Commit once so that invoice, items, and updated item costs are saved
         # atomically, ensuring the weighted cost persists in the database.
         db.session.commit()
@@ -989,6 +1047,41 @@ def reverse_purchase_invoice(invoice_id):
             ),
             cancel_url=url_for("purchase.view_purchase_invoices"),
             title="Confirm Invoice Reversal",
+        )
+    draft_payload = {
+        "invoice_number": invoice.invoice_number,
+        "received_date": invoice.received_date.isoformat()
+        if invoice.received_date
+        else None,
+        "location_id": invoice.location_id,
+        "department": invoice.department,
+        "gst": invoice.gst,
+        "pst": invoice.pst,
+        "delivery_charge": invoice.delivery_charge,
+        "items": [
+            {
+                "item_id": inv_item.item_id,
+                "unit_id": inv_item.unit_id,
+                "quantity": inv_item.quantity,
+                "cost": inv_item.cost,
+                "position": inv_item.position,
+                "gl_code_id": inv_item.purchase_gl_code_id,
+                "location_id": inv_item.location_id,
+            }
+            for inv_item in invoice.items
+        ],
+    }
+    existing_draft = PurchaseInvoiceDraft.query.filter_by(
+        purchase_order_id=po.id
+    ).first()
+    if existing_draft:
+        existing_draft.update_payload(draft_payload)
+    else:
+        db.session.add(
+            PurchaseInvoiceDraft(
+                purchase_order_id=po.id,
+                payload=json.dumps(draft_payload),
+            )
         )
     for inv_item in invoice.items:
         factor = 1

@@ -1,3 +1,5 @@
+import re
+
 from werkzeug.security import generate_password_hash
 
 import pytest
@@ -10,6 +12,7 @@ from app.models import (
     Location,
     LocationStandItem,
     PurchaseInvoice,
+    PurchaseInvoiceDraft,
     PurchaseInvoiceItem,
     PurchaseOrder,
     PurchaseOrderItem,
@@ -19,6 +22,26 @@ from app.models import (
     Vendor,
 )
 from tests.utils import login
+
+
+def extract_input_value(page: str, field_id: str) -> str:
+    pattern = rf'id="{re.escape(field_id)}"[^>]*value="([^"]*)"'
+    match = re.search(pattern, page)
+    assert match is not None, f"Value for {field_id} not found"
+    return match.group(1)
+
+
+def extract_selected_option(page: str, select_id: str) -> str:
+    select_pattern = rf'<select[^>]*id="{re.escape(select_id)}"[^>]*>(.*?)</select>'
+    select_match = re.search(select_pattern, page, re.DOTALL)
+    assert select_match is not None, f"Select {select_id} not found"
+    options_html = select_match.group(1)
+    option_match = re.search(
+        r'(?:value="([^"]*)"[^>]*selected|selected[^>]*value="([^"]*)")',
+        options_html,
+    )
+    assert option_match is not None, f"No selected option found for {select_id}"
+    return option_match.group(1) or option_match.group(2)
 
 
 def setup_purchase(app):
@@ -701,7 +724,107 @@ def test_invoice_moves_and_reverse(client, app):
             location_id=location_id, item_id=item_id
         ).first()
         assert lsi.expected_count == 0
+        draft = PurchaseInvoiceDraft.query.filter_by(purchase_order_id=po_id).first()
+        assert draft is not None
 
+
+def test_reverse_invoice_prefills_form(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-06-01",
+                "expected_date": "2023-06-05",
+                "delivery_charge": 1.5,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 3,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po = PurchaseOrder.query.first()
+        assert po is not None
+        po_id = po.id
+
+    initial_data = {
+        "received_date": "2023-06-06",
+        "location_id": location_id,
+        "department": "Kitchen",
+        "gst": 0.25,
+        "pst": 0.35,
+        "delivery_charge": 5.75,
+        "invoice_number": "INV-123",
+        "items-0-item": item_id,
+        "items-0-unit": unit_id,
+        "items-0-quantity": 3,
+        "items-0-cost": 2.5,
+        "items-0-location_id": 0,
+        "items-0-gl_code": 0,
+    }
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/purchase_orders/{po_id}/receive",
+            data=initial_data,
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        invoice = PurchaseInvoice.query.first()
+        assert invoice is not None
+        inv_id = invoice.id
+
+    with client:
+        login(client, email, "pass")
+        client.get(
+            f"/purchase_invoices/{inv_id}/reverse", follow_redirects=True
+        )
+
+    with app.app_context():
+        draft = PurchaseInvoiceDraft.query.filter_by(purchase_order_id=po_id).first()
+        assert draft is not None
+        data = draft.data
+        assert data["invoice_number"] == "INV-123"
+        assert data["gst"] == pytest.approx(0.25)
+        assert data["delivery_charge"] == pytest.approx(5.75)
+        assert data["items"][0]["cost"] == pytest.approx(2.5)
+
+    with client:
+        login(client, email, "pass")
+        resp = client.get(f"/purchase_orders/{po_id}/receive")
+        page = resp.get_data(as_text=True)
+        assert extract_input_value(page, "received_date") == "2023-06-06"
+        assert extract_input_value(page, "invoice_number") == "INV-123"
+        assert float(extract_input_value(page, "gst")) == pytest.approx(0.25)
+        assert float(extract_input_value(page, "pst")) == pytest.approx(0.35)
+        assert float(extract_input_value(page, "delivery_charge")) == pytest.approx(5.75)
+        assert float(extract_input_value(page, "items-0-cost")) == pytest.approx(2.5)
+        assert float(extract_input_value(page, "items-0-quantity")) == pytest.approx(3)
+        assert extract_selected_option(page, "location_id") == str(location_id)
+        assert extract_selected_option(page, "department") == "Kitchen"
+
+        updated_data = initial_data.copy()
+        updated_data["gst"] = 0.5
+        client.post(
+            f"/purchase_orders/{po_id}/receive",
+            data=updated_data,
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        assert (PurchaseInvoiceDraft.query.filter_by(purchase_order_id=po_id).first() is None)
+        invoice = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).first()
+        assert invoice is not None
+        assert invoice.gst == pytest.approx(0.5)
+        assert invoice.pst == pytest.approx(0.35)
+        assert invoice.delivery_charge == pytest.approx(5.75)
+        assert invoice.invoice_number == "INV-123"
 
 def test_receive_invoice_base_unit_cost(client, app):
     """Receiving items in cases should update item cost per base unit."""

@@ -48,9 +48,6 @@ from app.utils.units import (
     get_unit_label,
 )
 
-STANDSHEET_PAGE_SIZE = 20
-
-
 _STAND_SHEET_FIELDS = (
     "opening_count",
     "transferred_in",
@@ -146,13 +143,6 @@ def _convert_report_value_to_base(value, base_unit, report_unit):
     except (TypeError, ValueError):
         return value
 
-
-def _chunk_stand_sheet_items(items, chunk_size=STANDSHEET_PAGE_SIZE):
-    """Split stand sheet items into page-sized chunks."""
-
-    if not items:
-        return [items]
-    return [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 event = Blueprint("event", __name__)
 
@@ -1269,17 +1259,14 @@ def bulk_count_sheets(event_id):
     data = []
     for el in ev.locations:
         loc, items = _get_stand_items(el.location_id, event_id)
-        chunks = _chunk_stand_sheet_items(items)
-        page_count = len(chunks)
-        for page_number, chunk in enumerate(chunks, start=1):
-            data.append(
-                {
-                    "location": loc,
-                    "stand_items": chunk,
-                    "page_number": page_number,
-                    "page_count": page_count,
-                }
-            )
+        data.append(
+            {
+                "location": loc,
+                "stand_items": items,
+                "page_number": 1,
+                "page_count": 1,
+            }
+        )
     return render_template(
         "events/bulk_count_sheets.html", event=ev, data=data
     )

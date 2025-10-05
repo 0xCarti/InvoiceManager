@@ -310,7 +310,7 @@ def test_bulk_stand_sheets_render_multiple_pages(client, app):
         )
         resp = client.get(f"/events/{eid}/stand_sheets")
         assert resp.status_code == 200
-        assert resp.data.count(b"Opening Standsheet") == 2
+        assert resp.data.count(b"Opening Standsheet") == 1
         assert f"Location: {loc_name}".encode() in resp.data
         assert b"Upload Stand Sheet QR" not in resp.data
 
