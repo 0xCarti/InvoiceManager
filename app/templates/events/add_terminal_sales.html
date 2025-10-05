@@ -6,15 +6,14 @@
     <div class="table-responsive">
     <table class="table">
         <thead>
-            <tr><th>Product</th><th class="text-end">Price</th><th>Quantity</th></tr>
+            <tr><th>Product</th><th>Quantity</th></tr>
         </thead>
         <tbody>
         {% for product in event_location.location.products %}
-        <tr data-price="{{ product.price }}">
+        <tr>
             <td>{{ product.name }}</td>
-            <td class="text-end">${{ '{:,.2f}'.format(product.price) }}</td>
             <td>
-                <input type="number" step="any" name="qty_{{ product.id }}" class="form-control terminal-sale-input"
+                <input type="number" step="any" name="qty_{{ product.id }}" class="form-control"
                        value="{{ existing_sales.get(product.id, '') }}">
             </td>
         </tr>
@@ -22,47 +21,6 @@
         </tbody>
     </table>
     </div>
-    <div class="mt-3">
-        <strong>Grand Total:</strong>
-        <span id="terminal-sales-grand-total">$0.00</span>
-    </div>
     <button type="submit" class="btn btn-primary mt-2">Submit</button>
 </form>
-<script>
-    (function () {
-        const totalEl = document.getElementById('terminal-sales-grand-total');
-        if (!totalEl) {
-            return;
-        }
-
-        const formatCurrency = (value) => {
-            return value.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
-        };
-
-        const updateTotal = () => {
-            let total = 0;
-            document.querySelectorAll('tr[data-price]').forEach((row) => {
-                const price = parseFloat(row.dataset.price);
-                if (Number.isNaN(price)) {
-                    return;
-                }
-                const input = row.querySelector('.terminal-sale-input');
-                if (!input) {
-                    return;
-                }
-                const qty = parseFloat(input.value);
-                if (!Number.isNaN(qty)) {
-                    total += price * qty;
-                }
-            });
-            totalEl.textContent = formatCurrency(total);
-        };
-
-        document.querySelectorAll('.terminal-sale-input').forEach((input) => {
-            input.addEventListener('input', updateTotal);
-        });
-
-        updateTotal();
-    })();
-</script>
 {% endblock %}
