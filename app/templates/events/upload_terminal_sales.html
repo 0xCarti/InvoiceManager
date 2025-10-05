@@ -19,6 +19,7 @@
                 <tr>
                     <th scope="col">Sales Location</th>
                     <th scope="col">Total Quantity</th>
+                    <th scope="col">Total Amount</th>
                     <th scope="col">Products</th>
                 </tr>
             </thead>
@@ -29,9 +30,27 @@
                         <th scope="row">{{ location_name }}</th>
                         <td>{{ '%.2f'|format(data.total) }}</td>
                         <td>
+                            {% if data.total_amount %}
+                                {{ '%.2f'|format(data.total_amount) }}
+                            {% else %}
+                                &mdash;
+                            {% endif %}
+                        </td>
+                        <td>
                             <ul class="mb-0 ps-3">
-                                {% for product_name, qty in data.products.items() %}
-                                    <li>{{ product_name }} &mdash; {{ '%.2f'|format(qty) }}</li>
+                                {% for product_name, info in data.products.items() %}
+                                    <li>
+                                        {{ product_name }} &mdash; {{ '%.2f'|format(info.quantity) }}
+                                        {% if info.prices %}
+                                            @ $
+                                            {% for price in info.prices %}
+                                                {{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                        {% if info.amount %}
+                                            <span class="text-muted">(Total ${{ '%.2f'|format(info.amount) }})</span>
+                                        {% endif %}
+                                    </li>
                                 {% endfor %}
                             </ul>
                         </td>
@@ -40,6 +59,46 @@
             </tbody>
         </table>
     </div>
+
+    {% if price_discrepancies or menu_mismatches %}
+        <div class="alert alert-warning">
+            <p class="mb-2">
+                Review the following issues detected in the uploaded sales data
+                before importing.
+            </p>
+            {% if price_discrepancies %}
+                <h5 class="h6">Price differences</h5>
+                <ul class="mb-3 ps-3">
+                    {% for location_name, entries in price_discrepancies.items() %}
+                        {% for item in entries %}
+                            <li>
+                                {{ item.product }} for {{ location_name }} (file location "{{ item.sales_location }}")
+                                listed at
+                                {% for price in item.file_prices %}
+                                    ${{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                                in the file but ${{ '%.2f'|format(item.app_price) }} in the app.
+                            </li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            {% if menu_mismatches %}
+                <h5 class="h6">Menu mismatches</h5>
+                <ul class="mb-0 ps-3">
+                    {% for location_name, entries in menu_mismatches.items() %}
+                        {% for item in entries %}
+                            <li>
+                                {{ item.product }} appears in the file for {{ item.sales_location }}
+                                but is not on the menu{% if item.menu_name %} ({{ item.menu_name }}){% endif %}
+                                for {{ location_name }}.
+                            </li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    {% endif %}
 
     <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -101,6 +160,21 @@
                     {% endfor %}
                 </div>
             </div>
+            {% if price_discrepancies or menu_mismatches %}
+                {% if warnings_required %}
+                    <div class="alert alert-danger">
+                        Please acknowledge the warnings above before importing.
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="acknowledge-warnings" name="acknowledge_warnings" value="1" {% if warnings_acknowledged %}checked{% endif %}>
+                        <label class="form-check-label" for="acknowledge-warnings">
+                            I have reviewed the discrepancies and want to continue.
+                        </label>
+                    </div>
+                {% else %}
+                    <input type="hidden" name="acknowledge_warnings" value="1">
+                {% endif %}
+            {% endif %}
             <button type="submit" class="btn btn-primary">Import Sales</button>
             <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}" class="btn btn-secondary ms-2">Start Over</a>
         {% else %}
