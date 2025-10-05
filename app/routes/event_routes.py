@@ -640,116 +640,7 @@ def upload_terminal_sales(event_id):
         abort(404)
 
     form = TerminalSalesUploadForm()
-    open_locations = [
-        el
-        for el in ev.locations
-        if not el.confirmed and not ev.closed
-    ]
-    mapping_payload = None
-    mapping_filename = None
-    sales_summary: dict[str, dict] = {}
-    sales_location_names: list[str] = []
-    default_mapping: dict[int, str] = {}
-
-    def _group_rows(row_data):
-        grouped: dict[str, dict] = {}
-        for entry in row_data:
-            loc = entry["location"]
-            prod = entry["product"]
-            qty = entry["quantity"]
-            loc_entry = grouped.setdefault(
-                loc, {"products": {}, "total": 0.0}
-            )
-            loc_entry["products"][prod] = (
-                loc_entry["products"].get(prod, 0.0) + qty
-            )
-            loc_entry["total"] += qty
-        return grouped
-
-    if request.method == "POST" and request.form.get("step") == "map":
-        payload = request.form.get("payload")
-        if not payload:
-            flash("Unable to process the uploaded sales data.", "danger")
-            return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
-        try:
-            payload_data = json.loads(payload)
-        except (TypeError, ValueError):
-            flash("The uploaded sales data is invalid.", "danger")
-            return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
-
-        rows = payload_data.get("rows", [])
-        mapping_filename = payload_data.get("filename")
-        if not rows:
-            flash("No sales records were found in the uploaded file.", "warning")
-            return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
-
-        sales_summary = _group_rows(rows)
-        product_names = {
-            product_name
-            for data in sales_summary.values()
-            for product_name in data["products"].keys()
-        }
-        if product_names:
-            product_lookup = {
-                p.name: p
-                for p in Product.query.filter(
-                    Product.name.in_(product_names)
-                ).all()
-            }
-        else:
-            product_lookup = {}
-
-        updated_locations = []
-        for el in open_locations:
-            selected_loc = request.form.get(f"mapping-{el.id}")
-            if not selected_loc:
-                continue
-            loc_sales = sales_summary.get(selected_loc)
-            if not loc_sales:
-                continue
-            location_updated = False
-            for prod_name, qty in loc_sales["products"].items():
-                product = product_lookup.get(prod_name)
-                if not product:
-                    continue
-                sale = TerminalSale.query.filter_by(
-                    event_location_id=el.id,
-                    product_id=product.id,
-                ).first()
-                if sale:
-                    sale.quantity = qty
-                    location_updated = True
-                else:
-                    db.session.add(
-                        TerminalSale(
-                            event_location_id=el.id,
-                            product_id=product.id,
-                            quantity=qty,
-                            sold_at=datetime.utcnow(),
-                        )
-                    )
-                    location_updated = True
-            if location_updated:
-                updated_locations.append(el.location.name)
-
-        if updated_locations:
-            db.session.commit()
-            log_activity(
-                "Uploaded terminal sales for event "
-                f"{event_id} from {mapping_filename or 'uploaded file'}"
-            )
-            flash(
-                "Terminal sales were imported for: "
-                + ", ".join(updated_locations),
-                "success",
-            )
-        else:
-            flash(
-                "No event locations were linked to the uploaded sales data.",
-                "warning",
-            )
-        return redirect(url_for("event.view_event", event_id=event_id))
-
+    unmatched = []
     if form.validate_on_submit():
         file = form.file.data
         filename = secure_filename(file.filename)
@@ -766,129 +657,107 @@ def upload_terminal_sales(event_id):
                 return
             rows.append((loc, name.strip(), qty))
 
-        try:
-            if ext in {".xls", ".xlsx"}:
-                import pandas as pd
-                from zipfile import BadZipFile
+        if ext == ".xls" or ext == ".xlsx":
+            import pandas as pd
 
-                read_kwargs = {"header": None}
-                engine = "openpyxl"
-                try:
-                    df = pd.read_excel(
-                        filepath, engine=engine, **read_kwargs
-                    )
-                except (BadZipFile, ValueError):
-                    engine = "xlrd"
-                    try:
-                        df = pd.read_excel(
-                            filepath, engine=engine, **read_kwargs
-                        )
-                    except ImportError as exc:
-                        flash(
-                            "Excel support for legacy .xls files is missing.",
-                            "danger",
-                        )
-                        current_app.logger.exception(
-                            "xlrd is required to read .xls files"
-                        )
-                        return redirect(
-                            url_for(
-                                "event.upload_terminal_sales",
-                                event_id=event_id,
-                            )
-                        )
-                    except Exception:
-                        flash(
-                            "The uploaded Excel file could not be read.",
-                            "danger",
-                        )
-                        current_app.logger.exception(
-                            "Failed to parse Excel file with xlrd"
-                        )
-                        return redirect(
-                            url_for(
-                                "event.upload_terminal_sales",
-                                event_id=event_id,
-                            )
-                        )
+            # Use openpyxl for reading Excel files regardless of extension.
+            # This avoids reliance on the deprecated xlrd/xlwt packages and
+            # allows test fixtures to rename .xlsx files with a .xls suffix.
+            df = pd.read_excel(filepath, header=None, engine="openpyxl")
+            current_loc = None
+            for _, r in df.iterrows():
+                first, second = r.iloc[0], r.iloc[1]
+                if pd.isna(second):
+                    if isinstance(first, str):
+                        current_loc = first.strip()
+                else:
+                    if current_loc and isinstance(second, str):
+                        add_row(current_loc, second, r.iloc[4])
+        elif ext == ".pdf":
+            import pdfplumber
 
-                current_loc = None
-                for _, r in df.iterrows():
-                    first, second = r.iloc[0], r.iloc[1]
-                    if pd.isna(second):
-                        if isinstance(first, str):
-                            current_loc = first.strip()
-                    else:
-                        if current_loc and isinstance(second, str):
-                            add_row(current_loc, second, r.iloc[4])
-            elif ext == ".pdf":
-                import pdfplumber
+            with pdfplumber.open(filepath) as pdf:
+                text = "\n".join(
+                    page.extract_text() or "" for page in pdf.pages
+                )
+            current_loc = None
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if not line[0].isdigit():
+                    current_loc = line
+                    continue
+                if current_loc is None:
+                    continue
+                parts = line.split()
+                idx = 1
+                while (
+                    idx < len(parts)
+                    and not parts[idx].replace(".", "", 1).isdigit()
+                ):
+                    idx += 1
+                if idx + 2 < len(parts):
+                    name = " ".join(parts[1:idx])
+                    qty = parts[idx + 2]
+                    add_row(current_loc, name, qty)
 
-                with pdfplumber.open(filepath) as pdf:
-                    text = "\n".join(
-                        page.extract_text() or "" for page in pdf.pages
-                    )
-                current_loc = None
-                for line in text.splitlines():
-                    line = line.strip()
-                    if not line:
-                        continue
-                    if not line[0].isdigit():
-                        current_loc = line
-                        continue
-                    if current_loc is None:
-                        continue
-                    parts = line.split()
-                    idx = 1
-                    while (
-                        idx < len(parts)
-                        and not parts[idx].replace(".", "", 1).isdigit()
-                    ):
-                        idx += 1
-                    if idx + 2 < len(parts):
-                        name = " ".join(parts[1:idx])
-                        qty = parts[idx + 2]
-                        add_row(current_loc, name, qty)
-        finally:
-            try:
-                os.remove(filepath)
-            except OSError:
-                pass
+        product_names = {prod_name for _, prod_name, _ in rows}
+        product_lookup = {
+            p.name: p
+            for p in Product.query.filter(
+                Product.name.in_(product_names)
+            ).all()
+        }
 
-        if not rows:
-            flash(
-                "No sales records were detected in the uploaded file.",
-                "warning",
+        for loc_name, prod_name, qty in rows:
+            loc = (
+                Location.query.join(EventLocation)
+                .filter(
+                    EventLocation.event_id == event_id,
+                    Location.name == loc_name,
+                )
+                .first()
             )
-        else:
-            rows_data = [
-                {"location": loc, "product": product, "quantity": qty}
-                for loc, product, qty in rows
-            ]
-
-            sales_summary = _group_rows(rows_data)
-            sales_location_names = list(sales_summary.keys())
-            mapping_payload = json.dumps(
-                {"rows": rows_data, "filename": filename}
+            if not loc:
+                if loc_name not in unmatched:
+                    unmatched.append(loc_name)
+                continue
+            el = EventLocation.query.filter_by(
+                event_id=event_id, location_id=loc.id
+            ).first()
+            if not el:
+                if loc_name not in unmatched:
+                    unmatched.append(loc_name)
+                continue
+            product = product_lookup.get(prod_name)
+            if not product:
+                continue
+            sale = TerminalSale.query.filter_by(
+                event_location_id=el.id, product_id=product.id
+            ).first()
+            if sale:
+                sale.quantity = qty
+            else:
+                db.session.add(
+                    TerminalSale(
+                        event_location_id=el.id,
+                        product_id=product.id,
+                        quantity=qty,
+                        sold_at=datetime.utcnow(),
+                    )
+                )
+        db.session.commit()
+        if rows:
+            log_activity(
+                f"Uploaded terminal sales for event {event_id} from {filename}"
             )
-            mapping_filename = filename
-            default_mapping = {
-                el.id: el.location.name
-                if el.location.name in sales_summary
-                else ""
-                for el in open_locations
-            }
 
     return render_template(
         "events/upload_terminal_sales.html",
         form=form,
         event=ev,
-        open_locations=open_locations,
-        mapping_payload=mapping_payload,
-        mapping_filename=mapping_filename,
-        sales_summary=sales_summary,
-        sales_location_names=sales_location_names,
-        default_mapping=default_mapping,
+        unmatched=unmatched,
     )
 
 

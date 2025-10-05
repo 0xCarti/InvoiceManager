@@ -1,87 +1,22 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Upload Terminal Sales for {{ event.name }}</h2>
-
-{% if mapping_payload %}
-    <div class="alert alert-info">
-        <p>
-            Review the sales locations detected in the uploaded file and link
-            them to the open event locations below. A blank selection will skip
-            updating that event location.
-        </p>
+<form method="post" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+        {{ form.file.label }}
+        {{ form.file(class="form-control-file") }}
     </div>
-    {% if mapping_filename %}
-        <p><strong>Source file:</strong> {{ mapping_filename }}</p>
-    {% endif %}
-    <div class="table-responsive mb-4">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th scope="col">Sales Location</th>
-                    <th scope="col">Total Quantity</th>
-                    <th scope="col">Products</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for location_name in sales_location_names %}
-                    {% set data = sales_summary[location_name] %}
-                    <tr>
-                        <th scope="row">{{ location_name }}</th>
-                        <td>{{ '%.2f'|format(data.total) }}</td>
-                        <td>
-                            <ul class="mb-0 ps-3">
-                                {% for product_name, qty in data.products.items() %}
-                                    <li>{{ product_name }} &mdash; {{ '%.2f'|format(qty) }}</li>
-                                {% endfor %}
-                            </ul>
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    <form method="post">
-        <input type="hidden" name="step" value="map">
-        <input type="hidden" name="payload" value="{{ mapping_payload }}">
-        {% if open_locations %}
-            <div class="card mb-3">
-                <div class="card-header">Link Event Locations</div>
-                <div class="card-body">
-                    {% for el in open_locations %}
-                        <div class="mb-3">
-                            <label class="form-label" for="mapping-{{ el.id }}">
-                                {{ el.location.name }}
-                            </label>
-                            <select class="form-select" id="mapping-{{ el.id }}" name="mapping-{{ el.id }}">
-                                <option value="">Skip</option>
-                                {% for location_name in sales_location_names %}
-                                    <option value="{{ location_name }}" {% if default_mapping[el.id] == location_name %}selected{% endif %}>
-                                        {{ location_name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary">Import Sales</button>
-            <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}" class="btn btn-secondary ms-2">Start Over</a>
-        {% else %}
-            <div class="alert alert-warning">
-                There are no open locations for this event available for mapping.
-            </div>
-            <a href="{{ url_for('event.view_event', event_id=event.id) }}" class="btn btn-secondary">Back to Event</a>
-        {% endif %}
-    </form>
-{% else %}
-    <form method="post" enctype="multipart/form-data">
-        {{ form.hidden_tag() }}
-        <div class="form-group">
-            {{ form.file.label }}
-            {{ form.file(class="form-control") }}
-        </div>
-        {{ form.submit(class="btn btn-primary mt-3") }}
-    </form>
+    {{ form.submit(class="btn btn-primary mt-2") }}
+</form>
+{% if unmatched %}
+<div class="alert alert-warning mt-3">
+    <p>Unmatched locations:</p>
+    <ul>
+    {% for name in unmatched %}
+        <li>{{ name }}</li>
+    {% endfor %}
+    </ul>
+</div>
 {% endif %}
 {% endblock %}
