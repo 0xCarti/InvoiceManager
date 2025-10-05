@@ -1,4 +1,5 @@
 import os
+from datetime import date
 from functools import lru_cache
 from zoneinfo import available_timezones
 
@@ -54,6 +55,20 @@ from app.utils.units import (
 
 # Uploaded backup files are capped at 10MB to prevent excessive memory usage
 MAX_BACKUP_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+PURCHASE_RECEIVE_DEPARTMENT_CONFIG = [
+    ("Kitchen", "Kitchen", "receive_default_kitchen"),
+    ("Concessions", "Concessions", "receive_default_concessions"),
+    ("Banquets", "Banquets", "receive_default_banquets"),
+    ("Beverages", "Beverages", "receive_default_beverages"),
+    ("Office", "Office", "receive_default_office"),
+    ("Other", "Other", "receive_default_other"),
+]
+
+PURCHASE_RECEIVE_DEPARTMENT_CHOICES = [
+    (key, label) for key, label, _ in PURCHASE_RECEIVE_DEPARTMENT_CONFIG
+]
 
 
 def load_item_choices():
@@ -847,21 +862,15 @@ class InvoiceItemReceiveForm(FlaskForm):
 
 class ReceiveInvoiceForm(FlaskForm):
     invoice_number = StringField("Invoice Number", validators=[Optional()])
-    received_date = DateField("Received Date", validators=[DataRequired()])
+    received_date = DateField(
+        "Received Date", validators=[DataRequired()], default=date.today
+    )
     location_id = SelectField(
-        "Location", coerce=int, validators=[DataRequired()]
+        "Location", coerce=int, validators=[DataRequired()] 
     )
     department = SelectField(
         "Department",
-        choices=[
-            ("", "—"),
-            ("Kitchen", "Kitchen"),
-            ("Concessions", "Concessions"),
-            ("Banquets", "Banquets"),
-            ("Beverages", "Beverages"),
-            ("Office", "Office"),
-            ("Other", "Other"),
-        ],
+        choices=[("", "—")] + PURCHASE_RECEIVE_DEPARTMENT_CHOICES,
         validators=[Optional()],
     )
     gst = DecimalField("GST Amount", validators=[Optional()], default=0)
@@ -1037,9 +1046,33 @@ class SettingsForm(FlaskForm):
     convert_gram = SelectField("Gram")
     convert_each = SelectField("Each")
     convert_millilitre = SelectField("Millilitre")
+    receive_default_kitchen = SelectField(
+        "Kitchen Default Location", coerce=int, validate_choice=False
+    )
+    receive_default_concessions = SelectField(
+        "Concessions Default Location", coerce=int, validate_choice=False
+    )
+    receive_default_banquets = SelectField(
+        "Banquets Default Location", coerce=int, validate_choice=False
+    )
+    receive_default_beverages = SelectField(
+        "Beverages Default Location", coerce=int, validate_choice=False
+    )
+    receive_default_office = SelectField(
+        "Office Default Location", coerce=int, validate_choice=False
+    )
+    receive_default_other = SelectField(
+        "Other Default Location", coerce=int, validate_choice=False
+    )
     submit = SubmitField("Update")
 
-    def __init__(self, *args, base_unit_mapping=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        base_unit_mapping=None,
+        receive_location_defaults=None,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.default_timezone.choices = [
             (tz, tz) for tz in get_timezone_choices()
@@ -1054,10 +1087,29 @@ class SettingsForm(FlaskForm):
             if not self.is_submitted():
                 field.data = mapping.get(unit, unit)
 
+        location_choices = [
+            (0, "No default")
+        ] + [
+            (loc.id, loc.name)
+            for loc in Location.query.filter_by(archived=False)
+            .order_by(Location.name)
+            .all()
+        ]
+        defaults = receive_location_defaults or {}
+        for department, _, field_name in PURCHASE_RECEIVE_DEPARTMENT_CONFIG:
+            field = getattr(self, field_name)
+            field.choices = location_choices
+            if not self.is_submitted():
+                field.data = defaults.get(department, 0)
+
     def iter_base_unit_conversions(self):
         for unit in BASE_UNITS:
             field = getattr(self, f"convert_{unit}")
             yield unit, get_unit_label(unit), field
+
+    def iter_receive_location_defaults(self):
+        for _, label, field_name in PURCHASE_RECEIVE_DEPARTMENT_CONFIG:
+            yield label, getattr(self, field_name)
 
 
 class TimezoneForm(FlaskForm):

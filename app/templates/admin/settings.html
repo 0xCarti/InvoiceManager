@@ -32,6 +32,21 @@
             {{ form.max_backups(class='form-control') }}
         </div>
         <div class="mt-4">
+            <h3>Purchase Receiving Defaults</h3>
+            <p class="text-muted">Select default locations for each department.</p>
+            <div class="row g-3">
+                {% for label, field in form.iter_receive_location_defaults() %}
+                <div class="col-md-6">
+                    <label class="form-label">{{ label }}</label>
+                    {{ field(class='form-select') }}
+                    {% if field.errors %}
+                        <div class="text-danger small">{{ field.errors[0] }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="mt-4">
             <h3>Reporting Units</h3>
             <p class="text-muted">Choose how base units should appear in reports.</p>
             <div class="table-responsive">

@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -99,7 +100,6 @@ class User(UserMixin, db.Model):
         else:
             favs.add(endpoint)
         self.favorites = ",".join(sorted(favs))
-
 
 class Location(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -806,3 +806,48 @@ class Setting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
     value = db.Column(db.String(255))
+
+    RECEIVE_LOCATION_SETTING = "PURCHASE_RECEIVE_LOCATION_DEFAULTS"
+
+    @classmethod
+    def get_receive_location_defaults(cls) -> dict[str, int]:
+        """Return default receiving locations keyed by department."""
+
+        setting = cls.query.filter_by(name=cls.RECEIVE_LOCATION_SETTING).first()
+        if setting is None or not setting.value:
+            return {}
+        try:
+            data = json.loads(setting.value)
+        except (TypeError, ValueError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        defaults: dict[str, int] = {}
+        for department, location_id in data.items():
+            try:
+                cast_location_id = int(location_id)
+            except (TypeError, ValueError):
+                continue
+            if cast_location_id:
+                defaults[str(department)] = cast_location_id
+        return defaults
+
+    @classmethod
+    def set_receive_location_defaults(cls, defaults: dict[str, int]):
+        """Persist default receiving locations for departments."""
+
+        cleaned = {}
+        for department, location_id in defaults.items():
+            try:
+                cast_location_id = int(location_id)
+            except (TypeError, ValueError):
+                continue
+            if cast_location_id:
+                cleaned[str(department)] = cast_location_id
+
+        setting = cls.query.filter_by(name=cls.RECEIVE_LOCATION_SETTING).first()
+        if setting is None:
+            setting = cls(name=cls.RECEIVE_LOCATION_SETTING)
+            db.session.add(setting)
+        setting.value = json.dumps(cleaned)
+        return setting

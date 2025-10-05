@@ -39,6 +39,7 @@ from app.forms import (
     TimezoneForm,
     UserForm,
     MAX_BACKUP_SIZE,
+    PURCHASE_RECEIVE_DEPARTMENT_CONFIG,
 )
 from app.models import (
     ActivityLog,
@@ -753,6 +754,7 @@ def settings():
     db.session.commit()
 
     conversion_mapping = parse_conversion_setting(conversions_setting.value)
+    receive_defaults = Setting.get_receive_location_defaults()
 
     form = SettingsForm(
         gst_number=gst_setting.value,
@@ -762,6 +764,7 @@ def settings():
         auto_backup_interval_unit=interval_unit_setting.value,
         max_backups=int(max_backups_setting.value),
         base_unit_mapping=conversion_mapping,
+        receive_location_defaults=receive_defaults,
     )
     if form.validate_on_submit():
         conversion_updates = {}
@@ -780,6 +783,12 @@ def settings():
         if has_conversion_error:
             return render_template("admin/settings.html", form=form)
 
+        receive_location_updates = {}
+        for department, _, field_name in PURCHASE_RECEIVE_DEPARTMENT_CONFIG:
+            field = getattr(form, field_name)
+            if field.data:
+                receive_location_updates[department] = field.data
+
         gst_setting.value = form.gst_number.data or ""
         tz_setting.value = form.default_timezone.data or "UTC"
         auto_setting.value = "1" if form.auto_backup_enabled.data else "0"
@@ -791,6 +800,7 @@ def settings():
         conversions_setting.value = serialize_conversion_setting(
             conversion_updates
         )
+        Setting.set_receive_location_defaults(receive_location_updates)
         db.session.commit()
         import app
 
