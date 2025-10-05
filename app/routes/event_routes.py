@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import math
 import os
 import re
 from collections import defaultdict
@@ -656,6 +657,10 @@ def upload_terminal_sales(event_id):
     resolution_errors: list[str] = []
     product_resolution_required = False
     product_choices: list[Product] = []
+    price_discrepancies: dict[str, list[dict]] = {}
+    menu_mismatches: dict[str, list[dict]] = {}
+    warnings_required = False
+    warnings_acknowledged = False
 
     def _normalize_product_name(value: str) -> str:
         if not value:
@@ -664,20 +669,63 @@ def upload_terminal_sales(event_id):
         value = re.sub(r"[^a-z0-9]+", " ", value)
         return re.sub(r"\s+", " ", value).strip()
 
+    def _to_float(value):
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            cleaned = str(value).strip().replace("$", "")
+            if not cleaned:
+                return None
+            return float(cleaned)
+        except (TypeError, ValueError):
+            return None
+
     def _group_rows(row_data):
         grouped: dict[str, dict] = {}
         for entry in row_data:
             loc = entry["location"]
             prod = entry["product"]
-            qty = entry["quantity"]
+            qty = float(entry.get("quantity", 0.0))
+            price = entry.get("price")
+            amount = entry.get("amount")
             loc_entry = grouped.setdefault(
-                loc, {"products": {}, "total": 0.0}
+                loc,
+                {
+                    "products": {},
+                    "total": 0.0,
+                    "total_amount": 0.0,
+                },
             )
-            loc_entry["products"][prod] = (
-                loc_entry["products"].get(prod, 0.0) + qty
+            product_entry = loc_entry["products"].setdefault(
+                prod,
+                {
+                    "quantity": 0.0,
+                    "prices": [],
+                    "amount": 0.0,
+                },
             )
+            product_entry["quantity"] += qty
+            if price is not None:
+                product_entry["prices"].append(price)
+            if amount is not None:
+                product_entry["amount"] += amount
+                loc_entry["total_amount"] += amount
             loc_entry["total"] += qty
+
+        for loc_entry in grouped.values():
+            for product_entry in loc_entry["products"].values():
+                if product_entry["prices"]:
+                    unique_prices = sorted({round(p, 4) for p in product_entry["prices"]})
+                    product_entry["prices"] = unique_prices
         return grouped
+
+    def _prices_match(file_price: float, app_price: float) -> bool:
+        try:
+            return math.isclose(float(file_price), float(app_price), abs_tol=0.01)
+        except (TypeError, ValueError):
+            return False
 
     if request.method == "POST" and request.form.get("step") == "map":
         payload = request.form.get("payload")
@@ -829,11 +877,17 @@ def upload_terminal_sales(event_id):
                     product_choices=product_choices,
                     resolution_errors=resolution_errors,
                     product_resolution_required=True,
+                    price_discrepancies=price_discrepancies,
+                    menu_mismatches=menu_mismatches,
+                    warnings_required=warnings_required,
+                    warnings_acknowledged=warnings_acknowledged,
                 )
 
             product_resolution_required = False
 
         updated_locations = []
+        warnings_acknowledged = request.form.get("acknowledge_warnings") == "1"
+        location_allowed_products: dict[int, set[int]] = {}
         for el in open_locations:
             selected_loc = request.form.get(f"mapping-{el.id}")
             if not selected_loc:
@@ -842,7 +896,7 @@ def upload_terminal_sales(event_id):
             if not loc_sales:
                 continue
             location_updated = False
-            for prod_name, qty in loc_sales["products"].items():
+            for prod_name, product_data in loc_sales["products"].items():
                 product = product_lookup.get(prod_name)
                 if not product:
                     continue
@@ -850,21 +904,84 @@ def upload_terminal_sales(event_id):
                     event_location_id=el.id,
                     product_id=product.id,
                 ).first()
+                quantity_value = product_data.get("quantity", 0.0)
                 if sale:
-                    sale.quantity = qty
+                    sale.quantity = quantity_value
                     location_updated = True
                 else:
                     db.session.add(
                         TerminalSale(
                             event_location_id=el.id,
                             product_id=product.id,
-                            quantity=qty,
+                            quantity=quantity_value,
                             sold_at=datetime.utcnow(),
                         )
                     )
                     location_updated = True
+
+                file_prices = product_data.get("prices") or []
+                if file_prices and not all(
+                    _prices_match(price, product.price) for price in file_prices
+                ):
+                    price_discrepancies.setdefault(el.location.name, []).append(
+                        {
+                            "product": product.name,
+                            "file_prices": file_prices,
+                            "app_price": product.price,
+                            "sales_location": selected_loc,
+                        }
+                    )
+
+                allowed_products = location_allowed_products.get(el.id)
+                if allowed_products is None:
+                    allowed_products = {
+                        p.id for p in el.location.products
+                    }
+                    if el.location.current_menu is not None:
+                        allowed_products.update(
+                            p.id for p in el.location.current_menu.products
+                        )
+                    location_allowed_products[el.id] = allowed_products
+                if allowed_products and product.id not in allowed_products:
+                    menu_mismatches.setdefault(el.location.name, []).append(
+                        {
+                            "product": product.name,
+                            "sales_location": selected_loc,
+                            "menu_name": (
+                                el.location.current_menu.name
+                                if el.location.current_menu
+                                else None
+                            ),
+                        }
+                    )
             if location_updated:
                 updated_locations.append(el.location.name)
+
+        if (price_discrepancies or menu_mismatches) and not warnings_acknowledged:
+            warnings_required = True
+            default_mapping = {
+                el.id: request.form.get(f"mapping-{el.id}", "")
+                for el in open_locations
+            }
+            return render_template(
+                "events/upload_terminal_sales.html",
+                form=form,
+                event=ev,
+                open_locations=open_locations,
+                mapping_payload=payload,
+                mapping_filename=mapping_filename,
+                sales_summary=sales_summary,
+                sales_location_names=list(sales_summary.keys()),
+                default_mapping=default_mapping,
+                unresolved_products=[],
+                product_choices=product_choices,
+                resolution_errors=resolution_errors,
+                product_resolution_required=False,
+                price_discrepancies=price_discrepancies,
+                menu_mismatches=menu_mismatches,
+                warnings_required=warnings_required,
+                warnings_acknowledged=False,
+            )
 
         if updated_locations:
             db.session.commit()
@@ -891,14 +1008,34 @@ def upload_terminal_sales(event_id):
         filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
         file.save(filepath)
 
-        rows = []
+        rows: list[dict] = []
 
-        def add_row(loc, name, qty):
-            try:
-                qty = float(qty)
-            except (TypeError, ValueError):
+        def add_row(loc, name, qty, price=None, amount=None):
+            if not loc or not isinstance(loc, str):
                 return
-            rows.append((loc, name.strip(), qty))
+            loc = loc.strip()
+            if not loc:
+                return
+            if not name or not isinstance(name, str):
+                return
+            product_name = name.strip()
+            if not product_name:
+                return
+            quantity_value = _to_float(qty)
+            if quantity_value is None:
+                return
+            entry = {
+                "location": loc,
+                "product": product_name,
+                "quantity": quantity_value,
+            }
+            price_value = _to_float(price)
+            if price_value is not None:
+                entry["price"] = price_value
+            amount_value = _to_float(amount)
+            if amount_value is not None:
+                entry["amount"] = amount_value
+            rows.append(entry)
 
         try:
             if ext in {".xls", ".xlsx"}:
@@ -991,7 +1128,9 @@ def upload_terminal_sales(event_id):
                         continue
 
                     quantity = row[4] if len(row) > 4 else None
-                    add_row(current_loc, second, quantity)
+                    price = row[2] if len(row) > 2 else None
+                    amount = row[5] if len(row) > 5 else None
+                    add_row(current_loc, second, quantity, price, amount)
             elif ext == ".pdf":
                 import pdfplumber
 
@@ -1032,10 +1171,7 @@ def upload_terminal_sales(event_id):
                 "warning",
             )
         else:
-            rows_data = [
-                {"location": loc, "product": product, "quantity": qty}
-                for loc, product, qty in rows
-            ]
+            rows_data = rows
 
             sales_summary = _group_rows(rows_data)
             sales_location_names = list(sales_summary.keys())
@@ -1064,6 +1200,10 @@ def upload_terminal_sales(event_id):
         product_choices=product_choices,
         resolution_errors=resolution_errors,
         product_resolution_required=product_resolution_required,
+        price_discrepancies=price_discrepancies,
+        menu_mismatches=menu_mismatches,
+        warnings_required=warnings_required,
+        warnings_acknowledged=warnings_acknowledged,
     )
 
 
