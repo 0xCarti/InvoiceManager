@@ -110,9 +110,13 @@ def create_admin_user():
         print("Admin user created.")
 
 
-def create_app(args: list):
+def create_app(args=None):
     """Application factory used by Flask."""
     global socketio, GST, DEFAULT_TIMEZONE, BASE_UNIT_CONVERSIONS
+    if args is None:
+        args = sys.argv[1:]
+    else:
+        args = list(args)
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
     default_secure_cookies = "--demo" not in args

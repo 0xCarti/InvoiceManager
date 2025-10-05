@@ -1,4 +1,4 @@
-"""remove user-specific receive location defaults column"
+"""remove user-specific receive location defaults column"""
 
 import sqlalchemy as sa
 from alembic import op
