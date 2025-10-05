@@ -87,9 +87,6 @@ class User(UserMixin, db.Model):
     items_per_page = db.Column(
         db.Integer, nullable=False, default=20, server_default="20"
     )
-    receive_location_defaults = db.Column(
-        db.Text, nullable=False, default="", server_default=""
-    )
 
     def get_favorites(self):
         """Return the user's favourite endpoint names as a list."""
@@ -103,37 +100,6 @@ class User(UserMixin, db.Model):
         else:
             favs.add(endpoint)
         self.favorites = ",".join(sorted(favs))
-
-    def get_receive_location_defaults(self) -> dict[str, int]:
-        """Return saved default receive locations keyed by department."""
-        raw_value = self.receive_location_defaults or ""
-        if not raw_value:
-            return {}
-        try:
-            data = json.loads(raw_value)
-        except (TypeError, ValueError):
-            return {}
-        if not isinstance(data, dict):
-            return {}
-        defaults: dict[str, int] = {}
-        for department, location_id in data.items():
-            try:
-                defaults[str(department)] = int(location_id)
-            except (TypeError, ValueError):
-                continue
-        return defaults
-
-    def set_receive_location_default(self, department: str, location_id: int | None):
-        """Persist the default receiving location for a department."""
-        defaults = self.get_receive_location_defaults()
-        if not department:
-            return
-        if location_id is None:
-            defaults.pop(department, None)
-        else:
-            defaults[department] = int(location_id)
-        self.receive_location_defaults = json.dumps(defaults)
-
 
 class Location(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -840,3 +806,48 @@ class Setting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
     value = db.Column(db.String(255))
+
+    RECEIVE_LOCATION_SETTING = "PURCHASE_RECEIVE_LOCATION_DEFAULTS"
+
+    @classmethod
+    def get_receive_location_defaults(cls) -> dict[str, int]:
+        """Return default receiving locations keyed by department."""
+
+        setting = cls.query.filter_by(name=cls.RECEIVE_LOCATION_SETTING).first()
+        if setting is None or not setting.value:
+            return {}
+        try:
+            data = json.loads(setting.value)
+        except (TypeError, ValueError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        defaults: dict[str, int] = {}
+        for department, location_id in data.items():
+            try:
+                cast_location_id = int(location_id)
+            except (TypeError, ValueError):
+                continue
+            if cast_location_id:
+                defaults[str(department)] = cast_location_id
+        return defaults
+
+    @classmethod
+    def set_receive_location_defaults(cls, defaults: dict[str, int]):
+        """Persist default receiving locations for departments."""
+
+        cleaned = {}
+        for department, location_id in defaults.items():
+            try:
+                cast_location_id = int(location_id)
+            except (TypeError, ValueError):
+                continue
+            if cast_location_id:
+                cleaned[str(department)] = cast_location_id
+
+        setting = cls.query.filter_by(name=cls.RECEIVE_LOCATION_SETTING).first()
+        if setting is None:
+            setting = cls(name=cls.RECEIVE_LOCATION_SETTING)
+            db.session.add(setting)
+        setting.value = json.dumps(cleaned)
+        return setting

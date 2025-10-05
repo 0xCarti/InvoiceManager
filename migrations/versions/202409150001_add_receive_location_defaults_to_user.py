@@ -1,4 +1,4 @@
-"""add receive location defaults to user"""
+"""remove user-specific receive location defaults column"
 
 import sqlalchemy as sa
 from alembic import op
@@ -30,6 +30,18 @@ def upgrade():
     if not bind or not _has_table("user", bind):
         return
 
+    if not _has_column("user", "receive_location_defaults", bind):
+        return
+
+    with op.batch_alter_table("user", recreate="always") as batch_op:
+        batch_op.drop_column("receive_location_defaults")
+
+
+def downgrade():
+    bind = op.get_bind()
+    if not bind or not _has_table("user", bind):
+        return
+
     if _has_column("user", "receive_location_defaults", bind):
         return
 
@@ -47,15 +59,3 @@ def upgrade():
         batch_op.alter_column(
             "receive_location_defaults", server_default=None
         )
-
-
-def downgrade():
-    bind = op.get_bind()
-    if not bind or not _has_table("user", bind):
-        return
-
-    if not _has_column("user", "receive_location_defaults", bind):
-        return
-
-    with op.batch_alter_table("user", recreate="always") as batch_op:
-        batch_op.drop_column("receive_location_defaults")

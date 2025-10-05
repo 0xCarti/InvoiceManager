@@ -14,6 +14,7 @@ from app.models import (
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseOrderItemArchive,
+    Setting,
     User,
     Vendor,
 )
@@ -136,6 +137,43 @@ def test_purchase_and_receive(client, app):
             ).count()
             == 1
         )
+
+
+def test_receive_form_includes_department_defaults(client, app):
+    email, vendor_id, item_id, location_id, unit_id = setup_purchase(app)
+    with app.app_context():
+        secondary = Location(name="Secondary")
+        db.session.add(secondary)
+        db.session.commit()
+        default_location_id = secondary.id
+        Setting.set_receive_location_defaults({"Kitchen": default_location_id})
+        db.session.commit()
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/purchase_orders/create",
+            data={
+                "vendor": vendor_id,
+                "order_date": "2023-01-01",
+                "expected_date": "2023-01-05",
+                "delivery_charge": 0,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 1,
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        po_id = PurchaseOrder.query.first().id
+
+    with client:
+        login(client, email, "pass")
+        resp = client.get(f"/purchase_orders/{po_id}/receive")
+        assert resp.status_code == 200
+        page = resp.get_data(as_text=True)
+        assert f'"Kitchen": {default_location_id}' in page
 
 
 def test_item_cost_visible_on_items_page(client, app):
