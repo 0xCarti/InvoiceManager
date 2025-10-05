@@ -341,6 +341,11 @@ class Product(db.Model):
     terminal_sales = relationship(
         "TerminalSale", back_populates="product", cascade="all, delete-orphan"
     )
+    terminal_sale_aliases = relationship(
+        "TerminalSaleProductAlias",
+        back_populates="product",
+        cascade="all, delete-orphan",
+    )
     menus = relationship(
         "Menu", secondary=menu_products, back_populates="products"
     )
@@ -793,6 +798,22 @@ class TerminalSale(db.Model):
         "EventLocation", back_populates="terminal_sales"
     )
     product = relationship("Product", back_populates="terminal_sales")
+
+
+class TerminalSaleProductAlias(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    source_name = db.Column(db.String(255), nullable=False)
+    normalized_name = db.Column(
+        db.String(255), nullable=False, unique=True
+    )
+    product_id = db.Column(
+        db.Integer, db.ForeignKey("product.id"), nullable=False
+    )
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow
+    )
+
+    product = relationship("Product", back_populates="terminal_sale_aliases")
 
 
 class EventStandSheetItem(db.Model):

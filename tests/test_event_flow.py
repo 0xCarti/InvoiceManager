@@ -24,6 +24,7 @@ from app.models import (
     Product,
     ProductRecipeItem,
     TerminalSale,
+    TerminalSaleProductAlias,
     User,
 )
 from app.utils.units import DEFAULT_BASE_UNIT_CONVERSIONS, convert_quantity
@@ -628,7 +629,15 @@ def test_upload_sales_pdf(client, app):
         assert sale_w and sale_w.quantity == 2 and sale_w.sold_at
 
 
-def test_upload_sales_fuzzy_product_match(client, app):
+def test_upload_sales_manual_product_match(client, app):
+    payload_rows = [
+        {
+            "location": "Main Bar",
+            "product": "LQR - Seagrams VO Rye",
+            "quantity": 9,
+        }
+    ]
+
     with app.app_context():
         user = User(
             email="fuzzy@example.com",
@@ -661,22 +670,29 @@ def test_upload_sales_fuzzy_product_match(client, app):
             data={
                 "step": "map",
                 "payload": json.dumps(
-                    {
-                        "rows": [
-                            {
-                                "location": "Main Bar",
-                                "product": "LQR - Seagrams VO Rye",
-                                "quantity": 9,
-                            }
-                        ],
-                        "filename": "terminal_sales.xlsx",
-                    }
+                    {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
                 ),
                 f"mapping-{event_location_id}": "Main Bar",
             },
             follow_redirects=True,
         )
         assert response.status_code == 200
+        assert b"Match Unknown Products" in response.data
+
+        resolution_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "product-resolution-step": "1",
+                "payload": json.dumps(
+                    {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
+                ),
+                f"mapping-{event_location_id}": "Main Bar",
+                "product-match-0": str(product_id),
+            },
+            follow_redirects=True,
+        )
+        assert resolution_response.status_code == 200
 
     with app.app_context():
         sale = TerminalSale.query.filter_by(
@@ -685,6 +701,46 @@ def test_upload_sales_fuzzy_product_match(client, app):
         assert sale is not None
         assert sale.product_id == product_id
         assert sale.quantity == 9
+
+        alias = TerminalSaleProductAlias.query.filter_by(
+            normalized_name="lqr seagrams vo rye"
+        ).first()
+        assert alias is not None
+        assert alias.product_id == product_id
+
+    payload_rows_repeat = [
+        {
+            "location": "Main Bar",
+            "product": "LQR - Seagrams VO Rye",
+            "quantity": 4,
+        }
+    ]
+
+    with client:
+        login(client, user_email, "pass")
+        repeat_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "payload": json.dumps(
+                    {
+                        "rows": payload_rows_repeat,
+                        "filename": "terminal_sales.xlsx",
+                    }
+                ),
+                f"mapping-{event_location_id}": "Main Bar",
+            },
+            follow_redirects=True,
+        )
+        assert repeat_response.status_code == 200
+
+    with app.app_context():
+        sale = TerminalSale.query.filter_by(
+            event_location_id=event_location_id
+        ).first()
+        assert sale is not None
+        assert sale.product_id == product_id
+        assert sale.quantity == 4
 
 
 def test_terminal_sale_last_sale(app):
