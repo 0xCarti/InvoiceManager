@@ -81,6 +81,10 @@
             {{ form.department.label(class="form-label") }}
             {{ form.department(class="form-select narrow-field") }}
         </div>
+        <div class="form-check mb-3">
+            {{ form.remember_department_location(class="form-check-input") }}
+            {{ form.remember_department_location.label(class="form-check-label") }}
+        </div>
         <div class="form-group">
             {{ form.pst.label(class="form-label") }}
             {{ form.pst(class="form-control narrow-field") }}
@@ -130,10 +134,42 @@
     </form>
 </div>
 <script nonce="{{ csp_nonce }}">
+    const departmentDefaults = {{ department_defaults|tojson }};
     const itemOptions = `<option value="">Select Item</option>{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
     const glCodeOptions = `{% for val, label in gl_code_choices %}<option value="{{ val }}">{{ label|e }}</option>{% endfor %}`;
     const locationOptions = `{% for val, label in form.items[0].location_id.choices %}<option value="{{ val }}">{{ label|e }}</option>{% endfor %}`;
     let itemIndex = {{ form.items|length }};
+    const departmentField = document.getElementById('department');
+    const invoiceLocationField = document.getElementById('location_id');
+
+    function applyDepartmentDefault(department, { skipIfSet = false } = {}) {
+        if (!invoiceLocationField) {
+            return;
+        }
+        const defaultLocation = departmentDefaults && departmentDefaults[department];
+        if (!defaultLocation) {
+            return;
+        }
+        if (skipIfSet && invoiceLocationField.value) {
+            return;
+        }
+        const targetValue = String(defaultLocation);
+        const hasOption = Array.from(invoiceLocationField.options).some(
+            (option) => option.value === targetValue
+        );
+        if (!hasOption) {
+            return;
+        }
+        invoiceLocationField.value = targetValue;
+        invoiceLocationField.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    if (departmentField) {
+        applyDepartmentDefault(departmentField.value, { skipIfSet: true });
+        departmentField.addEventListener('change', () => {
+            applyDepartmentDefault(departmentField.value);
+        });
+    }
 
     function createRow(index) {
         const row = document.createElement('div');

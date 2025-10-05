@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -86,6 +87,9 @@ class User(UserMixin, db.Model):
     items_per_page = db.Column(
         db.Integer, nullable=False, default=20, server_default="20"
     )
+    receive_location_defaults = db.Column(
+        db.Text, nullable=False, default="", server_default=""
+    )
 
     def get_favorites(self):
         """Return the user's favourite endpoint names as a list."""
@@ -99,6 +103,36 @@ class User(UserMixin, db.Model):
         else:
             favs.add(endpoint)
         self.favorites = ",".join(sorted(favs))
+
+    def get_receive_location_defaults(self) -> dict[str, int]:
+        """Return saved default receive locations keyed by department."""
+        raw_value = self.receive_location_defaults or ""
+        if not raw_value:
+            return {}
+        try:
+            data = json.loads(raw_value)
+        except (TypeError, ValueError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        defaults: dict[str, int] = {}
+        for department, location_id in data.items():
+            try:
+                defaults[str(department)] = int(location_id)
+            except (TypeError, ValueError):
+                continue
+        return defaults
+
+    def set_receive_location_default(self, department: str, location_id: int | None):
+        """Persist the default receiving location for a department."""
+        defaults = self.get_receive_location_defaults()
+        if not department:
+            return
+        if location_id is None:
+            defaults.pop(department, None)
+        else:
+            defaults[department] = int(location_id)
+        self.receive_location_defaults = json.dumps(defaults)
 
 
 class Location(db.Model):

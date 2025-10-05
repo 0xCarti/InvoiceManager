@@ -597,8 +597,15 @@ def receive_invoice(po_id):
         abort(404)
     form = ReceiveInvoiceForm()
     gl_code_choices = load_purchase_gl_code_choices()
+    department_defaults = current_user.get_receive_location_defaults()
     if request.method == "GET":
         form.delivery_charge.data = po.delivery_charge
+        if not form.received_date.data:
+            form.received_date.data = datetime.date.today()
+        selected_department = form.department.data or ""
+        default_location_id = department_defaults.get(selected_department)
+        if default_location_id:
+            form.location_id.data = default_location_id
         form.items.min_entries = max(1, len(po.items))
         while len(form.items) < len(po.items):
             form.items.append_entry()
@@ -627,6 +634,17 @@ def receive_invoice(po_id):
             form.items[i].gl_code.data = 0
             form.items[i].location_id.data = 0
     if form.validate_on_submit():
+        if (
+            form.remember_department_location.data
+            and form.department.data
+            and form.location_id.data
+        ):
+            current_user.set_receive_location_default(
+                form.department.data, form.location_id.data
+            )
+            db.session.add(current_user)
+            department_defaults = current_user.get_receive_location_defaults()
+        location_obj = db.session.get(Location, form.location_id.data)
         if not PurchaseOrderItemArchive.query.filter_by(
             purchase_order_id=po.id
         ).first():
@@ -646,7 +664,7 @@ def receive_invoice(po_id):
             user_id=current_user.id,
             location_id=form.location_id.data,
             vendor_name=po.vendor_name,
-            location_name=db.session.get(Location, form.location_id.data).name,
+            location_name=location_obj.name if location_obj else "",
             received_date=form.received_date.data,
             invoice_number=form.invoice_number.data,
             department=form.department.data or None,
@@ -795,6 +813,7 @@ def receive_invoice(po_id):
         form=form,
         po=po,
         gl_code_choices=gl_code_choices,
+        department_defaults=department_defaults,
     )
 
 

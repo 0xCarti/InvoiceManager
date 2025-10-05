@@ -1,4 +1,5 @@
 import os
+from datetime import date
 from functools import lru_cache
 from zoneinfo import available_timezones
 
@@ -847,9 +848,11 @@ class InvoiceItemReceiveForm(FlaskForm):
 
 class ReceiveInvoiceForm(FlaskForm):
     invoice_number = StringField("Invoice Number", validators=[Optional()])
-    received_date = DateField("Received Date", validators=[DataRequired()])
+    received_date = DateField(
+        "Received Date", validators=[DataRequired()], default=date.today
+    )
     location_id = SelectField(
-        "Location", coerce=int, validators=[DataRequired()]
+        "Location", coerce=int, validators=[DataRequired()] 
     )
     department = SelectField(
         "Department",
@@ -870,6 +873,9 @@ class ReceiveInvoiceForm(FlaskForm):
         "Delivery Charge", validators=[Optional()], default=0
     )
     items = FieldList(FormField(InvoiceItemReceiveForm), min_entries=1)
+    remember_department_location = BooleanField(
+        "Set current location as default for this department"
+    )
     submit = SubmitField("Submit")
 
     def __init__(self, *args, **kwargs):
