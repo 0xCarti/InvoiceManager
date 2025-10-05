@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from datetime import datetime, timedelta, date
@@ -625,6 +626,65 @@ def test_upload_sales_pdf(client, app):
         ).first()
         assert sale_e and sale_e.quantity == 7 and sale_e.sold_at
         assert sale_w and sale_w.quantity == 2 and sale_w.sold_at
+
+
+def test_upload_sales_fuzzy_product_match(client, app):
+    with app.app_context():
+        user = User(
+            email="fuzzy@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        location = Location(name="Main Bar")
+        product = Product(name="LQR - Seagrams Rye", price=1.0, cost=0.5)
+        event = Event(
+            name="Fuzzy Event",
+            start_date=date(2025, 7, 4),
+            end_date=date(2025, 7, 5),
+            event_type="inventory",
+        )
+        db.session.add_all([user, location, product, event])
+        location.products.append(product)
+        event_location = EventLocation(event=event, location=location)
+        db.session.add(event_location)
+        db.session.commit()
+
+        event_id = event.id
+        event_location_id = event_location.id
+        product_id = product.id
+        user_email = user.email
+
+    with client:
+        login(client, user_email, "pass")
+        response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "payload": json.dumps(
+                    {
+                        "rows": [
+                            {
+                                "location": "Main Bar",
+                                "product": "LQR - Seagrams VO Rye",
+                                "quantity": 9,
+                            }
+                        ],
+                        "filename": "terminal_sales.xlsx",
+                    }
+                ),
+                f"mapping-{event_location_id}": "Main Bar",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+    with app.app_context():
+        sale = TerminalSale.query.filter_by(
+            event_location_id=event_location_id
+        ).first()
+        assert sale is not None
+        assert sale.product_id == product_id
+        assert sale.quantity == 9
 
 
 def test_terminal_sale_last_sale(app):

@@ -2,8 +2,10 @@ import csv
 import io
 import json
 import os
+import re
 from collections import defaultdict
 from datetime import datetime
+from difflib import SequenceMatcher
 from types import SimpleNamespace
 
 from flask import (
@@ -696,6 +698,54 @@ def upload_terminal_sales(event_id):
                     Product.name.in_(product_names)
                 ).all()
             }
+            unmatched_names = [
+                name for name in product_names if name not in product_lookup
+            ]
+
+            if unmatched_names:
+
+                def _normalize_product_name(value: str) -> str:
+                    value = value.strip().lower()
+                    value = re.sub(r"[^a-z0-9]+", " ", value)
+                    return re.sub(r"\s+", " ", value).strip()
+
+                candidate_products = {}
+                for el in open_locations:
+                    for product in el.location.products:
+                        candidate_products[product.id] = product
+                if not candidate_products:
+                    candidate_products = {
+                        product.id: product for product in Product.query.all()
+                    }
+
+                candidate_entries = []
+                for product in candidate_products.values():
+                    normalized_name = _normalize_product_name(product.name)
+                    if normalized_name:
+                        candidate_entries.append((normalized_name, product))
+
+                for original_name in unmatched_names:
+                    normalized = _normalize_product_name(original_name)
+                    if not normalized or not candidate_entries:
+                        continue
+
+                    best_product = None
+                    best_score = 0.0
+                    for candidate_normalized, candidate_product in candidate_entries:
+                        if normalized == candidate_normalized:
+                            best_product = candidate_product
+                            best_score = 1.0
+                            break
+
+                        score = SequenceMatcher(
+                            None, normalized, candidate_normalized
+                        ).ratio()
+                        if score > best_score:
+                            best_product = candidate_product
+                            best_score = score
+
+                    if best_product and best_score >= 0.8:
+                        product_lookup[original_name] = best_product
         else:
             product_lookup = {}
 
