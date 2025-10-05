@@ -42,6 +42,7 @@
     </div>
 
     <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <input type="hidden" name="step" value="map">
         <input type="hidden" name="payload" value="{{ mapping_payload }}">
         {% if open_locations %}
