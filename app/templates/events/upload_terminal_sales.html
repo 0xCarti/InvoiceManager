@@ -97,11 +97,8 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="step" value="resolve">
             <input type="hidden" name="payload" value="{{ mapping_payload }}">
-            <input type="hidden" name="issue_state" value='{{ issue_state }}'>
-            <input type="hidden" name="pending_sales" value='{{ pending_sales }}'>
-            <input type="hidden" name="issue_index" value="{{ issue_index }}">
+            <input type="hidden" name="state_token" value="{{ state_token }}">
             <input type="hidden" name="mapping_filename" value="{{ mapping_filename }}">
-            <input type="hidden" name="selected_locations" value='{{ selected_locations|tojson }}'>
             {% if current_issue.price_issues %}
                 <div class="card mb-3">
                     <div class="card-header">Price Differences</div>

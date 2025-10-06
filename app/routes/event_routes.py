@@ -50,6 +50,7 @@ from app.utils.units import (
     convert_quantity_for_reporting,
     get_unit_label,
 )
+from itsdangerous import BadSignature, URLSafeSerializer
 
 _STAND_SHEET_FIELDS = (
     "opening_count",
@@ -148,6 +149,13 @@ def _convert_report_value_to_base(value, base_unit, report_unit):
 
 
 event = Blueprint("event", __name__)
+
+
+def _terminal_sales_serializer() -> URLSafeSerializer:
+    secret_key = current_app.secret_key or current_app.config.get("SECRET_KEY")
+    if not secret_key:
+        raise RuntimeError("Application secret key is not configured.")
+    return URLSafeSerializer(secret_key, salt="terminal-sales-resolution")
 
 
 def _parse_date(value):
@@ -822,26 +830,22 @@ def upload_terminal_sales(event_id):
         step = request.form.get("step")
         if step == "resolve":
             payload = request.form.get("payload")
-            raw_issue_state = request.form.get("issue_state")
-            raw_pending_sales = request.form.get("pending_sales")
-            raw_selected_locations = request.form.get("selected_locations") or "[]"
+            state_token = request.form.get("state_token")
             mapping_filename = request.form.get("mapping_filename")
-            if not raw_issue_state or not raw_pending_sales:
+            if not state_token:
                 flash("Unable to continue the resolution process.", "danger")
                 return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+            serializer = _terminal_sales_serializer()
             try:
-                issue_state = json.loads(raw_issue_state)
-                pending_sales = json.loads(raw_pending_sales)
-                selected_locations = json.loads(raw_selected_locations)
-            except (TypeError, ValueError):
-                flash("The resolution data could not be processed.", "danger")
+                state_data = serializer.loads(state_token)
+            except BadSignature:
+                flash("The resolution data could not be verified.", "danger")
                 return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
 
-            queue: list[dict] = issue_state.get("queue", [])
-            try:
-                issue_index = int(request.form.get("issue_index", 0))
-            except (TypeError, ValueError):
-                issue_index = 0
+            queue: list[dict] = state_data.get("queue") or []
+            pending_sales: list[dict] = state_data.get("pending_sales") or []
+            selected_locations: list[str] = state_data.get("selected_locations") or []
+            issue_index = state_data.get("issue_index", 0)
             action = request.form.get("action", "")
 
             if issue_index < 0:
@@ -911,7 +915,24 @@ def upload_terminal_sales(event_id):
                     else:
                         issue_index += 1
             elif action == "finish":
-                issue_index = len(queue)
+                unresolved_overall = []
+                for location_issue in queue:
+                    unresolved_overall.extend(
+                        issue
+                        for issue in location_issue.get("price_issues", [])
+                        if issue.get("resolution") is None
+                    )
+                    unresolved_overall.extend(
+                        issue
+                        for issue in location_issue.get("menu_issues", [])
+                        if issue.get("resolution") is None
+                    )
+                if unresolved_overall:
+                    error_messages.append(
+                        "Resolve all issues before finishing the import."
+                    )
+                else:
+                    issue_index = len(queue)
 
             if queue and issue_index < len(queue):
                 current_issue = queue[issue_index]
@@ -920,7 +941,9 @@ def upload_terminal_sales(event_id):
 
             if issue_index >= len(queue):
                 updated_locations = _apply_pending_sales(pending_sales)
-                price_updates, menu_updates = _apply_resolution_actions(issue_state)
+                price_updates, menu_updates = _apply_resolution_actions(
+                    {"queue": queue}
+                )
                 if updated_locations or price_updates or menu_updates:
                     db.session.commit()
                     log_activity(
@@ -953,6 +976,12 @@ def upload_terminal_sales(event_id):
                 for message in error_messages:
                     flash(message, "danger")
 
+            state_data["queue"] = queue
+            state_data["pending_sales"] = pending_sales
+            state_data["selected_locations"] = selected_locations
+            state_data["issue_index"] = issue_index
+            state_token = serializer.dumps(state_data)
+
             total_locations = len(queue)
             return render_template(
                 "events/upload_terminal_sales.html",
@@ -972,8 +1001,7 @@ def upload_terminal_sales(event_id):
                 menu_mismatches={},
                 warnings_required=False,
                 warnings_acknowledged=False,
-                issue_state=json.dumps(issue_state),
-                pending_sales=json.dumps(pending_sales),
+                state_token=state_token,
                 issue_index=issue_index,
                 current_issue=current_issue,
                 remaining_locations=len(queue) - issue_index - 1,
@@ -1222,7 +1250,14 @@ def upload_terminal_sales(event_id):
                     )
 
             if issue_queue:
-                issue_state = {"queue": issue_queue}
+                serializer = _terminal_sales_serializer()
+                state_data = {
+                    "queue": issue_queue,
+                    "pending_sales": pending_sales,
+                    "selected_locations": selected_locations,
+                    "issue_index": 0,
+                }
+                state_token = serializer.dumps(state_data)
                 return render_template(
                     "events/upload_terminal_sales.html",
                     form=form,
@@ -1244,8 +1279,7 @@ def upload_terminal_sales(event_id):
                     menu_mismatches={},
                     warnings_required=False,
                     warnings_acknowledged=False,
-                    issue_state=json.dumps(issue_state),
-                    pending_sales=json.dumps(pending_sales),
+                    state_token=state_token,
                     issue_index=0,
                     current_issue=issue_queue[0],
                     remaining_locations=len(issue_queue) - 1,
