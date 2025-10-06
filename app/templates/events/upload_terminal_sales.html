@@ -2,114 +2,254 @@
 {% block content %}
 <h2>Upload Terminal Sales for {{ event.name }}</h2>
 
+{% set resolving_issues = current_issue is defined %}
+{% set issue_total = issue_total if issue_total is defined else 0 %}
+
 {% if mapping_payload %}
     <div class="alert alert-info">
-        <p>
-            Review the sales locations detected in the uploaded file and link
-            them to the open event locations below. A blank selection will skip
-            updating that event location.
-        </p>
+        {% if resolving_issues %}
+            <p class="mb-0">
+                Resolve the discrepancies detected in the uploaded terminal sales
+                before importing them. Each location must be handled separately.
+            </p>
+        {% else %}
+            <p class="mb-0">
+                Review the sales locations detected in the uploaded file and link
+                them to the open event locations below. A blank selection will skip
+                updating that event location.
+            </p>
+        {% endif %}
     </div>
     {% if mapping_filename %}
         <p><strong>Source file:</strong> {{ mapping_filename }}</p>
     {% endif %}
-    <div class="table-responsive mb-4">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th scope="col">Sales Location</th>
-                    <th scope="col">Total Quantity</th>
-                    <th scope="col">Products</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for location_name in sales_location_names %}
-                    {% set data = sales_summary[location_name] %}
+    {% if sales_location_names %}
+        {% if not resolving_issues %}
+            <div class="alert alert-secondary">
+                <strong>Detected sales locations:</strong>
+                {{ sales_location_names | join(', ') }}
+            </div>
+        {% endif %}
+        <div class="table-responsive mb-4">
+            <table class="table table-striped">
+                <thead>
                     <tr>
-                        <th scope="row">{{ location_name }}</th>
-                        <td>{{ '%.2f'|format(data.total) }}</td>
-                        <td>
-                            <ul class="mb-0 ps-3">
-                                {% for product_name, qty in data.products.items() %}
-                                    <li>{{ product_name }} &mdash; {{ '%.2f'|format(qty) }}</li>
-                                {% endfor %}
-                            </ul>
-                        </td>
+                        <th scope="col">Sales Location</th>
+                        <th scope="col">Total Quantity</th>
+                        <th scope="col">Total Amount</th>
+                        <th scope="col">Products</th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    {% for location_name in sales_location_names %}
+                        {% set data = sales_summary[location_name] %}
+                        <tr>
+                            <th scope="row">{{ location_name }}</th>
+                            <td>{{ '%.2f'|format(data.total) }}</td>
+                            <td>
+                                {% if data.total_amount %}
+                                    {{ '%.2f'|format(data.total_amount) }}
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </td>
+                            <td>
+                                <ul class="mb-0 ps-3">
+                                    {% for product_name, info in data.products.items() %}
+                                        <li>
+                                            {{ product_name }} &mdash; {{ '%.2f'|format(info.quantity) }}
+                                            {% if info.prices %}
+                                                @ $
+                                                {% for price in info.prices %}
+                                                    {{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
+                                                {% endfor %}
+                                            {% endif %}
+                                            {% if info.amount %}
+                                                <span class="text-muted">(Total ${{ '%.2f'|format(info.amount) }})</span>
+                                            {% endif %}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
 
-    <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-        <input type="hidden" name="step" value="map">
-        <input type="hidden" name="payload" value="{{ mapping_payload }}">
-        {% if product_resolution_required %}
-            <input type="hidden" name="product-resolution-step" value="1">
-            <div class="alert alert-warning">
-                <p class="mb-2">
-                    We couldn't automatically match every product in the terminal
-                    sales file. Please select the matching product from the app
-                    for each unknown entry below.
-                </p>
-                {% if resolution_errors %}
-                    <ul class="mb-0 ps-3">
-                        {% for message in resolution_errors %}
-                            <li>{{ message }}</li>
+    {% if resolving_issues %}
+        {% set current_step = issue_index + 1 %}
+        {% set unresolved_prices = current_issue.price_issues | selectattr('resolution', 'equalto', None) | list %}
+        {% set unresolved_menu = current_issue.menu_issues | selectattr('resolution', 'equalto', None) | list %}
+        {% set unresolved_total = unresolved_prices|length + unresolved_menu|length %}
+        <div class="alert alert-warning">
+            <p class="mb-1">
+                Resolving issues for <strong>{{ current_issue.location_name }}</strong>
+                (file location "{{ current_issue.sales_location }}").
+            </p>
+            <p class="mb-0">
+                Location {{ current_step }} of {{ issue_total }}. Remaining locations:
+                {{ remaining_locations if remaining_locations > 0 else 0 }}.
+            </p>
+        </div>
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <input type="hidden" name="step" value="resolve">
+            <input type="hidden" name="payload" value="{{ mapping_payload }}">
+            <input type="hidden" name="issue_state" value='{{ issue_state }}'>
+            <input type="hidden" name="pending_sales" value='{{ pending_sales }}'>
+            <input type="hidden" name="issue_index" value="{{ issue_index }}">
+            <input type="hidden" name="mapping_filename" value="{{ mapping_filename }}">
+            <input type="hidden" name="selected_locations" value='{{ selected_locations|tojson }}'>
+            {% if current_issue.price_issues %}
+                <div class="card mb-3">
+                    <div class="card-header">Price Differences</div>
+                    <div class="card-body">
+                        {% for issue in current_issue.price_issues %}
+                            <div class="mb-3">
+                                <h6 class="mb-1">{{ issue.product }}</h6>
+                                <p class="mb-2">
+                                    Terminal sales price:
+                                    {% for price in issue.file_prices %}
+                                        ${{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
+                                    {% endfor %}
+                                    &mdash; App price: ${{ '%.2f'|format(issue.app_price) }}
+                                </p>
+                                {% if issue.resolution == 'update' %}
+                                    <span class="badge bg-success">Will update app price to ${{ '%.2f'|format(issue.target_price) }}</span>
+                                {% elif issue.resolution == 'skip' %}
+                                    <span class="badge bg-secondary">Keeping existing app price</span>
+                                {% else %}
+                                    <div class="btn-group" role="group" aria-label="Price resolution">
+                                        <button type="submit" class="btn btn-sm btn-primary" name="action" value="price:{{ issue.product_id }}:update">
+                                            Use terminal price
+                                        </button>
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary" name="action" value="price:{{ issue.product_id }}:skip">
+                                            Keep app price
+                                        </button>
+                                    </div>
+                                {% endif %}
+                            </div>
                         {% endfor %}
-                    </ul>
+                    </div>
+                </div>
+            {% endif %}
+            {% if current_issue.menu_issues %}
+                <div class="card mb-3">
+                    <div class="card-header">Menu Availability</div>
+                    <div class="card-body">
+                        {% for issue in current_issue.menu_issues %}
+                            <div class="mb-3">
+                                <h6 class="mb-1">{{ issue.product }}</h6>
+                                <p class="mb-2">
+                                    This product is not on the menu{% if issue.menu_name %} ({{ issue.menu_name }}){% endif %}
+                                    for {{ current_issue.location_name }}.
+                                </p>
+                                {% if issue.resolution == 'add' %}
+                                    <span class="badge bg-success">Will add product to the menu</span>
+                                {% elif issue.resolution == 'skip' %}
+                                    <span class="badge bg-secondary">Will leave menu unchanged</span>
+                                {% else %}
+                                    <div class="btn-group" role="group" aria-label="Menu resolution">
+                                        <button type="submit" class="btn btn-sm btn-primary" name="action" value="menu:{{ issue.product_id }}:add">
+                                            Add to menu
+                                        </button>
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary" name="action" value="menu:{{ issue.product_id }}:skip">
+                                            Skip for now
+                                        </button>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+            <div class="d-flex align-items-center mb-3">
+                <button type="submit" class="btn btn-primary" name="action" value="next_location" {% if unresolved_total > 0 %}disabled{% endif %}>
+                    {% if remaining_locations > 0 %}
+                        Next Location
+                    {% else %}
+                        Finish Import
+                    {% endif %}
+                </button>
+                {% if unresolved_total > 0 %}
+                    <span class="ms-3 text-danger">Resolve all issues above to continue.</span>
                 {% endif %}
             </div>
-            <div class="card mb-3">
-                <div class="card-header">Match Unknown Products</div>
-                <div class="card-body">
-                    {% for product in unresolved_products %}
-                        <div class="mb-3">
-                            <label class="form-label" for="{{ product.field }}">
-                                {{ product.name }}
-                            </label>
-                            <select class="form-select" id="{{ product.field }}" name="{{ product.field }}">
-                                <option value="">Select a product</option>
-                                {% for choice in product_choices %}
-                                    <option value="{{ choice.id }}" {% if product.selected and product.selected|int == choice.id %}selected{% endif %}>{{ choice.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    {% endfor %}
+            <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}" class="btn btn-link">Start Over</a>
+        </form>
+    {% else %}
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <input type="hidden" name="step" value="map">
+            <input type="hidden" name="payload" value="{{ mapping_payload }}">
+            {% if product_resolution_required %}
+                <input type="hidden" name="product-resolution-step" value="1">
+                <div class="alert alert-warning">
+                    <p class="mb-2">
+                        We couldn't automatically match every product in the terminal
+                        sales file. Please select the matching product from the app
+                        for each unknown entry below.
+                    </p>
+                    {% if resolution_errors %}
+                        <ul class="mb-0 ps-3">
+                            {% for message in resolution_errors %}
+                                <li>{{ message }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
                 </div>
-            </div>
-        {% endif %}
-        {% if open_locations %}
-            <div class="card mb-3">
-                <div class="card-header">Link Event Locations</div>
-                <div class="card-body">
-                    {% for el in open_locations %}
-                        <div class="mb-3">
-                            <label class="form-label" for="mapping-{{ el.id }}">
-                                {{ el.location.name }}
-                            </label>
-                            <select class="form-select" id="mapping-{{ el.id }}" name="mapping-{{ el.id }}">
-                                <option value="">Skip</option>
-                                {% for location_name in sales_location_names %}
-                                    <option value="{{ location_name }}" {% if default_mapping[el.id] == location_name %}selected{% endif %}>
-                                        {{ location_name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    {% endfor %}
+                <div class="card mb-3">
+                    <div class="card-header">Match Unknown Products</div>
+                    <div class="card-body">
+                        {% for product in unresolved_products %}
+                            <div class="mb-3">
+                                <label class="form-label" for="{{ product.field }}">
+                                    {{ product.name }}
+                                </label>
+                                <select class="form-select" id="{{ product.field }}" name="{{ product.field }}">
+                                    <option value="">Select a product</option>
+                                    {% for choice in product_choices %}
+                                        <option value="{{ choice.id }}" {% if product.selected and product.selected|int == choice.id %}selected{% endif %}>{{ choice.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        {% endfor %}
+                    </div>
                 </div>
-            </div>
-            <button type="submit" class="btn btn-primary">Import Sales</button>
-            <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}" class="btn btn-secondary ms-2">Start Over</a>
-        {% else %}
-            <div class="alert alert-warning">
-                There are no open locations for this event available for mapping.
-            </div>
-            <a href="{{ url_for('event.view_event', event_id=event.id) }}" class="btn btn-secondary">Back to Event</a>
-        {% endif %}
-    </form>
+            {% endif %}
+            {% if open_locations %}
+                <div class="card mb-3">
+                    <div class="card-header">Link Event Locations</div>
+                    <div class="card-body">
+                        {% for el in open_locations %}
+                            <div class="mb-3">
+                                <label class="form-label" for="mapping-{{ el.id }}">
+                                    {{ el.location.name }}
+                                </label>
+                                <select class="form-select" id="mapping-{{ el.id }}" name="mapping-{{ el.id }}">
+                                    <option value="">Skip</option>
+                                    {% for location_name in sales_location_names %}
+                                        <option value="{{ location_name }}" {% if default_mapping[el.id] == location_name %}selected{% endif %}>
+                                            {{ location_name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Review Issues</button>
+                <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}" class="btn btn-secondary ms-2">Start Over</a>
+            {% else %}
+                <div class="alert alert-warning">
+                    There are no open locations for this event available for mapping.
+                </div>
+                <a href="{{ url_for('event.view_event', event_id=event.id) }}" class="btn btn-secondary">Back to Event</a>
+            {% endif %}
+        </form>
+    {% endif %}
 {% else %}
     <form method="post" enctype="multipart/form-data">
         {{ form.hidden_tag() }}

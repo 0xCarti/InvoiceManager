@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import math
 import os
 import re
 from collections import defaultdict
@@ -656,6 +657,10 @@ def upload_terminal_sales(event_id):
     resolution_errors: list[str] = []
     product_resolution_required = False
     product_choices: list[Product] = []
+    price_discrepancies: dict[str, list[dict]] = {}
+    menu_mismatches: dict[str, list[dict]] = {}
+    warnings_required = False
+    warnings_acknowledged = False
 
     def _normalize_product_name(value: str) -> str:
         if not value:
@@ -664,154 +669,560 @@ def upload_terminal_sales(event_id):
         value = re.sub(r"[^a-z0-9]+", " ", value)
         return re.sub(r"\s+", " ", value).strip()
 
+    def _to_float(value):
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            cleaned = str(value).strip().replace("$", "")
+            if not cleaned:
+                return None
+            return float(cleaned)
+        except (TypeError, ValueError):
+            return None
+
     def _group_rows(row_data):
         grouped: dict[str, dict] = {}
         for entry in row_data:
             loc = entry["location"]
             prod = entry["product"]
-            qty = entry["quantity"]
+            qty = float(entry.get("quantity", 0.0))
+            price = entry.get("price")
+            amount = entry.get("amount")
             loc_entry = grouped.setdefault(
-                loc, {"products": {}, "total": 0.0}
+                loc,
+                {
+                    "products": {},
+                    "total": 0.0,
+                    "total_amount": 0.0,
+                },
             )
-            loc_entry["products"][prod] = (
-                loc_entry["products"].get(prod, 0.0) + qty
+            product_entry = loc_entry["products"].setdefault(
+                prod,
+                {
+                    "quantity": 0.0,
+                    "prices": [],
+                    "amount": 0.0,
+                },
             )
+            product_entry["quantity"] += qty
+            if price is not None:
+                product_entry["prices"].append(price)
+            if amount is not None:
+                product_entry["amount"] += amount
+                loc_entry["total_amount"] += amount
             loc_entry["total"] += qty
+
+        for loc_entry in grouped.values():
+            for product_entry in loc_entry["products"].values():
+                if product_entry["prices"]:
+                    unique_prices = sorted({round(p, 4) for p in product_entry["prices"]})
+                    product_entry["prices"] = unique_prices
         return grouped
 
-    if request.method == "POST" and request.form.get("step") == "map":
-        payload = request.form.get("payload")
-        if not payload:
-            flash("Unable to process the uploaded sales data.", "danger")
-            return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+    def _prices_match(file_price: float, app_price: float) -> bool:
         try:
-            payload_data = json.loads(payload)
+            return math.isclose(float(file_price), float(app_price), abs_tol=0.01)
         except (TypeError, ValueError):
-            flash("The uploaded sales data is invalid.", "danger")
-            return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+            return False
 
-        rows = payload_data.get("rows", [])
-        mapping_filename = payload_data.get("filename")
-        if not rows:
-            flash("No sales records were found in the uploaded file.", "warning")
-            return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
-
-        sales_summary = _group_rows(rows)
-        product_names = {
-            product_name
-            for data in sales_summary.values()
-            for product_name in data["products"].keys()
-        }
-        product_lookup: dict[str, Product] = {}
-        normalized_lookup = {
-            name: _normalize_product_name(name) for name in product_names
-        }
-
-        if product_names:
-            product_lookup.update(
-                {
-                    p.name: p
-                    for p in Product.query.filter(
-                        Product.name.in_(product_names)
-                    ).all()
-                }
-            )
-
-            normalized_values = [
-                norm for norm in normalized_lookup.values() if norm
-            ]
-            alias_lookup: dict[str, TerminalSaleProductAlias] = {}
-            if normalized_values:
-                alias_rows = (
-                    TerminalSaleProductAlias.query.filter(
-                        TerminalSaleProductAlias.normalized_name.in_(
-                            normalized_values
-                        )
-                    ).all()
+    def _ensure_location_items(location_obj: Location, product_obj: Product) -> None:
+        for recipe_item in product_obj.recipe_items:
+            if not recipe_item.countable:
+                continue
+            record = LocationStandItem.query.filter_by(
+                location_id=location_obj.id, item_id=recipe_item.item_id
+            ).first()
+            if record is None:
+                db.session.add(
+                    LocationStandItem(
+                        location_id=location_obj.id,
+                        item_id=recipe_item.item_id,
+                        expected_count=0,
+                        purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+                    )
                 )
-                alias_lookup = {
-                    alias.normalized_name: alias for alias in alias_rows
-                }
-                for original_name, normalized in normalized_lookup.items():
-                    if (
-                        normalized
-                        and original_name not in product_lookup
-                        and normalized in alias_lookup
-                    ):
-                        product_lookup[original_name] = alias_lookup[
-                            normalized
-                        ].product
-        else:
-            alias_lookup = {}
 
-        unmatched_names = [
-            name for name in product_names if name not in product_lookup
-        ]
+    def _apply_pending_sales(pending_sales: list[dict]) -> set[str]:
+        updated_locations: set[str] = set()
+        for entry in pending_sales:
+            event_location_id = entry.get("event_location_id")
+            product_id = entry.get("product_id")
+            quantity_value = entry.get("quantity", 0.0)
+            if not event_location_id or not product_id:
+                continue
+            event_location = db.session.get(EventLocation, event_location_id)
+            product = db.session.get(Product, product_id)
+            if event_location is None or product is None:
+                continue
+            sale = TerminalSale.query.filter_by(
+                event_location_id=event_location.id, product_id=product.id
+            ).first()
+            if sale:
+                sale.quantity = quantity_value
+            else:
+                db.session.add(
+                    TerminalSale(
+                        event_location_id=event_location.id,
+                        product_id=product.id,
+                        quantity=quantity_value,
+                        sold_at=datetime.utcnow(),
+                    )
+                )
+            updated_locations.add(event_location.location.name)
+        return updated_locations
 
-        if unmatched_names:
-            product_resolution_required = True
-            resolution_requested = request.form.get(
-                "product-resolution-step"
-            ) == "1"
-            if not product_choices:
-                product_choices = Product.query.order_by(Product.name).all()
+    def _apply_resolution_actions(issue_state: dict) -> tuple[list[str], list[str]]:
+        price_updates: list[str] = []
+        menu_updates: list[str] = []
+        for location_issue in issue_state.get("queue", []):
+            event_location_id = location_issue.get("event_location_id")
+            event_location = None
+            if event_location_id:
+                event_location = db.session.get(EventLocation, event_location_id)
+            for issue in location_issue.get("price_issues", []):
+                if issue.get("resolution") != "update":
+                    continue
+                product_id = issue.get("product_id")
+                new_price = issue.get("target_price")
+                if product_id is None or new_price is None:
+                    continue
+                product = db.session.get(Product, product_id)
+                if product is None:
+                    continue
+                product.price = new_price
+                price_updates.append(product.name)
+            if event_location is None:
+                continue
+            location_obj = event_location.location
+            if location_obj is None:
+                continue
+            for issue in location_issue.get("menu_issues", []):
+                if issue.get("resolution") != "add":
+                    continue
+                product_id = issue.get("product_id")
+                if product_id is None:
+                    continue
+                product = db.session.get(Product, product_id)
+                if product is None:
+                    continue
+                if product not in location_obj.products:
+                    location_obj.products.append(product)
+                if (
+                    location_obj.current_menu
+                    and product not in location_obj.current_menu.products
+                ):
+                    location_obj.current_menu.products.append(product)
+                _ensure_location_items(location_obj, product)
+                menu_updates.append(f"{product.name} @ {location_obj.name}")
+        return price_updates, menu_updates
 
-            manual_mappings: dict[str, Product] = {}
-            for idx, original_name in enumerate(unmatched_names):
-                field_name = f"product-match-{idx}"
-                selected_value = request.form.get(field_name)
-                selected_product = None
-                if selected_value:
+    if request.method == "POST":
+        step = request.form.get("step")
+        if step == "resolve":
+            payload = request.form.get("payload")
+            raw_issue_state = request.form.get("issue_state")
+            raw_pending_sales = request.form.get("pending_sales")
+            raw_selected_locations = request.form.get("selected_locations") or "[]"
+            mapping_filename = request.form.get("mapping_filename")
+            if not raw_issue_state or not raw_pending_sales:
+                flash("Unable to continue the resolution process.", "danger")
+                return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+            try:
+                issue_state = json.loads(raw_issue_state)
+                pending_sales = json.loads(raw_pending_sales)
+                selected_locations = json.loads(raw_selected_locations)
+            except (TypeError, ValueError):
+                flash("The resolution data could not be processed.", "danger")
+                return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+
+            queue: list[dict] = issue_state.get("queue", [])
+            try:
+                issue_index = int(request.form.get("issue_index", 0))
+            except (TypeError, ValueError):
+                issue_index = 0
+            action = request.form.get("action", "")
+
+            if issue_index < 0:
+                issue_index = 0
+            if issue_index > len(queue):
+                issue_index = len(queue)
+
+            if queue and issue_index < len(queue):
+                current_issue = queue[issue_index]
+            else:
+                current_issue = None
+
+            error_messages: list[str] = []
+
+            if action.startswith("price:") and current_issue:
+                parts = action.split(":", 2)
+                if len(parts) == 3:
+                    _, product_id_raw, resolution_value = parts
                     try:
-                        product_id = int(selected_value)
+                        product_id_int = int(product_id_raw)
                     except (TypeError, ValueError):
-                        resolution_errors.append(
-                            f"Invalid product selection for {original_name}."
+                        error_messages.append("Invalid price resolution request.")
+                    else:
+                        for issue in current_issue.get("price_issues", []):
+                            if issue.get("product_id") == product_id_int:
+                                if resolution_value == "update":
+                                    issue["resolution"] = "update"
+                                elif resolution_value == "skip":
+                                    issue["resolution"] = "skip"
+                                break
+                else:
+                    error_messages.append("Invalid price resolution request.")
+            elif action.startswith("menu:") and current_issue:
+                parts = action.split(":", 2)
+                if len(parts) == 3:
+                    _, product_id_raw, resolution_value = parts
+                    try:
+                        product_id_int = int(product_id_raw)
+                    except (TypeError, ValueError):
+                        error_messages.append("Invalid menu resolution request.")
+                    else:
+                        for issue in current_issue.get("menu_issues", []):
+                            if issue.get("product_id") == product_id_int:
+                                if resolution_value == "add":
+                                    issue["resolution"] = "add"
+                                elif resolution_value == "skip":
+                                    issue["resolution"] = "skip"
+                                break
+                else:
+                    error_messages.append("Invalid menu resolution request.")
+            elif action == "next_location":
+                if current_issue:
+                    unresolved = [
+                        issue
+                        for issue in current_issue.get("price_issues", [])
+                        if issue.get("resolution") is None
+                    ]
+                    unresolved.extend(
+                        issue
+                        for issue in current_issue.get("menu_issues", [])
+                        if issue.get("resolution") is None
+                    )
+                    if unresolved:
+                        error_messages.append(
+                            "Resolve all issues for this location before continuing."
                         )
                     else:
-                        selected_product = db.session.get(
-                            Product, product_id
-                        )
-                        if selected_product is None:
-                            resolution_errors.append(
-                                f"Selected product is no longer available for {original_name}."
-                            )
-                elif resolution_requested:
-                    resolution_errors.append(
-                        f"Select a product for '{original_name}' to continue."
+                        issue_index += 1
+            elif action == "finish":
+                issue_index = len(queue)
+
+            if queue and issue_index < len(queue):
+                current_issue = queue[issue_index]
+            else:
+                current_issue = None
+
+            if issue_index >= len(queue):
+                updated_locations = _apply_pending_sales(pending_sales)
+                price_updates, menu_updates = _apply_resolution_actions(issue_state)
+                if updated_locations or price_updates or menu_updates:
+                    db.session.commit()
+                    log_activity(
+                        "Uploaded terminal sales for event "
+                        f"{event_id} from {mapping_filename or 'uploaded file'}"
                     )
+                    success_parts: list[str] = []
+                    if updated_locations:
+                        success_parts.append(
+                            "Terminal sales were imported for: "
+                            + ", ".join(sorted(updated_locations))
+                        )
+                    if price_updates:
+                        success_parts.append(
+                            "Updated product prices: " + ", ".join(sorted(set(price_updates)))
+                        )
+                    if menu_updates:
+                        success_parts.append(
+                            "Added products to menus: " + ", ".join(sorted(set(menu_updates)))
+                        )
+                    flash(" ".join(success_parts), "success")
+                else:
+                    flash(
+                        "No event locations were linked to the uploaded sales data.",
+                        "warning",
+                    )
+                return redirect(url_for("event.view_event", event_id=event_id))
 
-                if selected_product:
-                    product_lookup[original_name] = selected_product
-                    manual_mappings[original_name] = selected_product
+            if error_messages:
+                for message in error_messages:
+                    flash(message, "danger")
 
-                unresolved_products.append(
+            total_locations = len(queue)
+            return render_template(
+                "events/upload_terminal_sales.html",
+                form=form,
+                event=ev,
+                open_locations=open_locations,
+                mapping_payload=payload,
+                mapping_filename=mapping_filename,
+                sales_summary={},
+                sales_location_names=[],
+                default_mapping={},
+                unresolved_products=[],
+                product_choices=[],
+                resolution_errors=[],
+                product_resolution_required=False,
+                price_discrepancies={},
+                menu_mismatches={},
+                warnings_required=False,
+                warnings_acknowledged=False,
+                issue_state=json.dumps(issue_state),
+                pending_sales=json.dumps(pending_sales),
+                issue_index=issue_index,
+                current_issue=current_issue,
+                remaining_locations=len(queue) - issue_index - 1,
+                selected_locations=selected_locations,
+                issue_total=total_locations,
+            )
+
+        elif step == "map":
+            payload = request.form.get("payload")
+            if not payload:
+                flash("Unable to process the uploaded sales data.", "danger")
+                return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+            try:
+                payload_data = json.loads(payload)
+            except (TypeError, ValueError):
+                flash("The uploaded sales data is invalid.", "danger")
+                return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+
+            rows = payload_data.get("rows", [])
+            mapping_filename = payload_data.get("filename")
+            if not rows:
+                flash("No sales records were found in the uploaded file.", "warning")
+                return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+
+            sales_summary = _group_rows(rows)
+            product_names = {
+                product_name
+                for data in sales_summary.values()
+                for product_name in data["products"].keys()
+            }
+            product_lookup: dict[str, Product] = {}
+            normalized_lookup = {
+                name: _normalize_product_name(name) for name in product_names
+            }
+
+            if product_names:
+                product_lookup.update(
                     {
-                        "field": field_name,
-                        "name": original_name,
-                        "selected": selected_value or "",
+                        p.name: p
+                        for p in Product.query.filter(
+                            Product.name.in_(product_names)
+                        ).all()
                     }
                 )
 
-            if manual_mappings and normalized_lookup:
-                for original_name, product in manual_mappings.items():
-                    normalized = normalized_lookup.get(original_name, "")
-                    if not normalized:
-                        continue
-                    alias = alias_lookup.get(normalized)
-                    if alias is None:
-                        alias = TerminalSaleProductAlias(
-                            source_name=original_name,
-                            normalized_name=normalized,
-                            product=product,
-                        )
-                        db.session.add(alias)
-                        alias_lookup[normalized] = alias
-                    else:
-                        alias.source_name = original_name
-                        alias.product = product
+                normalized_values = [
+                    norm for norm in normalized_lookup.values() if norm
+                ]
+                alias_lookup: dict[str, TerminalSaleProductAlias] = {}
+                if normalized_values:
+                    alias_rows = (
+                        TerminalSaleProductAlias.query.filter(
+                            TerminalSaleProductAlias.normalized_name.in_(
+                                normalized_values
+                            )
+                        ).all()
+                    )
+                    alias_lookup = {
+                        alias.normalized_name: alias for alias in alias_rows
+                    }
+                    for original_name, normalized in normalized_lookup.items():
+                        if (
+                            normalized
+                            and original_name not in product_lookup
+                            and normalized in alias_lookup
+                        ):
+                            product_lookup[original_name] = alias_lookup[
+                                normalized
+                            ].product
+            else:
+                alias_lookup = {}
 
-            if resolution_errors or len(manual_mappings) != len(unmatched_names):
+            unmatched_names = [
+                name for name in product_names if name not in product_lookup
+            ]
+
+            if unmatched_names:
+                product_resolution_required = True
+                resolution_requested = request.form.get(
+                    "product-resolution-step"
+                ) == "1"
+                if not product_choices:
+                    product_choices = Product.query.order_by(Product.name).all()
+
+                manual_mappings: dict[str, Product] = {}
+                for idx, original_name in enumerate(unmatched_names):
+                    field_name = f"product-match-{idx}"
+                    selected_value = request.form.get(field_name)
+                    selected_product = None
+                    if selected_value:
+                        try:
+                            product_id = int(selected_value)
+                        except (TypeError, ValueError):
+                            resolution_errors.append(
+                                f"Invalid product selection for {original_name}."
+                            )
+                        else:
+                            selected_product = db.session.get(
+                                Product, product_id
+                            )
+                            if selected_product is None:
+                                resolution_errors.append(
+                                    f"Selected product is no longer available for {original_name}."
+                                )
+                    elif resolution_requested:
+                        resolution_errors.append(
+                            f"Select a product for '{original_name}' to continue."
+                        )
+
+                    if selected_product:
+                        product_lookup[original_name] = selected_product
+                        manual_mappings[original_name] = selected_product
+
+                    unresolved_products.append(
+                        {
+                            "field": field_name,
+                            "name": original_name,
+                            "selected": selected_value or "",
+                        }
+                    )
+
+                if manual_mappings and normalized_lookup:
+                    for original_name, product in manual_mappings.items():
+                        normalized = normalized_lookup.get(original_name, "")
+                        if not normalized:
+                            continue
+                        alias = alias_lookup.get(normalized)
+                        if alias is None:
+                            alias = TerminalSaleProductAlias(
+                                source_name=original_name,
+                                normalized_name=normalized,
+                                product=product,
+                            )
+                            db.session.add(alias)
+                            alias_lookup[normalized] = alias
+                        else:
+                            alias.source_name = original_name
+                            alias.product = product
+
+                if resolution_errors or len(manual_mappings) != len(unmatched_names):
+                    return render_template(
+                        "events/upload_terminal_sales.html",
+                        form=form,
+                        event=ev,
+                        open_locations=open_locations,
+                        mapping_payload=payload,
+                        mapping_filename=mapping_filename,
+                        sales_summary=sales_summary,
+                        sales_location_names=list(sales_summary.keys()),
+                        default_mapping={
+                            el.id: request.form.get(f"mapping-{el.id}", "")
+                            for el in open_locations
+                        },
+                        unresolved_products=unresolved_products,
+                        product_choices=product_choices,
+                        resolution_errors=resolution_errors,
+                        product_resolution_required=True,
+                        price_discrepancies=price_discrepancies,
+                        menu_mismatches=menu_mismatches,
+                        warnings_required=warnings_required,
+                        warnings_acknowledged=warnings_acknowledged,
+                    )
+
+                product_resolution_required = False
+
+            pending_sales: list[dict] = []
+            selected_locations: list[str] = []
+            issue_queue: list[dict] = []
+            location_allowed_products: dict[int, set[int]] = {}
+            for el in open_locations:
+                selected_loc = request.form.get(f"mapping-{el.id}")
+                if not selected_loc:
+                    continue
+                loc_sales = sales_summary.get(selected_loc)
+                if not loc_sales:
+                    continue
+                location_updated = False
+                price_issues: list[dict] = []
+                menu_issues: list[dict] = []
+                for prod_name, product_data in loc_sales["products"].items():
+                    product = product_lookup.get(prod_name)
+                    if not product:
+                        continue
+                    quantity_value = product_data.get("quantity", 0.0)
+                    pending_sales.append(
+                        {
+                            "event_location_id": el.id,
+                            "product_id": product.id,
+                            "quantity": quantity_value,
+                        }
+                    )
+                    location_updated = True
+
+                    file_prices = product_data.get("prices") or []
+                    if file_prices and not all(
+                        _prices_match(price, product.price) for price in file_prices
+                    ):
+                        target_price = file_prices[0]
+                        price_issues.append(
+                            {
+                                "product": product.name,
+                                "product_id": product.id,
+                                "file_prices": file_prices,
+                                "app_price": product.price,
+                                "sales_location": selected_loc,
+                                "resolution": None,
+                                "target_price": target_price,
+                            }
+                        )
+
+                    allowed_products = location_allowed_products.get(el.id)
+                    if allowed_products is None:
+                        allowed_products = {
+                            p.id for p in el.location.products
+                        }
+                        if el.location.current_menu is not None:
+                            allowed_products.update(
+                                p.id for p in el.location.current_menu.products
+                            )
+                        location_allowed_products[el.id] = allowed_products
+                    if allowed_products and product.id not in allowed_products:
+                        menu_issues.append(
+                            {
+                                "product": product.name,
+                                "product_id": product.id,
+                                "sales_location": selected_loc,
+                                "menu_name": (
+                                    el.location.current_menu.name
+                                    if el.location.current_menu
+                                    else None
+                                ),
+                                "resolution": None,
+                            }
+                        )
+                if location_updated:
+                    selected_locations.append(el.location.name)
+                if price_issues or menu_issues:
+                    issue_queue.append(
+                        {
+                            "event_location_id": el.id,
+                            "location_name": el.location.name,
+                            "sales_location": selected_loc,
+                            "price_issues": price_issues,
+                            "menu_issues": menu_issues,
+                        }
+                    )
+
+            if issue_queue:
+                issue_state = {"queue": issue_queue}
                 return render_template(
                     "events/upload_terminal_sales.html",
                     form=form,
@@ -825,64 +1236,44 @@ def upload_terminal_sales(event_id):
                         el.id: request.form.get(f"mapping-{el.id}", "")
                         for el in open_locations
                     },
-                    unresolved_products=unresolved_products,
+                    unresolved_products=[],
                     product_choices=product_choices,
                     resolution_errors=resolution_errors,
-                    product_resolution_required=True,
+                    product_resolution_required=False,
+                    price_discrepancies={},
+                    menu_mismatches={},
+                    warnings_required=False,
+                    warnings_acknowledged=False,
+                    issue_state=json.dumps(issue_state),
+                    pending_sales=json.dumps(pending_sales),
+                    issue_index=0,
+                    current_issue=issue_queue[0],
+                    remaining_locations=len(issue_queue) - 1,
+                    selected_locations=selected_locations,
+                    issue_total=len(issue_queue),
                 )
 
-            product_resolution_required = False
-
-        updated_locations = []
-        for el in open_locations:
-            selected_loc = request.form.get(f"mapping-{el.id}")
-            if not selected_loc:
-                continue
-            loc_sales = sales_summary.get(selected_loc)
-            if not loc_sales:
-                continue
-            location_updated = False
-            for prod_name, qty in loc_sales["products"].items():
-                product = product_lookup.get(prod_name)
-                if not product:
-                    continue
-                sale = TerminalSale.query.filter_by(
-                    event_location_id=el.id,
-                    product_id=product.id,
-                ).first()
-                if sale:
-                    sale.quantity = qty
-                    location_updated = True
-                else:
-                    db.session.add(
-                        TerminalSale(
-                            event_location_id=el.id,
-                            product_id=product.id,
-                            quantity=qty,
-                            sold_at=datetime.utcnow(),
-                        )
-                    )
-                    location_updated = True
-            if location_updated:
-                updated_locations.append(el.location.name)
-
-        if updated_locations:
-            db.session.commit()
-            log_activity(
-                "Uploaded terminal sales for event "
-                f"{event_id} from {mapping_filename or 'uploaded file'}"
-            )
-            flash(
-                "Terminal sales were imported for: "
-                + ", ".join(updated_locations),
-                "success",
-            )
-        else:
-            flash(
-                "No event locations were linked to the uploaded sales data.",
-                "warning",
-            )
-        return redirect(url_for("event.view_event", event_id=event_id))
+            updated_locations = _apply_pending_sales(pending_sales)
+            if updated_locations:
+                db.session.commit()
+                log_activity(
+                    "Uploaded terminal sales for event "
+                    f"{event_id} from {mapping_filename or 'uploaded file'}"
+                )
+                flash(
+                    "Terminal sales were imported for: "
+                    + ", ".join(sorted(updated_locations)),
+                    "success",
+                )
+            else:
+                flash(
+                    "No event locations were linked to the uploaded sales data.",
+                    "warning",
+                )
+            return redirect(url_for("event.view_event", event_id=event_id))
+        elif step:
+            flash("Unable to process the uploaded sales data.", "danger")
+            return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
 
     if form.validate_on_submit():
         file = form.file.data
@@ -891,14 +1282,34 @@ def upload_terminal_sales(event_id):
         filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
         file.save(filepath)
 
-        rows = []
+        rows: list[dict] = []
 
-        def add_row(loc, name, qty):
-            try:
-                qty = float(qty)
-            except (TypeError, ValueError):
+        def add_row(loc, name, qty, price=None, amount=None):
+            if not loc or not isinstance(loc, str):
                 return
-            rows.append((loc, name.strip(), qty))
+            loc = loc.strip()
+            if not loc:
+                return
+            if not name or not isinstance(name, str):
+                return
+            product_name = name.strip()
+            if not product_name:
+                return
+            quantity_value = _to_float(qty)
+            if quantity_value is None:
+                return
+            entry = {
+                "location": loc,
+                "product": product_name,
+                "quantity": quantity_value,
+            }
+            price_value = _to_float(price)
+            if price_value is not None:
+                entry["price"] = price_value
+            amount_value = _to_float(amount)
+            if amount_value is not None:
+                entry["amount"] = amount_value
+            rows.append(entry)
 
         try:
             if ext in {".xls", ".xlsx"}:
@@ -991,7 +1402,9 @@ def upload_terminal_sales(event_id):
                         continue
 
                     quantity = row[4] if len(row) > 4 else None
-                    add_row(current_loc, second, quantity)
+                    price = row[2] if len(row) > 2 else None
+                    amount = row[5] if len(row) > 5 else None
+                    add_row(current_loc, second, quantity, price, amount)
             elif ext == ".pdf":
                 import pdfplumber
 
@@ -1032,10 +1445,7 @@ def upload_terminal_sales(event_id):
                 "warning",
             )
         else:
-            rows_data = [
-                {"location": loc, "product": product, "quantity": qty}
-                for loc, product, qty in rows
-            ]
+            rows_data = rows
 
             sales_summary = _group_rows(rows_data)
             sales_location_names = list(sales_summary.keys())
@@ -1064,6 +1474,10 @@ def upload_terminal_sales(event_id):
         product_choices=product_choices,
         resolution_errors=resolution_errors,
         product_resolution_required=product_resolution_required,
+        price_discrepancies=price_discrepancies,
+        menu_mismatches=menu_mismatches,
+        warnings_required=warnings_required,
+        warnings_acknowledged=warnings_acknowledged,
     )
 
 
