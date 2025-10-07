@@ -39,7 +39,12 @@
             <div class="col-auto gl-code-column">
                 <span class="gl-code-display badge bg-light text-dark" data-gl-code="{{ selected_gl_code }}">{{ selected_gl_code or 'Unassigned' }}</span>
             </div>
-            <div class="col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data or '' }}"></select></div>
+            <div class="col">
+                <div class="d-flex flex-column gap-1">
+                    <select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data or '' }}"></select>
+                    <button type="button" class="btn btn-link btn-sm p-0 text-start manage-units-button" aria-label="Edit units of measure"{% if not item_id %} disabled{% endif %}>Edit units</button>
+                </div>
+            </div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col-auto">
                 <button type="button" class="btn btn-outline-secondary btn-sm drag-handle" aria-label="Drag to reorder" title="Drag to reorder">=</button>
@@ -55,6 +60,7 @@
     </form>
 
     {% include 'purchase_orders/_create_item_modal.html' %}
+    {% include 'purchase_orders/_manage_units_modal.html' %}
 </div>
 
 <script src="{{ url_for('static', filename='js/purchase_order_form.js') }}"></script>
