@@ -16,6 +16,9 @@
         const quickAddButton = config.quickAddButton || null;
         const saveNewItemButton = config.saveNewItemButton || null;
         const newItemModalEl = config.newItemModal || null;
+        const manageUnitsModalEl =
+            (config && config.manageUnitsModal) ||
+            document.getElementById("manageUnitsModal");
         const searchTimers = new WeakMap();
         const defaultGlCodeLabel = "Unassigned";
 
@@ -41,6 +44,16 @@
             display.dataset.glCode = glCode || "";
         }
 
+        function setManageButtonState(row, enabled) {
+            if (!row) {
+                return;
+            }
+            const button = row.querySelector(".manage-units-button");
+            if (button) {
+                button.disabled = !enabled;
+            }
+        }
+
         let nextIndex = toNumber(
             config.nextIndex !== undefined
                 ? config.nextIndex
@@ -58,10 +71,30 @@
                 new bootstrap.Modal(newItemModalEl);
         }
 
+        let manageUnitsModal = null;
+        if (manageUnitsModalEl && typeof bootstrap !== "undefined") {
+            manageUnitsModal =
+                bootstrap.Modal.getInstance(manageUnitsModalEl) ||
+                new bootstrap.Modal(manageUnitsModalEl);
+        }
+
         const baseUnitSelect = document.getElementById("new-item-base-unit");
         const newItemUnitsContainer = document.getElementById("new-item-units");
         const addNewItemUnitButton = document.getElementById("add-new-item-unit");
+        const manageUnitsContainer = document.getElementById("manage-units-rows");
+        const addManageUnitButton = document.getElementById("add-manage-unit");
+        const saveManageUnitsButton = document.getElementById("save-manage-units");
+        const manageUnitsItemNameInput = document.getElementById(
+            "manage-units-item-name"
+        );
+        const manageUnitsBaseUnitInput = document.getElementById(
+            "manage-units-base-unit"
+        );
+        const manageUnitsAlert = document.getElementById("manage-units-alert");
         let newItemUnitIndex = 0;
+        let manageUnitsIndex = 0;
+        let manageUnitsCurrentItemId = null;
+        let manageUnitsTargetRow = null;
         let preparedDragRow = null;
         let activeDragRow = null;
         let skipNextPointerCancel = false;
@@ -113,6 +146,302 @@
                     fallback.checked = true;
                 }
             }
+        }
+
+        function showManageUnitsError(message) {
+            if (!manageUnitsAlert) {
+                return;
+            }
+            if (message) {
+                manageUnitsAlert.textContent = message;
+                manageUnitsAlert.classList.remove("d-none");
+            } else {
+                manageUnitsAlert.textContent = "";
+                manageUnitsAlert.classList.add("d-none");
+            }
+        }
+
+        function resetManageUnitsRows() {
+            if (!manageUnitsContainer) {
+                return;
+            }
+            manageUnitsContainer.innerHTML = "";
+            manageUnitsIndex = 0;
+        }
+
+        function ensureManageUnitDefaults() {
+            if (!manageUnitsContainer) {
+                return;
+            }
+            const receivingChecked = manageUnitsContainer.querySelector(
+                ".manage-unit-receiving:checked"
+            );
+            if (!receivingChecked) {
+                const fallback = manageUnitsContainer.querySelector(
+                    '.manage-unit-row[data-base="true"] .manage-unit-receiving'
+                );
+                if (fallback) {
+                    fallback.checked = true;
+                }
+            }
+
+            const transferChecked = manageUnitsContainer.querySelector(
+                ".manage-unit-transfer:checked"
+            );
+            if (!transferChecked) {
+                const fallback = manageUnitsContainer.querySelector(
+                    '.manage-unit-row[data-base="true"] .manage-unit-transfer'
+                );
+                if (fallback) {
+                    fallback.checked = true;
+                }
+            }
+        }
+
+        function createManageUnitRow(options = {}) {
+            if (!manageUnitsContainer) {
+                return null;
+            }
+            const index = manageUnitsIndex++;
+            const isBase = Boolean(options.isBase);
+            const row = document.createElement("div");
+            row.classList.add(
+                "row",
+                "g-2",
+                "align-items-end",
+                "manage-unit-row"
+            );
+            row.dataset.base = isBase ? "true" : "false";
+            row.dataset.unitId = options.id ? String(options.id) : "";
+
+            const nameCol = document.createElement("div");
+            nameCol.classList.add("col-12", "col-md-4");
+            const nameLabel = document.createElement("label");
+            nameLabel.classList.add("form-label");
+            const nameId = `manage-unit-${index}-name`;
+            nameLabel.setAttribute("for", nameId);
+            nameLabel.textContent = isBase ? "Base Unit" : "Unit Name";
+            const nameInput = document.createElement("input");
+            nameInput.type = "text";
+            nameInput.classList.add("form-control", "manage-unit-name");
+            nameInput.id = nameId;
+            nameInput.value = options.name || "";
+            if (isBase) {
+                nameInput.readOnly = true;
+            } else {
+                nameInput.placeholder = "e.g. Case";
+            }
+            nameCol.append(nameLabel, nameInput);
+            row.appendChild(nameCol);
+
+            const factorCol = document.createElement("div");
+            factorCol.classList.add("col-12", "col-md-3");
+            const factorLabel = document.createElement("label");
+            factorLabel.classList.add("form-label");
+            const factorId = `manage-unit-${index}-factor`;
+            factorLabel.setAttribute("for", factorId);
+            factorLabel.textContent = "Ratio to Base Unit";
+            const factorInput = document.createElement("input");
+            factorInput.type = "number";
+            factorInput.classList.add("form-control", "manage-unit-factor");
+            factorInput.id = factorId;
+            factorInput.step = "any";
+            factorInput.min = "0";
+            factorInput.value =
+                options.factor !== undefined && options.factor !== null
+                    ? options.factor
+                    : 1;
+            if (isBase) {
+                factorInput.readOnly = true;
+                factorInput.value = 1;
+            }
+            factorCol.append(factorLabel, factorInput);
+            row.appendChild(factorCol);
+
+            const receivingCol = document.createElement("div");
+            receivingCol.classList.add(
+                "col-6",
+                "col-md-2",
+                "d-flex",
+                "align-items-center"
+            );
+            const receivingWrapper = document.createElement("div");
+            receivingWrapper.classList.add("form-check");
+            const receivingId = `manage-unit-${index}-receiving`;
+            const receivingInput = document.createElement("input");
+            receivingInput.type = "radio";
+            receivingInput.classList.add(
+                "form-check-input",
+                "manage-unit-receiving"
+            );
+            receivingInput.name = "manage-unit-receiving";
+            receivingInput.id = receivingId;
+            receivingInput.checked = Boolean(options.receivingDefault);
+            const receivingLabel = document.createElement("label");
+            receivingLabel.classList.add("form-check-label");
+            receivingLabel.setAttribute("for", receivingId);
+            receivingLabel.textContent = "Receiving Default";
+            receivingWrapper.append(receivingInput, receivingLabel);
+            receivingCol.appendChild(receivingWrapper);
+            row.appendChild(receivingCol);
+
+            const transferCol = document.createElement("div");
+            transferCol.classList.add(
+                "col-6",
+                "col-md-2",
+                "d-flex",
+                "align-items-center"
+            );
+            const transferWrapper = document.createElement("div");
+            transferWrapper.classList.add("form-check");
+            const transferId = `manage-unit-${index}-transfer`;
+            const transferInput = document.createElement("input");
+            transferInput.type = "radio";
+            transferInput.classList.add(
+                "form-check-input",
+                "manage-unit-transfer"
+            );
+            transferInput.name = "manage-unit-transfer";
+            transferInput.id = transferId;
+            transferInput.checked = Boolean(options.transferDefault);
+            const transferLabel = document.createElement("label");
+            transferLabel.classList.add("form-check-label");
+            transferLabel.setAttribute("for", transferId);
+            transferLabel.textContent = "Transfer Default";
+            transferWrapper.append(transferInput, transferLabel);
+            transferCol.appendChild(transferWrapper);
+            row.appendChild(transferCol);
+
+            if (!isBase) {
+                const removeCol = document.createElement("div");
+                removeCol.classList.add(
+                    "col-12",
+                    "col-md-1",
+                    "d-flex",
+                    "justify-content-md-end"
+                );
+                const removeButton = document.createElement("button");
+                removeButton.type = "button";
+                removeButton.classList.add(
+                    "btn",
+                    "btn-outline-danger",
+                    "btn-sm",
+                    "manage-unit-remove"
+                );
+                removeButton.textContent = "Delete";
+                removeCol.appendChild(removeButton);
+                row.appendChild(removeCol);
+            } else {
+                const spacerCol = document.createElement("div");
+                spacerCol.classList.add("col-12", "col-md-1");
+                row.appendChild(spacerCol);
+            }
+
+            return row;
+        }
+
+        function appendManageUnitRow(options = {}) {
+            if (!manageUnitsContainer) {
+                return null;
+            }
+            const row = createManageUnitRow(options);
+            if (!row) {
+                return null;
+            }
+            manageUnitsContainer.appendChild(row);
+            return row;
+        }
+
+        function loadManageUnits(itemId, itemName) {
+            if (!manageUnitsContainer) {
+                return;
+            }
+            manageUnitsCurrentItemId = itemId;
+            manageUnitsIndex = 0;
+            showManageUnitsError("");
+            if (manageUnitsItemNameInput) {
+                manageUnitsItemNameInput.value = itemName || "";
+            }
+            if (manageUnitsBaseUnitInput) {
+                manageUnitsBaseUnitInput.value = "";
+            }
+            manageUnitsContainer.innerHTML =
+                '<div class="text-muted">Loading...</div>';
+
+            fetch(`/items/${itemId}/units`)
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error("Failed to load units");
+                    }
+                    return response.json();
+                })
+                .then((data) => {
+                    if (manageUnitsBaseUnitInput) {
+                        manageUnitsBaseUnitInput.value = data.base_unit || "";
+                    }
+                    resetManageUnitsRows();
+                    const units = Array.isArray(data.units) ? data.units : [];
+                    const baseUnitName = data.base_unit || "";
+                    const baseUnitEntry = units.find(
+                        (unit) => unit.name === baseUnitName
+                    );
+                    appendManageUnitRow({
+                        id: baseUnitEntry ? baseUnitEntry.id : null,
+                        name: baseUnitName,
+                        factor: 1,
+                        receivingDefault: baseUnitEntry
+                            ? Boolean(baseUnitEntry.receiving_default)
+                            : true,
+                        transferDefault: baseUnitEntry
+                            ? Boolean(baseUnitEntry.transfer_default)
+                            : true,
+                        isBase: true,
+                    });
+                    const remainingUnits = units.filter((unit) => {
+                        if (baseUnitEntry && unit.id === baseUnitEntry.id) {
+                            return false;
+                        }
+                        return unit.name !== baseUnitName;
+                    });
+                    remainingUnits.forEach((unit) => {
+                        appendManageUnitRow({
+                            id: unit.id,
+                            name: unit.name,
+                            factor: unit.factor,
+                            receivingDefault: Boolean(
+                                unit.receiving_default
+                            ),
+                            transferDefault: Boolean(
+                                unit.transfer_default
+                            ),
+                            isBase: false,
+                        });
+                    });
+                    ensureManageUnitDefaults();
+                })
+                .catch(() => {
+                    resetManageUnitsRows();
+                    showManageUnitsError(
+                        "Unable to load units for this item."
+                    );
+                });
+        }
+
+        function openManageUnitsForRow(row) {
+            if (!row) {
+                return;
+            }
+            const hiddenField = row.querySelector(".item-id-field");
+            if (!hiddenField || !hiddenField.value) {
+                return;
+            }
+            manageUnitsTargetRow = row;
+            const nameField = row.querySelector(".item-search");
+            const itemName = nameField ? nameField.value.trim() : "";
+            if (manageUnitsModal) {
+                manageUnitsModal.show();
+            }
+            loadManageUnits(hiddenField.value, itemName);
         }
 
         function createNewItemUnitRow(options = {}) {
@@ -408,11 +737,33 @@
 
             const unitCol = document.createElement("div");
             unitCol.classList.add("col");
+            const unitWrapper = document.createElement("div");
+            unitWrapper.classList.add("d-flex", "flex-column", "gap-1");
             const unitSelect = document.createElement("select");
             unitSelect.name = `items-${index}-unit`;
             unitSelect.classList.add("form-control", "unit-select");
-            unitSelect.dataset.selected = options.unitId ? String(options.unitId) : "";
-            unitCol.appendChild(unitSelect);
+            unitSelect.dataset.selected = options.unitId
+                ? String(options.unitId)
+                : "";
+            unitWrapper.appendChild(unitSelect);
+            const manageButton = document.createElement("button");
+            manageButton.type = "button";
+            manageButton.classList.add(
+                "btn",
+                "btn-link",
+                "btn-sm",
+                "p-0",
+                "text-start",
+                "manage-units-button"
+            );
+            manageButton.textContent = "Edit units";
+            manageButton.setAttribute(
+                "aria-label",
+                "Edit units of measure"
+            );
+            manageButton.disabled = true;
+            unitWrapper.appendChild(manageButton);
+            unitCol.appendChild(unitWrapper);
 
             const quantityCol = document.createElement("div");
             quantityCol.classList.add("col");
@@ -469,6 +820,7 @@
             updatePositions();
 
             updateRowGlCode(row, options.glCode || "");
+            setManageButtonState(row, Boolean(options.itemId));
 
             const unitSelect = row.querySelector(".unit-select");
             if (options.itemId) {
@@ -641,6 +993,7 @@
             if (hiddenField) {
                 hiddenField.value = "";
             }
+            setManageButtonState(row, false);
             updateRowGlCode(row, "");
             clearUnits(unitSelect);
             closeAllSuggestionLists(suggestionList);
@@ -678,6 +1031,7 @@
                 searchInput.value = option.dataset.itemName || "";
             }
             updateRowGlCode(row, option.dataset.glCode || "");
+            setManageButtonState(row, true);
             clearSuggestions(suggestionList);
             fetchUnits(option.dataset.itemId, unitSelect);
 
@@ -752,6 +1106,254 @@
                 if (nameInput && !nameInput.readOnly) {
                     nameInput.focus();
                 }
+            });
+        }
+
+        if (addManageUnitButton) {
+            addManageUnitButton.addEventListener("click", () => {
+                const row = appendManageUnitRow({
+                    name: "",
+                    factor: 1,
+                    receivingDefault: false,
+                    transferDefault: false,
+                });
+                if (!row) {
+                    return;
+                }
+                const nameInput = row.querySelector(".manage-unit-name");
+                if (nameInput && !nameInput.readOnly) {
+                    nameInput.focus();
+                }
+                ensureManageUnitDefaults();
+            });
+        }
+
+        if (manageUnitsContainer) {
+            manageUnitsContainer.addEventListener("click", (event) => {
+                const target = event.target;
+                if (!(target instanceof Element)) {
+                    return;
+                }
+                const removeButton = target.closest(".manage-unit-remove");
+                if (!removeButton) {
+                    return;
+                }
+                const row = removeButton.closest(".manage-unit-row");
+                if (row && row.dataset.base !== "true") {
+                    row.remove();
+                    ensureManageUnitDefaults();
+                }
+            });
+
+            manageUnitsContainer.addEventListener("change", (event) => {
+                const target = event.target;
+                if (!(target instanceof Element)) {
+                    return;
+                }
+                if (
+                    target.classList.contains("manage-unit-receiving") ||
+                    target.classList.contains("manage-unit-transfer")
+                ) {
+                    ensureManageUnitDefaults();
+                }
+            });
+        }
+
+        if (manageUnitsModalEl) {
+            manageUnitsModalEl.addEventListener("hidden.bs.modal", () => {
+                manageUnitsCurrentItemId = null;
+                manageUnitsTargetRow = null;
+                resetManageUnitsRows();
+                showManageUnitsError("");
+                if (manageUnitsItemNameInput) {
+                    manageUnitsItemNameInput.value = "";
+                }
+                if (manageUnitsBaseUnitInput) {
+                    manageUnitsBaseUnitInput.value = "";
+                }
+            });
+        }
+
+        if (saveManageUnitsButton) {
+            saveManageUnitsButton.addEventListener("click", () => {
+                if (!manageUnitsContainer || !manageUnitsCurrentItemId) {
+                    return;
+                }
+                showManageUnitsError("");
+                const itemId = manageUnitsCurrentItemId;
+                const unitRows = Array.from(
+                    manageUnitsContainer.querySelectorAll(".manage-unit-row")
+                );
+                if (!unitRows.length) {
+                    showManageUnitsError(
+                        "Add at least one unit before saving."
+                    );
+                    return;
+                }
+                const baseUnit = manageUnitsBaseUnitInput
+                    ? manageUnitsBaseUnitInput.value.trim()
+                    : "";
+                const unitsPayload = [];
+                let hasInvalid = false;
+                let receivingAssigned = false;
+                let transferAssigned = false;
+
+                unitRows.forEach((row) => {
+                    const isBase = row.dataset.base === "true";
+                    const unitIdValue = row.dataset.unitId || "";
+                    let unitId = null;
+                    if (unitIdValue) {
+                        const parsed = parseInt(unitIdValue, 10);
+                        if (!Number.isNaN(parsed)) {
+                            unitId = parsed;
+                        }
+                    }
+                    const nameField = row.querySelector(".manage-unit-name");
+                    const factorField = row.querySelector(
+                        ".manage-unit-factor"
+                    );
+                    let unitName = nameField ? nameField.value.trim() : "";
+                    if (isBase && baseUnit) {
+                        unitName = baseUnit;
+                    }
+                    let factorValue = factorField
+                        ? parseFloat(factorField.value)
+                        : NaN;
+                    if (isBase) {
+                        factorValue = 1;
+                    }
+                    const receivingField = row.querySelector(
+                        ".manage-unit-receiving"
+                    );
+                    const transferField = row.querySelector(
+                        ".manage-unit-transfer"
+                    );
+                    let receivingDefault = receivingField
+                        ? receivingField.checked
+                        : false;
+                    let transferDefault = transferField
+                        ? transferField.checked
+                        : false;
+
+                    if (
+                        !unitName ||
+                        !Number.isFinite(factorValue) ||
+                        factorValue <= 0
+                    ) {
+                        hasInvalid = true;
+                        return;
+                    }
+
+                    if (receivingDefault) {
+                        if (receivingAssigned) {
+                            receivingDefault = false;
+                        } else {
+                            receivingAssigned = true;
+                        }
+                    }
+
+                    if (transferDefault) {
+                        if (transferAssigned) {
+                            transferDefault = false;
+                        } else {
+                            transferAssigned = true;
+                        }
+                    }
+
+                    unitsPayload.push({
+                        id: unitId,
+                        name: unitName,
+                        factor: factorValue,
+                        receiving_default: receivingDefault,
+                        transfer_default: transferDefault,
+                        is_base: isBase,
+                    });
+                });
+
+                if (hasInvalid || !unitsPayload.length) {
+                    showManageUnitsError(
+                        "Enter a valid name and ratio for each unit."
+                    );
+                    return;
+                }
+
+                const baseEntry = unitsPayload.find((unit) => unit.is_base);
+                if (!baseEntry) {
+                    showManageUnitsError("The base unit is required.");
+                    return;
+                }
+
+                if (!receivingAssigned) {
+                    baseEntry.receiving_default = true;
+                    receivingAssigned = true;
+                }
+
+                if (!transferAssigned) {
+                    baseEntry.transfer_default = true;
+                    transferAssigned = true;
+                }
+
+                if (!receivingAssigned || !transferAssigned) {
+                    showManageUnitsError(
+                        "Choose defaults for receiving and transfers."
+                    );
+                    return;
+                }
+
+                const csrfTokenInput = document.querySelector(
+                    'input[name="csrf_token"]'
+                );
+                const csrfToken = csrfTokenInput ? csrfTokenInput.value : null;
+                const targetRow = manageUnitsTargetRow || null;
+                const targetSelect = targetRow
+                    ? targetRow.querySelector(".unit-select")
+                    : null;
+                const previousSelection = targetSelect
+                    ? targetSelect.value
+                    : null;
+
+                fetch(`/items/${itemId}/units`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": csrfToken || "",
+                    },
+                    body: JSON.stringify({ units: unitsPayload }),
+                })
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error("Failed to save units");
+                        }
+                        return response.json();
+                    })
+                    .then(() => {
+                        if (manageUnitsModal) {
+                            manageUnitsModal.hide();
+                        }
+                        if (targetRow && targetRow.isConnected) {
+                            const unitSelect = targetRow.querySelector(
+                                ".unit-select"
+                            );
+                            if (unitSelect) {
+                                fetchUnits(
+                                    itemId,
+                                    unitSelect,
+                                    previousSelection || null
+                                );
+                            }
+                        }
+                        if (!manageUnitsModal) {
+                            manageUnitsCurrentItemId = null;
+                            manageUnitsTargetRow = null;
+                            resetManageUnitsRows();
+                            showManageUnitsError("");
+                        }
+                    })
+                    .catch(() => {
+                        showManageUnitsError(
+                            "Unable to save units. Please try again."
+                        );
+                    });
             });
         }
 
@@ -1048,7 +1650,16 @@
 
         container.addEventListener("click", (event) => {
             const target = event.target;
-            if (target.classList.contains("remove-item")) {
+            if (!(target instanceof Element)) {
+                return;
+            }
+            if (target.closest(".manage-units-button")) {
+                const button = target.closest(".manage-units-button");
+                const row = button ? button.closest(".item-row") : null;
+                if (row) {
+                    openManageUnitsForRow(row);
+                }
+            } else if (target.classList.contains("remove-item")) {
                 const row = target.closest(".item-row");
                 if (row) {
                     row.remove();
@@ -1069,6 +1680,7 @@
             const hiddenField = row.querySelector(".item-id-field");
             const unitSelect = row.querySelector(".unit-select");
             const selectedUnit = unitSelect ? unitSelect.dataset.selected : null;
+            setManageButtonState(row, Boolean(hiddenField && hiddenField.value));
             if (hiddenField && hiddenField.value) {
                 fetchUnits(hiddenField.value, unitSelect, selectedUnit || null);
             }

@@ -752,39 +752,169 @@ def quick_add_item():
     })
 
 
-@item.route("/items/<int:item_id>/units")
+@item.route("/items/<int:item_id>/units", methods=["GET", "POST"])
 @login_required
 def item_units(item_id):
-    """Return unit options for an item."""
+    """Return or update unit options for an item."""
     item = db.session.get(Item, item_id)
     if item is None:
         abort(404)
 
     location_id = request.args.get("location_id", type=int)
-    if location_id:
-        gl_obj = item.purchase_gl_code_for_location(location_id)
-    else:
-        gl_obj = item.purchase_gl_code
 
-    data = {
-        "base_unit": item.base_unit,
-        "units": [
-            {
-                "id": u.id,
-                "name": u.name,
-                "factor": u.factor,
-                "receiving_default": u.receiving_default,
-                "transfer_default": u.transfer_default,
-            }
-            for u in item.units
-        ],
-        "purchase_gl_code": {
-            "id": gl_obj.id if gl_obj else None,
-            "code": gl_obj.code if gl_obj else "",
-            "description": gl_obj.description if gl_obj and gl_obj.description else "",
-        },
-    }
-    return jsonify(data)
+    def serialize_units() -> dict:
+        if location_id:
+            gl_obj = item.purchase_gl_code_for_location(location_id)
+        else:
+            gl_obj = item.purchase_gl_code
+
+        sorted_units = sorted(
+            item.units,
+            key=lambda unit: (unit.name != item.base_unit, unit.name.lower()),
+        )
+        return {
+            "base_unit": item.base_unit,
+            "units": [
+                {
+                    "id": unit.id,
+                    "name": unit.name,
+                    "factor": unit.factor,
+                    "receiving_default": unit.receiving_default,
+                    "transfer_default": unit.transfer_default,
+                }
+                for unit in sorted_units
+            ],
+            "purchase_gl_code": {
+                "id": gl_obj.id if gl_obj else None,
+                "code": gl_obj.code if gl_obj else "",
+                "description": gl_obj.description
+                if gl_obj and gl_obj.description
+                else "",
+            },
+        }
+
+    if request.method == "GET":
+        return jsonify(serialize_units())
+
+    data = request.get_json() or {}
+    raw_units = data.get("units")
+    if not isinstance(raw_units, list):
+        return jsonify({"error": "Invalid data"}), 400
+
+    base_unit_name = item.base_unit
+    cleaned_units = []
+    base_entry = None
+    seen_names = set()
+
+    for entry in raw_units:
+        if not isinstance(entry, dict):
+            continue
+        is_base = bool(entry.get("is_base"))
+        try:
+            unit_id = int(entry.get("id"))
+        except (TypeError, ValueError):
+            unit_id = None
+        unit_name = (entry.get("name") or "").strip()
+        try:
+            factor = float(entry.get("factor", 0))
+        except (TypeError, ValueError):
+            factor = 0.0
+        receiving_default = bool(entry.get("receiving_default"))
+        transfer_default = bool(entry.get("transfer_default"))
+
+        if is_base:
+            unit_name = base_unit_name
+            factor = 1.0
+
+        if not unit_name or factor <= 0:
+            continue
+
+        if not is_base:
+            key = unit_name.lower()
+            if key in seen_names:
+                continue
+            seen_names.add(key)
+
+        unit_data = {
+            "id": unit_id,
+            "name": unit_name,
+            "factor": 1.0 if is_base else factor,
+            "receiving_default": receiving_default,
+            "transfer_default": transfer_default,
+            "is_base": is_base,
+        }
+
+        if is_base and base_entry is None:
+            base_entry = unit_data
+        elif not is_base:
+            cleaned_units.append(unit_data)
+
+    if base_entry is None:
+        existing_base = next(
+            (unit for unit in item.units if unit.name == base_unit_name),
+            None,
+        )
+        base_entry = {
+            "id": existing_base.id if existing_base else None,
+            "name": base_unit_name,
+            "factor": 1.0,
+            "receiving_default": False,
+            "transfer_default": False,
+            "is_base": True,
+        }
+
+    cleaned_units.insert(0, base_entry)
+
+    receiving_assigned = False
+    transfer_assigned = False
+    for unit_data in cleaned_units:
+        if unit_data["receiving_default"] and not receiving_assigned:
+            receiving_assigned = True
+        else:
+            unit_data["receiving_default"] = False
+
+        if unit_data["transfer_default"] and not transfer_assigned:
+            transfer_assigned = True
+        else:
+            unit_data["transfer_default"] = False
+
+    if not receiving_assigned and cleaned_units:
+        cleaned_units[0]["receiving_default"] = True
+        receiving_assigned = True
+
+    if not transfer_assigned and cleaned_units:
+        cleaned_units[0]["transfer_default"] = True
+        transfer_assigned = True
+
+    if not cleaned_units or not receiving_assigned or not transfer_assigned:
+        return jsonify({"error": "Invalid data"}), 400
+
+    existing_units = {unit.id: unit for unit in item.units}
+    remaining_ids = set(existing_units.keys())
+
+    for unit_data in cleaned_units:
+        unit_id = unit_data.get("id")
+        unit = existing_units.get(unit_id) if unit_id in existing_units else None
+        if unit is None:
+            unit = ItemUnit(item=item)
+        else:
+            remaining_ids.discard(unit_id)
+
+        unit.name = unit_data["name"]
+        unit.factor = unit_data["factor"]
+        unit.receiving_default = unit_data["receiving_default"]
+        unit.transfer_default = unit_data["transfer_default"]
+        db.session.add(unit)
+
+    for unit_id in remaining_ids:
+        db.session.delete(existing_units[unit_id])
+
+    db.session.flush()
+    response_data = serialize_units()
+    db.session.commit()
+    log_activity(f"Updated units for item {item.id}")
+
+    return jsonify(response_data)
 
 
 @item.route("/items/<int:item_id>/last_cost")
