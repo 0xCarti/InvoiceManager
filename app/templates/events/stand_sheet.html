@@ -99,7 +99,18 @@
                 }
                 columns[colIdx].push(inp);
                 inp.dataset.columnIndex = colIdx;
-                inp.addEventListener('input', function() { calcVariance(row); });
+                inp.addEventListener('keydown', function(e) {
+                    if (e.key === ' ') {
+                        e.preventDefault();
+                    }
+                });
+                inp.addEventListener('input', function() {
+                    const cleaned = inp.value.replace(/\s+/g, '');
+                    if (cleaned !== inp.value) {
+                        inp.value = cleaned;
+                    }
+                    calcVariance(row);
+                });
             });
             calcVariance(row);
         });
