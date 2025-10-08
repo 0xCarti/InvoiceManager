@@ -186,16 +186,21 @@
 
 <script src="{{ url_for('static', filename='js/transfer_workflow.js') }}" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
-    var protocol = window.location.protocol;
-    var socket = io.connect(protocol + '//' + document.domain + ':' + location.port);
+    var socket = null;
+    if (window.io && typeof window.io.connect === 'function') {
+        var protocol = window.location.protocol;
+        socket = window.io.connect(protocol + '//' + document.domain + ':' + location.port);
 
-    socket.on('connect', function() {
-        console.log('Websocket connected!');
-    });
+        socket.on('connect', function() {
+            console.log('Websocket connected!');
+        });
 
-    socket.on('new_transfer', function(data) {
-        document.getElementById('new-transfer-alert').style.display = 'inline-block';
-    });
+        socket.on('new_transfer', function(data) {
+            document.getElementById('new-transfer-alert').style.display = 'inline-block';
+        });
+    } else {
+        console.warn('Socket.io not available, skipping live transfer notifications.');
+    }
 
     let addItemIndex = 0;
     document.getElementById('add-item-name').addEventListener('input', function() {

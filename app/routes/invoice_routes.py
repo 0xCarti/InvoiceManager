@@ -16,6 +16,7 @@ from app import GST, db
 from app.forms import DeleteForm, InvoiceFilterForm, InvoiceForm
 from app.models import Customer, Invoice, InvoiceProduct, Product
 from app.utils.activity import log_activity
+from app.utils.numeric import coerce_float
 from app.utils.pagination import build_pagination_args, get_per_page
 
 invoice = Blueprint("invoice", __name__)
@@ -68,7 +69,10 @@ def _create_invoice_from_form(form):
         product = product_lookup.get(product_name)
 
         if product:
-            quantity = float(quantity)
+            quantity_value = coerce_float(quantity)
+            if quantity_value is None:
+                continue
+            quantity = quantity_value
             unit_price = product.price
             line_subtotal = quantity * unit_price
 

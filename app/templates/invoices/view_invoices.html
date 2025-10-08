@@ -219,7 +219,7 @@ $(document).ready(function(){
 
         var newRow = `<tr class="product-row">
     <td>${productName}</td>
-    <td><input type="number" class="form-control quantity" value="1" step="any"></td>
+    <td><input type="text" class="form-control quantity" value="1" inputmode="decimal"></td>
     <td class="price">$${productPrice}</td>
     <td class="total">$${(parseFloat(productPrice)).toFixed(2)}</td>
     <td>
@@ -231,6 +231,9 @@ $(document).ready(function(){
         $('#productTable tbody').append(newRow);
 
         const row = $('#productTable tbody tr').last();
+        if (window.NumericInput) {
+            window.NumericInput.enableWithin(row.get(0));
+        }
         updateRowTotal(row);
     });
 
@@ -248,9 +251,18 @@ $(document).ready(function(){
         $(this).closest('tr').remove();
     });
 
+    function parseNumber(value, defaultValue = 0) {
+        if (window.NumericInput) {
+            const parsed = window.NumericInput.parseValue(value);
+            return Number.isFinite(parsed) ? parsed : defaultValue;
+        }
+        const parsed = parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : defaultValue;
+    }
+
     function updateRowTotal(row) {
-        const quantity = parseFloat(row.find('.quantity').val()) || 0;
-        const price = parseFloat(row.find('.price').text().replace('$', '')) || 0;
+        const quantity = parseNumber(row.find('.quantity').val(), 0);
+        const price = parseNumber(row.find('.price').text().replace('$', ''), 0);
         const applyGST = row.find('.override-gst').is(':checked');
         const applyPST = row.find('.override-pst').is(':checked');
 

@@ -47,23 +47,23 @@
                     {% endif %}
                 </td>
                 <td>
-                    <input type="number" step="any" class="form-control" name="open_{{ entry.item.id }}" value="{% if entry.sheet_values.opening_count is not none %}{{ '%.4f'|format(entry.sheet_values.opening_count) }}{% endif %}">
+                    <input type="text" inputmode="decimal" class="form-control" name="open_{{ entry.item.id }}" value="{% if entry.sheet_values.opening_count is not none %}{{ '%.4f'|format(entry.sheet_values.opening_count) }}{% endif %}">
                 </td>
                 <td>
-                    <input type="number" step="any" class="form-control" name="in_{{ entry.item.id }}" value="{% if entry.sheet_values.transferred_in is not none %}{{ '%.4f'|format(entry.sheet_values.transferred_in) }}{% endif %}">
+                    <input type="text" inputmode="decimal" class="form-control" name="in_{{ entry.item.id }}" value="{% if entry.sheet_values.transferred_in is not none %}{{ '%.4f'|format(entry.sheet_values.transferred_in) }}{% endif %}">
                 </td>
                 <td>
-                    <input type="number" step="any" class="form-control" name="out_{{ entry.item.id }}" value="{% if entry.sheet_values.transferred_out is not none %}{{ '%.4f'|format(entry.sheet_values.transferred_out) }}{% endif %}">
+                    <input type="text" inputmode="decimal" class="form-control" name="out_{{ entry.item.id }}" value="{% if entry.sheet_values.transferred_out is not none %}{{ '%.4f'|format(entry.sheet_values.transferred_out) }}{% endif %}">
                 </td>
                 <td class="sales" data-sales="{{ '%.4f'|format(entry.sales) }}">{{ '%.2f'|format(entry.sales) }}</td>
                 <td>
-                    <input type="number" step="any" class="form-control" name="eaten_{{ entry.item.id }}" value="{% if entry.sheet_values.eaten is not none %}{{ '%.4f'|format(entry.sheet_values.eaten) }}{% endif %}">
+                    <input type="text" inputmode="decimal" class="form-control" name="eaten_{{ entry.item.id }}" value="{% if entry.sheet_values.eaten is not none %}{{ '%.4f'|format(entry.sheet_values.eaten) }}{% endif %}">
                 </td>
                 <td>
-                    <input type="number" step="any" class="form-control" name="spoiled_{{ entry.item.id }}" value="{% if entry.sheet_values.spoiled is not none %}{{ '%.4f'|format(entry.sheet_values.spoiled) }}{% endif %}">
+                    <input type="text" inputmode="decimal" class="form-control" name="spoiled_{{ entry.item.id }}" value="{% if entry.sheet_values.spoiled is not none %}{{ '%.4f'|format(entry.sheet_values.spoiled) }}{% endif %}">
                 </td>
                 <td>
-                    <input type="number" step="any" class="form-control" name="close_{{ entry.item.id }}" value="{% if entry.sheet_values.closing_count is not none %}{{ '%.4f'|format(entry.sheet_values.closing_count) }}{% endif %}">
+                    <input type="text" inputmode="decimal" class="form-control" name="close_{{ entry.item.id }}" value="{% if entry.sheet_values.closing_count is not none %}{{ '%.4f'|format(entry.sheet_values.closing_count) }}{% endif %}">
                 </td>
                 <td class="variance">{% if entry.sheet %}{{ '%.2f'|format(variance) }}{% else %}0.00{% endif %}</td>
             </tr>
@@ -75,14 +75,23 @@
     </form>
 </div>
 <script nonce="{{ csp_nonce }}">
+    function parseNumber(value, defaultValue = 0) {
+        if (window.NumericInput) {
+            const parsed = window.NumericInput.parseValue(value);
+            return Number.isFinite(parsed) ? parsed : defaultValue;
+        }
+        const parsed = parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : defaultValue;
+    }
+
     function calcVariance(row) {
-        const sales = parseFloat(row.querySelector('.sales').dataset.sales) || 0;
-        const pre = parseFloat(row.querySelector('input[name^="open_"]').value) || 0;
-        const tin = parseFloat(row.querySelector('input[name^="in_"]').value) || 0;
-        const tout = parseFloat(row.querySelector('input[name^="out_"]').value) || 0;
-        const eaten = parseFloat(row.querySelector('input[name^="eaten_"]').value) || 0;
-        const spoiled = parseFloat(row.querySelector('input[name^="spoiled_"]').value) || 0;
-        const close = parseFloat(row.querySelector('input[name^="close_"]').value) || 0;
+        const sales = parseNumber(row.querySelector('.sales').dataset.sales, 0);
+        const pre = parseNumber(row.querySelector('input[name^="open_"]').value, 0);
+        const tin = parseNumber(row.querySelector('input[name^="in_"]').value, 0);
+        const tout = parseNumber(row.querySelector('input[name^="out_"]').value, 0);
+        const eaten = parseNumber(row.querySelector('input[name^="eaten_"]').value, 0);
+        const spoiled = parseNumber(row.querySelector('input[name^="spoiled_"]').value, 0);
+        const close = parseNumber(row.querySelector('input[name^="close_"]').value, 0);
         const variance = pre + tin - tout - sales - eaten - spoiled - close;
         row.querySelector('.variance').textContent = variance.toFixed(2);
     }

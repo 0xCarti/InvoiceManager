@@ -1217,7 +1217,9 @@
                         unitName = baseUnit;
                     }
                     let factorValue = factorField
-                        ? parseFloat(factorField.value)
+                        ? window.NumericInput
+                            ? window.NumericInput.parseValue(factorField)
+                            : parseFloat(factorField.value)
                         : NaN;
                     if (isBase) {
                         factorValue = 1;
@@ -1507,7 +1509,9 @@
 
                     let unitName = nameField ? nameField.value.trim() : "";
                     let factorValue = factorField
-                        ? parseFloat(factorField.value)
+                        ? window.NumericInput
+                            ? window.NumericInput.parseValue(factorField)
+                            : parseFloat(factorField.value)
                         : NaN;
 
                     if (row.dataset.base === "true") {

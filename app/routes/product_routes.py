@@ -34,6 +34,7 @@ from app.models import (
     TerminalSale,
 )
 from app.utils.activity import log_activity
+from app.utils.numeric import coerce_float
 from app.utils.pagination import build_pagination_args, get_per_page
 
 product = Blueprint("product", __name__)
@@ -64,10 +65,10 @@ def view_products():
         int(x) for x in request.args.getlist("sales_gl_code_id") if x.isdigit()
     ]
     customer_id = request.args.get("customer_id", type=int)
-    cost_min = request.args.get("cost_min", type=float)
-    cost_max = request.args.get("cost_max", type=float)
-    price_min = request.args.get("price_min", type=float)
-    price_max = request.args.get("price_max", type=float)
+    cost_min = coerce_float(request.args.get("cost_min"))
+    cost_max = coerce_float(request.args.get("cost_max"))
+    price_min = coerce_float(request.args.get("price_min"))
+    price_max = coerce_float(request.args.get("price_max"))
     last_sold_before_str = request.args.get("last_sold_before")
     include_unsold = request.args.get("include_unsold") in [
         "1",
@@ -448,7 +449,7 @@ def edit_product_recipe(product_id):
             index = field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item", type=int)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
-            quantity = request.form.get(f"items-{index}-quantity", type=float)
+            quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
             countable = request.form.get(f"items-{index}-countable") == "y"
             if item_id and quantity is not None:
                 db.session.add(
@@ -505,7 +506,7 @@ def calculate_product_cost(product_id):
             qty = 0
         factor = ri.unit.factor if ri.unit else 1
         total += (item_cost or 0) * qty * factor
-    yield_override = request.args.get("yield_quantity", type=float)
+    yield_override = coerce_float(request.args.get("yield_quantity"))
     yield_quantity = product.recipe_yield_quantity or 0
     if yield_override is not None and yield_override > 0:
         yield_quantity = yield_override

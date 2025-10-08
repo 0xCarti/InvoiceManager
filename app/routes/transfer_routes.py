@@ -29,6 +29,7 @@ from app.models import (
     User,
 )
 from app.utils.activity import log_activity
+from app.utils.numeric import coerce_float
 from app.utils.pagination import build_pagination_args, get_per_page
 from app.utils.sms import send_sms
 
@@ -218,7 +219,7 @@ def add_transfer():
         for item_field in items:
             index = item_field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item")
-            quantity = request.form.get(f"items-{index}-quantity", type=float)
+            quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             if item_id:
                 item = db.session.get(Item, item_id)
@@ -283,8 +284,8 @@ def ajax_add_transfer():
         for item_field in items:
             index = item_field.split("-")[2]
             item_id = request.form.get(f"add-items-{index}-item")
-            quantity = request.form.get(
-                f"add-items-{index}-quantity", type=float
+            quantity = coerce_float(
+                request.form.get(f"add-items-{index}-quantity")
             )
             unit_id = request.form.get(f"add-items-{index}-unit", type=int)
             if item_id:
@@ -354,7 +355,7 @@ def edit_transfer(transfer_id):
         for item_field in items:
             index = item_field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item")
-            quantity = request.form.get(f"items-{index}-quantity", type=float)
+            quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             if (
                 item_id and quantity is not None
@@ -441,7 +442,7 @@ def ajax_edit_transfer(transfer_id):
         for item_field in items:
             index = item_field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item")
-            quantity = request.form.get(f"items-{index}-quantity", type=float)
+            quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             if item_id and quantity is not None:
                 factor = 1

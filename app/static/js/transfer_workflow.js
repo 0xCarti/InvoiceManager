@@ -121,9 +121,8 @@
     unitQtyCol.appendChild(unitQtyLabel);
 
     const unitQtyInput = document.createElement('input');
-    unitQtyInput.type = 'number';
-    unitQtyInput.step = 'any';
-    unitQtyInput.min = '0';
+    unitQtyInput.type = 'text';
+    unitQtyInput.setAttribute('inputmode', 'decimal');
     unitQtyInput.className = 'form-control unit-quantity';
     unitQtyInput.name = `${prefix}-${index}-quantity`;
     unitQtyInput.id = `${prefix}-${index}-quantity`;
@@ -146,9 +145,8 @@
     baseQtyCol.appendChild(baseInputGroup);
 
     const baseQtyInput = document.createElement('input');
-    baseQtyInput.type = 'number';
-    baseQtyInput.step = 'any';
-    baseQtyInput.min = '0';
+    baseQtyInput.type = 'text';
+    baseQtyInput.setAttribute('inputmode', 'decimal');
     baseQtyInput.className = 'form-control base-quantity';
     baseQtyInput.name = `${prefix}-${index}-base_quantity`;
     baseQtyInput.id = `${prefix}-${index}-base_quantity`;
@@ -193,10 +191,15 @@
       }
     }
 
-    const initialBaseQuantity = Number.isFinite(existingBaseQuantity)
-      ? existingBaseQuantity
-      : Number.isFinite(parseFloat(existingBaseQuantity))
-      ? parseFloat(existingBaseQuantity)
+    const parsedExisting =
+      typeof existingBaseQuantity === 'number' &&
+      Number.isFinite(existingBaseQuantity)
+        ? existingBaseQuantity
+        : window.NumericInput
+        ? window.NumericInput.parseValue(existingBaseQuantity)
+        : parseFloat(existingBaseQuantity);
+    const initialBaseQuantity = Number.isFinite(parsedExisting)
+      ? parsedExisting
       : NaN;
 
     if (Number.isFinite(initialBaseQuantity)) {
@@ -211,7 +214,9 @@
     updateLabels();
 
     unitSelect.addEventListener('change', function () {
-      const baseQty = parseFloat(unitQtyInput.dataset.baseQty);
+      const baseQty = window.NumericInput
+        ? window.NumericInput.parseValue(unitQtyInput.dataset.baseQty)
+        : parseFloat(unitQtyInput.dataset.baseQty);
       if (Number.isFinite(baseQty)) {
         updateUnitFromBase(baseQty);
       } else {
@@ -221,7 +226,9 @@
     });
 
     unitQtyInput.addEventListener('input', function () {
-      const unitValue = parseFloat(unitQtyInput.value);
+      const unitValue = window.NumericInput
+        ? window.NumericInput.parseValue(unitQtyInput)
+        : parseFloat(unitQtyInput.value);
       if (Number.isFinite(unitValue)) {
         updateBaseFromUnit(unitValue);
       } else {
@@ -231,7 +238,9 @@
     });
 
     baseQtyInput.addEventListener('input', function () {
-      const baseValue = parseFloat(baseQtyInput.value);
+      const baseValue = window.NumericInput
+        ? window.NumericInput.parseValue(baseQtyInput)
+        : parseFloat(baseQtyInput.value);
       if (Number.isFinite(baseValue)) {
         updateUnitFromBase(baseValue);
       } else {
@@ -239,6 +248,10 @@
         unitQtyInput.dataset.baseQty = '';
       }
     });
+
+    if (window.NumericInput) {
+      window.NumericInput.enableWithin(listItem);
+    }
 
     return listItem;
   }
