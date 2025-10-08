@@ -30,3 +30,11 @@ def test_negative_number_without_prefix_is_allowed(app):
         assert form.validate()
         assert form.value.data == Decimal("-5")
 
+
+def test_expression_field_marks_input_for_numeric_js(app):
+    with app.test_request_context():
+        form = DummyExpressionForm()
+        html = form.value()
+        assert 'data-numeric-input="1"' in html
+        assert 'inputmode="decimal"' in html
+
