@@ -51,6 +51,75 @@
     return Number.isFinite(parsed) ? parsed : defaultValue;
   }
 
+  function getStepDecimalPlaces(input) {
+    if (!input) {
+      return null;
+    }
+    const stepAttr = input.getAttribute('step');
+    if (!stepAttr) {
+      return null;
+    }
+    const trimmed = stepAttr.trim();
+    if (!trimmed || trimmed.toLowerCase() === 'any') {
+      return null;
+    }
+    const decimalIndex = trimmed.indexOf('.');
+    if (decimalIndex === -1) {
+      return null;
+    }
+    const decimalPortion = trimmed.slice(decimalIndex + 1).replace(/[^0-9].*$/, '');
+    return decimalPortion ? decimalPortion.length : null;
+  }
+
+  function formatResolvedValue(input, value) {
+    if (!Number.isFinite(value)) {
+      return '';
+    }
+    let rounded = value;
+    const decimalPlaces = getStepDecimalPlaces(input);
+    const places = Number.isInteger(decimalPlaces) ? decimalPlaces : 10;
+    try {
+      rounded = Number(value.toFixed(places));
+    } catch (error) {
+      rounded = value;
+    }
+    if (!Number.isFinite(rounded)) {
+      rounded = value;
+    }
+    return rounded.toString();
+  }
+
+  function resolveExpressionForInput(input, { dispatchEvents = true } = {}) {
+    if (!(input instanceof window.HTMLInputElement)) {
+      return;
+    }
+    const rawValue = input.value;
+    if (typeof rawValue !== 'string') {
+      return;
+    }
+    const trimmed = rawValue.trim();
+    if (!trimmed || trimmed.charAt(0) !== '=') {
+      return;
+    }
+    const expression = trimmed.slice(1);
+    const result = evaluateExpression(expression);
+    if (!Number.isFinite(result)) {
+      return;
+    }
+    const formatted = formatResolvedValue(input, result);
+    if (formatted === rawValue) {
+      return;
+    }
+    input.value = formatted;
+    if (dispatchEvents) {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
+  function handleInputBlur(event) {
+    resolveExpressionForInput(event.target);
+  }
+
   function enableInput(input) {
     if (!input || input.dataset.numericExpressionEnabled === '1') {
       return;
@@ -67,6 +136,7 @@
     if (!input.hasAttribute('inputmode')) {
       input.setAttribute('inputmode', 'decimal');
     }
+    input.addEventListener('blur', handleInputBlur);
     input.dataset.numericExpressionEnabled = '1';
   }
 
@@ -111,5 +181,6 @@
     parseValue: parseValue,
     parseOrDefault: parseOrDefault,
     evaluateExpression: evaluateExpression,
+    resolveExpressionForInput: resolveExpressionForInput,
   };
 })(window, document);
