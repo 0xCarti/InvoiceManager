@@ -9,6 +9,19 @@
     return Number.isInteger(fixed) ? String(fixed) : String(fixed);
   }
 
+  function parseInputValue(input) {
+    if (!input) {
+      return NaN;
+    }
+    if (window.NumericInput && typeof window.NumericInput.parseValue === 'function') {
+      return window.NumericInput.parseValue(input);
+    }
+    if (typeof input === 'string') {
+      return parseFloat(input);
+    }
+    return parseFloat(input.value);
+  }
+
   function formatRatio(unitName, factor, baseUnit) {
     const formattedFactor = formatNumber(factor);
     return `${unitName} - ${formattedFactor} ${baseUnit}`;
@@ -125,7 +138,6 @@
     unitQtyInput.name = `${prefix}-${index}-quantity`;
     unitQtyInput.id = `${prefix}-${index}-quantity`;
     unitQtyInput.placeholder = 'Transfer Qty';
-    unitQtyInput.dataset.baseQty = '';
     unitQtyCol.appendChild(unitQtyInput);
 
     const baseQtyCol = document.createElement('div');
@@ -162,31 +174,6 @@
       unitQtyLabel.textContent = `${unitName} Quantity`;
     }
 
-    function updateUnitFromBase(baseValue) {
-      const selected = unitSelect.selectedOptions[0];
-      const factor = parseFloat(selected.dataset.factor) || 1;
-      if (Number.isFinite(baseValue)) {
-        unitQtyInput.value = formatNumber(baseValue / factor);
-        unitQtyInput.dataset.baseQty = String(baseValue);
-      } else {
-        unitQtyInput.value = '';
-        unitQtyInput.dataset.baseQty = '';
-      }
-    }
-
-    function updateBaseFromUnit(unitValue) {
-      const selected = unitSelect.selectedOptions[0];
-      const factor = parseFloat(selected.dataset.factor) || 1;
-      if (Number.isFinite(unitValue)) {
-        const baseValue = unitValue * factor;
-        baseQtyInput.value = formatNumber(baseValue);
-        unitQtyInput.dataset.baseQty = String(baseValue);
-      } else {
-        baseQtyInput.value = '';
-        unitQtyInput.dataset.baseQty = '';
-      }
-    }
-
     const parsedExisting =
       typeof existingBaseQuantity === 'number' &&
       Number.isFinite(existingBaseQuantity)
@@ -198,51 +185,70 @@
       ? parsedExisting
       : NaN;
 
+    unitQtyInput.dataset.unitBaseQty = '';
+
     if (Number.isFinite(initialBaseQuantity)) {
-      baseQtyInput.value = formatNumber(initialBaseQuantity);
-      updateUnitFromBase(initialBaseQuantity);
-    } else {
-      unitQtyInput.value = '';
-      baseQtyInput.value = '';
-      unitQtyInput.dataset.baseQty = '';
+      const selected = unitSelect.selectedOptions[0];
+      const factor = parseFloat(selected.dataset.factor) || 1;
+      if (factor > 0) {
+        const rawUnitQty = Math.floor(initialBaseQuantity / factor);
+        const unitQty = Number.isFinite(rawUnitQty) ? rawUnitQty : 0;
+        let remainder = initialBaseQuantity - unitQty * factor;
+        if (Math.abs(remainder) < 1e-9) {
+          remainder = 0;
+        }
+        if (unitQty > 0) {
+          const unitBaseQty = unitQty * factor;
+          unitQtyInput.value = formatNumber(unitQty);
+          unitQtyInput.dataset.unitBaseQty = String(unitBaseQty);
+        }
+        if (unitQty === 0) {
+          if (initialBaseQuantity !== 0) {
+            baseQtyInput.value = formatNumber(initialBaseQuantity);
+          }
+        } else if (remainder > 0) {
+          baseQtyInput.value = formatNumber(remainder);
+        }
+      } else {
+        baseQtyInput.value = formatNumber(initialBaseQuantity);
+      }
     }
 
     updateLabels();
 
     unitSelect.addEventListener('change', function () {
-      const baseQty = window.NumericInput
-        ? window.NumericInput.parseValue(unitQtyInput.dataset.baseQty)
-        : parseFloat(unitQtyInput.dataset.baseQty);
-      if (Number.isFinite(baseQty)) {
-        updateUnitFromBase(baseQty);
-      } else {
-        unitQtyInput.value = '';
+      const storedBaseQty = parseInputValue(unitQtyInput.dataset.unitBaseQty);
+      if (Number.isFinite(storedBaseQty)) {
+        const selected = unitSelect.selectedOptions[0];
+        const factor = parseFloat(selected.dataset.factor) || 1;
+        const newUnitValue = storedBaseQty / factor;
+        if (Number.isFinite(newUnitValue)) {
+          unitQtyInput.value = formatNumber(newUnitValue);
+          unitQtyInput.dataset.unitBaseQty = String(storedBaseQty);
+        }
       }
       updateLabels();
     });
 
     unitQtyInput.addEventListener('input', function () {
-      const unitValue = window.NumericInput
-        ? window.NumericInput.parseValue(unitQtyInput)
-        : parseFloat(unitQtyInput.value);
+      const unitValue = parseInputValue(unitQtyInput);
       if (Number.isFinite(unitValue)) {
-        updateBaseFromUnit(unitValue);
+        const selected = unitSelect.selectedOptions[0];
+        const factor = parseFloat(selected.dataset.factor) || 1;
+        const baseQty = unitValue * factor;
+        if (Number.isFinite(baseQty)) {
+          unitQtyInput.dataset.unitBaseQty = String(baseQty);
+        } else {
+          unitQtyInput.dataset.unitBaseQty = '';
+        }
       } else {
-        unitQtyInput.dataset.baseQty = '';
-        baseQtyInput.value = '';
+        unitQtyInput.dataset.unitBaseQty = '';
       }
     });
 
     baseQtyInput.addEventListener('input', function () {
-      const baseValue = window.NumericInput
-        ? window.NumericInput.parseValue(baseQtyInput)
-        : parseFloat(baseQtyInput.value);
-      if (Number.isFinite(baseValue)) {
-        updateUnitFromBase(baseValue);
-      } else {
-        unitQtyInput.value = '';
-        unitQtyInput.dataset.baseQty = '';
-      }
+      // Base quantity represents additional base units and should not
+      // overwrite the transfer unit quantity. No automatic updates needed.
     });
 
     if (window.NumericInput) {

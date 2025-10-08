@@ -220,22 +220,31 @@ def add_transfer():
             index = item_field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item")
             quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
+            base_quantity = coerce_float(
+                request.form.get(f"items-{index}-base_quantity")
+            )
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             if item_id:
                 item = db.session.get(Item, item_id)
-                if item and quantity is not None:
+                if item and (quantity is not None or base_quantity is not None):
                     factor = 1
                     if unit_id:
                         unit = db.session.get(ItemUnit, unit_id)
                         if unit:
                             factor = unit.factor
-                    transfer_item = TransferItem(
-                        transfer_id=transfer.id,
-                        item_id=item.id,
-                        quantity=quantity * factor,
-                        item_name=item.name,
-                    )
-                    db.session.add(transfer_item)
+                    total_quantity = 0.0
+                    if quantity is not None:
+                        total_quantity += quantity * factor
+                    if base_quantity is not None:
+                        total_quantity += base_quantity
+                    if total_quantity != 0:
+                        transfer_item = TransferItem(
+                            transfer_id=transfer.id,
+                            item_id=item.id,
+                            quantity=total_quantity,
+                            item_name=item.name,
+                        )
+                        db.session.add(transfer_item)
         db.session.commit()
         log_activity(f"Added transfer {transfer.id}")
 
@@ -287,22 +296,31 @@ def ajax_add_transfer():
             quantity = coerce_float(
                 request.form.get(f"add-items-{index}-quantity")
             )
+            base_quantity = coerce_float(
+                request.form.get(f"add-items-{index}-base_quantity")
+            )
             unit_id = request.form.get(f"add-items-{index}-unit", type=int)
             if item_id:
                 item = db.session.get(Item, item_id)
-                if item and quantity is not None:
+                if item and (quantity is not None or base_quantity is not None):
                     factor = 1
                     if unit_id:
                         unit = db.session.get(ItemUnit, unit_id)
                         if unit:
                             factor = unit.factor
-                    transfer_item = TransferItem(
-                        transfer_id=transfer.id,
-                        item_id=item.id,
-                        quantity=quantity * factor,
-                        item_name=item.name,
-                    )
-                    db.session.add(transfer_item)
+                    total_quantity = 0.0
+                    if quantity is not None:
+                        total_quantity += quantity * factor
+                    if base_quantity is not None:
+                        total_quantity += base_quantity
+                    if total_quantity != 0:
+                        transfer_item = TransferItem(
+                            transfer_id=transfer.id,
+                            item_id=item.id,
+                            quantity=total_quantity,
+                            item_name=item.name,
+                        )
+                        db.session.add(transfer_item)
         db.session.commit()
         log_activity(f"Added transfer {transfer.id}")
         socketio.emit("new_transfer", {"message": "New transfer added"})
@@ -356,22 +374,29 @@ def edit_transfer(transfer_id):
             index = item_field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item")
             quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
+            base_quantity = coerce_float(
+                request.form.get(f"items-{index}-base_quantity")
+            )
             unit_id = request.form.get(f"items-{index}-unit", type=int)
-            if (
-                item_id and quantity is not None
-            ):  # Ensure both are provided and valid
+            if item_id and (quantity is not None or base_quantity is not None):
                 factor = 1
                 if unit_id:
                     unit = db.session.get(ItemUnit, unit_id)
                     if unit:
                         factor = unit.factor
-                new_transfer_item = TransferItem(
-                    transfer_id=transfer.id,
-                    item_id=int(item_id),
-                    quantity=quantity * factor,
-                    item_name=db.session.get(Item, int(item_id)).name,
-                )
-                db.session.add(new_transfer_item)
+                total_quantity = 0.0
+                if quantity is not None:
+                    total_quantity += quantity * factor
+                if base_quantity is not None:
+                    total_quantity += base_quantity
+                if total_quantity != 0:
+                    new_transfer_item = TransferItem(
+                        transfer_id=transfer.id,
+                        item_id=int(item_id),
+                        quantity=total_quantity,
+                        item_name=db.session.get(Item, int(item_id)).name,
+                    )
+                    db.session.add(new_transfer_item)
 
         db.session.commit()
         log_activity(f"Edited transfer {transfer.id}")
@@ -443,20 +468,29 @@ def ajax_edit_transfer(transfer_id):
             index = item_field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item")
             quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
+            base_quantity = coerce_float(
+                request.form.get(f"items-{index}-base_quantity")
+            )
             unit_id = request.form.get(f"items-{index}-unit", type=int)
-            if item_id and quantity is not None:
+            if item_id and (quantity is not None or base_quantity is not None):
                 factor = 1
                 if unit_id:
                     unit = db.session.get(ItemUnit, unit_id)
                     if unit:
                         factor = unit.factor
-                new_transfer_item = TransferItem(
-                    transfer_id=transfer.id,
-                    item_id=int(item_id),
-                    quantity=quantity * factor,
-                    item_name=db.session.get(Item, int(item_id)).name,
-                )
-                db.session.add(new_transfer_item)
+                total_quantity = 0.0
+                if quantity is not None:
+                    total_quantity += quantity * factor
+                if base_quantity is not None:
+                    total_quantity += base_quantity
+                if total_quantity != 0:
+                    new_transfer_item = TransferItem(
+                        transfer_id=transfer.id,
+                        item_id=int(item_id),
+                        quantity=total_quantity,
+                        item_name=db.session.get(Item, int(item_id)).name,
+                    )
+                    db.session.add(new_transfer_item)
         db.session.commit()
         log_activity(f"Edited transfer {transfer.id}")
         row_html = render_template(
