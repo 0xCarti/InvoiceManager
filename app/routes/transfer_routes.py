@@ -49,8 +49,10 @@ def _extract_transfer_items(prefix: str):
 
     Returns
     -------
-    list[tuple[Item, float]]
-        A list of ``(Item, quantity)`` tuples for valid rows.
+    list[dict[str, object]]
+        A list of dictionaries describing each valid row. Each dictionary
+        contains the ``Item`` instance, the combined ``total_quantity``, and
+        the captured unit selection/quantity details.
     """
 
     pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)-item$")
@@ -68,7 +70,7 @@ def _extract_transfer_items(prefix: str):
         if item is None:
             continue
 
-        quantity = coerce_float(
+        unit_quantity = coerce_float(
             request.form.get(f"{prefix}-{index}-quantity")
         )
         base_quantity = coerce_float(
@@ -83,13 +85,24 @@ def _extract_transfer_items(prefix: str):
                 factor = unit.factor
 
         total_quantity = 0.0
-        if quantity is not None:
-            total_quantity += quantity * factor
+        unit_base_quantity = None
+        if unit_quantity is not None:
+            unit_base_quantity = unit_quantity * factor
+            total_quantity += unit_base_quantity
         if base_quantity is not None:
             total_quantity += base_quantity
 
         if total_quantity != 0:
-            results.append((item, total_quantity))
+            results.append(
+                {
+                    "item": item,
+                    "total_quantity": total_quantity,
+                    "unit_id": unit_id or None,
+                    "unit_quantity": unit_quantity,
+                    "base_quantity": base_quantity,
+                    "unit_base_quantity": unit_base_quantity,
+                }
+            )
 
     return results
 
@@ -276,12 +289,16 @@ def add_transfer():
             )
             db.session.add(transfer)
 
-            for item, total_quantity in item_entries:
+            for entry in item_entries:
+                item = entry["item"]
                 transfer.transfer_items.append(
                     TransferItem(
                         transfer=transfer,
                         item_id=item.id,
-                        quantity=total_quantity,
+                        quantity=entry["total_quantity"],
+                        unit_id=entry["unit_id"],
+                        unit_quantity=entry["unit_quantity"],
+                        base_quantity=entry["base_quantity"],
                         item_name=item.name,
                     )
                 )
@@ -333,12 +350,16 @@ def ajax_add_transfer():
             )
             db.session.add(transfer)
 
-            for item, total_quantity in item_entries:
+            for entry in item_entries:
+                item = entry["item"]
                 transfer.transfer_items.append(
                     TransferItem(
                         transfer=transfer,
                         item_id=item.id,
-                        quantity=total_quantity,
+                        quantity=entry["total_quantity"],
+                        unit_id=entry["unit_id"],
+                        unit_quantity=entry["unit_quantity"],
+                        base_quantity=entry["base_quantity"],
                         item_name=item.name,
                     )
                 )
@@ -395,12 +416,16 @@ def edit_transfer(transfer_id):
 
             TransferItem.query.filter_by(transfer_id=transfer.id).delete()
 
-            for item, total_quantity in item_entries:
+            for entry in item_entries:
+                item = entry["item"]
                 transfer.transfer_items.append(
                     TransferItem(
                         transfer=transfer,
                         item_id=item.id,
-                        quantity=total_quantity,
+                        quantity=entry["total_quantity"],
+                        unit_id=entry["unit_id"],
+                        unit_quantity=entry["unit_quantity"],
+                        base_quantity=entry["base_quantity"],
                         item_name=item.name,
                     )
                 )
@@ -413,10 +438,19 @@ def edit_transfer(transfer_id):
         flash("There was an error submitting the transfer.", "error")
 
     # For GET requests or if the form doesn't validate, pass existing items to the template
-    items = [
-        {"id": item.item_id, "name": item.item.name, "quantity": item.quantity}
-        for item in transfer.transfer_items
-    ]
+    items = []
+    for transfer_item in transfer.transfer_items:
+        item_obj = transfer_item.item
+        items.append(
+            {
+                "id": transfer_item.item_id,
+                "name": item_obj.name if item_obj else transfer_item.item_name,
+                "quantity": transfer_item.quantity,
+                "unit_id": transfer_item.unit_id,
+                "unit_quantity": transfer_item.unit_quantity,
+                "base_quantity": transfer_item.base_quantity,
+            }
+        )
     return render_template(
         "transfers/edit_transfer.html",
         form=form,
@@ -431,14 +465,19 @@ def transfer_json(transfer_id):
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
-    items = [
-        {
-            "id": ti.item_id,
-            "name": ti.item.name if ti.item else ti.item_name,
-            "quantity": ti.quantity,
-        }
-        for ti in transfer.transfer_items
-    ]
+    items = []
+    for ti in transfer.transfer_items:
+        item_obj = ti.item
+        items.append(
+            {
+                "id": ti.item_id,
+                "name": item_obj.name if item_obj else ti.item_name,
+                "quantity": ti.quantity,
+                "unit_id": ti.unit_id,
+                "unit_quantity": ti.unit_quantity,
+                "base_quantity": ti.base_quantity,
+            }
+        )
     return jsonify(
         {
             "id": transfer.id,
@@ -477,12 +516,16 @@ def ajax_edit_transfer(transfer_id):
             transfer.to_location_name = to_location.name if to_location else ""
             TransferItem.query.filter_by(transfer_id=transfer.id).delete()
 
-            for item, total_quantity in item_entries:
+            for entry in item_entries:
+                item = entry["item"]
                 transfer.transfer_items.append(
                     TransferItem(
                         transfer=transfer,
                         item_id=item.id,
-                        quantity=total_quantity,
+                        quantity=entry["total_quantity"],
+                        unit_id=entry["unit_id"],
+                        unit_quantity=entry["unit_quantity"],
+                        base_quantity=entry["base_quantity"],
                         item_name=item.name,
                     )
                 )

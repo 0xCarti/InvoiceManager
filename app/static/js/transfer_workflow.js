@@ -49,14 +49,39 @@
       itemId,
       itemName,
       unitsData,
-      existingBaseQuantity,
+      existingValues = {},
     } = options;
+
+    function toFiniteNumber(value) {
+      if (value === undefined || value === null || value === '') {
+        return NaN;
+      }
+      if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : NaN;
+      }
+      if (typeof value === 'string') {
+        const parsed = parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : NaN;
+      }
+      return NaN;
+    }
 
     const units = ensureUnits(unitsData);
     const baseUnit = unitsData.base_unit;
     const defaultUnit = units.find(function (unit) {
       return unit.transfer_default;
     }) || units[0];
+
+    const rawExistingUnitId =
+      existingValues.unitId !== undefined
+        ? existingValues.unitId
+        : existingValues.unit_id;
+    const numericExistingUnitId = toFiniteNumber(rawExistingUnitId);
+    const hasExistingUnitSelection =
+      numericExistingUnitId === 0 || Number.isFinite(numericExistingUnitId);
+    const targetUnitValue = hasExistingUnitSelection
+      ? String(numericExistingUnitId)
+      : String(defaultUnit.id || 0);
 
     const listItem = document.createElement('div');
     listItem.className = 'transfer-item card mb-3';
@@ -114,13 +139,26 @@
       const option = document.createElement('option');
       const unitName = unit.id === 0 ? baseUnit : unit.name;
       const factor = Number.isFinite(unit.factor) ? unit.factor : 1;
-      option.value = unit.id || 0;
+      option.value = String(unit.id || 0);
       option.dataset.factor = factor;
       option.dataset.unitName = unitName;
-      option.selected = unit.id === defaultUnit.id;
+      option.selected = hasExistingUnitSelection
+        ? option.value === targetUnitValue
+        : unit.id === defaultUnit.id;
       option.textContent = formatRatio(unitName, factor, baseUnit);
       unitSelect.appendChild(option);
     });
+
+    if (hasExistingUnitSelection) {
+      const matchingOption = Array.from(unitSelect.options).some(function (
+        option,
+      ) {
+        return option.value === targetUnitValue;
+      });
+      if (matchingOption) {
+        unitSelect.value = targetUnitValue;
+      }
+    }
 
     const unitQtyCol = document.createElement('div');
     unitQtyCol.className = 'col-md-4 col-sm-6';
@@ -168,49 +206,86 @@
     baseUnitTag.textContent = baseUnit;
     baseInputGroup.appendChild(baseUnitTag);
 
+    function getSelectedOption() {
+      return unitSelect.selectedOptions[0] || unitSelect.options[0];
+    }
+
     function updateLabels() {
-      const selected = unitSelect.selectedOptions[0];
-      const unitName = selected.dataset.unitName || selected.textContent || baseUnit;
+      const selected = getSelectedOption();
+      const unitName = selected
+        ? selected.dataset.unitName || selected.textContent || baseUnit
+        : baseUnit;
       unitQtyLabel.textContent = `${unitName} Quantity`;
     }
 
-    const parsedExisting =
-      typeof existingBaseQuantity === 'number' &&
-      Number.isFinite(existingBaseQuantity)
-        ? existingBaseQuantity
-        : window.NumericInput
-        ? window.NumericInput.parseValue(existingBaseQuantity)
-        : parseFloat(existingBaseQuantity);
-    const initialBaseQuantity = Number.isFinite(parsedExisting)
-      ? parsedExisting
-      : NaN;
+    const storedUnitQuantity = toFiniteNumber(existingValues.unitQuantity);
+    const storedBaseQuantity = toFiniteNumber(existingValues.baseQuantity);
+    const storedTotalQuantity = toFiniteNumber(existingValues.totalQuantity);
 
     unitQtyInput.dataset.unitBaseQty = '';
 
-    if (Number.isFinite(initialBaseQuantity)) {
-      const selected = unitSelect.selectedOptions[0];
-      const factor = parseFloat(selected.dataset.factor) || 1;
-      if (factor > 0) {
-        const rawUnitQty = Math.floor(initialBaseQuantity / factor);
-        const unitQty = Number.isFinite(rawUnitQty) ? rawUnitQty : 0;
-        let remainder = initialBaseQuantity - unitQty * factor;
-        if (Math.abs(remainder) < 1e-9) {
-          remainder = 0;
-        }
-        if (unitQty > 0) {
-          const unitBaseQty = unitQty * factor;
-          unitQtyInput.value = formatNumber(unitQty);
-          unitQtyInput.dataset.unitBaseQty = String(unitBaseQty);
-        }
-        if (unitQty === 0) {
-          if (initialBaseQuantity !== 0) {
-            baseQtyInput.value = formatNumber(initialBaseQuantity);
+    const initialSelected = getSelectedOption();
+    const initialFactor = initialSelected
+      ? parseFloat(initialSelected.dataset.factor) || 1
+      : 1;
+
+    if (Number.isFinite(storedUnitQuantity)) {
+      unitQtyInput.value = formatNumber(storedUnitQuantity);
+      const baseFromUnits = storedUnitQuantity * initialFactor;
+      if (Number.isFinite(baseFromUnits)) {
+        unitQtyInput.dataset.unitBaseQty = String(baseFromUnits);
+        if (!Number.isFinite(storedBaseQuantity) && Number.isFinite(storedTotalQuantity)) {
+          let remainder = storedTotalQuantity - baseFromUnits;
+          if (Math.abs(remainder) < 1e-9) {
+            remainder = 0;
           }
-        } else if (remainder > 0) {
-          baseQtyInput.value = formatNumber(remainder);
+          if (remainder > 0) {
+            baseQtyInput.value = formatNumber(remainder);
+          }
         }
-      } else {
-        baseQtyInput.value = formatNumber(initialBaseQuantity);
+      }
+    }
+
+    if (Number.isFinite(storedBaseQuantity)) {
+      baseQtyInput.value = formatNumber(storedBaseQuantity);
+    }
+
+    if (!Number.isFinite(storedUnitQuantity) && Number.isFinite(storedTotalQuantity)) {
+      if (initialFactor > 0) {
+        const derivedUnitQty = Math.floor(storedTotalQuantity / initialFactor);
+        if (Number.isFinite(derivedUnitQty) && derivedUnitQty > 0) {
+          const derivedBaseQty = derivedUnitQty * initialFactor;
+          unitQtyInput.value = formatNumber(derivedUnitQty);
+          unitQtyInput.dataset.unitBaseQty = String(derivedBaseQty);
+          if (!Number.isFinite(storedBaseQuantity)) {
+            let remainder = storedTotalQuantity - derivedBaseQty;
+            if (Math.abs(remainder) < 1e-9) {
+              remainder = 0;
+            }
+            if (remainder > 0) {
+              baseQtyInput.value = formatNumber(remainder);
+            }
+          }
+        } else if (!Number.isFinite(storedBaseQuantity)) {
+          baseQtyInput.value = formatNumber(storedTotalQuantity);
+        }
+      } else if (!Number.isFinite(storedBaseQuantity)) {
+        baseQtyInput.value = formatNumber(storedTotalQuantity);
+      }
+    }
+
+    if (
+      Number.isFinite(storedUnitQuantity) &&
+      !Number.isFinite(storedBaseQuantity) &&
+      Number.isFinite(storedTotalQuantity)
+    ) {
+      const baseFromUnits = storedUnitQuantity * initialFactor;
+      let remainder = storedTotalQuantity - baseFromUnits;
+      if (Math.abs(remainder) < 1e-9) {
+        remainder = 0;
+      }
+      if (remainder > 0) {
+        baseQtyInput.value = formatNumber(remainder);
       }
     }
 
