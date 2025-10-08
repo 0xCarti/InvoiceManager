@@ -99,17 +99,15 @@
 
     units.forEach(function (unit) {
       const option = document.createElement('option');
+      const unitName = unit.id === 0 ? baseUnit : unit.name;
+      const factor = Number.isFinite(unit.factor) ? unit.factor : 1;
       option.value = unit.id || 0;
-      option.dataset.factor = unit.factor;
-      option.dataset.unitName = unit.id === 0 ? baseUnit : unit.name;
+      option.dataset.factor = factor;
+      option.dataset.unitName = unitName;
       option.selected = unit.id === defaultUnit.id;
-      option.textContent = unit.id === 0 ? baseUnit : unit.name;
+      option.textContent = formatRatio(unitName, factor, baseUnit);
       unitSelect.appendChild(option);
     });
-
-    const ratioDisplay = document.createElement('div');
-    ratioDisplay.className = 'form-text text-muted ratio-display mt-1';
-    unitCol.appendChild(ratioDisplay);
 
     const unitQtyCol = document.createElement('div');
     unitQtyCol.className = 'col-md-4 col-sm-6';
@@ -161,8 +159,6 @@
     function updateLabels() {
       const selected = unitSelect.selectedOptions[0];
       const unitName = selected.dataset.unitName || selected.textContent || baseUnit;
-      const factor = parseFloat(selected.dataset.factor) || 1;
-      ratioDisplay.textContent = formatRatio(unitName, factor, baseUnit);
       unitQtyLabel.textContent = `${unitName} Quantity`;
     }
 
