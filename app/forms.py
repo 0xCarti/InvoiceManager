@@ -1,5 +1,9 @@
+import ast
+import operator
 import os
+import re
 from datetime import date
+from decimal import Decimal, DivisionByZero, InvalidOperation
 from functools import lru_cache
 from zoneinfo import available_timezones
 
@@ -11,7 +15,7 @@ from wtforms import (
     BooleanField,
     DateField,
     DateTimeLocalField,
-    DecimalField,
+    DecimalField as WTFormsDecimalField,
     FieldList,
     FileField,
     FormField,
@@ -69,6 +73,111 @@ PURCHASE_RECEIVE_DEPARTMENT_CONFIG = [
 PURCHASE_RECEIVE_DEPARTMENT_CHOICES = [
     (key, label) for key, label, _ in PURCHASE_RECEIVE_DEPARTMENT_CONFIG
 ]
+
+
+class ExpressionParsingError(ValueError):
+    """Raised when a math expression cannot be parsed or evaluated."""
+
+
+_ALLOWED_BINOPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+}
+_ALLOWED_UNARYOPS = {
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
+_EXPRESSION_CHARS_RE = re.compile(r"[+\-*/()]")
+
+
+def _evaluate_math_expression(expression: str) -> Decimal:
+    """Safely evaluate a restricted arithmetic expression and return a Decimal."""
+
+    try:
+        parsed = ast.parse(expression, mode="eval")
+    except SyntaxError as exc:  # pragma: no cover - ast gives limited info
+        raise ExpressionParsingError(
+            "Enter a valid equation using numbers, +, -, *, /, and parentheses."
+        ) from exc
+    return _evaluate_ast_node(parsed.body)
+
+
+def _evaluate_ast_node(node: ast.AST) -> Decimal:
+    if isinstance(node, ast.BinOp):
+        op_type = type(node.op)
+        if op_type not in _ALLOWED_BINOPS:
+            raise ExpressionParsingError("Use only +, -, *, and / in equations.")
+        left = _evaluate_ast_node(node.left)
+        right = _evaluate_ast_node(node.right)
+        try:
+            return _ALLOWED_BINOPS[op_type](left, right)
+        except DivisionByZero as exc:
+            raise ExpressionParsingError("Division by zero is not allowed.") from exc
+        except InvalidOperation as exc:
+            raise ExpressionParsingError("Enter a valid numerical equation.") from exc
+    if isinstance(node, ast.UnaryOp):
+        op_type = type(node.op)
+        if op_type not in _ALLOWED_UNARYOPS:
+            raise ExpressionParsingError("Use only + or - as unary operators.")
+        operand = _evaluate_ast_node(node.operand)
+        return _ALLOWED_UNARYOPS[op_type](operand)
+    if isinstance(node, ast.Constant):
+        if not isinstance(node.value, (int, float)):
+            raise ExpressionParsingError("Only numeric values are allowed in equations.")
+        return Decimal(str(node.value))
+    if isinstance(node, ast.Num):  # pragma: no cover - legacy for Python <3.8
+        return Decimal(str(node.n))
+    raise ExpressionParsingError("Enter a valid numerical equation.")
+
+
+def _looks_like_expression(value: str) -> bool:
+    stripped = value.strip()
+    if stripped.startswith(("+", "-")):
+        stripped = stripped[1:].lstrip()
+    return bool(_EXPRESSION_CHARS_RE.search(stripped))
+
+
+class ExpressionDecimalField(WTFormsDecimalField):
+    """Decimal field that supports simple math expressions prefixed with '='."""
+
+    expression_prefix = "="
+
+    def process_formdata(self, valuelist):
+        if not valuelist:
+            return super().process_formdata(valuelist)
+
+        raw_value = valuelist[0]
+        if raw_value is None:
+            return super().process_formdata(valuelist)
+
+        text = str(raw_value).strip()
+        if not text:
+            return super().process_formdata(valuelist)
+
+        if text.startswith(self.expression_prefix):
+            expression = text[len(self.expression_prefix) :].strip()
+            if not expression:
+                self.data = None
+                raise ValueError("Enter a calculation after '='.")
+            try:
+                self.data = _evaluate_math_expression(expression)
+            except ExpressionParsingError as exc:
+                self.data = None
+                raise ValueError(str(exc)) from exc
+            self.raw_data = valuelist
+            return
+
+        if _looks_like_expression(text):
+            self.data = None
+            raise ValueError("To enter a calculation, start the value with '='.")
+
+        super().process_formdata(valuelist)
+
+
+# Replace the imported DecimalField with the enhanced version for local use.
+DecimalField = ExpressionDecimalField
 
 
 def load_item_choices():
