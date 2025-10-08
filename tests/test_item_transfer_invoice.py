@@ -262,6 +262,18 @@ def test_transfer_expected_counts_updated(client, app):
         assert l2.expected_count == 0
 
 
+def test_transfer_item_form_nested_csrf_disabled(app):
+    with app.test_request_context('/'):
+        from app.forms import TransferForm
+
+        form = TransferForm(prefix='add')
+        entry = form.items.entries[0]
+
+        # Nested transfer item forms should not require CSRF tokens so that
+        # dynamically added rows from JavaScript post successfully.
+        assert not hasattr(entry, 'csrf_token')
+
+
 def test_stand_sheet_shows_expected_counts(client, app):
     user_id = create_user(app, "stand@example.com")
     with app.app_context():
