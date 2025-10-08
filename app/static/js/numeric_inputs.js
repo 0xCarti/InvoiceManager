@@ -2,9 +2,6 @@
   'use strict';
 
   const EXPRESSION_ALLOWED_RE = /^[0-9+\-*/().\s]+$/;
-  const EXPRESSION_CHARS_RE = /[+\-*/()]/;
-  const EXPRESSION_PREFIX = '=';
-  const EXPRESSION_WARNING_MESSAGE = "To enter a calculation, start the value with '='.";
 
   function evaluateExpression(expression) {
     if (typeof expression !== 'string') {
@@ -35,7 +32,7 @@
     if (!text) {
       return NaN;
     }
-    if (text.startsWith(EXPRESSION_PREFIX)) {
+    if (text.startsWith('=')) {
       return evaluateExpression(text.slice(1));
     }
     const normalized = text.replace(/,/g, '');
@@ -54,51 +51,6 @@
     return Number.isFinite(parsed) ? parsed : defaultValue;
   }
 
-  function requiresExpressionPrefix(value) {
-    if (value === null || value === undefined) {
-      return false;
-    }
-    const text = String(value).trim();
-    if (!text || text.startsWith(EXPRESSION_PREFIX)) {
-      return false;
-    }
-    let stripped = text;
-    if (stripped.startsWith('+') || stripped.startsWith('-')) {
-      stripped = stripped.slice(1).trimStart();
-    }
-    if (!stripped) {
-      return false;
-    }
-    return EXPRESSION_CHARS_RE.test(stripped);
-  }
-
-  function updateExpressionWarning(input, shouldReport) {
-    if (!input) {
-      return;
-    }
-    const needsPrefix = requiresExpressionPrefix(input.value);
-    if (needsPrefix) {
-      input.setCustomValidity(EXPRESSION_WARNING_MESSAGE);
-      if (shouldReport && input.dataset.numericExpressionWarned !== '1') {
-        if (typeof input.reportValidity === 'function') {
-          input.reportValidity();
-        }
-        input.dataset.numericExpressionWarned = '1';
-      }
-    } else {
-      input.setCustomValidity('');
-      delete input.dataset.numericExpressionWarned;
-    }
-  }
-
-  function handleExpressionInput(event) {
-    updateExpressionWarning(event.currentTarget || event.target, true);
-  }
-
-  function handleExpressionBlur(event) {
-    updateExpressionWarning(event.currentTarget || event.target, false);
-  }
-
   function enableInput(input) {
     if (!input || input.dataset.numericExpressionEnabled === '1') {
       return;
@@ -115,14 +67,7 @@
     if (!input.hasAttribute('inputmode')) {
       input.setAttribute('inputmode', 'decimal');
     }
-    if (input.dataset.numericExpressionWarningBound !== '1') {
-      input.addEventListener('input', handleExpressionInput);
-      input.addEventListener('change', handleExpressionBlur);
-      input.addEventListener('blur', handleExpressionBlur);
-      input.dataset.numericExpressionWarningBound = '1';
-    }
     input.dataset.numericExpressionEnabled = '1';
-    updateExpressionWarning(input, false);
   }
 
   function enableWithin(root) {
