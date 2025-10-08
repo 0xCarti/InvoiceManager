@@ -88,11 +88,58 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('tbody tr').forEach(function(row){
-            row.querySelectorAll('input').forEach(function(inp){
-                inp.addEventListener('input', function(){ calcVariance(row); });
+        const rows = Array.from(document.querySelectorAll('tbody tr'));
+        const columns = [];
+
+        rows.forEach(function(row) {
+            const inputs = Array.from(row.querySelectorAll('input'));
+            inputs.forEach(function(inp, colIdx) {
+                if (!columns[colIdx]) {
+                    columns[colIdx] = [];
+                }
+                columns[colIdx].push(inp);
+                inp.dataset.columnIndex = colIdx;
+                inp.addEventListener('input', function() { calcVariance(row); });
             });
             calcVariance(row);
+        });
+
+        columns.forEach(function(col) {
+            col.forEach(function(inp, rowIdx) {
+                inp.dataset.rowIndex = rowIdx;
+            });
+        });
+
+        function moveWithinColumn(input, direction) {
+            const columnIndex = Number(input.dataset.columnIndex);
+            const rowIndex = Number(input.dataset.rowIndex);
+            if (Number.isNaN(columnIndex) || Number.isNaN(rowIndex)) {
+                return false;
+            }
+            const column = columns[columnIndex];
+            if (!column) {
+                return false;
+            }
+            const targetIndex = rowIndex + direction;
+            if (targetIndex < 0 || targetIndex >= column.length) {
+                return false;
+            }
+            const target = column[targetIndex];
+            target.focus();
+            target.select();
+            return true;
+        }
+
+        document.querySelectorAll('tbody input').forEach(function(input) {
+            input.addEventListener('keydown', function(e) {
+                if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) {
+                    return;
+                }
+                const direction = e.shiftKey ? -1 : 1;
+                if (moveWithinColumn(input, direction)) {
+                    e.preventDefault();
+                }
+            });
         });
     });
 </script>
