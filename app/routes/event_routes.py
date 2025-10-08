@@ -44,6 +44,7 @@ from app.models import (
     TerminalSaleProductAlias,
 )
 from app.utils.activity import log_activity
+from app.utils.numeric import coerce_float
 from app.utils.units import (
     DEFAULT_BASE_UNIT_CONVERSIONS,
     convert_quantity,
@@ -1774,24 +1775,18 @@ def stand_sheet(event_id, location_id):
                     event_location_id=el.id, item_id=item_id
                 )
                 db.session.add(sheet)
-            opening = request.form.get(
-                f"open_{item_id}", type=float, default=0
+            opening = coerce_float(request.form.get(f"open_{item_id}"), default=0.0)
+            transferred_in = coerce_float(
+                request.form.get(f"in_{item_id}"), default=0.0
             )
-            transferred_in = request.form.get(
-                f"in_{item_id}", type=float, default=0
+            transferred_out = coerce_float(
+                request.form.get(f"out_{item_id}"), default=0.0
             )
-            transferred_out = request.form.get(
-                f"out_{item_id}", type=float, default=0
+            eaten = coerce_float(request.form.get(f"eaten_{item_id}"), default=0.0)
+            spoiled = coerce_float(
+                request.form.get(f"spoiled_{item_id}"), default=0.0
             )
-            eaten = request.form.get(
-                f"eaten_{item_id}", type=float, default=0
-            )
-            spoiled = request.form.get(
-                f"spoiled_{item_id}", type=float, default=0
-            )
-            closing = request.form.get(
-                f"close_{item_id}", type=float, default=0
-            )
+            closing = coerce_float(request.form.get(f"close_{item_id}"), default=0.0)
             sheet.opening_count = _convert_report_value_to_base(
                 opening or 0, base_unit, report_unit
             )
@@ -1939,16 +1934,15 @@ def count_sheet(event_id, location_id):
                     event_location_id=el.id, item_id=item_id
                 )
                 db.session.add(sheet)
-            recv_qty = (
-                request.form.get(f"recv_{item_id}", type=float, default=0) or 0
-            )
-            trans_qty = (
-                request.form.get(f"trans_{item_id}", type=float, default=0)
-                or 0
-            )
-            base_qty = (
-                request.form.get(f"base_{item_id}", type=float, default=0) or 0
-            )
+            recv_qty = coerce_float(
+                request.form.get(f"recv_{item_id}"), default=0.0
+            ) or 0
+            trans_qty = coerce_float(
+                request.form.get(f"trans_{item_id}"), default=0.0
+            ) or 0
+            base_qty = coerce_float(
+                request.form.get(f"base_{item_id}"), default=0.0
+            ) or 0
             recv_factor = (
                 entry["recv_unit"].factor if entry["recv_unit"] else 0
             )

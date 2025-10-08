@@ -176,8 +176,8 @@
                 <input type="hidden" name="items-${index}-position" class="item-position" value="">
             </div>
             <div class="col-auto unit-col"><select name="items-${index}-unit" id="items-${index}-unit" class="form-control unit-select" data-selected=""></select></div>
-            <div class="col quantity-col"><input type="number" step="any" name="items-${index}-quantity" id="items-${index}-quantity" class="form-control quantity"></div>
-            <div class="col cost-col"><input type="number" step="any" name="items-${index}-cost" id="items-${index}-cost" class="form-control cost"></div>
+            <div class="col quantity-col"><input type="text" name="items-${index}-quantity" id="items-${index}-quantity" class="form-control quantity" inputmode="decimal"></div>
+            <div class="col cost-col"><input type="text" name="items-${index}-cost" id="items-${index}-cost" class="form-control cost" inputmode="decimal"></div>
             <div class="col location-col"><select name="items-${index}-location_id" id="items-${index}-location_id" class="form-select location-select">${locationOptions}</select></div>
             <div class="col gl-code-col"><select name="items-${index}-gl_code" id="items-${index}-gl_code" class="form-control gl-code-select">${glCodeOptions}</select></div>
             <div class="col line-total-col"><span class="line-total">0.00</span></div>
@@ -277,19 +277,28 @@
         glSelect.value = defaultValue;
     }
 
+    function parseNumber(value, defaultValue = 0) {
+        if (window.NumericInput) {
+            const parsed = window.NumericInput.parseValue(value);
+            return Number.isFinite(parsed) ? parsed : defaultValue;
+        }
+        const parsed = parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : defaultValue;
+    }
+
     function updateTotals() {
         let total = 0;
         document.querySelectorAll('#items .item-row').forEach(row => {
-            const qty = parseFloat(row.querySelector('.quantity').value) || 0;
-            const price = parseFloat(row.querySelector('.cost').value) || 0;
+            const qty = parseNumber(row.querySelector('.quantity').value, 0);
+            const price = parseNumber(row.querySelector('.cost').value, 0);
             const lineTotal = qty * price;
             row.querySelector('.line-total').textContent = lineTotal.toFixed(2);
             total += lineTotal;
         });
         document.getElementById('item-total').textContent = total.toFixed(2);
-        const gst = parseFloat(document.getElementById('gst').value) || 0;
-        const pst = parseFloat(document.getElementById('pst').value) || 0;
-        const del = parseFloat(document.getElementById('delivery_charge').value) || 0;
+        const gst = parseNumber(document.getElementById('gst').value, 0);
+        const pst = parseNumber(document.getElementById('pst').value, 0);
+        const del = parseNumber(document.getElementById('delivery_charge').value, 0);
         document.getElementById('grand-total').textContent = (total + gst + pst + del).toFixed(2);
     }
 
@@ -297,6 +306,9 @@
         e.preventDefault();
         const row = createRow(itemIndex);
         document.getElementById('items').appendChild(row);
+        if (window.NumericInput) {
+            window.NumericInput.enableWithin(row);
+        }
         const glSelect = row.querySelector('.gl-code-select');
         if (glSelect) {
             glSelect.value = '0';

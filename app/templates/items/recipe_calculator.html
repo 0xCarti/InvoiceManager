@@ -26,7 +26,7 @@
             <div class="row g-3">
                 <div class="col-md-6">
                     <label for="yield-quantity" class="form-label">Recipe Yield Quantity</label>
-                    <input type="number" min="0" step="0.0001" class="form-control" id="yield-quantity" value="1">
+                    <input type="text" inputmode="decimal" class="form-control" id="yield-quantity" value="1">
                     <div class="form-text">How many products this recipe batch makes.</div>
                 </div>
                 <div class="col-md-6">
@@ -79,6 +79,15 @@
         return `$${value.toFixed(2)}`;
     }
 
+    function parseNumber(value, defaultValue = NaN) {
+        if (window.NumericInput) {
+            const parsed = window.NumericInput.parseValue(value);
+            return Number.isFinite(parsed) ? parsed : defaultValue;
+        }
+        const parsed = parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : defaultValue;
+    }
+
     function refreshColumnHeaders() {
         const rows = recipeContainer.querySelectorAll('.recipe-row');
         rows.forEach((row, index) => {
@@ -99,8 +108,8 @@
         });
         batchCostElement.textContent = formatCurrency(total);
 
-        const yieldQuantity = parseFloat(yieldInput.value);
-        if (!Number.isNaN(yieldQuantity) && yieldQuantity > 0) {
+        const yieldQuantity = parseNumber(yieldInput.value);
+        if (Number.isFinite(yieldQuantity) && yieldQuantity > 0) {
             const perProduct = total / yieldQuantity;
             unitCostElement.textContent = formatCurrency(perProduct);
             unitCostElement.classList.remove('text-muted');
@@ -131,11 +140,11 @@
     function updateRowCost(row) {
         const quantityInput = row.querySelector('.quantity-input');
         const lineCostLabel = row.querySelector('.line-cost');
-        const quantity = parseFloat(quantityInput.value);
+        const quantity = parseNumber(quantityInput.value);
         const baseCost = parseFloat(row.dataset.baseCost || '0');
         const factor = parseFloat(row.dataset.unitFactor || '0');
 
-        if (Number.isNaN(quantity) || Number.isNaN(baseCost) || Number.isNaN(factor) || baseCost <= 0 || factor <= 0) {
+        if (!Number.isFinite(quantity) || Number.isNaN(baseCost) || Number.isNaN(factor) || baseCost <= 0 || factor <= 0) {
             lineCostLabel.textContent = '$0.00';
             row.dataset.lineCost = '0';
         } else {
@@ -210,7 +219,7 @@
             </div>
             <div class="col-6 col-md-4 col-lg-2">
                 <label class="form-label column-label">Quantity</label>
-                <input type="number" min="0" step="0.0001" value="1" class="form-control quantity-input">
+                <input type="text" inputmode="decimal" value="1" class="form-control quantity-input">
             </div>
             <div class="col-6 col-md-4 col-lg-1">
                 <div class="form-label column-label">Unit Cost</div>

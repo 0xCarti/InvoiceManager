@@ -68,8 +68,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const yieldInput = document.getElementById('recipe_yield_quantity');
                 let url = `/products/${pid}/calculate_cost`;
                 if (yieldInput) {
-                    const parsedYield = parseFloat(yieldInput.value);
-                    if (!Number.isNaN(parsedYield) && parsedYield > 0) {
+                    const parsedYield = window.NumericInput
+                        ? window.NumericInput.parseValue(yieldInput)
+                        : parseFloat(yieldInput.value);
+                    if (Number.isFinite(parsedYield) && parsedYield > 0) {
                         url += `?yield_quantity=${encodeURIComponent(parsedYield)}`;
                     }
                 }

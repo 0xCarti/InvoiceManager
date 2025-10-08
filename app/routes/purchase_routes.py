@@ -35,6 +35,7 @@ from app.models import (
     Vendor,
 )
 from app.utils.activity import log_activity
+from app.utils.numeric import coerce_float
 from app.routes.report_routes import (
     _invoice_gl_code_rows,
     invoice_gl_code_report,
@@ -233,7 +234,7 @@ def create_purchase_order():
             index = field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item", type=int)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
-            quantity = request.form.get(f"items-{index}-quantity", type=float)
+            quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
             position = request.form.get(f"items-{index}-position", type=int)
             if item_id and quantity is not None:
                 item_entries.append(
@@ -310,13 +311,19 @@ def purchase_order_recommendations():
     """Display demand-based purchase order recommendations."""
 
     params = request.values if request.method == "POST" else request.args
-    lookback_days = params.get("lookback_days", type=int) or 30
+    raw_lookback = coerce_float(params.get("lookback_days"))
+    lookback_days = int(raw_lookback) if raw_lookback is not None else 0
+    if not lookback_days:
+        lookback_days = 30
     location_id = params.get("location_id", type=int)
     item_id = params.get("item_id", type=int)
-    attendance_multiplier = params.get("attendance_multiplier", type=float) or 1.0
-    weather_multiplier = params.get("weather_multiplier", type=float) or 1.0
-    promo_multiplier = params.get("promo_multiplier", type=float) or 1.0
-    lead_time_days = params.get("lead_time_days", type=int) or 3
+    attendance_multiplier = coerce_float(params.get("attendance_multiplier")) or 1.0
+    weather_multiplier = coerce_float(params.get("weather_multiplier")) or 1.0
+    promo_multiplier = coerce_float(params.get("promo_multiplier")) or 1.0
+    raw_lead_time = coerce_float(params.get("lead_time_days"))
+    lead_time_days = int(raw_lead_time) if raw_lead_time is not None else 0
+    if not lead_time_days:
+        lead_time_days = 3
 
     helper = DemandForecastingHelper(
         lookback_days=lookback_days, lead_time_days=lead_time_days
@@ -388,7 +395,7 @@ def purchase_order_recommendations():
         else:
             seed_items = []
             override_map = {
-                key: request.form.get(f"override-{key}", type=float)
+                key: coerce_float(request.form.get(f"override-{key}"))
                 for key in selected_keys
             }
             rec_map = {
@@ -481,7 +488,7 @@ def edit_purchase_order(po_id):
             index = field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item", type=int)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
-            quantity = request.form.get(f"items-{index}-quantity", type=float)
+            quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
             position = request.form.get(f"items-{index}-position", type=int)
             if item_id and quantity is not None:
                 item_entries.append(
@@ -738,8 +745,8 @@ def receive_invoice(po_id):
             index = field.split("-")[1]
             item_id = request.form.get(f"items-{index}-item", type=int)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
-            quantity = request.form.get(f"items-{index}-quantity", type=float)
-            cost = request.form.get(f"items-{index}-cost", type=float)
+            quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
+            cost = coerce_float(request.form.get(f"items-{index}-cost"))
             position = request.form.get(f"items-{index}-position", type=int)
             gl_code_id = request.form.get(f"items-{index}-gl_code", type=int)
             gl_code_id = gl_code_id or None
