@@ -380,6 +380,8 @@
         input.setAttribute('type', 'text');
       }
     }
+    input.setAttribute('data-numeric-input', '1');
+
     if (!input.hasAttribute('inputmode')) {
       input.setAttribute('inputmode', 'decimal');
     }
@@ -407,6 +409,26 @@
   document.addEventListener('DOMContentLoaded', function () {
     enableWithin(document);
   });
+
+  if (document.readyState !== 'loading') {
+    enableWithin(document);
+  }
+
+  document.addEventListener(
+    'focusout',
+    function (event) {
+      const target = event.target;
+      if (
+        !target ||
+        !(target instanceof window.HTMLInputElement) ||
+        target.dataset.numericExpressionEnabled !== '1'
+      ) {
+        return;
+      }
+      resolveExpressionForInput(target);
+    },
+    true
+  );
 
   const observer = new MutationObserver(function (mutations) {
     mutations.forEach(function (mutation) {
