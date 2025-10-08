@@ -184,6 +184,7 @@
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/transfer_workflow.js') }}" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
     var protocol = window.location.protocol;
     var socket = io.connect(protocol + '//' + document.domain + ':' + location.port);
@@ -198,18 +199,18 @@
 
     let addItemIndex = 0;
     document.getElementById('add-item-name').addEventListener('input', function() {
-        var input = this.value;
-        if (input === ''){
+        const input = this.value.trim();
+        if (input === '') {
             document.getElementById('add-suggestions').innerHTML = '';
             return;
         }
-        fetch('/items/search?term=' + input)
+        fetch('/items/search?term=' + encodeURIComponent(input))
             .then(response => response.json())
             .then(data => {
-                var suggestionsDiv = document.getElementById('add-suggestions');
+                const suggestionsDiv = document.getElementById('add-suggestions');
                 suggestionsDiv.innerHTML = '';
                 data.forEach(function(item) {
-                    var suggestion = document.createElement('div');
+                    const suggestion = document.createElement('div');
                     suggestion.textContent = item.name;
                     suggestion.dataset.id = item.id;
                     suggestion.classList.add('suggestion');
@@ -220,66 +221,30 @@
 
     document.addEventListener('click', function(event) {
         if (event.target && event.target.classList.contains('suggestion') && event.target.parentElement.id === 'add-suggestions') {
-            var itemName = event.target.textContent;
-            var itemId = event.target.dataset.id;
+            const itemName = event.target.textContent;
+            const itemId = event.target.dataset.id;
             addItemToList(itemId, itemName);
         }
     });
 
-    // Escape HTML special characters to prevent XSS
-    function escapeHtml(str) {
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
     function addItemToList(id, name) {
         fetch(`/items/${id}/units`).then(r => r.json()).then(data => {
-            const base = data.base_unit;
-            const units = data.units || [];
-            const hasDefault = units.some(u => u.transfer_default);
-            units.unshift({id:0, name: base, factor:1, transfer_default: !hasDefault});
-            var options = '';
-            units.forEach(u => {
-                const label = u.id === 0 ? base : `${u.name} of ${u.factor} ${base}${u.factor != 1 ? 's' : ''}`;
-                options += `<option value="${u.id}" data-factor="${u.factor}" ${u.transfer_default ? 'selected' : ''}>${label}</option>`;
-            });
-            var listItem = document.createElement('div');
-            listItem.classList.add('item-container','d-flex','justify-content-between','align-items-center','mb-2');
-            listItem.innerHTML = `
-                <div style="padding-left: 15px; font-weight: bold;">${escapeHtml(name)}</div>
-                <div class="d-flex align-items-center">
-                    <input type="hidden" name="add-items-${addItemIndex}-item" value="${id}">
-                    <select name="add-items-${addItemIndex}-unit" class="form-control me-2" style="max-width: 160px;">${options}</select>
-                    <input type="number" step="any" class="form-control quantity" name="add-items-${addItemIndex}-quantity" placeholder="Qty" style="max-width: 120px;" data-base-qty="0">
-                    <button type="button" class="btn btn-danger delete-item ms-2">Delete</button>
-                </div>`;
-            const qtyInput = listItem.querySelector('.quantity');
-            const unitSelect = listItem.querySelector('select');
-            qtyInput.addEventListener('input', function(){
-                const factor = parseFloat(unitSelect.selectedOptions[0].dataset.factor);
-                this.dataset.baseQty = (parseFloat(this.value) || 0) * factor;
-            });
-            unitSelect.addEventListener('change', function(){
-                const factor = parseFloat(this.selectedOptions[0].dataset.factor);
-                const qty = listItem.querySelector('.quantity');
-                qty.value = (parseFloat(qty.dataset.baseQty) || 0) / factor;
+            const listItem = TransferWorkflow.createRow({
+                prefix: 'add-items',
+                index: addItemIndex,
+                itemId: id,
+                itemName: name,
+                unitsData: data,
+                existingBaseQuantity: NaN,
             });
             document.getElementById('add-item-list').appendChild(listItem);
             document.getElementById('add-suggestions').innerHTML = '';
             document.getElementById('add-item-name').value = '';
             addItemIndex++;
+        }).catch(error => {
+            console.error('Error loading item units:', error);
         });
     }
-
-    document.getElementById('add-item-list').addEventListener('click', function(event) {
-        if (event.target && event.target.classList.contains('delete-item')) {
-            event.target.closest('.item-container').remove();
-        }
-    });
 
     document.getElementById('add-transfer-form').addEventListener('submit', function(e){
         e.preventDefault();
@@ -304,18 +269,18 @@
     // Edit form functionality
     let editItemIndex = 0;
     document.getElementById('edit-item-name').addEventListener('input', function() {
-        var input = this.value;
-        if (input === ''){
+        const input = this.value.trim();
+        if (input === '') {
             document.getElementById('edit-suggestions').innerHTML = '';
             return;
         }
-        fetch('/items/search?term=' + input)
+        fetch('/items/search?term=' + encodeURIComponent(input))
             .then(response => response.json())
             .then(data => {
-                var suggestionsDiv = document.getElementById('edit-suggestions');
+                const suggestionsDiv = document.getElementById('edit-suggestions');
                 suggestionsDiv.innerHTML = '';
                 data.forEach(function(item) {
-                    var suggestion = document.createElement('div');
+                    const suggestion = document.createElement('div');
                     suggestion.textContent = item.name;
                     suggestion.dataset.id = item.id;
                     suggestion.classList.add('suggestion');
@@ -326,66 +291,28 @@
 
     document.addEventListener('click', function(event) {
         if (event.target && event.target.classList.contains('suggestion') && event.target.parentElement.id === 'edit-suggestions') {
-            var itemName = event.target.textContent;
-            var itemId = event.target.dataset.id;
-            addEditItem({id: itemId, name: itemName, quantity: 0});
+            const itemName = event.target.textContent;
+            const itemId = event.target.dataset.id;
+            addEditItem({id: itemId, name: itemName, quantity: NaN});
             editItemIndex++;
         }
     });
 
-    function escapeHtml(str) {
-        return String(str)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;");
-    }
-
     function addEditItem(item){
         fetch(`/items/${item.id}/units`).then(r => r.json()).then(data => {
-            const base = data.base_unit;
-            const units = data.units || [];
-            const hasDefault = units.some(u => u.transfer_default);
-            units.unshift({id:0, name: base, factor:1, transfer_default: !hasDefault});
-            let defaultUnit = units.find(u => u.transfer_default) || units[0];
-            var options = '';
-            units.forEach(u => {
-                const label = u.id === 0 ? base : `${u.name} of ${u.factor} ${base}${u.factor != 1 ? 's' : ''}`;
-                const selected = u.id === defaultUnit.id ? 'selected' : '';
-                options += `<option value="${u.id}" data-factor="${u.factor}" ${selected}>${label}</option>`;
-            });
-            var listItem = document.createElement('div');
-            listItem.classList.add('item-container','d-flex','justify-content-between','align-items-center','mb-2');
-            const displayQty = item.quantity ? item.quantity / defaultUnit.factor : 0;
-            listItem.innerHTML = `
-                <div style="padding-left: 15px; font-weight: bold;">${escapeHtml(item.name)}</div>
-                <div class="d-flex align-items-center">
-                    <input type="hidden" name="items-${editItemIndex}-item" value="${item.id}">
-                    <select name="items-${editItemIndex}-unit" class="form-control me-2" style="max-width: 160px;">${options}</select>
-                    <input type="number" step="any" class="form-control quantity" name="items-${editItemIndex}-quantity" value="${displayQty}" placeholder="Qty" style="max-width: 120px;" data-base-qty="${item.quantity}">
-                    <button type="button" class="btn btn-danger delete-item ms-2">Delete</button>
-                </div>`;
-            const qtyInput = listItem.querySelector('.quantity');
-            const unitSelect = listItem.querySelector('select');
-            qtyInput.addEventListener('input', function(){
-                const factor = parseFloat(unitSelect.selectedOptions[0].dataset.factor);
-                this.dataset.baseQty = (parseFloat(this.value) || 0) * factor;
-            });
-            unitSelect.addEventListener('change', function(){
-                const factor = parseFloat(this.selectedOptions[0].dataset.factor);
-                const qty = listItem.querySelector('.quantity');
-                qty.value = (parseFloat(qty.dataset.baseQty) || 0) / factor;
+            const listItem = TransferWorkflow.createRow({
+                prefix: 'items',
+                index: editItemIndex,
+                itemId: item.id,
+                itemName: item.name,
+                unitsData: data,
+                existingBaseQuantity: item.quantity,
             });
             document.getElementById('edit-item-list').appendChild(listItem);
+        }).catch(error => {
+            console.error('Error loading item units:', error);
         });
     }
-
-    document.getElementById('edit-item-list').addEventListener('click', function(event) {
-        if (event.target && event.target.classList.contains('delete-item')) {
-            event.target.closest('.item-container').remove();
-        }
-    });
 
     function loadEditTransfer(id){
         fetch(`/transfers/${id}/json`).then(r => r.json()).then(data => {

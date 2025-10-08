@@ -35,23 +35,25 @@
         {{ form.submit(class="btn btn-success") }}
     </form>
 </div>
+<script src="{{ url_for('static', filename='js/transfer_workflow.js') }}" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
+    let itemIndex = 0;
+
     document.getElementById('item-name').addEventListener('input', function() {
-        var input = this.value;
-        if (input === ''){
+        const input = this.value.trim();
+        if (input === '') {
             document.getElementById('suggestions').innerHTML = '';
             return;
         }
-        // Make AJAX request to fetch item suggestions based on input
-        fetch('/items/search?term=' + input)
+        fetch('/items/search?term=' + encodeURIComponent(input))
             .then(response => response.json())
             .then(data => {
-                var suggestionsDiv = document.getElementById('suggestions');
+                const suggestionsDiv = document.getElementById('suggestions');
                 suggestionsDiv.innerHTML = '';
                 data.forEach(function(item) {
-                    var suggestion = document.createElement('div');
-                    suggestion.textContent = item.name; // Display the item name
-                    suggestion.dataset.id = item.id; // Store the item ID in a data attribute
+                    const suggestion = document.createElement('div');
+                    suggestion.textContent = item.name;
+                    suggestion.dataset.id = item.id;
                     suggestion.classList.add('suggestion');
                     suggestionsDiv.appendChild(suggestion);
                 });
@@ -61,102 +63,34 @@
             });
     });
 
-    let itemIndex = 0;
-
     document.addEventListener('click', function(event) {
         if (event.target && event.target.classList.contains('suggestion')) {
-            var itemName = event.target.textContent; // Get the item name from textContent
-            var itemId = event.target.dataset.id; // Get the item ID from data attribute
-            addItemToList({id: itemId, name: itemName}); // Pass an object with both id and name
+            const itemName = event.target.textContent;
+            const itemId = event.target.dataset.id;
+            addItemToList({ id: itemId, name: itemName });
         }
     });
 
     function addItemToList(item) {
-        fetch(`/items/${item.id}/units`).then(r => r.json()).then(data => {
-            const base = data.base_unit;
-            const units = data.units || [];
-            const hasDefault = units.some(u => u.transfer_default);
-            units.unshift({id:0, name: base, factor:1, transfer_default: !hasDefault});
-            var options = '';
-            units.forEach(u => {
-                const label = u.id === 0 ? base : `${u.name} of ${u.factor} ${base}${u.factor != 1 ? 's' : ''}`;
-                options += `<option value="${u.id}" data-factor="${u.factor}" ${u.transfer_default ? 'selected' : ''}>${label}</option>`;
+        fetch(`/items/${item.id}/units`)
+            .then(r => r.json())
+            .then(data => {
+                const listItem = TransferWorkflow.createRow({
+                    prefix: 'items',
+                    index: itemIndex,
+                    itemId: item.id,
+                    itemName: item.name,
+                    unitsData: data,
+                    existingBaseQuantity: NaN,
+                });
+                document.getElementById('item-list').appendChild(listItem);
+                document.getElementById('suggestions').innerHTML = '';
+                document.getElementById('item-name').value = '';
+                itemIndex++;
+            })
+            .catch(error => {
+                console.error('Error loading item units:', error);
             });
-            var listItem = document.createElement('div');
-            listItem.classList.add('item-container', 'd-flex', 'justify-content-between', 'align-items-center', 'mb-2');
-
-            // Left column: item name
-            var nameDiv = document.createElement('div');
-            nameDiv.style.paddingLeft = '15px';
-            nameDiv.style.fontWeight = 'bold';
-            nameDiv.textContent = item.name;
-
-            // Right column: controls
-            var controlsDiv = document.createElement('div');
-            controlsDiv.className = 'd-flex align-items-center';
-
-            var inputHidden = document.createElement('input');
-            inputHidden.type = 'hidden';
-            inputHidden.name = `items-${itemIndex}-item`;
-            inputHidden.value = item.id;
-
-            var selectUnit = document.createElement('select');
-            selectUnit.name = `items-${itemIndex}-unit`;
-            selectUnit.className = 'form-control me-2';
-            selectUnit.style.maxWidth = '160px';
-            units.forEach(u => {
-                const label = u.id === 0 ? base : `${u.name} of ${u.factor} ${base}${u.factor != 1 ? 's' : ''}`;
-                var opt = document.createElement('option');
-                opt.value = u.id;
-                opt.setAttribute('data-factor', u.factor);
-                if (u.transfer_default) opt.selected = true;
-                opt.textContent = label;
-                selectUnit.appendChild(opt);
-            });
-
-            var inputQty = document.createElement('input');
-            inputQty.type = 'number';
-            inputQty.step = 'any';
-            inputQty.className = 'form-control quantity';
-            inputQty.name = `items-${itemIndex}-quantity`;
-            inputQty.placeholder = 'Qty';
-            inputQty.style.maxWidth = '120px';
-            inputQty.dataset.baseQty = "0";
-
-            var btnDelete = document.createElement('button');
-            btnDelete.type = 'button';
-            btnDelete.className = 'btn btn-danger delete-item ml-2';
-            btnDelete.textContent = 'Delete';
-
-            controlsDiv.appendChild(inputHidden);
-            controlsDiv.appendChild(selectUnit);
-            controlsDiv.appendChild(inputQty);
-            controlsDiv.appendChild(btnDelete);
-
-            listItem.appendChild(nameDiv);
-            listItem.appendChild(controlsDiv);
-
-            inputQty.addEventListener('input', function(){
-                const factor = parseFloat(selectUnit.selectedOptions[0].dataset.factor);
-                this.dataset.baseQty = (parseFloat(this.value) || 0) * factor;
-            });
-            selectUnit.addEventListener('change', function(){
-                const factor = parseFloat(this.selectedOptions[0].dataset.factor);
-                inputQty.value = (parseFloat(inputQty.dataset.baseQty) || 0) / factor;
-            });
-            document.getElementById('item-list').appendChild(listItem);
-            document.getElementById('suggestions').innerHTML = '';
-            document.getElementById('item-name').value = '';
-            itemIndex++;
-        });
     }
-
-
-
-        document.getElementById('item-list').addEventListener('click', function(event) {
-            if (event.target && event.target.classList.contains('delete-item')) {
-                event.target.closest('.item-container').remove();
-            }
-        });
 </script>
 {% endblock %}
