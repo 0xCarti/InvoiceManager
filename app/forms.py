@@ -474,14 +474,11 @@ class PurchaseCostForecastForm(FlaskForm):
 
 
 class TransferItemForm(FlaskForm):
-    class Meta:
-        csrf = False
-
     item = SelectField("Item", coerce=int)
     unit = SelectField(
         "Unit", coerce=int, validators=[Optional()], validate_choice=False
     )
-    quantity = DecimalField("Quantity", validators=[Optional()])
+    quantity = DecimalField("Quantity", validators=[InputRequired()])
 
 
 class TransferForm(FlaskForm):
