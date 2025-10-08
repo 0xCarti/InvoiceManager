@@ -298,16 +298,17 @@
         if (event.target && event.target.classList.contains('suggestion') && event.target.parentElement.id === 'edit-suggestions') {
             const itemName = event.target.textContent;
             const itemId = event.target.dataset.id;
-            addEditItem({id: itemId, name: itemName, quantity: NaN});
-            editItemIndex++;
+            const rowIndex = editItemIndex++;
+            addEditItem({id: itemId, name: itemName, quantity: NaN}, rowIndex);
         }
     });
 
-    function addEditItem(item){
+    function addEditItem(item, index){
+        const rowIndex = typeof index === 'number' ? index : editItemIndex++;
         fetch(`/items/${item.id}/units`).then(r => r.json()).then(data => {
             const listItem = TransferWorkflow.createRow({
-                prefix: 'items',
-                index: editItemIndex,
+                prefix: 'edit-items',
+                index: rowIndex,
                 itemId: item.id,
                 itemName: item.name,
                 unitsData: data,
@@ -326,7 +327,10 @@
             document.getElementById('edit-to_location_id').value = data.to_location_id;
             document.getElementById('edit-item-list').innerHTML = '';
             editItemIndex = 0;
-            data.items.forEach(function(it){ addEditItem(it); editItemIndex++; });
+            data.items.forEach(function(it){
+                const rowIndex = editItemIndex++;
+                addEditItem(it, rowIndex);
+            });
             var modal = new bootstrap.Modal(document.getElementById('editTransferModal'));
             modal.show();
         });

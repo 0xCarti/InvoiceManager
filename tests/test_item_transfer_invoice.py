@@ -154,6 +154,68 @@ def test_transfer_flow(client, app):
         assert db.session.get(Transfer, tid) is None
 
 
+def test_ajax_edit_transfer_updates_quantity(client, app):
+    user_id = create_user(app, "ajaxedit@example.com")
+    with app.app_context():
+        loc1 = Location(name="AjaxFrom")
+        loc2 = Location(name="AjaxTo")
+        item = Item(name="AjaxThing", base_unit="each")
+        db.session.add_all([loc1, loc2, item])
+        db.session.commit()
+        unit = ItemUnit(
+            item_id=item.id,
+            name="each",
+            factor=1,
+            receiving_default=True,
+            transfer_default=True,
+        )
+        db.session.add(unit)
+        db.session.commit()
+        loc1_id, loc2_id, item_id = loc1.id, loc2.id, item.id
+        unit_id = unit.id
+
+    transfer_id = None
+    with client:
+        login(client, "ajaxedit@example.com", "pass")
+        add_resp = client.post(
+            "/transfers/add",
+            data={
+                "from_location_id": loc1_id,
+                "to_location_id": loc2_id,
+                "items-0-item": item_id,
+                "items-0-unit": unit_id,
+                "items-0-quantity": 3,
+            },
+            follow_redirects=True,
+        )
+        assert add_resp.status_code == 200
+
+        with app.app_context():
+            transfer = Transfer.query.filter_by(user_id=user_id).first()
+            assert transfer is not None
+            transfer_id = transfer.id
+
+        edit_resp = client.post(
+            f"/transfers/ajax_edit/{transfer_id}",
+            data={
+                "edit-from_location_id": loc1_id,
+                "edit-to_location_id": loc2_id,
+                "edit-items-0-item": item_id,
+                "edit-items-0-unit": unit_id,
+                "edit-items-0-quantity": 7,
+            },
+        )
+        assert edit_resp.status_code == 200
+        payload = edit_resp.get_json()
+        assert payload["success"] is True
+
+    with app.app_context():
+        updated_transfer = db.session.get(Transfer, transfer_id)
+        assert updated_transfer is not None
+        assert len(updated_transfer.transfer_items) == 1
+        assert updated_transfer.transfer_items[0].quantity == 7
+
+
 def test_invoice_creation_total(client, app):
     create_user(app, "invoice@example.com")
     with app.app_context():
@@ -260,6 +322,18 @@ def test_transfer_expected_counts_updated(client, app):
         ).first()
         assert l1.expected_count == 0
         assert l2.expected_count == 0
+
+
+def test_transfer_item_form_nested_csrf_disabled(app):
+    with app.test_request_context('/'):
+        from app.forms import TransferForm
+
+        form = TransferForm(prefix='add')
+        entry = form.items.entries[0]
+
+        # Nested transfer item forms should not require CSRF tokens so that
+        # dynamically added rows from JavaScript post successfully.
+        assert not hasattr(entry, 'csrf_token')
 
 
 def test_stand_sheet_shows_expected_counts(client, app):
