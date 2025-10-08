@@ -3,6 +3,8 @@
 # flake8: noqa
 
 
+import re
+
 from flask import (
     Blueprint,
     abort,
@@ -34,6 +36,62 @@ from app.utils.pagination import build_pagination_args, get_per_page
 from app.utils.sms import send_sms
 
 transfer = Blueprint("transfer", __name__)
+
+
+def _extract_transfer_items(prefix: str):
+    """Parse dynamic transfer item inputs from ``request.form``.
+
+    Parameters
+    ----------
+    prefix:
+        The common prefix used for the transfer item inputs (e.g. ``"items"``
+        or ``"add-items"``).
+
+    Returns
+    -------
+    list[tuple[Item, float]]
+        A list of ``(Item, quantity)`` tuples for valid rows.
+    """
+
+    pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)-item$")
+    results = []
+
+    for key in request.form.keys():
+        match = pattern.match(key)
+        if not match:
+            continue
+        index = match.group(1)
+        item_id = request.form.get(f"{prefix}-{index}-item", type=int)
+        if not item_id:
+            continue
+        item = db.session.get(Item, item_id)
+        if item is None:
+            continue
+
+        quantity = coerce_float(
+            request.form.get(f"{prefix}-{index}-quantity")
+        )
+        base_quantity = coerce_float(
+            request.form.get(f"{prefix}-{index}-base_quantity")
+        )
+        unit_id = request.form.get(f"{prefix}-{index}-unit", type=int)
+
+        factor = 1.0
+        if unit_id:
+            unit = db.session.get(ItemUnit, unit_id)
+            if unit:
+                factor = unit.factor
+
+        total_quantity = 0.0
+        if quantity is not None:
+            total_quantity += quantity * factor
+        if base_quantity is not None:
+            total_quantity += base_quantity
+
+        if total_quantity != 0:
+            results.append((item, total_quantity))
+
+    return results
 
 
 def check_negative_transfer(transfer_obj, multiplier=1):
@@ -198,70 +256,53 @@ def add_transfer():
     """Create a transfer between locations."""
     form = TransferForm()
     if form.validate_on_submit():
-        transfer = Transfer(
-            from_location_id=form.from_location_id.data,
-            to_location_id=form.to_location_id.data,
-            user_id=current_user.id,
-            from_location_name=db.session.get(
-                Location, form.from_location_id.data
-            ).name,
-            to_location_name=db.session.get(
-                Location, form.to_location_id.data
-            ).name,
-        )
-        db.session.add(transfer)
-        # Dynamically determine the number of items added
-        items = [
-            key
-            for key in request.form.keys()
-            if key.startswith("items-") and key.endswith("-item")
-        ]
-        for item_field in items:
-            index = item_field.split("-")[1]
-            item_id = request.form.get(f"items-{index}-item")
-            quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
-            base_quantity = coerce_float(
-                request.form.get(f"items-{index}-base_quantity")
+        item_entries = _extract_transfer_items("items")
+        if not item_entries:
+            form.errors.setdefault("items", []).append(
+                "Add at least one item with a quantity."
             )
-            unit_id = request.form.get(f"items-{index}-unit", type=int)
-            if item_id:
-                item = db.session.get(Item, item_id)
-                if item and (quantity is not None or base_quantity is not None):
-                    factor = 1
-                    if unit_id:
-                        unit = db.session.get(ItemUnit, unit_id)
-                        if unit:
-                            factor = unit.factor
-                    total_quantity = 0.0
-                    if quantity is not None:
-                        total_quantity += quantity * factor
-                    if base_quantity is not None:
-                        total_quantity += base_quantity
-                    if total_quantity != 0:
-                        transfer_item = TransferItem(
-                            transfer_id=transfer.id,
-                            item_id=item.id,
-                            quantity=total_quantity,
-                            item_name=item.name,
-                        )
-                        db.session.add(transfer_item)
-        db.session.commit()
-        log_activity(f"Added transfer {transfer.id}")
+            flash("Please add at least one item to the transfer.", "error")
+        else:
+            from_location = db.session.get(
+                Location, form.from_location_id.data
+            )
+            to_location = db.session.get(Location, form.to_location_id.data)
+            transfer = Transfer(
+                from_location_id=form.from_location_id.data,
+                to_location_id=form.to_location_id.data,
+                user_id=current_user.id,
+                from_location_name=from_location.name if from_location else "",
+                to_location_name=to_location.name if to_location else "",
+            )
+            db.session.add(transfer)
 
-        socketio.emit("new_transfer", {"message": "New transfer added"})
-
-        try:
-            notify_users = User.query.filter_by(notify_transfers=True).all()
-            for user in notify_users:
-                if user.phone_number:
-                    send_sms(
-                        user.phone_number, f"Transfer {transfer.id} created"
+            for item, total_quantity in item_entries:
+                transfer.transfer_items.append(
+                    TransferItem(
+                        transfer=transfer,
+                        item_id=item.id,
+                        quantity=total_quantity,
+                        item_name=item.name,
                     )
-        except Exception:
-            pass
+                )
 
-        flash("Transfer added successfully!", "success")
-        return redirect(url_for("transfer.view_transfers"))
+            db.session.commit()
+            log_activity(f"Added transfer {transfer.id}")
+
+            socketio.emit("new_transfer", {"message": "New transfer added"})
+
+            try:
+                notify_users = User.query.filter_by(notify_transfers=True).all()
+                for user in notify_users:
+                    if user.phone_number:
+                        send_sms(
+                            user.phone_number, f"Transfer {transfer.id} created"
+                        )
+            except Exception:
+                pass
+
+            flash("Transfer added successfully!", "success")
+            return redirect(url_for("transfer.view_transfers"))
     elif form.errors:
         flash("There was an error submitting the transfer.", "error")
 
@@ -273,72 +314,54 @@ def add_transfer():
 def ajax_add_transfer():
     form = TransferForm(prefix="add")
     if form.validate_on_submit():
-        transfer = Transfer(
-            from_location_id=form.from_location_id.data,
-            to_location_id=form.to_location_id.data,
-            user_id=current_user.id,
-            from_location_name=db.session.get(
+        item_entries = _extract_transfer_items("add-items")
+        if not item_entries:
+            form.errors.setdefault("items", []).append(
+                "Add at least one item with a quantity."
+            )
+        else:
+            from_location = db.session.get(
                 Location, form.from_location_id.data
-            ).name,
-            to_location_name=db.session.get(
-                Location, form.to_location_id.data
-            ).name,
-        )
-        db.session.add(transfer)
-        items = [
-            key
-            for key in request.form.keys()
-            if key.startswith("add-items-") and key.endswith("-item")
-        ]
-        for item_field in items:
-            index = item_field.split("-")[2]
-            item_id = request.form.get(f"add-items-{index}-item")
-            quantity = coerce_float(
-                request.form.get(f"add-items-{index}-quantity")
             )
-            base_quantity = coerce_float(
-                request.form.get(f"add-items-{index}-base_quantity")
+            to_location = db.session.get(Location, form.to_location_id.data)
+            transfer = Transfer(
+                from_location_id=form.from_location_id.data,
+                to_location_id=form.to_location_id.data,
+                user_id=current_user.id,
+                from_location_name=from_location.name if from_location else "",
+                to_location_name=to_location.name if to_location else "",
             )
-            unit_id = request.form.get(f"add-items-{index}-unit", type=int)
-            if item_id:
-                item = db.session.get(Item, item_id)
-                if item and (quantity is not None or base_quantity is not None):
-                    factor = 1
-                    if unit_id:
-                        unit = db.session.get(ItemUnit, unit_id)
-                        if unit:
-                            factor = unit.factor
-                    total_quantity = 0.0
-                    if quantity is not None:
-                        total_quantity += quantity * factor
-                    if base_quantity is not None:
-                        total_quantity += base_quantity
-                    if total_quantity != 0:
-                        transfer_item = TransferItem(
-                            transfer_id=transfer.id,
-                            item_id=item.id,
-                            quantity=total_quantity,
-                            item_name=item.name,
-                        )
-                        db.session.add(transfer_item)
-        db.session.commit()
-        log_activity(f"Added transfer {transfer.id}")
-        socketio.emit("new_transfer", {"message": "New transfer added"})
-        try:
-            notify_users = User.query.filter_by(notify_transfers=True).all()
-            for user in notify_users:
-                if user.phone_number:
-                    send_sms(
-                        user.phone_number, f"Transfer {transfer.id} created"
+            db.session.add(transfer)
+
+            for item, total_quantity in item_entries:
+                transfer.transfer_items.append(
+                    TransferItem(
+                        transfer=transfer,
+                        item_id=item.id,
+                        quantity=total_quantity,
+                        item_name=item.name,
                     )
-        except Exception:
-            pass
-        row_html = render_template(
-            "transfers/_transfer_row.html",
-            transfer=transfer,
-            form=TransferForm(),
-        )
-        return jsonify(success=True, html=row_html)
+                )
+
+            db.session.commit()
+            log_activity(f"Added transfer {transfer.id}")
+            socketio.emit("new_transfer", {"message": "New transfer added"})
+            try:
+                notify_users = User.query.filter_by(notify_transfers=True).all()
+                for user in notify_users:
+                    if user.phone_number:
+                        send_sms(
+                            user.phone_number,
+                            f"Transfer {transfer.id} created",
+                        )
+            except Exception:
+                pass
+            row_html = render_template(
+                "transfers/_transfer_row.html",
+                transfer=transfer,
+                form=TransferForm(),
+            )
+            return jsonify(success=True, html=row_html)
     return jsonify(success=False, errors=form.errors), 400
 
 
@@ -352,56 +375,40 @@ def edit_transfer(transfer_id):
     form = TransferForm(obj=transfer)
 
     if form.validate_on_submit():
-        transfer.from_location_id = form.from_location_id.data
-        transfer.to_location_id = form.to_location_id.data
-        transfer.from_location_name = db.session.get(
-            Location, form.from_location_id.data
-        ).name
-        transfer.to_location_name = db.session.get(
-            Location, form.to_location_id.data
-        ).name
-
-        # Clear existing TransferItem entries
-        TransferItem.query.filter_by(transfer_id=transfer.id).delete()
-
-        # Dynamically determine the number of items added, similar to the "add" route
-        items = [
-            key
-            for key in request.form.keys()
-            if key.startswith("items-") and key.endswith("-item")
-        ]
-        for item_field in items:
-            index = item_field.split("-")[1]
-            item_id = request.form.get(f"items-{index}-item")
-            quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
-            base_quantity = coerce_float(
-                request.form.get(f"items-{index}-base_quantity")
+        item_entries = _extract_transfer_items("items")
+        if not item_entries:
+            form.errors.setdefault("items", []).append(
+                "Add at least one item with a quantity."
             )
-            unit_id = request.form.get(f"items-{index}-unit", type=int)
-            if item_id and (quantity is not None or base_quantity is not None):
-                factor = 1
-                if unit_id:
-                    unit = db.session.get(ItemUnit, unit_id)
-                    if unit:
-                        factor = unit.factor
-                total_quantity = 0.0
-                if quantity is not None:
-                    total_quantity += quantity * factor
-                if base_quantity is not None:
-                    total_quantity += base_quantity
-                if total_quantity != 0:
-                    new_transfer_item = TransferItem(
-                        transfer_id=transfer.id,
-                        item_id=int(item_id),
-                        quantity=total_quantity,
-                        item_name=db.session.get(Item, int(item_id)).name,
-                    )
-                    db.session.add(new_transfer_item)
+            flash("Please add at least one item to the transfer.", "error")
+        else:
+            from_location = db.session.get(
+                Location, form.from_location_id.data
+            )
+            to_location = db.session.get(Location, form.to_location_id.data)
+            transfer.from_location_id = form.from_location_id.data
+            transfer.to_location_id = form.to_location_id.data
+            transfer.from_location_name = (
+                from_location.name if from_location else ""
+            )
+            transfer.to_location_name = to_location.name if to_location else ""
 
-        db.session.commit()
-        log_activity(f"Edited transfer {transfer.id}")
-        flash("Transfer updated successfully!", "success")
-        return redirect(url_for("transfer.view_transfers"))
+            TransferItem.query.filter_by(transfer_id=transfer.id).delete()
+
+            for item, total_quantity in item_entries:
+                transfer.transfer_items.append(
+                    TransferItem(
+                        transfer=transfer,
+                        item_id=item.id,
+                        quantity=total_quantity,
+                        item_name=item.name,
+                    )
+                )
+
+            db.session.commit()
+            log_activity(f"Edited transfer {transfer.id}")
+            flash("Transfer updated successfully!", "success")
+            return redirect(url_for("transfer.view_transfers"))
     elif form.errors:
         flash("There was an error submitting the transfer.", "error")
 
@@ -450,55 +457,41 @@ def ajax_edit_transfer(transfer_id):
         abort(404)
     form = TransferForm(prefix="edit")
     if form.validate_on_submit():
-        transfer.from_location_id = form.from_location_id.data
-        transfer.to_location_id = form.to_location_id.data
-        transfer.from_location_name = db.session.get(
-            Location, form.from_location_id.data
-        ).name
-        transfer.to_location_name = db.session.get(
-            Location, form.to_location_id.data
-        ).name
-        TransferItem.query.filter_by(transfer_id=transfer.id).delete()
-        items = [
-            key
-            for key in request.form.keys()
-            if key.startswith("items-") and key.endswith("-item")
-        ]
-        for item_field in items:
-            index = item_field.split("-")[1]
-            item_id = request.form.get(f"items-{index}-item")
-            quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
-            base_quantity = coerce_float(
-                request.form.get(f"items-{index}-base_quantity")
+        item_entries = _extract_transfer_items("items")
+        if not item_entries:
+            form.errors.setdefault("items", []).append(
+                "Add at least one item with a quantity."
             )
-            unit_id = request.form.get(f"items-{index}-unit", type=int)
-            if item_id and (quantity is not None or base_quantity is not None):
-                factor = 1
-                if unit_id:
-                    unit = db.session.get(ItemUnit, unit_id)
-                    if unit:
-                        factor = unit.factor
-                total_quantity = 0.0
-                if quantity is not None:
-                    total_quantity += quantity * factor
-                if base_quantity is not None:
-                    total_quantity += base_quantity
-                if total_quantity != 0:
-                    new_transfer_item = TransferItem(
-                        transfer_id=transfer.id,
-                        item_id=int(item_id),
+        else:
+            from_location = db.session.get(
+                Location, form.from_location_id.data
+            )
+            to_location = db.session.get(Location, form.to_location_id.data)
+            transfer.from_location_id = form.from_location_id.data
+            transfer.to_location_id = form.to_location_id.data
+            transfer.from_location_name = (
+                from_location.name if from_location else ""
+            )
+            transfer.to_location_name = to_location.name if to_location else ""
+            TransferItem.query.filter_by(transfer_id=transfer.id).delete()
+
+            for item, total_quantity in item_entries:
+                transfer.transfer_items.append(
+                    TransferItem(
+                        transfer=transfer,
+                        item_id=item.id,
                         quantity=total_quantity,
-                        item_name=db.session.get(Item, int(item_id)).name,
+                        item_name=item.name,
                     )
-                    db.session.add(new_transfer_item)
-        db.session.commit()
-        log_activity(f"Edited transfer {transfer.id}")
-        row_html = render_template(
-            "transfers/_transfer_row.html",
-            transfer=transfer,
-            form=TransferForm(),
-        )
-        return jsonify(success=True, html=row_html, id=transfer.id)
+                )
+            db.session.commit()
+            log_activity(f"Edited transfer {transfer.id}")
+            row_html = render_template(
+                "transfers/_transfer_row.html",
+                transfer=transfer,
+                form=TransferForm(),
+            )
+            return jsonify(success=True, html=row_html, id=transfer.id)
     return jsonify(success=False, errors=form.errors), 400
 
 

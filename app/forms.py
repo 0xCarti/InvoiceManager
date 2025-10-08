@@ -478,7 +478,7 @@ class TransferItemForm(FlaskForm):
     unit = SelectField(
         "Unit", coerce=int, validators=[Optional()], validate_choice=False
     )
-    quantity = DecimalField("Quantity", validators=[InputRequired()])
+    quantity = DecimalField("Quantity", validators=[Optional()])
 
 
 class TransferForm(FlaskForm):
