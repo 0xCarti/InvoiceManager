@@ -258,7 +258,11 @@ class TransferItem(db.Model):
     )
     item_id = db.Column(db.Integer, db.ForeignKey("item.id"), nullable=False)
     quantity = db.Column(db.Float, nullable=False)
+    unit_id = db.Column(db.Integer, db.ForeignKey("item_unit.id"), nullable=True)
+    unit_quantity = db.Column(db.Float, nullable=True)
+    base_quantity = db.Column(db.Float, nullable=True)
     item = relationship("Item", backref="transfer_items", lazy=True)
+    unit = relationship("ItemUnit", foreign_keys=[unit_id])
     item_name = db.Column(db.String(100), nullable=False, server_default="")
 
 

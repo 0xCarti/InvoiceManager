@@ -90,7 +90,12 @@
                     itemId: item.id,
                     itemName: item.name,
                     unitsData: data,
-                    existingBaseQuantity: item.quantity,
+                    existingValues: {
+                        unitId: item.unit_id,
+                        unitQuantity: item.unit_quantity,
+                        baseQuantity: item.base_quantity,
+                        totalQuantity: item.quantity,
+                    },
                 });
                 document.getElementById('item-list').appendChild(listItem);
             })

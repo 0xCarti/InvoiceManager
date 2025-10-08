@@ -240,7 +240,6 @@
                 itemId: id,
                 itemName: name,
                 unitsData: data,
-                existingBaseQuantity: NaN,
             });
             document.getElementById('add-item-list').appendChild(listItem);
             document.getElementById('add-suggestions').innerHTML = '';
@@ -312,7 +311,12 @@
                 itemId: item.id,
                 itemName: item.name,
                 unitsData: data,
-                existingBaseQuantity: item.quantity,
+                existingValues: {
+                    unitId: item.unit_id,
+                    unitQuantity: item.unit_quantity,
+                    baseQuantity: item.base_quantity,
+                    totalQuantity: item.quantity,
+                },
             });
             document.getElementById('edit-item-list').appendChild(listItem);
         }).catch(error => {
