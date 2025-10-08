@@ -2,6 +2,7 @@
   'use strict';
 
   const EXPRESSION_ALLOWED_RE = /^[0-9+\-*/().\s]+$/;
+  const PLAIN_NUMBER_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
 
   const OPERATOR_PRECEDENCE = {
     '+': 1,
@@ -261,6 +262,46 @@
     return evaluateRpn(rpn);
   }
 
+  function extractExpression(text) {
+    if (typeof text !== 'string') {
+      return null;
+    }
+    let trimmed = text.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    let hadLeadingEquals = false;
+    if (trimmed.charAt(0) === '=') {
+      hadLeadingEquals = true;
+      trimmed = trimmed.slice(1).trim();
+    }
+
+    if (!trimmed) {
+      return null;
+    }
+
+    if (!EXPRESSION_ALLOWED_RE.test(trimmed)) {
+      return null;
+    }
+
+    const compact = trimmed.replace(/\s+/g, '');
+    if (!compact) {
+      return null;
+    }
+
+    if (!hadLeadingEquals) {
+      if (!/[+\-*/()]/.test(compact)) {
+        return null;
+      }
+      if (PLAIN_NUMBER_RE.test(compact)) {
+        return null;
+      }
+    }
+
+    return trimmed;
+  }
+
   function parseValue(value) {
     if (value instanceof window.HTMLInputElement) {
       value = value.value;
@@ -268,14 +309,20 @@
     if (value === null || value === undefined) {
       return NaN;
     }
-    const text = String(value).trim();
-    if (!text) {
+    const text = String(value);
+    const trimmed = text.trim();
+    if (!trimmed) {
       return NaN;
     }
-    if (text.startsWith('=')) {
-      return evaluateExpression(text.slice(1));
+    const expression = extractExpression(trimmed);
+    if (expression !== null) {
+      const evaluated = evaluateExpression(expression);
+      if (Number.isFinite(evaluated)) {
+        return evaluated;
+      }
     }
-    const normalized = text.replace(/,/g, '');
+
+    const normalized = trimmed.replace(/,/g, '');
     const numeric = Number(normalized);
     if (Number.isFinite(numeric)) {
       return numeric;
@@ -329,7 +376,7 @@
     return rounded.toString();
   }
 
-  function resolveExpressionForInput(input, { dispatchEvents = true } = {}) {
+  function resolveExpressionForInput(input, options) {
     if (!(input instanceof window.HTMLInputElement)) {
       return;
     }
@@ -337,11 +384,10 @@
     if (typeof rawValue !== 'string') {
       return;
     }
-    const trimmed = rawValue.trim();
-    if (!trimmed || trimmed.charAt(0) !== '=') {
+    const expression = extractExpression(rawValue);
+    if (expression === null) {
       return;
     }
-    const expression = trimmed.slice(1);
     const result = evaluateExpression(expression);
     if (!Number.isFinite(result)) {
       return;
@@ -351,7 +397,8 @@
       return;
     }
     input.value = formatted;
-    if (!dispatchEvents) {
+    const shouldDispatch = !options || options.dispatchEvents !== false;
+    if (!shouldDispatch) {
       return;
     }
 
