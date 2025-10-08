@@ -82,12 +82,6 @@ class ExpressionDecimalField(WTFormsDecimalField):
 
     expression_prefix = "="
 
-    def __init__(self, *args, render_kw=None, **kwargs):
-        render_kw = dict(render_kw or {})
-        render_kw.setdefault("data-numeric-input", "1")
-        render_kw.setdefault("inputmode", "decimal")
-        super().__init__(*args, render_kw=render_kw, **kwargs)
-
     def process_formdata(self, valuelist):
         if not valuelist:
             return super().process_formdata(valuelist)
