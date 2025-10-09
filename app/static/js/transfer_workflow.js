@@ -93,18 +93,10 @@
       'unit_id',
     ]);
     const numericExistingUnitId = toFiniteNumber(rawExistingUnitId);
-    const baseUnitSelected =
-      rawExistingUnitId === null ||
-      rawExistingUnitId === undefined ||
-      (typeof rawExistingUnitId === 'string' &&
-        rawExistingUnitId.trim() === '') ||
-      numericExistingUnitId === 0;
     const hasExistingUnitSelection =
-      baseUnitSelected || Number.isFinite(numericExistingUnitId);
+      numericExistingUnitId === 0 || Number.isFinite(numericExistingUnitId);
     const targetUnitValue = hasExistingUnitSelection
-      ? baseUnitSelected
-        ? '0'
-        : String(numericExistingUnitId)
+      ? String(numericExistingUnitId)
       : String(defaultUnit.id || 0);
 
     const listItem = document.createElement('div');
@@ -265,8 +257,6 @@
       ? parseFloat(initialSelected.dataset.factor) || 1
       : 1;
 
-    const usingBaseUnit = baseUnitSelected && targetUnitValue === '0';
-
     if (Number.isFinite(storedUnitQuantity)) {
       unitQtyInput.value = formatNumber(storedUnitQuantity);
       const baseFromUnits = storedUnitQuantity * initialFactor;
@@ -289,7 +279,7 @@
     }
 
     if (!Number.isFinite(storedUnitQuantity) && Number.isFinite(storedTotalQuantity)) {
-      if (!usingBaseUnit && initialFactor > 0) {
+      if (initialFactor > 0) {
         const derivedUnitQty = Math.floor(storedTotalQuantity / initialFactor);
         if (Number.isFinite(derivedUnitQty) && derivedUnitQty > 0) {
           const derivedBaseQty = derivedUnitQty * initialFactor;
