@@ -42,6 +42,22 @@
     return units;
   }
 
+  function getFirstDefined(source, keys) {
+    if (!source) {
+      return undefined;
+    }
+    for (let i = 0; i < keys.length; i += 1) {
+      const key = keys[i];
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        const value = source[key];
+        if (value !== undefined) {
+          return value;
+        }
+      }
+    }
+    return undefined;
+  }
+
   function createTransferRow(options) {
     const {
       prefix,
@@ -72,10 +88,10 @@
       return unit.transfer_default;
     }) || units[0];
 
-    const rawExistingUnitId =
-      existingValues.unitId !== undefined
-        ? existingValues.unitId
-        : existingValues.unit_id;
+    const rawExistingUnitId = getFirstDefined(existingValues, [
+      'unitId',
+      'unit_id',
+    ]);
     const numericExistingUnitId = toFiniteNumber(rawExistingUnitId);
     const hasExistingUnitSelection =
       numericExistingUnitId === 0 || Number.isFinite(numericExistingUnitId);
@@ -220,9 +236,19 @@
       unitQtyLabel.textContent = `${unitName} Quantity`;
     }
 
-    const storedUnitQuantity = toFiniteNumber(existingValues.unitQuantity);
-    const storedBaseQuantity = toFiniteNumber(existingValues.baseQuantity);
-    const storedTotalQuantity = toFiniteNumber(existingValues.totalQuantity);
+    const storedUnitQuantity = toFiniteNumber(
+      getFirstDefined(existingValues, ['unitQuantity', 'unit_quantity'])
+    );
+    const storedBaseQuantity = toFiniteNumber(
+      getFirstDefined(existingValues, ['baseQuantity', 'base_quantity'])
+    );
+    const storedTotalQuantity = toFiniteNumber(
+      getFirstDefined(existingValues, [
+        'totalQuantity',
+        'total_quantity',
+        'quantity',
+      ])
+    );
 
     unitQtyInput.dataset.unitBaseQty = '';
 
