@@ -93,10 +93,18 @@
       'unit_id',
     ]);
     const numericExistingUnitId = toFiniteNumber(rawExistingUnitId);
+    const baseUnitSelected =
+      rawExistingUnitId === null ||
+      rawExistingUnitId === undefined ||
+      (typeof rawExistingUnitId === 'string' &&
+        rawExistingUnitId.trim() === '') ||
+      numericExistingUnitId === 0;
     const hasExistingUnitSelection =
-      numericExistingUnitId === 0 || Number.isFinite(numericExistingUnitId);
+      baseUnitSelected || Number.isFinite(numericExistingUnitId);
     const targetUnitValue = hasExistingUnitSelection
-      ? String(numericExistingUnitId)
+      ? baseUnitSelected
+        ? '0'
+        : String(numericExistingUnitId)
       : String(defaultUnit.id || 0);
 
     const listItem = document.createElement('div');
@@ -236,19 +244,23 @@
       unitQtyLabel.textContent = `${unitName} Quantity`;
     }
 
-    const storedUnitQuantity = toFiniteNumber(
-      getFirstDefined(existingValues, ['unitQuantity', 'unit_quantity'])
-    );
-    const storedBaseQuantity = toFiniteNumber(
-      getFirstDefined(existingValues, ['baseQuantity', 'base_quantity'])
-    );
-    const storedTotalQuantity = toFiniteNumber(
-      getFirstDefined(existingValues, [
-        'totalQuantity',
-        'total_quantity',
-        'quantity',
-      ])
-    );
+    const rawUnitQuantity = getFirstDefined(existingValues, [
+      'unitQuantity',
+      'unit_quantity',
+    ]);
+    const rawBaseQuantity = getFirstDefined(existingValues, [
+      'baseQuantity',
+      'base_quantity',
+    ]);
+    const rawTotalQuantity = getFirstDefined(existingValues, [
+      'totalQuantity',
+      'total_quantity',
+      'quantity',
+    ]);
+
+    const storedUnitQuantity = toFiniteNumber(rawUnitQuantity);
+    const storedBaseQuantity = toFiniteNumber(rawBaseQuantity);
+    const storedTotalQuantity = toFiniteNumber(rawTotalQuantity);
 
     unitQtyInput.dataset.unitBaseQty = '';
 
@@ -256,6 +268,8 @@
     const initialFactor = initialSelected
       ? parseFloat(initialSelected.dataset.factor) || 1
       : 1;
+
+    const usingBaseUnit = baseUnitSelected && targetUnitValue === '0';
 
     if (Number.isFinite(storedUnitQuantity)) {
       unitQtyInput.value = formatNumber(storedUnitQuantity);
@@ -272,14 +286,26 @@
           }
         }
       }
+    } else if (
+      rawUnitQuantity !== undefined &&
+      rawUnitQuantity !== null &&
+      String(rawUnitQuantity).trim() !== ''
+    ) {
+      unitQtyInput.value = String(rawUnitQuantity);
     }
 
     if (Number.isFinite(storedBaseQuantity)) {
       baseQtyInput.value = formatNumber(storedBaseQuantity);
+    } else if (
+      rawBaseQuantity !== undefined &&
+      rawBaseQuantity !== null &&
+      String(rawBaseQuantity).trim() !== ''
+    ) {
+      baseQtyInput.value = String(rawBaseQuantity);
     }
 
     if (!Number.isFinite(storedUnitQuantity) && Number.isFinite(storedTotalQuantity)) {
-      if (initialFactor > 0) {
+      if (!usingBaseUnit && initialFactor > 0) {
         const derivedUnitQty = Math.floor(storedTotalQuantity / initialFactor);
         if (Number.isFinite(derivedUnitQty) && derivedUnitQty > 0) {
           const derivedBaseQty = derivedUnitQty * initialFactor;
