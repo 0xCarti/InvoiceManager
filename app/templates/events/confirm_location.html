@@ -1,8 +1,112 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Confirm {{ event_location.location.name }} for {{ event_location.event.name }}</h2>
-<form method="post">
-    {{ form.csrf_token }}
-    {{ form.submit(class='btn btn-primary mt-2') }}
-</form>
+<div class="container mt-4">
+    <h2 class="mb-3">Confirm {{ event_location.location.name }} for {{ event_location.event.name }}</h2>
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">Terminal Sales Summary</div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-6">App Sales Total</dt>
+                        <dd class="col-sm-6">
+                            {% if sales_summary.app_total_amount %}
+                                ${{ '%.2f'|format(sales_summary.app_total_amount) }}
+                            {% else %}
+                                $0.00
+                            {% endif %}
+                            {% if sales_summary.app_total_quantity %}
+                                <div class="text-muted small">Quantity: {{ '%.2f'|format(sales_summary.app_total_quantity) }}</div>
+                            {% endif %}
+                        </dd>
+                        <dt class="col-sm-6">Terminal File Total</dt>
+                        <dd class="col-sm-6">
+                            {% if sales_summary.file_total_amount is not none %}
+                                ${{ '%.2f'|format(sales_summary.file_total_amount) }}
+                                {% if sales_summary.file_total_quantity is not none %}
+                                    <div class="text-muted small">Quantity: {{ '%.2f'|format(sales_summary.file_total_quantity) }}</div>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">Not available</span>
+                            {% endif %}
+                            {% if sales_summary.source_location %}
+                                <div class="text-muted small">File Location: {{ sales_summary.source_location }}</div>
+                            {% endif %}
+                        </dd>
+                        <dt class="col-sm-6">Amount Variance</dt>
+                        <dd class="col-sm-6">
+                            {% if sales_summary.amount_variance is not none %}
+                                ${{ '%.2f'|format(sales_summary.amount_variance) }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">Location Details</div>
+                <div class="card-body">
+                    <p class="mb-1"><strong>Event:</strong> {{ event_location.event.name }}</p>
+                    <p class="mb-1"><strong>Location:</strong> {{ location.name }}</p>
+                    <p class="mb-0"><strong>Event Dates:</strong> {{ event_location.event.start_date }} – {{ event_location.event.end_date }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">Stand Sheet Variances</div>
+        <div class="card-body p-0">
+            {% if stand_variances %}
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Item</th>
+                                <th scope="col">Closing Count</th>
+                                <th scope="col">Variance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in stand_variances %}
+                                <tr>
+                                    <td>
+                                        {{ entry.item.name if entry.item else 'Item Removed' }}
+                                        {% if entry.report_unit_label %}
+                                            <span class="text-muted">({{ entry.report_unit_label }})</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if entry.closing is not none %}
+                                            {{ '%.2f'|format(entry.closing) }}
+                                        {% else %}
+                                            <span class="text-muted">No count</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if entry.variance is not none %}
+                                            {{ '%.2f'|format(entry.variance) }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="mb-0 p-3 text-muted">No stand sheet data has been recorded for this location.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <form method="post" class="text-end">
+        {{ form.csrf_token }}
+        {{ form.submit(class='btn btn-primary') }}
+    </form>
+</div>
 {% endblock %}

@@ -776,6 +776,12 @@ class EventLocation(db.Model):
         back_populates="event_location",
         cascade="all, delete-orphan",
     )
+    terminal_sales_summary = relationship(
+        "EventLocationTerminalSalesSummary",
+        back_populates="event_location",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     stand_sheet_items = relationship(
         "EventStandSheetItem",
         back_populates="event_location",
@@ -802,6 +808,29 @@ class TerminalSale(db.Model):
         "EventLocation", back_populates="terminal_sales"
     )
     product = relationship("Product", back_populates="terminal_sales")
+
+
+class EventLocationTerminalSalesSummary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_location_id = db.Column(
+        db.Integer,
+        db.ForeignKey("event_location.id"),
+        nullable=False,
+        unique=True,
+    )
+    source_location = db.Column(db.String(255), nullable=True)
+    total_quantity = db.Column(db.Float, nullable=True)
+    total_amount = db.Column(db.Float, nullable=True)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    event_location = relationship(
+        "EventLocation", back_populates="terminal_sales_summary"
+    )
 
 
 class TerminalSaleProductAlias(db.Model):
