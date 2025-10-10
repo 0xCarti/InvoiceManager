@@ -286,7 +286,8 @@ def create_event_ajax():
         return render_template(
             "events/_event_row.html", e=ev, type_labels=dict(EVENT_TYPES)
         )
-    return "Invalid data", 400
+    response = {"errors": form.errors or {"form": ["Invalid data submitted."]}}
+    return jsonify(response), 400
 
 
 @event.route("/events/<int:event_id>/edit", methods=["GET", "POST"])
