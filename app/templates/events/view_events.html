@@ -134,6 +134,22 @@
 
 <script nonce="{{ csp_nonce }}">
 $(function(){
+    const startDateInput = document.getElementById('start_date');
+    if (startDateInput) {
+        flatpickr(startDateInput, {
+            dateFormat: 'Y-m-d',
+            allowInput: true
+        });
+    }
+
+    const endDateInput = document.getElementById('end_date');
+    if (endDateInput) {
+        flatpickr(endDateInput, {
+            dateFormat: 'Y-m-d',
+            allowInput: true
+        });
+    }
+
     $('#filterForm').on('submit', function(e){
         e.preventDefault();
         $.post('{{ url_for('event.filter_events_ajax') }}', $(this).serialize(), function(data){
