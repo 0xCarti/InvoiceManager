@@ -2,6 +2,7 @@ import os
 from datetime import date
 from decimal import Decimal
 from functools import lru_cache
+from datetime import datetime
 from zoneinfo import available_timezones
 
 from flask import g
@@ -122,6 +123,48 @@ class ExpressionDecimalField(WTFormsDecimalField):
 
 # Replace the imported DecimalField with the enhanced version for local use.
 DecimalField = ExpressionDecimalField
+
+
+class FlexibleDateField(DateField):
+    """Date field that accepts multiple string formats.
+
+    The flatpickr widget used in the UI submits dates formatted as
+    ``"F j, Y"`` (for example, ``"July 1, 2024"``) when the alternative
+    input is enabled.  Flask-WTF's :class:`~wtforms.fields.DateField`
+    expects the primary ``format`` (``"%Y-%m-%d"`` by default) and will
+    otherwise raise a validation error.  This subclass attempts to parse
+    several common formats so the server can handle both the original
+    ``YYYY-MM-DD`` values and the human-friendly flatpickr values.
+    """
+
+    def __init__(self, *args, alt_formats=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if alt_formats is None:
+            alt_formats = ("%B %d, %Y", "%b %d, %Y")
+        self.alt_formats = alt_formats
+
+    def process_formdata(self, valuelist):
+        if valuelist:
+            raw_value = valuelist[0]
+            if raw_value is not None:
+                text = str(raw_value).strip()
+                if text:
+                    base_formats = (
+                        list(self.format)
+                        if isinstance(self.format, (list, tuple))
+                        else [self.format]
+                    )
+                    for fmt in (*base_formats, *self.alt_formats):
+                        try:
+                            self.data = datetime.strptime(text, fmt).date()
+                        except ValueError:
+                            continue
+                        else:
+                            self.raw_data = [text]
+                            return
+                    self.data = None
+                    raise ValueError(self.gettext("Not a valid date value"))
+        super().process_formdata(valuelist)
 
 
 def load_item_choices():
@@ -992,8 +1035,8 @@ EVENT_TYPES = [
 
 class EventForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired()])
-    start_date = DateField("Start Date", validators=[DataRequired()])
-    end_date = DateField("End Date", validators=[DataRequired()])
+    start_date = FlexibleDateField("Start Date", validators=[DataRequired()])
+    end_date = FlexibleDateField("End Date", validators=[DataRequired()])
     event_type = SelectField(
         "Event Type", choices=EVENT_TYPES, validators=[DataRequired()]
     )
