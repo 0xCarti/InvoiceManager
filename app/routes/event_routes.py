@@ -35,6 +35,7 @@ from app.forms import (
 from app.models import (
     Event,
     EventLocation,
+    EventLocationTerminalSalesSummary,
     EventStandSheetItem,
     Item,
     Location,
@@ -754,8 +755,19 @@ def upload_terminal_sales(event_id):
                     )
                 )
 
-    def _apply_pending_sales(pending_sales: list[dict]) -> set[str]:
+    def _apply_pending_sales(
+        pending_sales: list[dict],
+        pending_totals: list[dict] | None = None,
+    ) -> set[str]:
         updated_locations: set[str] = set()
+        totals_map: dict[int, dict] = {}
+        if pending_totals:
+            for entry in pending_totals:
+                try:
+                    el_id = int(entry.get("event_location_id"))
+                except (TypeError, ValueError):
+                    continue
+                totals_map[el_id] = entry
         for entry in pending_sales:
             event_location_id = entry.get("event_location_id")
             product_id = entry.get("product_id")
@@ -781,6 +793,19 @@ def upload_terminal_sales(event_id):
                     )
                 )
             updated_locations.add(event_location.location.name)
+        if totals_map:
+            for el_id, data in totals_map.items():
+                summary = EventLocationTerminalSalesSummary.query.filter_by(
+                    event_location_id=el_id
+                ).first()
+                if summary is None:
+                    summary = EventLocationTerminalSalesSummary(
+                        event_location_id=el_id
+                    )
+                    db.session.add(summary)
+                summary.source_location = data.get("source_location")
+                summary.total_quantity = data.get("total_quantity")
+                summary.total_amount = data.get("total_amount")
         return updated_locations
 
     def _apply_resolution_actions(issue_state: dict) -> tuple[list[str], list[str]]:
@@ -846,6 +871,7 @@ def upload_terminal_sales(event_id):
 
             queue: list[dict] = state_data.get("queue") or []
             pending_sales: list[dict] = state_data.get("pending_sales") or []
+            pending_totals: list[dict] = state_data.get("pending_totals") or []
             selected_locations: list[str] = state_data.get("selected_locations") or []
             issue_index = state_data.get("issue_index", 0)
             action = request.form.get("action", "")
@@ -942,7 +968,9 @@ def upload_terminal_sales(event_id):
                 current_issue = None
 
             if issue_index >= len(queue):
-                updated_locations = _apply_pending_sales(pending_sales)
+                updated_locations = _apply_pending_sales(
+                    pending_sales, pending_totals
+                )
                 price_updates, menu_updates = _apply_resolution_actions(
                     {"queue": queue}
                 )
@@ -980,6 +1008,7 @@ def upload_terminal_sales(event_id):
 
             state_data["queue"] = queue
             state_data["pending_sales"] = pending_sales
+            state_data["pending_totals"] = pending_totals
             state_data["selected_locations"] = selected_locations
             state_data["issue_index"] = issue_index
             state_token = serializer.dumps(state_data)
@@ -1170,6 +1199,7 @@ def upload_terminal_sales(event_id):
                 product_resolution_required = False
 
             pending_sales: list[dict] = []
+            pending_totals: list[dict] = []
             selected_locations: list[str] = []
             issue_queue: list[dict] = []
             location_allowed_products: dict[int, set[int]] = {}
@@ -1240,6 +1270,14 @@ def upload_terminal_sales(event_id):
                         )
                 if location_updated:
                     selected_locations.append(el.location.name)
+                    pending_totals.append(
+                        {
+                            "event_location_id": el.id,
+                            "source_location": selected_loc,
+                            "total_quantity": loc_sales.get("total"),
+                            "total_amount": loc_sales.get("total_amount"),
+                        }
+                    )
                 if price_issues or menu_issues:
                     issue_queue.append(
                         {
@@ -1257,6 +1295,7 @@ def upload_terminal_sales(event_id):
                     "queue": issue_queue,
                     "pending_sales": pending_sales,
                     "selected_locations": selected_locations,
+                    "pending_totals": pending_totals,
                     "issue_index": 0,
                 }
                 state_token = serializer.dumps(state_data)
@@ -1289,7 +1328,7 @@ def upload_terminal_sales(event_id):
                     issue_total=len(issue_queue),
                 )
 
-            updated_locations = _apply_pending_sales(pending_sales)
+            updated_locations = _apply_pending_sales(pending_sales, pending_totals)
             if updated_locations:
                 db.session.commit()
                 log_activity(
@@ -1535,8 +1574,66 @@ def confirm_location(event_id, el_id):
         )
         flash("Location confirmed")
         return redirect(url_for("event.view_event", event_id=event_id))
+    location, stand_items = _get_stand_items(el.location_id, event_id)
+    stand_variances: list[dict] = []
+    for entry in stand_items:
+        sheet_values = entry.get("sheet_values")
+        opening_val = getattr(sheet_values, "opening_count", None) or 0.0
+        in_val = getattr(sheet_values, "transferred_in", None) or 0.0
+        out_val = getattr(sheet_values, "transferred_out", None) or 0.0
+        eaten_val = getattr(sheet_values, "eaten", None) or 0.0
+        spoiled_val = getattr(sheet_values, "spoiled", None) or 0.0
+        closing_val = getattr(sheet_values, "closing_count", None) or 0.0
+        sales_val = entry.get("sales") or 0.0
+        variance = (
+            opening_val
+            + in_val
+            - out_val
+            - sales_val
+            - eaten_val
+            - spoiled_val
+            - closing_val
+        )
+        has_sheet = entry.get("sheet") is not None
+        stand_variances.append(
+            {
+                "item": entry.get("item"),
+                "report_unit_label": entry.get("report_unit_label"),
+                "variance": variance if has_sheet else 0.0,
+                "closing": closing_val if has_sheet else None,
+            }
+        )
+
+    app_total_quantity = sum(float(sale.quantity or 0.0) for sale in el.terminal_sales)
+    app_total_amount = sum(
+        float(sale.quantity or 0.0) * float(sale.product.price or 0.0)
+        for sale in el.terminal_sales
+    )
+    summary_record = el.terminal_sales_summary
+    file_total_amount = None
+    file_total_quantity = None
+    source_location_name = None
+    if summary_record is not None:
+        file_total_amount = summary_record.total_amount
+        file_total_quantity = summary_record.total_quantity
+        source_location_name = summary_record.source_location
+    amount_variance = None
+    if file_total_amount is not None:
+        amount_variance = app_total_amount - float(file_total_amount)
     return render_template(
-        "events/confirm_location.html", form=form, event_location=el
+        "events/confirm_location.html",
+        form=form,
+        event_location=el,
+        stand_variances=stand_variances,
+        sales_summary={
+            "app_total_quantity": app_total_quantity,
+            "app_total_amount": app_total_amount,
+            "file_total_quantity": file_total_quantity,
+            "file_total_amount": file_total_amount,
+            "amount_variance": amount_variance,
+            "source_location": source_location_name,
+        },
+        location=location,
     )
 
 
