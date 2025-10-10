@@ -12,6 +12,43 @@
 </form>
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function () {
+    const form = document.querySelector('form');
+
+    function syncDatePickerValues(formElement) {
+        if (!formElement) {
+            return;
+        }
+
+        formElement.querySelectorAll('input[name="start_date"], input[name="end_date"]').forEach((input) => {
+            const picker = input && input._flatpickr;
+            if (!picker) {
+                return;
+            }
+
+            if (picker.selectedDates && picker.selectedDates.length > 0) {
+                input.value = picker.formatDate(
+                    picker.selectedDates[0],
+                    picker.config.dateFormat
+                );
+                return;
+            }
+
+            const altInput = picker.altInput;
+            if (!altInput || !altInput.value) {
+                return;
+            }
+
+            const parsed = picker.parseDate(
+                altInput.value,
+                picker.config.altFormat || picker.config.dateFormat
+            );
+
+            if (parsed) {
+                input.value = picker.formatDate(parsed, picker.config.dateFormat);
+            }
+        });
+    }
+
     document.querySelectorAll('input[name="start_date"], input[name="end_date"]').forEach((input) => {
         if (input && !input._flatpickr) {
             flatpickr(input, {
@@ -22,6 +59,12 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
     });
+
+    if (form) {
+        form.addEventListener('submit', function () {
+            syncDatePickerValues(form);
+        });
+    }
 });
 </script>
 {% endblock %}
