@@ -823,6 +823,11 @@ def upload_terminal_sales(event_id):
                     "products": {},
                     "total": 0.0,
                     "total_amount": 0.0,
+                    "net_including_tax_total": 0.0,
+                    "discount_total": 0.0,
+                    "_has_net_including_tax_total": False,
+                    "_has_discount_total": False,
+                    "_raw_amount_total": 0.0,
                 },
             )
             product_entry = loc_entry["products"].setdefault(
@@ -838,14 +843,31 @@ def upload_terminal_sales(event_id):
                 product_entry["prices"].append(price)
             if amount is not None:
                 product_entry["amount"] += amount
-                loc_entry["total_amount"] += amount
+                loc_entry["_raw_amount_total"] += amount
             loc_entry["total"] += qty
+            net_including_total = entry.get("net_including_tax_total")
+            if net_including_total is not None:
+                loc_entry["net_including_tax_total"] += net_including_total
+                loc_entry["_has_net_including_tax_total"] = True
+            discount_total = entry.get("discount_total")
+            if discount_total is not None:
+                loc_entry["discount_total"] += discount_total
+                loc_entry["_has_discount_total"] = True
 
         for loc_entry in grouped.values():
             for product_entry in loc_entry["products"].values():
                 if product_entry["prices"]:
                     unique_prices = sorted({round(p, 4) for p in product_entry["prices"]})
                     product_entry["prices"] = unique_prices
+            has_net = loc_entry.pop("_has_net_including_tax_total", False)
+            has_discount = loc_entry.pop("_has_discount_total", False)
+            raw_total = loc_entry.pop("_raw_amount_total", 0.0)
+            if has_net or has_discount:
+                net_total = loc_entry["net_including_tax_total"] if has_net else 0.0
+                discount_total = loc_entry["discount_total"] if has_discount else 0.0
+                loc_entry["total_amount"] = net_total + discount_total
+            else:
+                loc_entry["total_amount"] = raw_total
         return grouped
 
     def _prices_match(file_price: float, app_price: float) -> bool:
@@ -1475,7 +1497,15 @@ def upload_terminal_sales(event_id):
 
         rows: list[dict] = []
 
-        def add_row(loc, name, qty, price=None, amount=None):
+        def add_row(
+            loc,
+            name,
+            qty,
+            price=None,
+            amount=None,
+            net_including_tax_total=None,
+            discounts_total=None,
+        ):
             if not loc or not isinstance(loc, str):
                 return
             loc = loc.strip()
@@ -1500,6 +1530,12 @@ def upload_terminal_sales(event_id):
             amount_value = _to_float(amount)
             if amount_value is not None:
                 entry["amount"] = amount_value
+            net_including_value = _to_float(net_including_tax_total)
+            if net_including_value is not None:
+                entry["net_including_tax_total"] = net_including_value
+            discounts_value = _to_float(discounts_total)
+            if discounts_value is not None:
+                entry["discount_total"] = discounts_value
             rows.append(entry)
 
         try:
@@ -1595,6 +1631,7 @@ def upload_terminal_sales(event_id):
                     quantity = row[4] if len(row) > 4 else None
                     price = row[2] if len(row) > 2 else None
                     quantity_value = _to_float(quantity)
+                    discounts = None
                     if quantity_value is not None and quantity_value != 0:
                         net_including = (
                             _to_float(row[7]) if len(row) > 7 else None
@@ -1607,7 +1644,18 @@ def upload_terminal_sales(event_id):
                                 net_including + (discounts or 0.0)
                             ) / quantity_value
                     amount = row[5] if len(row) > 5 else None
-                    add_row(current_loc, second, quantity, price, amount)
+                    net_including_total = (
+                        row[7] if len(row) > 7 else None
+                    )
+                    add_row(
+                        current_loc,
+                        second,
+                        quantity,
+                        price,
+                        amount,
+                        net_including_tax_total=net_including_total,
+                        discounts_total=discounts,
+                    )
             elif ext == ".pdf":
                 import pdfplumber
 
