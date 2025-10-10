@@ -1594,6 +1594,18 @@ def upload_terminal_sales(event_id):
 
                     quantity = row[4] if len(row) > 4 else None
                     price = row[2] if len(row) > 2 else None
+                    quantity_value = _to_float(quantity)
+                    if quantity_value is not None and quantity_value != 0:
+                        net_including = (
+                            _to_float(row[7]) if len(row) > 7 else None
+                        )
+                        discounts = (
+                            _to_float(row[8]) if len(row) > 8 else None
+                        )
+                        if net_including is not None:
+                            price = (
+                                net_including + (discounts or 0.0)
+                            ) / quantity_value
                     amount = row[5] if len(row) > 5 else None
                     add_row(current_loc, second, quantity, price, amount)
             elif ext == ".pdf":
