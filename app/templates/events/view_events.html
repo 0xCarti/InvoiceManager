@@ -134,19 +134,25 @@
 
 <script nonce="{{ csp_nonce }}">
 $(function(){
-    const startDateInput = document.getElementById('start_date');
-    if (startDateInput) {
-        flatpickr(startDateInput, {
-            dateFormat: 'Y-m-d',
-            allowInput: true
+    function initializeDatePickers(root) {
+        root.querySelectorAll('input[name="start_date"], input[name="end_date"]').forEach((input) => {
+            if (input && !input._flatpickr) {
+                flatpickr(input, {
+                    dateFormat: 'Y-m-d',
+                    altInput: true,
+                    altFormat: 'F j, Y',
+                    allowInput: true
+                });
+            }
         });
     }
 
-    const endDateInput = document.getElementById('end_date');
-    if (endDateInput) {
-        flatpickr(endDateInput, {
-            dateFormat: 'Y-m-d',
-            allowInput: true
+    initializeDatePickers(document);
+
+    const createEventModal = document.getElementById('createEventModal');
+    if (createEventModal) {
+        createEventModal.addEventListener('shown.bs.modal', () => {
+            initializeDatePickers(createEventModal);
         });
     }
 

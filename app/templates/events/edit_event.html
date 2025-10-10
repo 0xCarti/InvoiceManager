@@ -10,4 +10,18 @@
     {{ form.estimated_sales.label }} {{ form.estimated_sales(class='form-control', placeholder='Optional') }}
     {{ form.submit(class='btn btn-primary mt-2', value='Update Event') }}
 </form>
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('input[name="start_date"], input[name="end_date"]').forEach((input) => {
+        if (input && !input._flatpickr) {
+            flatpickr(input, {
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'F j, Y',
+                allowInput: true
+            });
+        }
+    });
+});
+</script>
 {% endblock %}
