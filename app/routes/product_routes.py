@@ -19,6 +19,7 @@ from app import db
 from app.forms import (
     BulkProductCostForm,
     DeleteForm,
+    QuickProductForm,
     ProductRecipeForm,
     ProductWithRecipeForm,
 )
@@ -294,6 +295,36 @@ def ajax_create_product():
             "products/_product_row.html", product=product, delete_form=DeleteForm()
         )
         return jsonify(success=True, html=row_html)
+    return jsonify(success=False, errors=form.errors), 400
+
+
+@product.route("/products/quick-create", methods=["POST"])
+@login_required
+def quick_create_product():
+    """Create a lightweight product record for use in menus."""
+
+    form = QuickProductForm()
+    if form.validate_on_submit():
+        cost = form.cost.data if form.cost.data is not None else 0.0
+        sales_gl_code_id = form.sales_gl_code.data or None
+        if sales_gl_code_id == 0:
+            sales_gl_code_id = None
+        product_obj = Product(
+            name=form.name.data,
+            price=form.price.data,
+            cost=cost,
+            sales_gl_code_id=sales_gl_code_id,
+        )
+        db.session.add(product_obj)
+        db.session.commit()
+        log_activity(f"Quick created product {product_obj.name}")
+        return (
+            jsonify(
+                success=True,
+                product={"id": product_obj.id, "name": product_obj.name},
+            ),
+            201,
+        )
     return jsonify(success=False, errors=form.errors), 400
 
 
