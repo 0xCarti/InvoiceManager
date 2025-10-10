@@ -38,3 +38,20 @@ def test_expression_field_marks_input_for_numeric_js(app):
         assert 'data-numeric-input="1"' in html
         assert 'inputmode="decimal"' in html
 
+
+def test_decimal_field_accepts_formatted_numbers(app):
+    formatted_values = [
+        "1,234.50",
+        "1 234.50",  # non-breaking space
+        "$1,234.50",
+        "€1 234,50",
+        "(1,234.50)",
+    ]
+    with app.test_request_context():
+        for text in formatted_values:
+            form = DummyExpressionForm(
+                formdata=MultiDict({"value": text})
+            )
+            assert form.validate(), text
+            assert form.value.data == Decimal("-1234.50") if text.startswith("(") else Decimal("1234.50")
+

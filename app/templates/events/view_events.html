@@ -117,6 +117,7 @@
       </div>
       <form id="createEventForm">
         <div class="modal-body">
+          <div id="createEventErrors" class="alert alert-danger d-none" role="alert"></div>
           {{ create_form.csrf_token }}
           {{ create_form.name.label }} {{ create_form.name(class='form-control') }}
           {{ create_form.start_date.label }} {{ create_form.start_date(class='form-control') }}
@@ -165,14 +166,48 @@ $(function(){
             if (modal) { modal.hide(); }
         });
     });
-    $('#createEventForm').on('submit', function(e){
+    const $createEventForm = $('#createEventForm');
+    const $createEventErrors = $('#createEventErrors');
+    $createEventForm.on('submit', function(e){
         e.preventDefault();
-        $.post('{{ url_for('event.create_event_ajax') }}', $(this).serialize(), function(row){
-            $('#events-table-body').append(row);
-            const modalEl = document.getElementById('createEventModal');
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            if (modal) { modal.hide(); }
-            $('#createEventForm')[0].reset();
+        $createEventErrors.addClass('d-none').empty();
+        $.ajax({
+            url: '{{ url_for('event.create_event_ajax') }}',
+            method: 'POST',
+            data: $createEventForm.serialize(),
+            success: function(row){
+                $('#events-table-body').append(row);
+                const modalEl = document.getElementById('createEventModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) { modal.hide(); }
+                $createEventForm[0].reset();
+                const dateInputs = modalEl ? modalEl.querySelectorAll('input[name="start_date"], input[name="end_date"]') : [];
+                dateInputs.forEach((input) => {
+                    if (input && input._flatpickr) {
+                        input._flatpickr.clear();
+                    }
+                });
+            },
+            error: function(xhr){
+                let message = 'Unable to create event. Please review the form and try again.';
+                if (xhr.responseJSON && xhr.responseJSON.errors) {
+                    const errors = xhr.responseJSON.errors;
+                    const parts = [];
+                    Object.values(errors).forEach((msgs) => {
+                        if (Array.isArray(msgs)) {
+                            msgs.forEach((msg) => parts.push(msg));
+                        } else if (msgs) {
+                            parts.push(msgs);
+                        }
+                    });
+                    if (parts.length) {
+                        message = parts.join('<br>');
+                    }
+                } else if (xhr.responseText) {
+                    message = xhr.responseText;
+                }
+                $createEventErrors.html(message).removeClass('d-none');
+            }
         });
     });
 });

@@ -1,6 +1,6 @@
 import os
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from datetime import datetime
 from zoneinfo import available_timezones
@@ -83,11 +83,78 @@ class ExpressionDecimalField(WTFormsDecimalField):
 
     expression_prefix = "="
 
+    _CURRENCY_SYMBOLS = "$€£¥₽₩₹₺"
+
     def __init__(self, *args, render_kw=None, **kwargs):
         render_kw = dict(render_kw or {})
         render_kw.setdefault("data-numeric-input", "1")
         render_kw.setdefault("inputmode", "decimal")
         super().__init__(*args, render_kw=render_kw, **kwargs)
+
+    @classmethod
+    def _normalise_plain_number(cls, text):
+        """Return a plain numeric string for formatted monetary input.
+
+        Users frequently enter values such as ``"1,234.50"`` or
+        ``"$1 234,50"`` when the form is rendered in a browser.  Those values
+        are intuitive for humans but ``Decimal`` cannot parse them directly
+        because of the thousands separators, currency symbols, or locale
+        specific decimal separators.  This helper strips those presentation
+        characters and converts the value into a canonical representation that
+        :class:`decimal.Decimal` can understand.
+        """
+
+        if not text:
+            return None
+
+        cleaned = text.strip()
+        if not cleaned:
+            return None
+
+        negative = False
+        if cleaned.startswith("(") and cleaned.endswith(")"):
+            negative = True
+            cleaned = cleaned[1:-1]
+        cleaned = cleaned.strip()
+
+        # Remove leading/trailing currency symbols.
+        while cleaned and cleaned[0] in cls._CURRENCY_SYMBOLS:
+            cleaned = cleaned[1:].lstrip()
+        while cleaned and cleaned[-1] in cls._CURRENCY_SYMBOLS:
+            cleaned = cleaned[:-1].rstrip()
+
+        if not cleaned:
+            return None
+
+        cleaned = cleaned.replace("\u00a0", " ")
+
+        decimal_is_comma = False
+        if "," in cleaned and "." in cleaned:
+            last_comma = cleaned.rfind(",")
+            last_dot = cleaned.rfind(".")
+            if last_dot < last_comma:
+                decimal_is_comma = True
+        elif "," in cleaned:
+            comma_index = cleaned.rfind(",")
+            fractional_length = len(cleaned) - comma_index - 1
+            decimal_is_comma = 0 < fractional_length <= 2
+
+        cleaned = cleaned.replace("_", "")
+        cleaned = cleaned.replace(" ", "")
+
+        if decimal_is_comma:
+            cleaned = cleaned.replace(".", "")
+            cleaned = cleaned.replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+
+        if not cleaned:
+            return None
+
+        if negative:
+            cleaned = f"-{cleaned}"
+
+        return cleaned
 
     def process_formdata(self, valuelist):
         if not valuelist:
@@ -113,6 +180,19 @@ class ExpressionDecimalField(WTFormsDecimalField):
                 raise ValueError(str(exc)) from exc
             self.raw_data = valuelist
             return
+
+        normalised = self._normalise_plain_number(text)
+        if normalised and normalised != text:
+            try:
+                Decimal(normalised)
+            except (InvalidOperation, ValueError):
+                pass
+            else:
+                super().process_formdata([normalised])
+                # Preserve the user's original input when re-rendering the
+                # form so that validation errors elsewhere keep their data.
+                self.raw_data = valuelist
+                return
 
         if looks_like_expression(text):
             self.data = None
