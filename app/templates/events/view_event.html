@@ -34,36 +34,61 @@
         <a class="btn btn-danger" id="close-event-btn" href="{{ url_for('event.close_event', event_id=event.id) }}">Close Event</a>
         {% endif %}
     </div>
-    <div class="table-responsive">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Location</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for el in event.locations %}
-                <tr>
-                    <td>{{ el.location.name }}</td>
-                    <td>
-                        {% if not el.confirmed and not event.closed %}
-                            <a href="{{ url_for('event.stand_sheet', event_id=event.id, location_id=el.location_id) }}">Stand Sheet</a>
-                            {% if event.event_type == 'inventory' %}
-                                | <a href="{{ url_for('event.count_sheet', event_id=event.id, location_id=el.location_id) }}">Count Sheet</a>
-                                | <a href="{{ url_for('event.scan_counts', event_id=event.id, location_id=el.location_id) }}">Scan Counts</a>
-                            {% endif %} |
-                            <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Enter Sales</a> |
-                            <a href="{{ url_for('event.confirm_location', event_id=event.id, el_id=el.id) }}">Confirm</a>
-                        {% else %}
-                            Stand Sheet | Terminal Sales {% if el.confirmed %}| Confirmed{% endif %}
+    {% if not event.closed %}
+    <form method="post" action="{{ url_for('event.update_opening_counts', event_id=event.id) }}">
+        {{ opening_form.hidden_tag() }}
+    {% endif %}
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        {% if not event.closed %}
+                            <th scope="col">Select</th>
                         {% endif %}
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                        <th scope="col">Location</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for el in event.locations %}
+                    <tr>
+                        {% if not event.closed %}
+                        <td class="text-center">
+                            {% if not el.confirmed %}
+                                <div class="form-check m-0 d-flex justify-content-center">
+                                    <input class="form-check-input" type="checkbox" name="{{ opening_form.location_ids.name }}" value="{{ el.id }}" id="location-select-{{ el.id }}">
+                                    <label class="visually-hidden" for="location-select-{{ el.id }}">Select {{ el.location.name }}</label>
+                                </div>
+                            {% else %}
+                                <span class="badge bg-secondary">Confirmed</span>
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                        <td>{{ el.location.name }}</td>
+                        <td>
+                            {% if not el.confirmed and not event.closed %}
+                                <a href="{{ url_for('event.stand_sheet', event_id=event.id, location_id=el.location_id) }}">Stand Sheet</a>
+                                {% if event.event_type == 'inventory' %}
+                                    | <a href="{{ url_for('event.count_sheet', event_id=event.id, location_id=el.location_id) }}">Count Sheet</a>
+                                    | <a href="{{ url_for('event.scan_counts', event_id=event.id, location_id=el.location_id) }}">Scan Counts</a>
+                                {% endif %} |
+                                <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Enter Sales</a> |
+                                <a href="{{ url_for('event.confirm_location', event_id=event.id, el_id=el.id) }}">Confirm</a>
+                            {% else %}
+                                Stand Sheet | Terminal Sales {% if el.confirmed %}| Confirmed{% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if not event.closed %}
+        <div class="mt-3">
+            {{ opening_form.submit(class='btn btn-outline-primary', disabled=(unconfirmed_count == 0)) }}
+        </div>
+    </form>
+    {% endif %}
 </div>
 {% if not event.closed and unconfirmed_count %}
 <script nonce="{{ csp_nonce }}">
