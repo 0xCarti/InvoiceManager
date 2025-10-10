@@ -10,7 +10,7 @@ from flask_wtf.file import FileAllowed, FileRequired
 from sqlalchemy import or_
 from wtforms import (
     BooleanField,
-    DateField as WTFormsDateField,
+    DateField,
     DateTimeLocalField,
     DecimalField as WTFormsDecimalField,
     FieldList,
@@ -122,15 +122,6 @@ class ExpressionDecimalField(WTFormsDecimalField):
 
 # Replace the imported DecimalField with the enhanced version for local use.
 DecimalField = ExpressionDecimalField
-
-
-class DateField(WTFormsDateField):
-    """Date field that renders using the HTML5 date input."""
-
-    def __init__(self, *args, render_kw=None, **kwargs):
-        render_kw = dict(render_kw or {})
-        render_kw.setdefault("type", "date")
-        super().__init__(*args, render_kw=render_kw, **kwargs)
 
 
 def load_item_choices():
