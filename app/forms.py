@@ -1156,6 +1156,11 @@ class EventLocationConfirmForm(FlaskForm):
     submit = SubmitField("Confirm")
 
 
+class UpdateOpeningCountsForm(FlaskForm):
+    location_ids = SelectMultipleField("Locations", coerce=int)
+    submit = SubmitField("Update Opening Counts")
+
+
 class ScanCountForm(FlaskForm):
     upc = StringField("UPC", validators=[DataRequired(), Length(max=32)])
     quantity = DecimalField(

@@ -29,6 +29,7 @@ from app.forms import (
     EventForm,
     EventLocationConfirmForm,
     EventLocationForm,
+    UpdateOpeningCountsForm,
     ScanCountForm,
     TerminalSalesUploadForm,
 )
@@ -135,6 +136,37 @@ def _build_stand_item_entry(
         "recv_unit": recv_unit,
         "trans_unit": trans_unit,
     }
+
+
+def _sync_event_location_opening_counts(event_location: EventLocation) -> int:
+    """Ensure stand sheet opening counts mirror the location inventory."""
+
+    inventory_records = LocationStandItem.query.filter_by(
+        location_id=event_location.location_id
+    ).all()
+    if not inventory_records:
+        return 0
+
+    existing_sheets = {
+        sheet.item_id: sheet
+        for sheet in EventStandSheetItem.query.filter_by(
+            event_location_id=event_location.id
+        )
+    }
+
+    updated = 0
+    for record in inventory_records:
+        sheet = existing_sheets.get(record.item_id)
+        if sheet is None:
+            sheet = EventStandSheetItem(
+                event_location_id=event_location.id,
+                item_id=record.item_id,
+            )
+            db.session.add(sheet)
+        sheet.opening_count = float(record.expected_count or 0.0)
+        updated += 1
+
+    return updated
 
 
 def _convert_report_value_to_base(value, base_unit, report_unit):
@@ -332,11 +364,89 @@ def view_event(event_id):
     if ev is None:
         abort(404)
     type_labels = dict(EVENT_TYPES)
+    opening_form = UpdateOpeningCountsForm()
+    opening_form.location_ids.choices = [
+        (el.id, el.location.name)
+        for el in ev.locations
+        if el.location is not None
+    ]
     return render_template(
         "events/view_event.html",
         event=ev,
         event_type_label=type_labels.get(ev.event_type, ev.event_type),
+        opening_form=opening_form,
     )
+
+
+@event.route(
+    "/events/<int:event_id>/update_opening_counts", methods=["POST"]
+)
+@login_required
+def update_opening_counts(event_id):
+    ev = db.session.get(Event, event_id)
+    if ev is None:
+        abort(404)
+
+    form = UpdateOpeningCountsForm()
+    event_locations = (
+        EventLocation.query.filter_by(event_id=event_id)
+        .join(Location)
+        .order_by(Location.name)
+        .all()
+    )
+    form.location_ids.choices = [
+        (el.id, el.location.name) for el in event_locations
+    ]
+
+    if not form.validate_on_submit():
+        flash("Unable to update opening counts. Please try again.", "warning")
+        return redirect(url_for("event.view_event", event_id=event_id))
+
+    if ev.closed:
+        flash("This event is closed and opening counts cannot be updated.", "warning")
+        return redirect(url_for("event.view_event", event_id=event_id))
+
+    selected_ids = form.location_ids.data or []
+    if not selected_ids:
+        flash("Select at least one location to update opening counts.", "warning")
+        return redirect(url_for("event.view_event", event_id=event_id))
+
+    location_map = {el.id: el for el in event_locations}
+    updated_names = []
+    skipped_names = []
+    for el_id in selected_ids:
+        el = location_map.get(el_id)
+        if el is None:
+            continue
+        if el.confirmed:
+            skipped_names.append(el.location.name)
+            continue
+        _sync_event_location_opening_counts(el)
+        updated_names.append(el.location.name)
+
+    if not updated_names:
+        if skipped_names:
+            flash(
+                "The selected locations are already confirmed and cannot be updated.",
+                "warning",
+            )
+        else:
+            flash("No matching locations were found to update.", "warning")
+        return redirect(url_for("event.view_event", event_id=event_id))
+
+    db.session.commit()
+
+    log_activity(
+        "Updated opening counts for event %s locations: %s"
+        % (event_id, ", ".join(updated_names))
+    )
+
+    message = "Opening counts updated for: %s" % ", ".join(updated_names)
+    if skipped_names:
+        message += ". Skipped confirmed locations: %s" % ", ".join(skipped_names)
+    flash(message, "success")
+
+    return redirect(url_for("event.view_event", event_id=event_id))
 
 
 @event.route("/events/<int:event_id>/add_location", methods=["GET", "POST"])
@@ -351,11 +461,17 @@ def add_location(event_id):
         return redirect(url_for("event.view_event", event_id=event_id))
     if form.validate_on_submit():
         selected_ids = form.location_id.data
-        event_locations = [
-            EventLocation(event_id=event_id, location_id=location_id)
-            for location_id in selected_ids
-        ]
-        db.session.add_all(event_locations)
+        event_locations = []
+        for location_id in selected_ids:
+            event_location = EventLocation(
+                event_id=event_id, location_id=location_id
+            )
+            db.session.add(event_location)
+            event_locations.append(event_location)
+        if event_locations:
+            db.session.flush()
+            for event_location in event_locations:
+                _sync_event_location_opening_counts(event_location)
         db.session.commit()
         location_names = []
         for location_id in selected_ids:
