@@ -55,7 +55,7 @@
                     {% set selected_value = entry.purchase_gl_code_id if entry.purchase_gl_code_id else '' %}
                 {% endif %}
                 <tr>
-                    <td>{{ entry.item.name }}</td>
+                    <td><a href="{{ url_for('item.view_item', item_id=entry.item_id) }}">{{ entry.item.name }}</a></td>
                     <td>{{ entry.expected_count }}</td>
                     <td>
                         <select name="{{ field_name }}" class="form-select">
