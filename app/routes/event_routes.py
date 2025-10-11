@@ -941,6 +941,78 @@ def upload_terminal_sales(event_id):
                 except (TypeError, ValueError):
                     continue
                 totals_map[el_id] = entry
+
+        def _sanitize_variance_details(value):
+            if not value:
+                return None
+
+            def _sanitize_prices(values):
+                return [
+                    coerce_float(price)
+                    for price in (values or [])
+                    if price is not None
+                ]
+
+            sanitized_products: list[dict] = []
+            for entry in value.get("products", []):
+                sanitized_products.append(
+                    {
+                        "product_id": entry.get("product_id"),
+                        "product_name": entry.get("product_name"),
+                        "quantity": coerce_float(entry.get("quantity")),
+                        "file_amount": coerce_float(entry.get("file_amount")),
+                        "file_prices": _sanitize_prices(entry.get("file_prices")),
+                        "app_price": coerce_float(entry.get("app_price")),
+                        "sales_location": entry.get("sales_location"),
+                    }
+                )
+
+            sanitized_price_mismatches: list[dict] = []
+            for entry in value.get("price_mismatches", []):
+                sanitized_price_mismatches.append(
+                    {
+                        "product_id": entry.get("product_id"),
+                        "product_name": entry.get("product_name"),
+                        "file_prices": _sanitize_prices(entry.get("file_prices")),
+                        "app_price": coerce_float(entry.get("app_price")),
+                        "sales_location": entry.get("sales_location"),
+                    }
+                )
+
+            sanitized_menu_issues: list[dict] = []
+            for entry in value.get("menu_issues", []):
+                sanitized_menu_issues.append(
+                    {
+                        "product_id": entry.get("product_id"),
+                        "product_name": entry.get("product_name"),
+                        "menu_name": entry.get("menu_name"),
+                        "sales_location": entry.get("sales_location"),
+                    }
+                )
+
+            sanitized_unmapped: list[dict] = []
+            for entry in value.get("unmapped_products", []):
+                sanitized_unmapped.append(
+                    {
+                        "product_name": entry.get("product_name"),
+                        "quantity": coerce_float(entry.get("quantity")),
+                        "file_amount": coerce_float(entry.get("file_amount")),
+                        "file_prices": _sanitize_prices(entry.get("file_prices")),
+                        "sales_location": entry.get("sales_location"),
+                    }
+                )
+
+            sanitized = {
+                "products": sanitized_products,
+                "price_mismatches": sanitized_price_mismatches,
+                "menu_issues": sanitized_menu_issues,
+                "unmapped_products": sanitized_unmapped,
+            }
+
+            if not any(sanitized.values()):
+                return None
+            return sanitized
+
         for entry in pending_sales:
             event_location_id = entry.get("event_location_id")
             product_id = entry.get("product_id")
@@ -979,6 +1051,9 @@ def upload_terminal_sales(event_id):
                 summary.source_location = data.get("source_location")
                 summary.total_quantity = data.get("total_quantity")
                 summary.total_amount = data.get("total_amount")
+                summary.variance_details = _sanitize_variance_details(
+                    data.get("variance_details")
+                )
         return updated_locations
 
     def _apply_resolution_actions(issue_state: dict) -> tuple[list[str], list[str]]:
@@ -1527,13 +1602,37 @@ def upload_terminal_sales(event_id):
                 location_updated = False
                 price_issues: list[dict] = []
                 menu_issues: list[dict] = []
+                product_variances: list[dict] = []
+                unmatched_entries: list[dict] = []
+                price_mismatch_details: list[dict] = []
+                menu_issue_details: list[dict] = []
                 for prod_name, product_data in loc_sales["products"].items():
                     product = product_lookup.get(prod_name)
+                    quantity_value = coerce_float(
+                        product_data.get("quantity", 0.0)
+                    ) or 0.0
+                    file_prices_raw = product_data.get("prices") or []
+                    file_prices = [
+                        coerce_float(price)
+                        for price in file_prices_raw
+                        if price is not None
+                    ]
+                    file_amount = coerce_float(product_data.get("amount"))
+                    if file_amount is None and file_prices:
+                        file_amount = quantity_value * file_prices[0]
                     if not product:
+                        unmatched_entries.append(
+                            {
+                                "product_name": prod_name,
+                                "quantity": quantity_value,
+                                "file_amount": file_amount,
+                                "file_prices": file_prices,
+                                "sales_location": selected_loc,
+                            }
+                        )
                         continue
                     if el.location and product not in el.location.products:
                         el.location.products.append(product)
-                    quantity_value = product_data.get("quantity", 0.0)
                     pending_sales.append(
                         {
                             "event_location_id": el.id,
@@ -1543,7 +1642,7 @@ def upload_terminal_sales(event_id):
                     )
                     location_updated = True
 
-                    file_prices = product_data.get("prices") or []
+                    app_price_value = coerce_float(product.price)
                     if file_prices and not all(
                         _prices_match(price, product.price) for price in file_prices
                     ):
@@ -1557,6 +1656,15 @@ def upload_terminal_sales(event_id):
                                 "sales_location": selected_loc,
                                 "resolution": None,
                                 "target_price": target_price,
+                            }
+                        )
+                        price_mismatch_details.append(
+                            {
+                                "product_id": product.id,
+                                "product_name": product.name,
+                                "file_prices": file_prices,
+                                "app_price": app_price_value,
+                                "sales_location": selected_loc,
                             }
                         )
 
@@ -1584,16 +1692,46 @@ def upload_terminal_sales(event_id):
                                 "resolution": None,
                             }
                         )
-                if location_updated:
-                    selected_locations.append(el.location.name)
-                    pending_totals.append(
+                        menu_issue_details.append(
+                            {
+                                "product_id": product.id,
+                                "product_name": product.name,
+                                "sales_location": selected_loc,
+                                "menu_name": (
+                                    el.location.current_menu.name
+                                    if el.location.current_menu
+                                    else None
+                                ),
+                            }
+                        )
+
+                    product_variances.append(
                         {
-                            "event_location_id": el.id,
-                            "source_location": selected_loc,
-                            "total_quantity": loc_sales.get("total"),
-                            "total_amount": loc_sales.get("total_amount"),
+                            "product_id": product.id,
+                            "product_name": product.name,
+                            "quantity": quantity_value,
+                            "file_amount": file_amount,
+                            "file_prices": file_prices,
+                            "app_price": app_price_value,
+                            "sales_location": selected_loc,
                         }
                     )
+            if location_updated:
+                selected_locations.append(el.location.name)
+                pending_totals.append(
+                    {
+                        "event_location_id": el.id,
+                        "source_location": selected_loc,
+                        "total_quantity": loc_sales.get("total"),
+                        "total_amount": loc_sales.get("total_amount"),
+                        "variance_details": {
+                            "products": product_variances,
+                            "price_mismatches": price_mismatch_details,
+                            "menu_issues": menu_issue_details,
+                            "unmapped_products": unmatched_entries,
+                        },
+                    }
+                )
                 if price_issues or menu_issues:
                     issue_queue.append(
                         {
@@ -1987,6 +2125,149 @@ def confirm_location(event_id, el_id):
     amount_variance = None
     if file_total_amount is not None:
         amount_variance = app_total_amount - float(file_total_amount)
+
+    variance_breakdown = {
+        "product_deltas": [],
+        "price_mismatches": [],
+        "menu_issues": [],
+        "unmapped_products": [],
+        "has_details": False,
+    }
+    if summary_record is not None and summary_record.variance_details:
+        details = summary_record.variance_details or {}
+        product_entries = details.get("products") or []
+        price_entries = details.get("price_mismatches") or []
+        menu_entries = details.get("menu_issues") or []
+
+        product_ids = {
+            entry.get("product_id")
+            for entry in (product_entries + price_entries + menu_entries)
+        }
+        product_ids.discard(None)
+        resolved_products: dict[int, Product] = {}
+        if product_ids:
+            resolved_products = {
+                p.id: p
+                for p in Product.query.filter(Product.id.in_(product_ids)).all()
+            }
+
+        product_deltas: list[dict] = []
+        for entry in product_entries:
+            product_obj = None
+            product_id = entry.get("product_id")
+            if product_id in resolved_products:
+                product_obj = resolved_products[product_id]
+            name = (
+                product_obj.name
+                if product_obj is not None
+                else entry.get("product_name")
+            ) or "Unknown product"
+            quantity = coerce_float(entry.get("quantity")) or 0.0
+            app_price = (
+                coerce_float(product_obj.price)
+                if product_obj is not None
+                else coerce_float(entry.get("app_price"))
+            )
+            app_amount = quantity * app_price if app_price is not None else None
+            file_amount = coerce_float(entry.get("file_amount"))
+            file_prices = [
+                price
+                for price in (entry.get("file_prices") or [])
+                if price is not None
+            ]
+            amount_delta = None
+            if app_amount is not None and file_amount is not None:
+                amount_delta = app_amount - file_amount
+            product_deltas.append(
+                {
+                    "product_name": name,
+                    "quantity": quantity,
+                    "app_price": app_price,
+                    "file_prices": file_prices,
+                    "app_amount": app_amount,
+                    "file_amount": file_amount,
+                    "amount_delta": amount_delta,
+                }
+            )
+
+        price_mismatches: list[dict] = []
+        for entry in price_entries:
+            product_obj = None
+            product_id = entry.get("product_id")
+            if product_id in resolved_products:
+                product_obj = resolved_products[product_id]
+            name = (
+                product_obj.name
+                if product_obj is not None
+                else entry.get("product_name")
+            ) or "Unknown product"
+            app_price = (
+                coerce_float(product_obj.price)
+                if product_obj is not None
+                else coerce_float(entry.get("app_price"))
+            )
+            file_prices = [
+                price
+                for price in (entry.get("file_prices") or [])
+                if price is not None
+            ]
+            price_mismatches.append(
+                {
+                    "product_name": name,
+                    "app_price": app_price,
+                    "file_prices": file_prices,
+                    "sales_location": entry.get("sales_location"),
+                }
+            )
+
+        menu_issue_details: list[dict] = []
+        for entry in menu_entries:
+            product_obj = None
+            product_id = entry.get("product_id")
+            if product_id in resolved_products:
+                product_obj = resolved_products[product_id]
+            name = (
+                product_obj.name
+                if product_obj is not None
+                else entry.get("product_name")
+            ) or "Unknown product"
+            menu_issue_details.append(
+                {
+                    "product_name": name,
+                    "menu_name": entry.get("menu_name"),
+                    "sales_location": entry.get("sales_location"),
+                }
+            )
+
+        unmatched_details: list[dict] = []
+        for entry in details.get("unmapped_products", []) or []:
+            file_prices = [
+                price
+                for price in (entry.get("file_prices") or [])
+                if price is not None
+            ]
+            unmatched_details.append(
+                {
+                    "product_name": entry.get("product_name") or "Unmapped entry",
+                    "quantity": coerce_float(entry.get("quantity")),
+                    "file_amount": coerce_float(entry.get("file_amount")),
+                    "file_prices": file_prices,
+                    "sales_location": entry.get("sales_location"),
+                }
+            )
+
+        variance_breakdown["product_deltas"] = product_deltas
+        variance_breakdown["price_mismatches"] = price_mismatches
+        variance_breakdown["menu_issues"] = menu_issue_details
+        variance_breakdown["unmapped_products"] = unmatched_details
+        variance_breakdown["has_details"] = any(
+            (
+                product_deltas,
+                price_mismatches,
+                menu_issue_details,
+                unmatched_details,
+            )
+        )
     return render_template(
         "events/confirm_location.html",
         form=form,
@@ -2000,6 +2281,7 @@ def confirm_location(event_id, el_id):
             "amount_variance": amount_variance,
             "source_location": source_location_name,
         },
+        variance_breakdown=variance_breakdown,
         location=location,
     )
 

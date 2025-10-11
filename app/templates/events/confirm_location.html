@@ -42,6 +42,149 @@
                             {% endif %}
                         </dd>
                     </dl>
+                    {% if variance_breakdown.has_details %}
+                        <div class="mt-3">
+                            <button
+                                class="btn btn-sm btn-outline-secondary"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#variance-details-{{ event_location.id }}"
+                                aria-expanded="false"
+                                aria-controls="variance-details-{{ event_location.id }}"
+                            >
+                                View variance breakdown
+                            </button>
+                            <div class="collapse mt-3" id="variance-details-{{ event_location.id }}">
+                                {% if variance_breakdown.product_deltas %}
+                                    <h6 class="fw-semibold">Product Differences</h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-borderless mb-3">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Product</th>
+                                                    <th scope="col">File Amount</th>
+                                                    <th scope="col">App Amount</th>
+                                                    <th scope="col">Variance</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for entry in variance_breakdown.product_deltas %}
+                                                    <tr>
+                                                        <td>
+                                                            {{ entry.product_name }}
+                                                            {% if entry.quantity is not none %}
+                                                                <div class="text-muted small">Quantity: {{ '%.2f'|format(entry.quantity) }}</div>
+                                                            {% endif %}
+                                                        </td>
+                                                        <td>
+                                                            {% if entry.file_amount is not none %}
+                                                                ${{ '%.2f'|format(entry.file_amount) }}
+                                                            {% else %}
+                                                                <span class="text-muted">—</span>
+                                                            {% endif %}
+                                                            {% if entry.file_prices %}
+                                                                <div class="text-muted small">
+                                                                    File prices:
+                                                                    {% for price in entry.file_prices %}
+                                                                        ${{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
+                                                                    {% endfor %}
+                                                                </div>
+                                                            {% endif %}
+                                                        </td>
+                                                        <td>
+                                                            {% if entry.app_amount is not none %}
+                                                                ${{ '%.2f'|format(entry.app_amount) }}
+                                                            {% else %}
+                                                                <span class="text-muted">—</span>
+                                                            {% endif %}
+                                                            {% if entry.app_price is not none %}
+                                                                <div class="text-muted small">Price: ${{ '%.2f'|format(entry.app_price) }}</div>
+                                                            {% endif %}
+                                                        </td>
+                                                        <td>
+                                                            {% if entry.amount_delta is not none %}
+                                                                ${{ '%.2f'|format(entry.amount_delta) }}
+                                                            {% else %}
+                                                                <span class="text-muted">—</span>
+                                                            {% endif %}
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                {% endif %}
+                                {% if variance_breakdown.price_mismatches %}
+                                    <h6 class="fw-semibold">Price Mismatches</h6>
+                                    <ul class="list-unstyled small mb-3">
+                                        {% for mismatch in variance_breakdown.price_mismatches %}
+                                            <li>
+                                                <strong>{{ mismatch.product_name }}</strong>
+                                                — App price:
+                                                {% if mismatch.app_price is not none %}
+                                                    ${{ '%.2f'|format(mismatch.app_price) }}
+                                                {% else %}
+                                                    <span class="text-muted">n/a</span>
+                                                {% endif %}
+                                                {% if mismatch.file_prices %}
+                                                    | File prices:
+                                                    {% for price in mismatch.file_prices %}
+                                                        ${{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
+                                                    {% endfor %}
+                                                {% endif %}
+                                                {% if mismatch.sales_location %}
+                                                    <span class="text-muted">(Source: {{ mismatch.sales_location }})</span>
+                                                {% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                                {% if variance_breakdown.menu_issues %}
+                                    <h6 class="fw-semibold">Menu Issues</h6>
+                                    <ul class="list-unstyled small mb-3">
+                                        {% for issue in variance_breakdown.menu_issues %}
+                                            <li>
+                                                <strong>{{ issue.product_name }}</strong>
+                                                {% if issue.menu_name %}
+                                                    not on menu {{ issue.menu_name }}
+                                                {% else %}
+                                                    not on the assigned menu
+                                                {% endif %}
+                                                {% if issue.sales_location %}
+                                                    <span class="text-muted">(Source: {{ issue.sales_location }})</span>
+                                                {% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                                {% if variance_breakdown.unmapped_products %}
+                                    <h6 class="fw-semibold">Unmapped or Missing Items</h6>
+                                    <ul class="list-unstyled small mb-0">
+                                        {% for entry in variance_breakdown.unmapped_products %}
+                                            <li>
+                                                <strong>{{ entry.product_name }}</strong>
+                                                {% if entry.quantity is not none %}
+                                                    — Qty: {{ '%.2f'|format(entry.quantity) }}
+                                                {% endif %}
+                                                {% if entry.file_amount is not none %}
+                                                    — Amount: ${{ '%.2f'|format(entry.file_amount) }}
+                                                {% endif %}
+                                                {% if entry.file_prices %}
+                                                    — Prices:
+                                                    {% for price in entry.file_prices %}
+                                                        ${{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
+                                                    {% endfor %}
+                                                {% endif %}
+                                                {% if entry.sales_location %}
+                                                    <span class="text-muted">(Source: {{ entry.sales_location }})</span>
+                                                {% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

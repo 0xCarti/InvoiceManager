@@ -821,6 +821,7 @@ class EventLocationTerminalSalesSummary(db.Model):
     source_location = db.Column(db.String(255), nullable=True)
     total_quantity = db.Column(db.Float, nullable=True)
     total_amount = db.Column(db.Float, nullable=True)
+    variance_details = db.Column(db.JSON, nullable=True)
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
