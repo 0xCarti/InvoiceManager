@@ -2,15 +2,15 @@ from pathlib import Path
 
 import math
 
-import js2py
+from py_mini_racer import py_mini_racer
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load_numeric_input_context():
-    ctx = js2py.EvalJs()
-    ctx.execute(
+    ctx = py_mini_racer.MiniRacer()
+    ctx.eval(
         """
         var window = {};
         var document = {
@@ -27,9 +27,11 @@ def _load_numeric_input_context():
         }
         window.MutationObserver = MutationObserver;
         var MutationObserver = window.MutationObserver;
+        var global = window;
+        var globalThis = window;
         """
     )
-    ctx.execute(
+    ctx.eval(
         """
         if (typeof Number.isFinite !== 'function') {
             Number.isFinite = function (value) { return isFinite(value); };
@@ -42,7 +44,7 @@ def _load_numeric_input_context():
         """
     )
     script_path = ROOT / "app/static/js/numeric_inputs.js"
-    ctx.execute(script_path.read_text(encoding="utf-8"))
+    ctx.eval(script_path.read_text(encoding="utf-8"))
     return ctx
 
 
