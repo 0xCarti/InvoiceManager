@@ -182,6 +182,29 @@ def _convert_report_value_to_base(value, base_unit, report_unit):
         return value
 
 
+def _ensure_location_items(location_obj: Location, product_obj: Product) -> None:
+    """Ensure a location has inventory records for the product's countable items."""
+
+    if location_obj is None or product_obj is None:
+        return
+
+    for recipe_item in product_obj.recipe_items:
+        if not recipe_item.countable:
+            continue
+        record = LocationStandItem.query.filter_by(
+            location_id=location_obj.id, item_id=recipe_item.item_id
+        ).first()
+        if record is None:
+            db.session.add(
+                LocationStandItem(
+                    location_id=location_obj.id,
+                    item_id=recipe_item.item_id,
+                    expected_count=0,
+                    purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
+                )
+            )
+
+
 event = Blueprint("event", __name__)
 
 
@@ -940,23 +963,6 @@ def upload_terminal_sales(event_id):
             return math.isclose(float(file_price), float(app_price), abs_tol=0.01)
         except (TypeError, ValueError):
             return False
-
-    def _ensure_location_items(location_obj: Location, product_obj: Product) -> None:
-        for recipe_item in product_obj.recipe_items:
-            if not recipe_item.countable:
-                continue
-            record = LocationStandItem.query.filter_by(
-                location_id=location_obj.id, item_id=recipe_item.item_id
-            ).first()
-            if record is None:
-                db.session.add(
-                    LocationStandItem(
-                        location_id=location_obj.id,
-                        item_id=recipe_item.item_id,
-                        expected_count=0,
-                        purchase_gl_code_id=recipe_item.item.purchase_gl_code_id,
-                    )
-                )
 
     def _apply_pending_sales(
         pending_sales: list[dict],
