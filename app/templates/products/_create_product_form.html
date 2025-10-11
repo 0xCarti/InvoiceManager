@@ -1,4 +1,5 @@
-<form id="create-product-form" method="POST" action="{{ form_action }}">
+{% set product_form_id = form_id or 'product-form' %}
+<form id="{{ product_form_id }}" class="product-form" data-role="product-form" method="POST" action="{{ form_action }}">
     {{ form.hidden_tag() }}
     <div class="row">
         <div class="col-md-6 mb-3">
@@ -31,7 +32,7 @@
             {{ form.recipe_yield_unit(class="form-control", placeholder="e.g. cups") }}
         </div>
     </div>
-    <div id="item-list">
+    <div data-role="item-list">
         {% for item in form.items %}
         {% set selected_name = item.item.choices | selectattr('0', 'equalto', item.item.data) | map(attribute=1) | first %}
         <div class="row mb-2 align-items-center item-row">
@@ -66,13 +67,24 @@
         </div>
         {% endfor %}
     </div>
-    <button id="add-item" type="button" class="btn btn-secondary">Add Item</button>
-    <button type="button" class="btn btn-secondary" id="calc-cost" {% if product_id %}data-product-id="{{ product_id }}"{% endif %}>Set Cost From Recipe</button>
+    <button type="button" class="btn btn-secondary" data-role="add-item">Add Item</button>
+    <button type="button" class="btn btn-secondary" data-role="calc-cost" {% if product_id %}data-product-id="{{ product_id }}"{% endif %}>Set Cost From Recipe</button>
     <button type="submit" class="btn btn-primary">Submit</button>
 </form>
 <script nonce="{{ csp_nonce }}">
-document.addEventListener('DOMContentLoaded', function() {
-    const btn = document.getElementById('calc-cost');
+(function() {
+    const scriptEl = document.currentScript;
+    if (!scriptEl) {
+        return;
+    }
+    const form = scriptEl.previousElementSibling;
+    if (!form || form.tagName !== 'FORM') {
+        return;
+    }
+
+    const countableLabel = {{ form.countable_label|default('Countable', true)|tojson }};
+    let itemIndex = {{ form.items|length }};
+
     function parseNumericInput(inputEl) {
         if (!inputEl) {
             return null;
@@ -89,7 +101,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function collectRecipeData() {
         const items = [];
-        document.querySelectorAll('#item-list .item-row').forEach(row => {
+        const itemRows = form.querySelectorAll('[data-role="item-list"] .item-row');
+        itemRows.forEach(row => {
             const itemInput = row.querySelector('.item-id');
             const quantityInput = row.querySelector('input[name$="-quantity"]');
             const unitSelect = row.querySelector('.unit-select');
@@ -111,8 +124,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 quantity: quantity,
             });
         });
-        const yieldInput = document.getElementById('recipe_yield_quantity');
-        const yieldUnitInput = document.getElementById('recipe_yield_unit');
+        const yieldInput = form.querySelector('#recipe_yield_quantity');
+        const yieldUnitInput = form.querySelector('#recipe_yield_unit');
         return {
             items: items,
             yield_quantity: parseNumericInput(yieldInput),
@@ -120,10 +133,14 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
 
-    if (btn) {
+    function initializeCostButton() {
+        const btn = form.querySelector('[data-role="calc-cost"]');
+        if (!btn) {
+            return;
+        }
         btn.addEventListener('click', function() {
             const recipeData = collectRecipeData();
-            const costInput = document.getElementById('cost');
+            const costInput = form.querySelector('#cost');
             if (!recipeData.items.length) {
                 if (costInput) {
                     costInput.value = 0;
@@ -131,7 +148,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             const headers = { 'Content-Type': 'application/json' };
-            const csrfInput = document.querySelector('input[name="csrf_token"]');
+            const csrfInput = form.querySelector('input[name="csrf_token"]');
             if (csrfInput) {
                 headers['X-CSRFToken'] = csrfInput.value;
             }
@@ -150,7 +167,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (costInput && typeof data.cost !== 'undefined') {
                         costInput.value = data.cost;
                     }
-                    const yieldInput = document.getElementById('recipe_yield_quantity');
+                    const yieldInput = form.querySelector('#recipe_yield_quantity');
                     if (yieldInput && typeof data.yield_quantity !== 'undefined') {
                         yieldInput.value = data.yield_quantity;
                     }
@@ -161,12 +178,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const countableLabel = {{ form.countable_label|default('Countable', true)|tojson }};
-    let itemIndex = {{ form.items|length }};
-
     function fetchUnits(row, itemId, selected) {
         if (!itemId) {
-            row.querySelector('.unit-select').innerHTML = '';
+            const unitSelect = row.querySelector('.unit-select');
+            if (unitSelect) {
+                unitSelect.innerHTML = '';
+            }
             return;
         }
         fetch(`/items/${itemId}/units`).then(r => r.json()).then(data => {
@@ -175,8 +192,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 opts += `<option value="${u.id}">${u.name} of ${u.factor} ${data.base_unit}${u.factor != 1 ? 's' : ''}</option>`;
             });
             const sel = row.querySelector('.unit-select');
+            if (!sel) {
+                return;
+            }
             sel.innerHTML = opts;
-            if (selected) sel.value = selected;
+            if (selected) {
+                sel.value = selected;
+            }
         });
     }
 
@@ -227,72 +249,117 @@ document.addEventListener('DOMContentLoaded', function() {
         return row;
     }
 
-    document.getElementById('add-item').addEventListener('click', function(e) {
-        e.preventDefault();
-        const row = createRow(itemIndex);
-        document.getElementById('item-list').appendChild(row);
-        itemIndex++;
-    });
-
-    document.getElementById('item-list').addEventListener('click', function(e) {
-        if (e.target && e.target.classList.contains('remove-item')) {
-            e.target.closest('.row').remove();
-        } else if (e.target && e.target.classList.contains('item-suggestion')) {
-            e.preventDefault();
-            const row = e.target.closest('.item-row');
-            const id = e.target.dataset.id;
-            row.querySelector('.item-id').value = id;
-            row.querySelector('.item-search').value = e.target.textContent;
-            row.querySelector('.item-suggestions').innerHTML = '';
-            fetchUnits(row, id);
-            updateItemLink(row, id, e.target.textContent);
+    function initializeAddItem() {
+        const addItemBtn = form.querySelector('[data-role="add-item"]');
+        const itemList = form.querySelector('[data-role="item-list"]');
+        if (!addItemBtn || !itemList) {
+            return;
         }
-    });
+        addItemBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const row = createRow(itemIndex);
+            itemList.appendChild(row);
+            itemIndex++;
+        });
+    }
 
-    document.getElementById('item-list').addEventListener('keyup', function(e) {
-        if (e.target && e.target.classList.contains('item-search')) {
-            const row = e.target.closest('.item-row');
-            const query = e.target.value;
-            updateItemLink(row);
-            const sugg = row.querySelector('.item-suggestions');
-            if (!query) {
-                row.querySelector('.item-id').value = '';
+    function initializeItemListInteractions() {
+        const itemList = form.querySelector('[data-role="item-list"]');
+        if (!itemList) {
+            return;
+        }
+        itemList.addEventListener('click', function(e) {
+            if (e.target && e.target.classList.contains('remove-item')) {
+                e.target.closest('.row').remove();
+            } else if (e.target && e.target.classList.contains('item-suggestion')) {
+                e.preventDefault();
+                const row = e.target.closest('.item-row');
+                const id = e.target.dataset.id;
+                const itemName = e.target.textContent;
                 const hiddenInput = row.querySelector('.item-id');
                 if (hiddenInput) {
-                    hiddenInput.dataset.itemName = '';
+                    hiddenInput.value = id;
+                    hiddenInput.dataset.itemName = itemName;
                 }
-                sugg.innerHTML = '';
-                row.querySelector('.unit-select').innerHTML = '';
-                return;
+                const searchInput = row.querySelector('.item-search');
+                if (searchInput) {
+                    searchInput.value = itemName;
+                }
+                const suggestions = row.querySelector('.item-suggestions');
+                if (suggestions) {
+                    suggestions.innerHTML = '';
+                }
+                fetchUnits(row, id);
+                updateItemLink(row, id, itemName);
             }
-            fetch(`/items/search?term=${encodeURIComponent(query)}`)
-                .then(r => r.json())
-                .then(data => {
-                    sugg.innerHTML = data.map(it => `<a href="#" class="list-group-item list-group-item-action item-suggestion" data-id="${it.id}">${it.name}</a>`).join('');
-                });
-        }
-    });
+        });
 
-    document.getElementById('item-list').addEventListener('focusout', function(e) {
-        if (e.target && e.target.classList.contains('item-search')) {
-            const row = e.target.closest('.item-row');
-            const hiddenInput = row ? row.querySelector('.item-id') : null;
-            if (!hiddenInput) {
-                return;
+        itemList.addEventListener('keyup', function(e) {
+            if (e.target && e.target.classList.contains('item-search')) {
+                const row = e.target.closest('.item-row');
+                const query = e.target.value;
+                updateItemLink(row);
+                const sugg = row.querySelector('.item-suggestions');
+                if (!sugg) {
+                    return;
+                }
+                if (!query) {
+                    const hiddenInput = row.querySelector('.item-id');
+                    if (hiddenInput) {
+                        hiddenInput.value = '';
+                        hiddenInput.dataset.itemName = '';
+                    }
+                    sugg.innerHTML = '';
+                    const unitSelect = row.querySelector('.unit-select');
+                    if (unitSelect) {
+                        unitSelect.innerHTML = '';
+                    }
+                    return;
+                }
+                fetch(`/items/search?term=${encodeURIComponent(query)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        sugg.innerHTML = data.map(it => `<a href="#" class="list-group-item list-group-item-action item-suggestion" data-id="${it.id}">${it.name}</a>`).join('');
+                    });
             }
-            const itemId = hiddenInput.value;
-            const storedName = hiddenInput.dataset.itemName;
-            if (itemId && storedName) {
-                updateItemLink(row, itemId, storedName);
-            }
-        }
-    });
+        });
 
-    document.querySelectorAll('.item-row').forEach(row => {
-        const itemId = row.querySelector('.item-id').value;
-        const sel = row.querySelector('.unit-select');
-        const selected = sel.dataset.selected;
-        if (itemId) fetchUnits(row, itemId, selected);
-    });
-});
+        itemList.addEventListener('focusout', function(e) {
+            if (e.target && e.target.classList.contains('item-search')) {
+                const row = e.target.closest('.item-row');
+                const hiddenInput = row ? row.querySelector('.item-id') : null;
+                if (!hiddenInput) {
+                    return;
+                }
+                const itemId = hiddenInput.value;
+                const storedName = hiddenInput.dataset.itemName;
+                if (itemId && storedName) {
+                    updateItemLink(row, itemId, storedName);
+                }
+            }
+        });
+
+        itemList.querySelectorAll('.item-row').forEach(row => {
+            const hiddenInput = row.querySelector('.item-id');
+            const itemId = hiddenInput ? hiddenInput.value : null;
+            const sel = row.querySelector('.unit-select');
+            const selected = sel ? sel.dataset.selected : null;
+            if (itemId) {
+                fetchUnits(row, itemId, selected);
+            }
+        });
+    }
+
+    function init() {
+        initializeCostButton();
+        initializeAddItem();
+        initializeItemListInteractions();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init, { once: true });
+    } else {
+        init();
+    }
+})();
 </script>

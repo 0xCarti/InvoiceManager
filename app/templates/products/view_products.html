@@ -103,6 +103,19 @@
         </div>
     </div>
 
+    <!-- Edit Product Modal -->
+    <div class="modal fade" id="editProductModal" tabindex="-1" aria-labelledby="editProductModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editProductModalLabel">Edit Product</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" data-role="edit-product-body"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Filter Modal -->
     <div class="modal fade" id="filterModal" tabindex="-1" aria-labelledby="filterModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
@@ -201,6 +214,7 @@
                 </div>
                 <div class="modal-body">
                     {% set form_action = url_for('product.ajax_create_product') %}
+                    {% set form_id = 'create-product-form' %}
                     {% include 'products/_create_product_form.html' %}
                 </div>
             </div>
@@ -345,6 +359,142 @@ document.addEventListener('DOMContentLoaded', function() {
                     alert(JSON.stringify(data.errors));
                 }
             });
+        });
+    }
+
+    const scriptNonce = {{ csp_nonce | tojson }};
+    const editProductModalEl = document.getElementById('editProductModal');
+    const editProductModalBody = editProductModalEl ? editProductModalEl.querySelector('[data-role="edit-product-body"]') : null;
+
+    function updateEditProductModalBody(html) {
+        if (!editProductModalBody) {
+            return;
+        }
+        const template = document.createElement('template');
+        template.innerHTML = html || '';
+        const fragment = template.content;
+        const scripts = fragment.querySelectorAll('script');
+        scripts.forEach((originalScript) => {
+            const newScript = document.createElement('script');
+            Array.from(originalScript.attributes).forEach((attr) => {
+                if (attr.name.toLowerCase() === 'nonce') {
+                    return;
+                }
+                newScript.setAttribute(attr.name, attr.value);
+            });
+            if (originalScript.src) {
+                const srcValue = originalScript.src;
+                const alreadyLoaded = Array.from(document.querySelectorAll('script[src]'))
+                    .some((scriptEl) => scriptEl.src === srcValue);
+                if (!alreadyLoaded) {
+                    if (scriptNonce) {
+                        newScript.setAttribute('nonce', scriptNonce);
+                    }
+                    newScript.src = srcValue;
+                    document.head.appendChild(newScript);
+                }
+                originalScript.remove();
+                return;
+            }
+            newScript.textContent = originalScript.textContent;
+            if (scriptNonce) {
+                newScript.setAttribute('nonce', scriptNonce);
+            }
+            originalScript.replaceWith(newScript);
+        });
+        editProductModalBody.innerHTML = '';
+        editProductModalBody.appendChild(fragment);
+    }
+
+    function bindEditProductForm(actionUrl) {
+        if (!editProductModalEl) {
+            return;
+        }
+        const formEl = editProductModalEl.querySelector('form[data-role="product-form"]');
+        if (!formEl || formEl.dataset.bound === 'true') {
+            return;
+        }
+        formEl.dataset.bound = 'true';
+        formEl.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(formEl);
+            fetch(actionUrl, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData,
+            }).then(response => {
+                return response.json().then(data => ({ ok: response.ok, data }));
+            }).then(({ ok, data }) => {
+                if (ok && data.success) {
+                    const productId = data.product_id;
+                    const existingRow = document.getElementById(`product-row-${productId}`);
+                    let wasChecked = false;
+                    if (existingRow) {
+                        const existingCheckbox = existingRow.querySelector('input[name="product_ids"]');
+                        wasChecked = existingCheckbox ? existingCheckbox.checked : false;
+                        existingRow.outerHTML = data.row_html;
+                    }
+                    const updatedRow = document.getElementById(`product-row-${productId}`);
+                    if (updatedRow) {
+                        const updatedCheckbox = updatedRow.querySelector('input[name="product_ids"]');
+                        if (updatedCheckbox) {
+                            if (selectAllProducts && selectAllProducts.checked) {
+                                updatedCheckbox.checked = true;
+                            } else {
+                                updatedCheckbox.checked = wasChecked;
+                            }
+                        }
+                    }
+                    const modalInstance = bootstrap.Modal.getInstance(editProductModalEl);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+                } else if (data && data.form_html) {
+                    updateEditProductModalBody(data.form_html);
+                    bindEditProductForm(actionUrl);
+                } else {
+                    throw new Error('Invalid response');
+                }
+            }).catch(() => {
+                window.location.href = actionUrl;
+            });
+        });
+    }
+
+    const productTableEl = document.getElementById('product-table');
+    if (productTableEl && editProductModalEl) {
+        productTableEl.addEventListener('click', function(event) {
+            const target = event.target.closest('.edit-product-link');
+            if (!target) {
+                return;
+            }
+            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+            event.preventDefault();
+            const url = target.getAttribute('href');
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to load');
+                    }
+                    return response.text();
+                })
+                .then(html => {
+                    updateEditProductModalBody(html);
+                    const modalInstance = bootstrap.Modal.getOrCreateInstance(editProductModalEl);
+                    modalInstance.show();
+                    bindEditProductForm(url);
+                })
+                .catch(() => {
+                    window.location.href = url;
+                });
+        });
+    }
+
+    if (editProductModalEl && editProductModalBody) {
+        editProductModalEl.addEventListener('hidden.bs.modal', function() {
+            editProductModalBody.innerHTML = '';
         });
     }
 

@@ -78,7 +78,9 @@
                     data-product-locations='{{ location_ns.entries | tojson }}'>
                 View Locations
             </button>
-            <a href="{{ url_for('product.edit_product', product_id=product.id) }}" class="btn btn-primary btn-sm">Edit</a>
+            <a href="{{ url_for('product.edit_product', product_id=product.id) }}"
+               class="btn btn-primary btn-sm edit-product-link"
+               data-product-id="{{ product.id }}">Edit</a>
             <a href="{{ url_for('notes.entity_notes', entity_type='product', entity_id=product.id) }}" class="btn btn-outline-secondary btn-sm">Notes</a>
             <a href="{{ url_for('product.copy_product', product_id=product.id) }}" class="btn btn-secondary btn-sm">Copy</a>
             <form action="{{ url_for('product.delete_product', product_id=product.id) }}" method="post" class="d-inline-block">

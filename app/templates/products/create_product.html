@@ -6,6 +6,7 @@
 <div class="container mt-5">
     <h2>{{ title or "Create Product" }}</h2>
     {% set form_action = form_action or url_for('product.create_product') %}
+    {% set form_id = 'create-product-form-page' %}
     {% include 'products/_create_product_form.html' %}
 </div>
 {% endblock %}
