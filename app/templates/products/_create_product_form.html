@@ -55,49 +55,98 @@
         {% endfor %}
     </div>
     <button id="add-item" type="button" class="btn btn-secondary">Add Item</button>
-    <button type="button" class="btn btn-secondary" id="calc-cost" {% if product_id %}data-product-id="{{ product_id }}"{% else %}disabled{% endif %}>Set Cost From Recipe</button>
+    <button type="button" class="btn btn-secondary" id="calc-cost" {% if product_id %}data-product-id="{{ product_id }}"{% endif %}>Set Cost From Recipe</button>
     <button type="submit" class="btn btn-primary">Submit</button>
 </form>
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const btn = document.getElementById('calc-cost');
+    function parseNumericInput(inputEl) {
+        if (!inputEl) {
+            return null;
+        }
+        if (window.NumericInput && typeof window.NumericInput.parseValue === 'function') {
+            const parsed = window.NumericInput.parseValue(inputEl);
+            if (Number.isFinite(parsed)) {
+                return parsed;
+            }
+        }
+        const fallback = parseFloat(inputEl.value);
+        return Number.isFinite(fallback) ? fallback : null;
+    }
+
+    function collectRecipeData() {
+        const items = [];
+        document.querySelectorAll('#item-list .item-row').forEach(row => {
+            const itemInput = row.querySelector('.item-id');
+            const quantityInput = row.querySelector('input[name$="-quantity"]');
+            const unitSelect = row.querySelector('.unit-select');
+            const itemId = itemInput ? parseInt(itemInput.value, 10) : NaN;
+            const quantity = parseNumericInput(quantityInput);
+            if (!itemId || Number.isNaN(itemId) || quantity === null) {
+                return;
+            }
+            let unitId = null;
+            if (unitSelect && unitSelect.value) {
+                const parsedUnit = parseInt(unitSelect.value, 10);
+                if (!Number.isNaN(parsedUnit)) {
+                    unitId = parsedUnit;
+                }
+            }
+            items.push({
+                item_id: itemId,
+                unit_id: unitId,
+                quantity: quantity,
+            });
+        });
+        const yieldInput = document.getElementById('recipe_yield_quantity');
+        const yieldUnitInput = document.getElementById('recipe_yield_unit');
+        return {
+            items: items,
+            yield_quantity: parseNumericInput(yieldInput),
+            yield_unit: yieldUnitInput ? yieldUnitInput.value : null,
+        };
+    }
+
     if (btn) {
-        const pid = btn.getAttribute('data-product-id');
-        if (pid) {
-            btn.addEventListener('click', function() {
-                const yieldInput = document.getElementById('recipe_yield_quantity');
-                const itemList = document.getElementById('item-list');
-                if (itemList && itemList.querySelectorAll('.item-row').length === 0) {
-                    const costInput = document.getElementById('cost');
-                    if (costInput) {
-                        costInput.value = 0;
-                    }
-                    return;
+        btn.addEventListener('click', function() {
+            const recipeData = collectRecipeData();
+            const costInput = document.getElementById('cost');
+            if (!recipeData.items.length) {
+                if (costInput) {
+                    costInput.value = 0;
                 }
-                let url = `/products/${pid}/calculate_cost`;
-                if (yieldInput) {
-                    const parsedYield = window.NumericInput
-                        ? window.NumericInput.parseValue(yieldInput)
-                        : parseFloat(yieldInput.value);
-                    if (Number.isFinite(parsedYield) && parsedYield > 0) {
-                        url += `?yield_quantity=${encodeURIComponent(parsedYield)}`;
+                return;
+            }
+            const headers = { 'Content-Type': 'application/json' };
+            const csrfInput = document.querySelector('input[name="csrf_token"]');
+            if (csrfInput) {
+                headers['X-CSRFToken'] = csrfInput.value;
+            }
+            fetch('/products/calculate_cost_preview', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(recipeData),
+            })
+                .then(resp => {
+                    if (!resp.ok) {
+                        throw new Error('Request failed');
                     }
-                }
-                fetch(url).then(resp => resp.json()).then(data => {
-                    const costInput = document.getElementById('cost');
+                    return resp.json();
+                })
+                .then(data => {
                     if (costInput && typeof data.cost !== 'undefined') {
                         costInput.value = data.cost;
                     }
+                    const yieldInput = document.getElementById('recipe_yield_quantity');
                     if (yieldInput && typeof data.yield_quantity !== 'undefined') {
                         yieldInput.value = data.yield_quantity;
                     }
+                })
+                .catch(() => {
+                    alert('Unable to calculate recipe cost. Please try again.');
                 });
-            });
-        } else {
-            btn.addEventListener('click', function() {
-                alert('Product must be saved before cost can be calculated from recipe.');
-            });
-        }
+        });
     }
 
     const countableLabel = {{ form.countable_label|default('Countable', true)|tojson }};

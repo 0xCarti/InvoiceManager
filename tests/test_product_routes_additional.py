@@ -40,6 +40,7 @@ def setup_data(app):
 
 def test_additional_product_routes(client, app):
     email, item_id, unit_id = setup_data(app)
+    alt_unit_id = None
     with client:
         login(client, email, "pass")
         # View and create product form (GET)
@@ -80,7 +81,16 @@ def test_additional_product_routes(client, app):
                 countable=True,
             )
         )
+        alt_unit = ItemUnit(
+            item_id=item_id,
+            name="Half Gram",
+            factor=0.5,
+            receiving_default=False,
+            transfer_default=False,
+        )
+        db.session.add(alt_unit)
         db.session.commit()
+        alt_unit_id = alt_unit.id
     with client:
         login(client, email, "pass")
         # Edit page GET
@@ -118,6 +128,33 @@ def test_additional_product_routes(client, app):
         assert data["batch_cost"] == pytest.approx(1.0)
         assert data["yield_quantity"] == pytest.approx(35.0)
         assert client.get("/products/999/calculate_cost").status_code == 404
+        # Calculate cost preview using posted form data
+        resp = client.post(
+            "/products/calculate_cost_preview",
+            json={
+                "items": [
+                    {"item_id": item_id, "unit_id": alt_unit_id, "quantity": 2},
+                    {"item_id": item_id, "quantity": 1},
+                    {"item_id": 9999, "quantity": 3},
+                    {"item_id": item_id, "quantity": "invalid"},
+                ],
+                "yield_quantity": 10,
+                "yield_unit": "cups",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["batch_cost"] == pytest.approx(2.0)
+        assert data["cost"] == pytest.approx(0.2)
+        assert data["yield_quantity"] == pytest.approx(10.0)
+        resp = client.post(
+            "/products/calculate_cost_preview",
+            json={"items": [], "yield_quantity": 0},
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["cost"] == pytest.approx(0.0)
+        assert data["yield_quantity"] == pytest.approx(1.0)
         # Search products
         resp = client.get("/search_products?query=cand")
         assert b"Candy" in resp.data
