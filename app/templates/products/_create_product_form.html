@@ -66,6 +66,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (pid) {
             btn.addEventListener('click', function() {
                 const yieldInput = document.getElementById('recipe_yield_quantity');
+                const itemList = document.getElementById('item-list');
+                if (itemList && itemList.querySelectorAll('.item-row').length === 0) {
+                    const costInput = document.getElementById('cost');
+                    if (costInput) {
+                        costInput.value = 0;
+                    }
+                    return;
+                }
                 let url = `/products/${pid}/calculate_cost`;
                 if (yieldInput) {
                     const parsedYield = window.NumericInput
