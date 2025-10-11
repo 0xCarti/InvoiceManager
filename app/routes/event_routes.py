@@ -870,6 +870,37 @@ def upload_terminal_sales(event_id):
                 loc_entry["total_amount"] = raw_total
         return grouped
 
+    def _derive_price_map(summary: dict[str, dict]) -> dict[str, float | None]:
+        """Build a mapping of product names to representative sale prices."""
+
+        price_map: dict[str, float | None] = {}
+        for data in summary.values():
+            products = data.get("products", {})
+            for name, details in products.items():
+                if name in price_map and price_map[name] is not None:
+                    continue
+                candidate = None
+                prices = details.get("prices") or []
+                for price in prices:
+                    if price is None:
+                        continue
+                    try:
+                        candidate = float(price)
+                    except (TypeError, ValueError):
+                        continue
+                    else:
+                        break
+                if candidate is None:
+                    amount = details.get("amount")
+                    quantity = details.get("quantity")
+                    try:
+                        if amount is not None and quantity:
+                            candidate = float(amount) / float(quantity)
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        candidate = None
+                price_map.setdefault(name, candidate)
+        return price_map
+
     def _prices_match(file_price: float, app_price: float) -> bool:
         try:
             return math.isclose(float(file_price), float(app_price), abs_tol=0.01)
@@ -1196,6 +1227,8 @@ def upload_terminal_sales(event_id):
                 return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
 
             sales_summary = _group_rows(rows)
+            product_price_lookup = _derive_price_map(sales_summary)
+
             product_names = {
                 product_name
                 for data in sales_summary.values()
@@ -1256,25 +1289,30 @@ def upload_terminal_sales(event_id):
                     product_choices = Product.query.order_by(Product.name).all()
 
                 manual_mappings: dict[str, Product] = {}
+                pending_creations: list[str] = []
+                CREATE_SELECTION_VALUE = "__create__"
                 for idx, original_name in enumerate(unmatched_names):
                     field_name = f"product-match-{idx}"
                     selected_value = request.form.get(field_name)
                     selected_product = None
                     if selected_value:
-                        try:
-                            product_id = int(selected_value)
-                        except (TypeError, ValueError):
-                            resolution_errors.append(
-                                f"Invalid product selection for {original_name}."
-                            )
+                        if selected_value == CREATE_SELECTION_VALUE:
+                            pending_creations.append(original_name)
                         else:
-                            selected_product = db.session.get(
-                                Product, product_id
-                            )
-                            if selected_product is None:
+                            try:
+                                product_id = int(selected_value)
+                            except (TypeError, ValueError):
                                 resolution_errors.append(
-                                    f"Selected product is no longer available for {original_name}."
+                                    f"Invalid product selection for {original_name}."
                                 )
+                            else:
+                                selected_product = db.session.get(
+                                    Product, product_id
+                                )
+                                if selected_product is None:
+                                    resolution_errors.append(
+                                        f"Selected product is no longer available for {original_name}."
+                                    )
                     elif resolution_requested:
                         resolution_errors.append(
                             f"Select a product for '{original_name}' to continue."
@@ -1289,28 +1327,11 @@ def upload_terminal_sales(event_id):
                             "field": field_name,
                             "name": original_name,
                             "selected": selected_value or "",
+                            "price": product_price_lookup.get(original_name),
                         }
                     )
 
-                if manual_mappings and normalized_lookup:
-                    for original_name, product in manual_mappings.items():
-                        normalized = normalized_lookup.get(original_name, "")
-                        if not normalized:
-                            continue
-                        alias = alias_lookup.get(normalized)
-                        if alias is None:
-                            alias = TerminalSaleProductAlias(
-                                source_name=original_name,
-                                normalized_name=normalized,
-                                product=product,
-                            )
-                            db.session.add(alias)
-                            alias_lookup[normalized] = alias
-                        else:
-                            alias.source_name = original_name
-                            alias.product = product
-
-                if resolution_errors or len(manual_mappings) != len(unmatched_names):
+                if not resolution_requested:
                     return render_template(
                         "events/upload_terminal_sales.html",
                         form=form,
@@ -1334,6 +1355,77 @@ def upload_terminal_sales(event_id):
                         warnings_acknowledged=warnings_acknowledged,
                     )
 
+                if (
+                    len(manual_mappings) + len(pending_creations)
+                    != len(unmatched_names)
+                ):
+                    resolution_errors.append(
+                        "Select a product for each unmatched entry to continue."
+                    )
+
+                if resolution_errors:
+                    return render_template(
+                        "events/upload_terminal_sales.html",
+                        form=form,
+                        event=ev,
+                        open_locations=open_locations,
+                        mapping_payload=payload,
+                        mapping_filename=mapping_filename,
+                        sales_summary=sales_summary,
+                        sales_location_names=list(sales_summary.keys()),
+                        default_mapping={
+                            el.id: request.form.get(f"mapping-{el.id}", "")
+                            for el in open_locations
+                        },
+                        unresolved_products=unresolved_products,
+                        product_choices=product_choices,
+                        resolution_errors=resolution_errors,
+                        product_resolution_required=True,
+                        price_discrepancies=price_discrepancies,
+                        menu_mismatches=menu_mismatches,
+                        warnings_required=warnings_required,
+                        warnings_acknowledged=warnings_acknowledged,
+                    )
+
+                for original_name in pending_creations:
+                    existing_product = Product.query.filter_by(
+                        name=original_name
+                    ).first()
+                    if existing_product:
+                        product_lookup[original_name] = existing_product
+                        manual_mappings[original_name] = existing_product
+                        continue
+                    price_value = product_price_lookup.get(original_name)
+                    if price_value is None:
+                        price_value = 0.0
+                    new_product = Product(
+                        name=original_name,
+                        price=price_value,
+                        cost=0.0,
+                    )
+                    db.session.add(new_product)
+                    db.session.flush()
+                    product_lookup[original_name] = new_product
+                    manual_mappings[original_name] = new_product
+
+                if manual_mappings and normalized_lookup:
+                    for original_name, product in manual_mappings.items():
+                        normalized = normalized_lookup.get(original_name, "")
+                        if not normalized:
+                            continue
+                        alias = alias_lookup.get(normalized)
+                        if alias is None:
+                            alias = TerminalSaleProductAlias(
+                                source_name=original_name,
+                                normalized_name=normalized,
+                                product=product,
+                            )
+                            db.session.add(alias)
+                            alias_lookup[normalized] = alias
+                        else:
+                            alias.source_name = original_name
+                            alias.product = product
+
                 product_resolution_required = False
 
             pending_sales: list[dict] = []
@@ -1355,6 +1447,8 @@ def upload_terminal_sales(event_id):
                     product = product_lookup.get(prod_name)
                     if not product:
                         continue
+                    if el.location and product not in el.location.products:
+                        el.location.products.append(product)
                     quantity_value = product_data.get("quantity", 0.0)
                     pending_sales.append(
                         {
