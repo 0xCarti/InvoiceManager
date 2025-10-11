@@ -205,12 +205,25 @@
                                 <label class="form-label" for="{{ product.field }}">
                                     {{ product.name }}
                                 </label>
+                                {% set selected_value = product.selected|default('', true) %}
+                                {% set selected_value = '%s' % selected_value %}
                                 <select class="form-select" id="{{ product.field }}" name="{{ product.field }}">
                                     <option value="">Select a product</option>
                                     {% for choice in product_choices %}
-                                        <option value="{{ choice.id }}" {% if product.selected and product.selected|int == choice.id %}selected{% endif %}>{{ choice.name }}</option>
+                                        {% set choice_id = '%s' % choice.id %}
+                                        <option value="{{ choice_id }}" {% if selected_value == choice_id %}selected{% endif %}>{{ choice.name }}</option>
                                     {% endfor %}
+                                    <option value="__create__" {% if selected_value == '__create__' %}selected{% endif %}>Create a new product</option>
                                 </select>
+                                {% if product.price is not none %}
+                                    <div class="form-text">
+                                        Creating a new product will use the sale price of ${{ '%.2f'|format(product.price) }} from the uploaded file.
+                                    </div>
+                                {% else %}
+                                    <div class="form-text">
+                                        Creating a new product will use the uploaded sale price when available; otherwise the price will default to $0.00.
+                                    </div>
+                                {% endif %}
                             </div>
                         {% endfor %}
                     </div>
