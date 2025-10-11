@@ -1187,7 +1187,7 @@ def upload_terminal_sales(event_id):
             state_token = serializer.dumps(state_data)
 
             total_locations = len(queue)
-                return render_template(
+            return render_template(
                     "events/upload_terminal_sales.html",
                     form=form,
                     event=ev,
