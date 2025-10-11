@@ -157,6 +157,7 @@ def view_products():
         selectinload(Product.sales_gl_code),
         selectinload(Product.gl_code_rel),
         selectinload(Product.locations),
+        selectinload(Product.menus),
         selectinload(Product.recipe_items).selectinload(ProductRecipeItem.item),
         selectinload(Product.recipe_items).selectinload(ProductRecipeItem.unit),
     )

@@ -16,7 +16,11 @@
     <td class="col-product-locations text-wrap">
         {% if product.locations %}
             {% for location in product.locations %}
-                <div>{{ location.name }}</div>
+                <div>
+                    <a href="{{ url_for('locations.edit_location', location_id=location.id) }}" class="link-primary text-decoration-none">
+                        {{ location.name }}
+                    </a>
+                </div>
             {% endfor %}
         {% else %}
             <span class="text-muted">—</span>
@@ -49,12 +53,38 @@
         {% endif %}
     </td>
     <td class="col-product-actions">
-        <a href="{{ url_for('product.edit_product', product_id=product.id) }}" class="btn btn-primary mr-2">Edit</a>
-        <a href="{{ url_for('notes.entity_notes', entity_type='product', entity_id=product.id) }}" class="btn btn-outline-secondary mr-2">Notes</a>
-        <a href="{{ url_for('product.copy_product', product_id=product.id) }}" class="btn btn-secondary mr-2">Copy</a>
-        <form action="{{ url_for('product.delete_product', product_id=product.id) }}" method="post" class="d-inline">
-            {{ delete_form.hidden_tag() }}
-            <button type="submit" class="btn btn-danger">Delete</button>
-        </form>
+        {% set menu_ns = namespace(entries=[]) %}
+        {% for menu in product.menus %}
+            {% set menu_ns.entries = menu_ns.entries + [{'name': menu.name, 'url': url_for('menu.edit_menu', menu_id=menu.id)}] %}
+        {% endfor %}
+        {% set location_ns = namespace(entries=[]) %}
+        {% for location in product.locations %}
+            {% set location_ns.entries = location_ns.entries + [{'name': location.name, 'url': url_for('locations.edit_location', location_id=location.id)}] %}
+        {% endfor %}
+        <div class="d-flex flex-wrap gap-1">
+            <button type="button"
+                    class="btn btn-outline-primary btn-sm view-product-menus"
+                    data-bs-toggle="modal"
+                    data-bs-target="#productMenusModal"
+                    data-product-name="{{ product.name }}"
+                    data-product-menus='{{ menu_ns.entries | tojson }}'>
+                View Menus
+            </button>
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm view-product-locations"
+                    data-bs-toggle="modal"
+                    data-bs-target="#productLocationsModal"
+                    data-product-name="{{ product.name }}"
+                    data-product-locations='{{ location_ns.entries | tojson }}'>
+                View Locations
+            </button>
+            <a href="{{ url_for('product.edit_product', product_id=product.id) }}" class="btn btn-primary btn-sm">Edit</a>
+            <a href="{{ url_for('notes.entity_notes', entity_type='product', entity_id=product.id) }}" class="btn btn-outline-secondary btn-sm">Notes</a>
+            <a href="{{ url_for('product.copy_product', product_id=product.id) }}" class="btn btn-secondary btn-sm">Copy</a>
+            <form action="{{ url_for('product.delete_product', product_id=product.id) }}" method="post" class="d-inline-block">
+                {{ delete_form.hidden_tag() }}
+                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+        </div>
     </td>
 </tr>
