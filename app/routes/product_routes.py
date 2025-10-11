@@ -579,6 +579,48 @@ def calculate_product_cost(product_id):
     )
 
 
+@product.route("/products/calculate_cost_preview", methods=["POST"])
+@login_required
+def calculate_product_cost_preview():
+    """Calculate recipe cost from the posted form data."""
+    payload = request.get_json(silent=True) or {}
+    items = payload.get("items") or []
+    total = 0.0
+    for item_data in items:
+        item_id = item_data.get("item_id")
+        quantity = coerce_float(item_data.get("quantity"))
+        if not item_id or quantity is None:
+            continue
+        item = db.session.get(Item, item_id)
+        if item is None:
+            continue
+        unit_id = item_data.get("unit_id")
+        factor = 1.0
+        if unit_id:
+            unit = db.session.get(ItemUnit, unit_id)
+            if unit and (unit.item_id == item.id or unit.item_id is None):
+                try:
+                    factor = float(unit.factor or 1.0)
+                except (TypeError, ValueError):
+                    factor = 1.0
+        total += (item.cost or 0.0) * quantity * factor
+
+    yield_quantity = coerce_float(payload.get("yield_quantity"))
+    if yield_quantity is None or yield_quantity <= 0:
+        yield_quantity = 1.0
+    per_unit_cost = total / yield_quantity if yield_quantity else total
+    yield_unit = payload.get("yield_unit")
+
+    return jsonify(
+        {
+            "cost": per_unit_cost,
+            "batch_cost": total,
+            "yield_quantity": yield_quantity,
+            "yield_unit": yield_unit,
+        }
+    )
+
+
 @product.route("/products/bulk_set_cost_from_recipe", methods=["POST"])
 @login_required
 def bulk_set_cost_from_recipe():
