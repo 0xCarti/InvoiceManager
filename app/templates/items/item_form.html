@@ -5,6 +5,7 @@
 {% endif %}
 {% set location_stand_items = location_stand_items | default([]) %}
 {% set purchase_gl_codes = purchase_gl_codes | default([]) %}
+{% set recipe_product_items = recipe_product_items | default([]) %}
 {% set show_location_tab = current_item is not none %}
 {% set default_gl = current_item.purchase_gl_code if current_item else None %}
 {% set details_content %}
@@ -80,6 +81,11 @@
             <button class="nav-link" id="item-location-gl-tab" data-bs-toggle="tab" data-bs-target="#item-location-gl"
                     type="button" role="tab" aria-controls="item-location-gl" aria-selected="false">Location GL Codes</button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="item-recipe-products-tab" data-bs-toggle="tab"
+                    data-bs-target="#item-recipe-products" type="button" role="tab"
+                    aria-controls="item-recipe-products" aria-selected="false">Recipe Products</button>
+        </li>
     </ul>
     <div class="tab-content pt-3" id="itemFormTabContent">
         <div class="tab-pane fade show active" id="item-details" role="tabpanel" aria-labelledby="item-details-tab">
@@ -127,6 +133,38 @@
                     {% else %}
                         <tr>
                             <td colspan="2" class="text-center text-muted">No locations are currently assigned to this item.</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="tab-pane fade" id="item-recipe-products" role="tabpanel" aria-labelledby="item-recipe-products-tab">
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Countable</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for recipe_item in recipe_product_items %}
+                        <tr>
+                            <td>
+                                {% if recipe_item.product %}
+                                    <a href="{{ url_for('product.edit_product', product_id=recipe_item.product_id) }}">
+                                        {{ recipe_item.product.name }}
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted">Unknown product</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ 'Yes' if recipe_item.countable else 'No' }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="2" class="text-center text-muted">This item is not currently used in any product recipes.</td>
                         </tr>
                     {% endfor %}
                     </tbody>

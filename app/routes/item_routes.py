@@ -477,6 +477,13 @@ def edit_item(item_id):
         .order_by(Location.name)
         .all()
     )
+    recipe_product_items = (
+        ProductRecipeItem.query.join(Product)
+        .options(selectinload(ProductRecipeItem.product))
+        .filter(ProductRecipeItem.item_id == item.id)
+        .order_by(Product.name)
+        .all()
+    )
     purchase_gl_codes = ItemForm._fetch_purchase_gl_codes()
     form = ItemForm(obj=item)
     if request.method == "GET":
@@ -497,15 +504,24 @@ def edit_item(item_id):
         if recv_count > 1 or trans_count > 1:
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 form_html = render_template(
-                    "items/item_form.html", form=form, item=item
-                )
-                return jsonify({"success": False, "form_html": form_html})
-            flash(
-                "Only one unit can be set as receiving and transfer default.",
-                "error",
+                "items/item_form.html",
+                form=form,
+                item=item,
+                recipe_product_items=recipe_product_items,
+            )
+            return jsonify({"success": False, "form_html": form_html})
+        flash(
+            "Only one unit can be set as receiving and transfer default.",
+            "error",
             )
             return render_template(
-                "items/item_form_page.html", form=form, item=item, title="Edit Item"
+                "items/item_form_page.html",
+                form=form,
+                item=item,
+                title="Edit Item",
+                location_stand_items=location_stand_items,
+                purchase_gl_codes=purchase_gl_codes,
+                recipe_product_items=recipe_product_items,
             )
         item.name = form.name.data
         item.base_unit = form.base_unit.data
@@ -565,6 +581,7 @@ def edit_item(item_id):
                 item=item,
                 location_stand_items=location_stand_items,
                 purchase_gl_codes=purchase_gl_codes,
+                recipe_product_items=recipe_product_items,
             )
             return jsonify({"success": False, "form_html": form_html})
         return render_template(
@@ -573,6 +590,7 @@ def edit_item(item_id):
             item=item,
             location_stand_items=location_stand_items,
             purchase_gl_codes=purchase_gl_codes,
+            recipe_product_items=recipe_product_items,
         )
     return render_template(
         "items/item_form_page.html",
@@ -581,6 +599,7 @@ def edit_item(item_id):
         title="Edit Item",
         location_stand_items=location_stand_items,
         purchase_gl_codes=purchase_gl_codes,
+        recipe_product_items=recipe_product_items,
     )
 
 
