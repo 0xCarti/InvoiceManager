@@ -181,12 +181,12 @@
         <tr>
           <td>{{ s.item.name }}{% if s.report_unit_label %} ({{ s.report_unit_label }}){% endif %}</td>
           <td>{% if expected_open is not none %}{{ '%.2f'|format(expected_open) }}{% endif %}</td>
-          <td>{% if opening_count is not none %}{{ '%.2f'|format(opening_count) }}{% endif %}</td>
-          <td class="border-right">{% if transferred_in is not none %}{{ '%.2f'|format(transferred_in) }}{% endif %}</td>
-          <td>{% if transferred_out is not none %}{{ '%.2f'|format(transferred_out) }}{% endif %}</td>
-          <td>{% if eaten_val is not none %}{{ '%.2f'|format(eaten_val) }}{% endif %}</td>
-          <td class="border-right">{% if spoiled_val is not none %}{{ '%.2f'|format(spoiled_val) }}{% endif %}</td>
-          <td>{% if closing_count is not none %}{{ '%.2f'|format(closing_count) }}{% endif %}</td>
+          <td></td>
+          <td class="border-right"></td>
+          <td></td>
+          <td></td>
+          <td class="border-right"></td>
+          <td></td>
           <td></td>
           <td>{% if price.value is not none %}${{ '%.2f'|format(price.value) }}{% endif %}</td>
           <td>{% if s.sheet %}{{ '%.2f'|format(variance) }}{% endif %}</td>
