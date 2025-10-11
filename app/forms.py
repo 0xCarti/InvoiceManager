@@ -728,7 +728,7 @@ class ProductForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired()])
     gl_code = SelectField("GL Code", validators=[Optional()])
     price = DecimalField(
-        "Price", validators=[DataRequired(), NumberRange(min=0.0001)]
+        "Price", validators=[InputRequired(), NumberRange(min=0)]
     )
     cost = DecimalField(
         "Cost", validators=[InputRequired(), NumberRange(min=0)], default=0.0
@@ -838,7 +838,7 @@ class QuickProductForm(FlaskForm):
 
     name = StringField("Product Name", validators=[DataRequired(), Length(max=100)])
     price = DecimalField(
-        "Price", validators=[DataRequired(), NumberRange(min=0.0001)]
+        "Price", validators=[InputRequired(), NumberRange(min=0)]
     )
     cost = DecimalField(
         "Cost", validators=[Optional(), NumberRange(min=0)], default=0.0
