@@ -24,9 +24,11 @@ from app.models import (
     Product,
     ProductRecipeItem,
     TerminalSale,
+    TerminalSaleLocationAlias,
     TerminalSaleProductAlias,
     User,
 )
+from app.routes.event_routes import suggest_terminal_sales_location_mapping
 from app.utils.units import DEFAULT_BASE_UNIT_CONVERSIONS, convert_quantity
 from tests.utils import login
 
@@ -741,6 +743,77 @@ def test_upload_sales_manual_product_match(client, app):
         assert sale is not None
         assert sale.product_id == product_id
         assert sale.quantity == 4
+
+
+def test_upload_sales_remembers_location_mapping(client, app):
+    first_payload = [
+        {
+            "location": "Register 12",
+            "product": "Popcorn Bucket",
+            "quantity": 5,
+        }
+    ]
+
+    with app.app_context():
+        user = User(
+            email="remember@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        location = Location(name="Main Concessions")
+        product = Product(name="Popcorn Bucket", price=10.0, cost=4.0)
+        location.products.append(product)
+        event_one = Event(
+            name="Concessions Night 1",
+            start_date=date(2025, 6, 1),
+            end_date=date(2025, 6, 1),
+            event_type="inventory",
+        )
+        event_two = Event(
+            name="Concessions Night 2",
+            start_date=date(2025, 6, 2),
+            end_date=date(2025, 6, 2),
+            event_type="inventory",
+        )
+        db.session.add_all([user, location, product, event_one, event_two])
+        first_el = EventLocation(event=event_one, location=location)
+        second_el = EventLocation(event=event_two, location=location)
+        db.session.add_all([first_el, second_el])
+        db.session.commit()
+
+        event_one_id = event_one.id
+        event_two_location_id = second_el.id
+        first_el_id = first_el.id
+        location_id = location.id
+        user_email = user.email
+
+    with client:
+        login(client, user_email, "pass")
+        response = client.post(
+            f"/events/{event_one_id}/sales/upload",
+            data={
+                "step": "map",
+                "payload": json.dumps(
+                    {"rows": first_payload, "filename": "terminal_sales.xls"}
+                ),
+                f"mapping-{first_el_id}": "Register 12",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+    with app.app_context():
+        alias = TerminalSaleLocationAlias.query.filter_by(
+            normalized_name="register 12"
+        ).first()
+        assert alias is not None
+        assert alias.location_id == location_id
+
+        sales_summary = {"Register 12": {}}
+        mapping = suggest_terminal_sales_location_mapping(
+            [db.session.get(EventLocation, event_two_location_id)], sales_summary
+        )
+        assert mapping[event_two_location_id] == "Register 12"
 
 
 def test_upload_sales_skip_product(client, app):
