@@ -277,6 +277,28 @@
         </form>
     </div>
 </div>
+<div class="modal fade" id="productMenusModal" tabindex="-1" aria-labelledby="productMenusModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="productMenusModalLabel">Menus</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" data-list-container="menus"></div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="productLocationsModal" tabindex="-1" aria-labelledby="productLocationsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="productLocationsModalLabel">Locations</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" data-list-container="locations"></div>
+        </div>
+    </div>
+</div>
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const selectAllProducts = document.getElementById('select-all-products');
@@ -323,6 +345,91 @@ document.addEventListener('DOMContentLoaded', function() {
                     alert(JSON.stringify(data.errors));
                 }
             });
+        });
+    }
+
+    function renderLinkedList(container, items, emptyText) {
+        container.innerHTML = '';
+        if (!items || !items.length) {
+            const message = document.createElement('p');
+            message.className = 'mb-0 text-muted';
+            message.textContent = emptyText;
+            container.appendChild(message);
+            return;
+        }
+        const list = document.createElement('ul');
+        list.className = 'list-unstyled mb-0';
+        items.forEach(item => {
+            if (!item || !item.name || !item.url) {
+                return;
+            }
+            const li = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = item.url;
+            link.textContent = item.name;
+            link.className = 'link-primary';
+            li.appendChild(link);
+            list.appendChild(li);
+        });
+        if (!list.childElementCount) {
+            const message = document.createElement('p');
+            message.className = 'mb-0 text-muted';
+            message.textContent = emptyText;
+            container.appendChild(message);
+            return;
+        }
+        container.appendChild(list);
+    }
+
+    const productMenusModal = document.getElementById('productMenusModal');
+    if (productMenusModal) {
+        productMenusModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            if (!button) {
+                return;
+            }
+            const menusRaw = button.getAttribute('data-product-menus') || '[]';
+            let menus = [];
+            try {
+                menus = JSON.parse(menusRaw);
+            } catch (err) {
+                menus = [];
+            }
+            const productName = button.getAttribute('data-product-name') || '';
+            const title = productMenusModal.querySelector('.modal-title');
+            if (title) {
+                title.textContent = productName ? `Menus for ${productName}` : 'Menus';
+            }
+            const container = productMenusModal.querySelector('[data-list-container]');
+            if (container) {
+                renderLinkedList(container, menus, 'This product is not assigned to any menus.');
+            }
+        });
+    }
+
+    const productLocationsModal = document.getElementById('productLocationsModal');
+    if (productLocationsModal) {
+        productLocationsModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            if (!button) {
+                return;
+            }
+            const locationsRaw = button.getAttribute('data-product-locations') || '[]';
+            let locations = [];
+            try {
+                locations = JSON.parse(locationsRaw);
+            } catch (err) {
+                locations = [];
+            }
+            const productName = button.getAttribute('data-product-name') || '';
+            const title = productLocationsModal.querySelector('.modal-title');
+            if (title) {
+                title.textContent = productName ? `Locations for ${productName}` : 'Locations';
+            }
+            const container = productLocationsModal.querySelector('[data-list-container]');
+            if (container) {
+                renderLinkedList(container, locations, 'This product is not assigned to any locations.');
+            }
         });
     }
 });
