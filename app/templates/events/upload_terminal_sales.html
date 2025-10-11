@@ -213,6 +213,7 @@
                                         {% set choice_id = '%s' % choice.id %}
                                         <option value="{{ choice_id }}" {% if selected_value == choice_id %}selected{% endif %}>{{ choice.name }}</option>
                                     {% endfor %}
+                                    <option value="{{ skip_selection_value }}" {% if selected_value == skip_selection_value %}selected{% endif %}>Skip this product</option>
                                     <option value="__create__" {% if selected_value == '__create__' %}selected{% endif %}>Create a new product</option>
                                 </select>
                                 {% if product.price is not none %}

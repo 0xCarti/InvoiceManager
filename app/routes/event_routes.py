@@ -1290,13 +1290,18 @@ def upload_terminal_sales(event_id):
 
                 manual_mappings: dict[str, Product] = {}
                 pending_creations: list[str] = []
+                skipped_products: list[str] = []
                 CREATE_SELECTION_VALUE = "__create__"
+                SKIP_SELECTION_VALUE = "__skip__"
                 for idx, original_name in enumerate(unmatched_names):
                     field_name = f"product-match-{idx}"
                     selected_value = request.form.get(field_name)
                     selected_product = None
+                    skip_selected = selected_value == SKIP_SELECTION_VALUE
                     if selected_value:
-                        if selected_value == CREATE_SELECTION_VALUE:
+                        if skip_selected:
+                            skipped_products.append(original_name)
+                        elif selected_value == CREATE_SELECTION_VALUE:
                             pending_creations.append(original_name)
                         else:
                             try:
@@ -1315,7 +1320,7 @@ def upload_terminal_sales(event_id):
                                     )
                     elif resolution_requested:
                         resolution_errors.append(
-                            f"Select a product for '{original_name}' to continue."
+                            f"Select a product or skip '{original_name}' to continue."
                         )
 
                     if selected_product:
@@ -1347,6 +1352,7 @@ def upload_terminal_sales(event_id):
                         },
                         unresolved_products=unresolved_products,
                         product_choices=product_choices,
+                        skip_selection_value=SKIP_SELECTION_VALUE,
                         resolution_errors=resolution_errors,
                         product_resolution_required=True,
                         price_discrepancies=price_discrepancies,
@@ -1356,11 +1362,13 @@ def upload_terminal_sales(event_id):
                     )
 
                 if (
-                    len(manual_mappings) + len(pending_creations)
+                    len(manual_mappings)
+                    + len(pending_creations)
+                    + len(skipped_products)
                     != len(unmatched_names)
                 ):
                     resolution_errors.append(
-                        "Select a product for each unmatched entry to continue."
+                        "Select a product or skip each unmatched entry to continue."
                     )
 
                 if resolution_errors:
@@ -1379,6 +1387,7 @@ def upload_terminal_sales(event_id):
                         },
                         unresolved_products=unresolved_products,
                         product_choices=product_choices,
+                        skip_selection_value=SKIP_SELECTION_VALUE,
                         resolution_errors=resolution_errors,
                         product_resolution_required=True,
                         price_discrepancies=price_discrepancies,
