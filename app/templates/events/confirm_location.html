@@ -1,5 +1,18 @@
 {% extends 'base.html' %}
 {% block content %}
+<style>
+    .variance-toggle .when-expanded {
+        display: none;
+    }
+
+    .variance-toggle:not(.collapsed) .when-expanded {
+        display: inline;
+    }
+
+    .variance-toggle:not(.collapsed) .when-collapsed {
+        display: none;
+    }
+</style>
 <div class="container mt-4">
     <h2 class="mb-3">Confirm {{ event_location.location.name }} for {{ event_location.event.name }}</h2>
     <div class="row g-3 mb-4">
@@ -40,19 +53,35 @@
                             {% else %}
                                 <span class="text-muted">—</span>
                             {% endif %}
+                            {% if variance_breakdown.summary %}
+                                <div class="text-muted small mt-2">
+                                    <ul class="list-unstyled mb-0">
+                                        {% for entry in variance_breakdown.summary %}
+                                            <li>
+                                                <span class="fw-semibold">{{ entry.label }}</span>
+                                                — {{ entry.count }} issue{% if entry.count != 1 %}s{% endif %}
+                                                {% if entry.impact is not none %}
+                                                    (Impact: ${{ '%+.2f'|format(entry.impact) }})
+                                                {% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
                         </dd>
                     </dl>
                     {% if variance_breakdown.has_details %}
                         <div class="mt-3">
                             <button
-                                class="btn btn-sm btn-outline-secondary"
+                                class="btn btn-sm btn-outline-secondary variance-toggle collapsed"
                                 type="button"
                                 data-bs-toggle="collapse"
                                 data-bs-target="#variance-details-{{ event_location.id }}"
                                 aria-expanded="false"
                                 aria-controls="variance-details-{{ event_location.id }}"
                             >
-                                View variance breakdown
+                                <span class="when-collapsed">Show variance breakdown</span>
+                                <span class="when-expanded">Hide variance breakdown</span>
                             </button>
                             <div class="collapse mt-3" id="variance-details-{{ event_location.id }}">
                                 {% if variance_breakdown.product_deltas %}
