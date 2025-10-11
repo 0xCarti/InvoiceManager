@@ -878,10 +878,13 @@ def upload_terminal_sales(event_id):
         """Build a mapping of product names to representative sale prices."""
 
         price_map: dict[str, float | None] = {}
+        sentinel = object()
         for data in summary.values():
             products = data.get("products", {})
             for name, details in products.items():
-                if name in price_map and price_map[name] is not None:
+                existing = price_map.get(name, sentinel)
+                if existing is not sentinel and existing is not None:
+                    # We already derived a concrete price for this name; keep it.
                     continue
                 candidate = None
                 prices = details.get("prices") or []
@@ -902,7 +905,10 @@ def upload_terminal_sales(event_id):
                             candidate = float(amount) / float(quantity)
                     except (TypeError, ValueError, ZeroDivisionError):
                         candidate = None
-                price_map.setdefault(name, candidate)
+                if existing is sentinel:
+                    price_map[name] = candidate
+                elif existing is None and candidate is not None:
+                    price_map[name] = candidate
         return price_map
 
     def _prices_match(file_price: float, app_price: float) -> bool:

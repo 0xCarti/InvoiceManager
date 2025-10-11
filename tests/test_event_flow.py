@@ -897,6 +897,86 @@ def test_upload_sales_create_product(client, app):
         assert alias is not None
         assert alias.product_id == product.id
 
+
+def test_upload_sales_create_product_prefers_price(client, app):
+    payload_rows = [
+        {
+            "location": "Main Bar",
+            "product": "Frozen Lemonade",
+            "quantity": 6,
+        },
+        {
+            "location": "Main Bar",
+            "product": "Frozen Lemonade",
+            "quantity": 2,
+            "price": 8.0,
+        },
+    ]
+
+    with app.app_context():
+        user = User(
+            email="later-price@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        location = Location(name="Main Bar")
+        event = Event(
+            name="Later Price Event",
+            start_date=date(2025, 8, 3),
+            end_date=date(2025, 8, 4),
+            event_type="inventory",
+        )
+        db.session.add_all([user, location, event])
+        event_location = EventLocation(event=event, location=location)
+        db.session.add(event_location)
+        db.session.commit()
+
+        event_id = event.id
+        event_location_id = event_location.id
+        user_email = user.email
+
+    with client:
+        login(client, user_email, "pass")
+        response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "payload": json.dumps(
+                    {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
+                ),
+                f"mapping-{event_location_id}": "Main Bar",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Match Unknown Products" in response.data
+
+        resolution_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "product-resolution-step": "1",
+                "payload": json.dumps(
+                    {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
+                ),
+                f"mapping-{event_location_id}": "Main Bar",
+                "product-match-0": "__create__",
+            },
+            follow_redirects=True,
+        )
+        assert resolution_response.status_code == 200
+
+    with app.app_context():
+        product = Product.query.filter_by(name="Frozen Lemonade").first()
+        assert product is not None
+        assert product.price == pytest.approx(8.0)
+
+        sale = TerminalSale.query.filter_by(
+            event_location_id=event_location_id, product_id=product.id
+        ).first()
+        assert sale is not None
+        assert sale.quantity == pytest.approx(8)
+
 def test_terminal_sale_last_sale(app):
     email, loc_id, prod_id, _ = setup_event_env(app)
     with app.app_context():
