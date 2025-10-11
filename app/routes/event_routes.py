@@ -788,6 +788,10 @@ def upload_terminal_sales(event_id):
     menu_mismatches: dict[str, list[dict]] = {}
     warnings_required = False
     warnings_acknowledged = False
+    ignored_sales_locations: set[str] = set()
+    assigned_sales_locations: set[str] = set()
+    unassigned_sales_locations: list[str] = []
+    assignment_errors: list[str] = []
 
     def _normalize_product_name(value: str) -> str:
         if not value:
@@ -1183,31 +1187,35 @@ def upload_terminal_sales(event_id):
             state_token = serializer.dumps(state_data)
 
             total_locations = len(queue)
-            return render_template(
-                "events/upload_terminal_sales.html",
-                form=form,
-                event=ev,
-                open_locations=open_locations,
-                mapping_payload=payload,
-                mapping_filename=mapping_filename,
-                sales_summary={},
-                sales_location_names=[],
-                default_mapping={},
-                unresolved_products=[],
-                product_choices=[],
-                resolution_errors=[],
-                product_resolution_required=False,
-                price_discrepancies={},
-                menu_mismatches={},
-                warnings_required=False,
-                warnings_acknowledged=False,
-                state_token=state_token,
-                issue_index=issue_index,
-                current_issue=current_issue,
-                remaining_locations=len(queue) - issue_index - 1,
-                selected_locations=selected_locations,
-                issue_total=total_locations,
-            )
+                return render_template(
+                    "events/upload_terminal_sales.html",
+                    form=form,
+                    event=ev,
+                    open_locations=open_locations,
+                    mapping_payload=payload,
+                    mapping_filename=mapping_filename,
+                    sales_summary={},
+                    sales_location_names=[],
+                    default_mapping={},
+                    unresolved_products=[],
+                    product_choices=[],
+                    resolution_errors=[],
+                    product_resolution_required=False,
+                    price_discrepancies={},
+                    menu_mismatches={},
+                    warnings_required=False,
+                    warnings_acknowledged=False,
+                    state_token=state_token,
+                    issue_index=issue_index,
+                    current_issue=current_issue,
+                    remaining_locations=len(queue) - issue_index - 1,
+                    selected_locations=selected_locations,
+                    issue_total=total_locations,
+                    ignored_sales_locations=sorted(ignored_sales_locations),
+                    assigned_sales_locations=sorted(assigned_sales_locations),
+                    unassigned_sales_locations=unassigned_sales_locations,
+                    assignment_errors=assignment_errors,
+                )
 
         elif step == "map":
             payload = request.form.get("payload")
@@ -1227,11 +1235,49 @@ def upload_terminal_sales(event_id):
                 return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
 
             sales_summary = _group_rows(rows)
-            product_price_lookup = _derive_price_map(sales_summary)
+
+            ignored_sales_locations = set(request.form.getlist("ignored_locations"))
+
+            selected_mapping = {
+                el.id: request.form.get(f"mapping-{el.id}", "")
+                for el in open_locations
+            }
+            assigned_sales_locations = {
+                value for value in selected_mapping.values() if value
+            }
+
+            conflicting_selections = sorted(
+                assigned_sales_locations.intersection(ignored_sales_locations)
+            )
+            if conflicting_selections:
+                assignment_errors.append(
+                    "Remove the ignore selection for locations that are also linked: "
+                    + ", ".join(conflicting_selections)
+                )
+
+            active_sales_summary = {
+                name: data
+                for name, data in sales_summary.items()
+                if name not in ignored_sales_locations
+            }
+
+            unassigned_sales_locations = [
+                name
+                for name in sales_summary.keys()
+                if name not in assigned_sales_locations
+                and name not in ignored_sales_locations
+            ]
+            if unassigned_sales_locations:
+                assignment_errors.append(
+                    "Assign each sales location to an event location or mark it "
+                    "to be ignored before continuing."
+                )
+
+            product_price_lookup = _derive_price_map(active_sales_summary)
 
             product_names = {
                 product_name
-                for data in sales_summary.values()
+                for data in active_sales_summary.values()
                 for product_name in data["products"].keys()
             }
             product_lookup: dict[str, Product] = {}
@@ -1279,6 +1325,31 @@ def upload_terminal_sales(event_id):
             unmatched_names = [
                 name for name in product_names if name not in product_lookup
             ]
+
+            if assignment_errors:
+                return render_template(
+                    "events/upload_terminal_sales.html",
+                    form=form,
+                    event=ev,
+                    open_locations=open_locations,
+                    mapping_payload=payload,
+                    mapping_filename=mapping_filename,
+                    sales_summary=sales_summary,
+                    sales_location_names=list(sales_summary.keys()),
+                    default_mapping=selected_mapping,
+                    unresolved_products=[],
+                    product_choices=[],
+                    resolution_errors=resolution_errors,
+                    product_resolution_required=False,
+                    price_discrepancies=price_discrepancies,
+                    menu_mismatches=menu_mismatches,
+                    warnings_required=warnings_required,
+                    warnings_acknowledged=warnings_acknowledged,
+                    ignored_sales_locations=sorted(ignored_sales_locations),
+                    assigned_sales_locations=sorted(assigned_sales_locations),
+                    unassigned_sales_locations=unassigned_sales_locations,
+                    assignment_errors=assignment_errors,
+                )
 
             if unmatched_names:
                 product_resolution_required = True
@@ -1341,10 +1412,7 @@ def upload_terminal_sales(event_id):
                         mapping_filename=mapping_filename,
                         sales_summary=sales_summary,
                         sales_location_names=list(sales_summary.keys()),
-                        default_mapping={
-                            el.id: request.form.get(f"mapping-{el.id}", "")
-                            for el in open_locations
-                        },
+                        default_mapping=selected_mapping,
                         unresolved_products=unresolved_products,
                         product_choices=product_choices,
                         resolution_errors=resolution_errors,
@@ -1353,6 +1421,10 @@ def upload_terminal_sales(event_id):
                         menu_mismatches=menu_mismatches,
                         warnings_required=warnings_required,
                         warnings_acknowledged=warnings_acknowledged,
+                        ignored_sales_locations=sorted(ignored_sales_locations),
+                        assigned_sales_locations=sorted(assigned_sales_locations),
+                        unassigned_sales_locations=unassigned_sales_locations,
+                        assignment_errors=assignment_errors,
                     )
 
                 if (
@@ -1373,10 +1445,7 @@ def upload_terminal_sales(event_id):
                         mapping_filename=mapping_filename,
                         sales_summary=sales_summary,
                         sales_location_names=list(sales_summary.keys()),
-                        default_mapping={
-                            el.id: request.form.get(f"mapping-{el.id}", "")
-                            for el in open_locations
-                        },
+                        default_mapping=selected_mapping,
                         unresolved_products=unresolved_products,
                         product_choices=product_choices,
                         resolution_errors=resolution_errors,
@@ -1385,6 +1454,10 @@ def upload_terminal_sales(event_id):
                         menu_mismatches=menu_mismatches,
                         warnings_required=warnings_required,
                         warnings_acknowledged=warnings_acknowledged,
+                        ignored_sales_locations=sorted(ignored_sales_locations),
+                        assigned_sales_locations=sorted(assigned_sales_locations),
+                        unassigned_sales_locations=unassigned_sales_locations,
+                        assignment_errors=assignment_errors,
                     )
 
                 for original_name in pending_creations:
@@ -1437,7 +1510,9 @@ def upload_terminal_sales(event_id):
                 selected_loc = request.form.get(f"mapping-{el.id}")
                 if not selected_loc:
                     continue
-                loc_sales = sales_summary.get(selected_loc)
+                if selected_loc in ignored_sales_locations:
+                    continue
+                loc_sales = active_sales_summary.get(selected_loc)
                 if not loc_sales:
                     continue
                 location_updated = False
@@ -1540,10 +1615,7 @@ def upload_terminal_sales(event_id):
                     mapping_filename=mapping_filename,
                     sales_summary=sales_summary,
                     sales_location_names=list(sales_summary.keys()),
-                    default_mapping={
-                        el.id: request.form.get(f"mapping-{el.id}", "")
-                        for el in open_locations
-                    },
+                    default_mapping=selected_mapping,
                     unresolved_products=[],
                     product_choices=product_choices,
                     resolution_errors=resolution_errors,
@@ -1558,6 +1630,10 @@ def upload_terminal_sales(event_id):
                     remaining_locations=len(issue_queue) - 1,
                     selected_locations=selected_locations,
                     issue_total=len(issue_queue),
+                    ignored_sales_locations=sorted(ignored_sales_locations),
+                    assigned_sales_locations=sorted(assigned_sales_locations),
+                    unassigned_sales_locations=unassigned_sales_locations,
+                    assignment_errors=assignment_errors,
                 )
 
             updated_locations = _apply_pending_sales(pending_sales, pending_totals)
@@ -1804,6 +1880,14 @@ def upload_terminal_sales(event_id):
                 else ""
                 for el in open_locations
             }
+            assigned_sales_locations = {
+                value for value in default_mapping.values() if value
+            }
+            unassigned_sales_locations = [
+                name
+                for name in sales_location_names
+                if name not in assigned_sales_locations
+            ]
 
     return render_template(
         "events/upload_terminal_sales.html",
@@ -1823,6 +1907,10 @@ def upload_terminal_sales(event_id):
         menu_mismatches=menu_mismatches,
         warnings_required=warnings_required,
         warnings_acknowledged=warnings_acknowledged,
+        ignored_sales_locations=sorted(ignored_sales_locations),
+        assigned_sales_locations=sorted(assigned_sales_locations),
+        unassigned_sales_locations=unassigned_sales_locations,
+        assignment_errors=assignment_errors,
     )
 
 

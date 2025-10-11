@@ -181,6 +181,15 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="step" value="map">
             <input type="hidden" name="payload" value="{{ mapping_payload }}">
+            {% if assignment_errors %}
+                <div class="alert alert-danger">
+                    <ul class="mb-0 ps-3">
+                        {% for message in assignment_errors %}
+                            <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
             {% if product_resolution_required %}
                 <input type="hidden" name="product-resolution-step" value="1">
                 <div class="alert alert-warning">
@@ -226,6 +235,44 @@
                                 {% endif %}
                             </div>
                         {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+            {% if sales_location_names %}
+                <div class="card mb-3">
+                    <div class="card-header">Manage Terminal Sales Locations</div>
+                    <div class="card-body">
+                        <p class="mb-3">
+                            Select any locations from the uploaded file that should be
+                            ignored for this import.
+                        </p>
+                        {% if unassigned_sales_locations %}
+                            <div class="alert alert-warning">
+                                <strong>Unassigned locations:</strong>
+                                {{ unassigned_sales_locations | join(', ') }}
+                            </div>
+                        {% endif %}
+                        {% for location_name in sales_location_names %}
+                            {% set checkbox_id = 'ignore-location-' ~ loop.index %}
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox"
+                                       id="{{ checkbox_id }}"
+                                       name="ignored_locations"
+                                       value="{{ location_name }}"
+                                       {% if location_name in ignored_sales_locations %}checked{% endif %}>
+                                <label class="form-check-label" for="{{ checkbox_id }}">
+                                    Ignore <strong>{{ location_name }}</strong>
+                                    {% if location_name in assigned_sales_locations %}
+                                        <span class="badge bg-success ms-2">Linked</span>
+                                    {% elif location_name in unassigned_sales_locations %}
+                                        <span class="badge bg-warning text-dark ms-2">Unassigned</span>
+                                    {% endif %}
+                                </label>
+                            </div>
+                        {% endfor %}
+                        <div class="form-text">
+                            Ignored locations and their products will not be imported.
+                        </div>
                     </div>
                 </div>
             {% endif %}
