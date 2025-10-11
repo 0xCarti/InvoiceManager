@@ -2133,6 +2133,7 @@ def confirm_location(event_id, el_id):
         "unmapped_products": [],
         "summary": [],
         "has_details": False,
+        "show_toggle": False,
     }
     if summary_record is not None and summary_record.variance_details:
         details = summary_record.variance_details or {}
@@ -2315,6 +2316,11 @@ def confirm_location(event_id, el_id):
                 unmatched_details,
             )
         )
+
+    variance_breakdown["show_toggle"] = bool(
+        variance_breakdown["has_details"]
+        or (amount_variance is not None)
+    )
     return render_template(
         "events/confirm_location.html",
         form=form,
