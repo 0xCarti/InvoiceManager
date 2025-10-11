@@ -1,28 +1,24 @@
-<form id="locationForm" action="{{ url_for('locations.edit_location', location_id=location.id) }}" method="post">
-    {{ form.hidden_tag() }}
-    <div class="modal-header">
-        <h5 class="modal-title">Edit Location: {{ location.name }}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-    </div>
-    <div class="modal-body">
-        <div class="form-group">
-            {{ form.name.label(class="form-label") }}
-            {{ form.name(class="form-control") }}
-        </div>
-        <div class="form-group">
-            {{ form.menu_id.label(class="form-label") }}
-            {{ form.menu_id(class="form-select") }}
-            <div class="form-text">
-                Changing the menu updates the products and stand sheet for this location.
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-xl-6">
+            <h1 class="h3 mb-4">Edit Location</h1>
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form action="{{ form_action }}" method="post">
+                        {{ form.hidden_tag() }}
+                        <h2 class="h4 mb-3">{{ location.name }}</h2>
+                        {% include 'locations/_location_form_fields.html' with menu_help_text="Changing the menu updates the products and stand sheet for this location." %}
+                        <div class="d-flex flex-wrap gap-2 mt-4">
+                            <a class="btn btn-outline-secondary" href="{{ cancel_url }}">Cancel</a>
+                            {{ form.submit(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
-        <div class="form-check mb-3">
-            {{ form.is_spoilage(class="form-check-input") }}
-            {{ form.is_spoilage.label(class="form-check-label") }}
-        </div>
     </div>
-    <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        {{ form.submit(class="btn btn-primary") }}
-    </div>
-</form>
+</div>
+{% endblock %}

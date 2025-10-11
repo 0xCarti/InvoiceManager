@@ -66,7 +66,7 @@
                         {% endif %}
                         <td>
                             {% if el.location %}
-                                <a href="{{ url_for('locations.edit_location', location_id=el.location_id) }}">{{ el.location.name }}</a>
+                                <a href="{{ url_for('locations.edit_location', location_id=el.location_id, next=request.full_path) }}">{{ el.location.name }}</a>
                             {% else %}
                                 <span class="text-muted">Unknown location</span>
                             {% endif %}
