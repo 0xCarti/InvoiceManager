@@ -9,6 +9,7 @@ from flask import (
     request,
     url_for,
 )
+from urllib.parse import urlsplit
 from flask_login import login_required
 
 from app import db
@@ -54,6 +55,24 @@ def _location_items_redirect(location_id: int, page: str | None, per_page: str |
     if per_page and per_page.isdigit():
         args["per_page"] = int(per_page)
     return redirect(url_for("locations.location_items", **args))
+
+
+def _safe_next_url(raw_value: str | None) -> str | None:
+    """Return a safe relative URL derived from ``raw_value``."""
+
+    if not raw_value:
+        return None
+
+    parsed = urlsplit(raw_value)
+    if parsed.scheme or parsed.netloc:
+        return None
+
+    sanitized = parsed.geturl()
+    if sanitized.endswith("?"):
+        sanitized = sanitized[:-1]
+    if not sanitized.startswith("/"):
+        sanitized = f"/{sanitized}"
+    return sanitized
 @location.route("/locations/add", methods=["GET", "POST"])
 @login_required
 def add_location():
@@ -110,6 +129,27 @@ def edit_location(location_id):
     if request.method == "GET":
         form.menu_id.data = location.current_menu_id or 0
 
+    safe_next = _safe_next_url(request.args.get("next"))
+    cancel_url = safe_next or url_for("locations.view_locations")
+    action_kwargs = {"location_id": location.id}
+    if safe_next:
+        action_kwargs["next"] = safe_next
+    form_action = url_for("locations.edit_location", **action_kwargs)
+
+    def render_form():
+        template = (
+            "locations/edit_location_modal.html"
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            else "locations/edit_location.html"
+        )
+        return render_template(
+            template,
+            form=form,
+            location=location,
+            form_action=form_action,
+            cancel_url=cancel_url,
+        )
+
     if form.validate_on_submit():
         menu_obj = None
         menu_id = form.menu_id.data or 0
@@ -117,7 +157,7 @@ def edit_location(location_id):
             menu_obj = db.session.get(Menu, menu_id)
             if menu_obj is None:
                 form.menu_id.errors.append("Selected menu is no longer available.")
-                return render_template("locations/edit_location.html", form=form, location=location)
+                return render_form()
         location.name = form.name.data
         location.is_spoilage = form.is_spoilage.data
         if menu_obj is not None:
@@ -135,17 +175,14 @@ def edit_location(location_id):
                 }
             )
         flash("Location updated successfully.", "success")
-        return redirect(
-            url_for("locations.edit_location", location_id=location.id)
-        )
+        redirect_kwargs = {"location_id": location.id}
+        if safe_next:
+            redirect_kwargs["next"] = safe_next
+        return redirect(url_for("locations.edit_location", **redirect_kwargs))
 
     if form.menu_id.data is None:
         form.menu_id.data = location.current_menu_id or 0
-    return render_template(
-        "locations/edit_location.html",
-        form=form,
-        location=location,
-    )
+    return render_form()
 
 
 @location.route("/locations/<int:source_id>/copy_items", methods=["POST"])
