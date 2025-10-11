@@ -133,5 +133,172 @@
                     });
             });
         }
+
+        var quickProductForm = document.getElementById("quick-product-form");
+        var quickProductErrors = document.getElementById("quick-product-errors");
+        var quickProductFeedback = document.getElementById("quick-product-feedback");
+        var quickProductModalEl = document.getElementById("quickProductModal");
+
+        function showQuickProductFeedback(message, isError) {
+            if (!quickProductFeedback) {
+                return;
+            }
+            quickProductFeedback.textContent = message;
+            quickProductFeedback.classList.remove("d-none", "text-danger", "text-success");
+            quickProductFeedback.classList.add(isError ? "text-danger" : "text-success");
+        }
+
+        function clearQuickProductFeedback() {
+            if (!quickProductFeedback) {
+                return;
+            }
+            quickProductFeedback.textContent = "";
+            quickProductFeedback.classList.add("d-none");
+            quickProductFeedback.classList.remove("text-danger", "text-success");
+        }
+
+        function displayQuickProductErrors(errors) {
+            if (!quickProductErrors) {
+                return;
+            }
+            if (!errors) {
+                quickProductErrors.innerHTML = "";
+                quickProductErrors.classList.add("d-none");
+                return;
+            }
+            var messages = [];
+            Object.keys(errors).forEach(function (field) {
+                var fieldErrors = errors[field];
+                if (Array.isArray(fieldErrors)) {
+                    fieldErrors.forEach(function (message) {
+                        messages.push(message);
+                    });
+                }
+            });
+            if (!messages.length) {
+                quickProductErrors.innerHTML = "";
+                quickProductErrors.classList.add("d-none");
+                return;
+            }
+            var list = document.createElement("ul");
+            list.classList.add("mb-0");
+            messages.forEach(function (message) {
+                var item = document.createElement("li");
+                item.textContent = message;
+                list.appendChild(item);
+            });
+            quickProductErrors.innerHTML = "";
+            quickProductErrors.appendChild(list);
+            quickProductErrors.classList.remove("d-none");
+        }
+
+        function sortProductOptions() {
+            var options = Array.prototype.slice.call(productSelect.options);
+            options.sort(function (a, b) {
+                return a.text.localeCompare(b.text);
+            });
+            productSelect.innerHTML = "";
+            options.forEach(function (option) {
+                productSelect.appendChild(option);
+            });
+        }
+
+        if (quickProductForm) {
+            quickProductForm.addEventListener("submit", function (event) {
+                event.preventDefault();
+                displayQuickProductErrors(null);
+                clearQuickProductFeedback();
+                var submitButton = quickProductForm.querySelector("button[type='submit'], input[type='submit']");
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    if (submitButton.tagName === "BUTTON") {
+                        submitButton.dataset.originalLabel = submitButton.textContent;
+                        submitButton.textContent = "Saving…";
+                    } else {
+                        submitButton.dataset.originalLabel = submitButton.value;
+                        submitButton.value = "Saving…";
+                    }
+                }
+                var formData = new FormData(quickProductForm);
+                fetch(quickProductForm.getAttribute("action"), {
+                    method: "POST",
+                    headers: {
+                        Accept: "application/json"
+                    },
+                    body: formData
+                })
+                    .then(function (response) {
+                        if (response.ok) {
+                            return response.json();
+                        }
+                        return response.json().then(function (data) {
+                            throw { response: data };
+                        }).catch(function () {
+                            throw new Error("Unable to create product.");
+                        });
+                    })
+                    .then(function (data) {
+                        if (!data || !data.product) {
+                            throw new Error("Unexpected response from server.");
+                        }
+                        var product = data.product;
+                        var existing = null;
+                        Array.prototype.forEach.call(
+                            productSelect.options,
+                            function (option) {
+                                if (option.value === String(product.id)) {
+                                    existing = option;
+                                }
+                            }
+                        );
+                        if (!existing) {
+                            var newOption = new Option(product.name, product.id, true, true);
+                            productSelect.appendChild(newOption);
+                            sortProductOptions();
+                        } else {
+                            existing.selected = true;
+                        }
+                        applyProductFilter();
+                        showQuickProductFeedback(
+                            "Created " + product.name + " and added it to this menu.",
+                            false
+                        );
+                        if (quickProductModalEl && window.bootstrap) {
+                            var modalInstance = window.bootstrap.Modal.getInstance(quickProductModalEl);
+                            if (!modalInstance) {
+                                modalInstance = new window.bootstrap.Modal(quickProductModalEl);
+                            }
+                            modalInstance.hide();
+                        }
+                        quickProductForm.reset();
+                    })
+                    .catch(function (error) {
+                        if (error && error.response && error.response.errors) {
+                            displayQuickProductErrors(error.response.errors);
+                        } else {
+                            displayQuickProductErrors({ __all__: [error.message || "Unable to create product."] });
+                        }
+                    })
+                    .finally(function () {
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            var label = submitButton.dataset.originalLabel || "Create Product";
+                            if (submitButton.tagName === "BUTTON") {
+                                submitButton.textContent = label;
+                            } else {
+                                submitButton.value = label;
+                            }
+                            delete submitButton.dataset.originalLabel;
+                        }
+                    });
+            });
+
+            if (quickProductModalEl && window.bootstrap) {
+                quickProductModalEl.addEventListener("hidden.bs.modal", function () {
+                    displayQuickProductErrors(null);
+                    quickProductForm.reset();
+                });
+            }
+        }
     });
 })();

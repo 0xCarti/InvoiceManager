@@ -14,7 +14,12 @@ from flask_login import login_required
 from sqlalchemy.orm import selectinload
 
 from app import db
-from app.forms import CSRFOnlyForm, MenuAssignmentForm, MenuForm
+from app.forms import (
+    CSRFOnlyForm,
+    MenuAssignmentForm,
+    MenuForm,
+    QuickProductForm,
+)
 from app.models import Location, Menu, MenuAssignment, Product
 from app.utils.activity import log_activity
 from app.utils.menu_assignments import set_location_menu, sync_menu_locations
@@ -92,6 +97,7 @@ def view_menus():
 @login_required
 def add_menu():
     form = MenuForm()
+    quick_product_form = QuickProductForm()
     copy_menus = Menu.query.order_by(Menu.name).all()
     if form.validate_on_submit():
         menu = Menu(
@@ -104,7 +110,13 @@ def add_menu():
         log_activity(f"Created menu {menu.name}")
         flash("Menu created successfully.", "success")
         return redirect(url_for("menu.view_menus"))
-    return render_template("menus/edit_menu.html", form=form, menu=None, copy_menus=copy_menus)
+    return render_template(
+        "menus/edit_menu.html",
+        form=form,
+        menu=None,
+        copy_menus=copy_menus,
+        quick_product_form=quick_product_form,
+    )
 
 
 @menu.route("/menus/<int:menu_id>/edit", methods=["GET", "POST"])
@@ -114,6 +126,7 @@ def edit_menu(menu_id: int):
     if menu is None:
         abort(404)
     form = MenuForm(obj=menu, obj_id=menu.id)
+    quick_product_form = QuickProductForm()
     copy_menus = (
         Menu.query.filter(Menu.id != menu.id).order_by(Menu.name).all()
     )
@@ -129,7 +142,13 @@ def edit_menu(menu_id: int):
         log_activity(f"Updated menu {menu.name}")
         flash("Menu updated successfully.", "success")
         return redirect(url_for("menu.view_menus"))
-    return render_template("menus/edit_menu.html", form=form, menu=menu, copy_menus=copy_menus)
+    return render_template(
+        "menus/edit_menu.html",
+        form=form,
+        menu=menu,
+        copy_menus=copy_menus,
+        quick_product_form=quick_product_form,
+    )
 
 
 @menu.route("/menus/<int:menu_id>/delete", methods=["POST"])
