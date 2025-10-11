@@ -64,7 +64,13 @@
                             {% endif %}
                         </td>
                         {% endif %}
-                        <td>{{ el.location.name }}</td>
+                        <td>
+                            {% if el.location %}
+                                <a href="{{ url_for('locations.edit_location', location_id=el.location_id) }}">{{ el.location.name }}</a>
+                            {% else %}
+                                <span class="text-muted">Unknown location</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if not el.confirmed and not event.closed %}
                                 <a href="{{ url_for('event.stand_sheet', event_id=event.id, location_id=el.location_id) }}">Stand Sheet</a>
