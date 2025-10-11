@@ -29,9 +29,6 @@
 
     ready(function () {
         var productSelect = document.getElementById("product_ids");
-        if (!productSelect) {
-            return;
-        }
 
         var menuForm = document.getElementById("menu-form");
         var endpoint = null;
@@ -43,7 +40,7 @@
         var clearSearchButton = document.getElementById("product-search-clear");
 
         function applyProductFilter() {
-            if (!searchInput) {
+            if (!productSelect || !searchInput) {
                 return;
             }
             var term = searchInput.value.trim().toLowerCase();
@@ -57,11 +54,11 @@
             });
         }
 
-        if (searchInput) {
+        if (productSelect && searchInput) {
             searchInput.addEventListener("input", applyProductFilter);
         }
 
-        if (clearSearchButton) {
+        if (productSelect && clearSearchButton) {
             clearSearchButton.addEventListener("click", function () {
                 if (!searchInput) {
                     return;
@@ -81,6 +78,9 @@
         }
 
         function setSelectedProducts(productIds) {
+            if (!productSelect) {
+                return;
+            }
             var idSet = new Set(productIds.map(function (id) {
                 return String(id);
             }));
@@ -90,7 +90,7 @@
             applyProductFilter();
         }
 
-        if (copySelect && copyButton && endpoint) {
+        if (productSelect && copySelect && copyButton && endpoint) {
             copyButton.addEventListener("click", function () {
                 clearStatus(statusEl);
                 var selectedMenuId = copySelect.value;
@@ -205,6 +205,9 @@
         }
 
         function sortProductOptions() {
+            if (!productSelect) {
+                return;
+            }
             var options = Array.prototype.slice.call(productSelect.options);
             options.sort(function (a, b) {
                 return a.text.localeCompare(b.text);
@@ -525,22 +528,29 @@
                         }
                         var product = data.product;
                         var existing = null;
-                        Array.prototype.forEach.call(
-                            productSelect.options,
-                            function (option) {
-                                if (option.value === String(product.id)) {
-                                    existing = option;
+                        if (productSelect) {
+                            Array.prototype.forEach.call(
+                                productSelect.options,
+                                function (option) {
+                                    if (option.value === String(product.id)) {
+                                        existing = option;
+                                    }
                                 }
+                            );
+                            if (!existing) {
+                                var newOption = new Option(
+                                    product.name,
+                                    product.id,
+                                    true,
+                                    true
+                                );
+                                productSelect.appendChild(newOption);
+                                sortProductOptions();
+                            } else {
+                                existing.selected = true;
                             }
-                        );
-                        if (!existing) {
-                            var newOption = new Option(product.name, product.id, true, true);
-                            productSelect.appendChild(newOption);
-                            sortProductOptions();
-                        } else {
-                            existing.selected = true;
+                            applyProductFilter();
                         }
-                        applyProductFilter();
                         showQuickProductFeedback(
                             "Created " + product.name + " and added it to this menu.",
                             false
