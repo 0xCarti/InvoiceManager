@@ -504,15 +504,16 @@ def edit_item(item_id):
         if recv_count > 1 or trans_count > 1:
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 form_html = render_template(
-                "items/item_form.html",
-                form=form,
-                item=item,
-                recipe_product_items=recipe_product_items,
-            )
-            return jsonify({"success": False, "form_html": form_html})
-        flash(
-            "Only one unit can be set as receiving and transfer default.",
-            "error",
+                    "items/item_form.html",
+                    form=form,
+                    item=item,
+                    recipe_product_items=recipe_product_items,
+                )
+                return jsonify({"success": False, "form_html": form_html})
+
+            flash(
+                "Only one unit can be set as receiving and transfer default.",
+                "error",
             )
             return render_template(
                 "items/item_form_page.html",
