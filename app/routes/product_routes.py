@@ -309,13 +309,38 @@ def quick_create_product():
         sales_gl_code_id = form.sales_gl_code.data or None
         if sales_gl_code_id == 0:
             sales_gl_code_id = None
+
+        yield_quantity = form.recipe_yield_quantity.data
+        if yield_quantity is None or yield_quantity <= 0:
+            yield_quantity = 1
+
         product_obj = Product(
             name=form.name.data,
             price=form.price.data,
             cost=cost,
             sales_gl_code_id=sales_gl_code_id,
+            recipe_yield_quantity=float(yield_quantity),
+            recipe_yield_unit=form.recipe_yield_unit.data or None,
         )
         db.session.add(product_obj)
+        db.session.flush()
+
+        for item_form in form.items:
+            item_id = item_form.item.data
+            quantity = item_form.quantity.data
+            if not item_id or quantity in (None, ""):
+                continue
+            unit_id = item_form.unit.data or None
+            db.session.add(
+                ProductRecipeItem(
+                    product_id=product_obj.id,
+                    item_id=item_id,
+                    unit_id=unit_id,
+                    quantity=quantity,
+                    countable=item_form.countable.data,
+                )
+            )
+
         db.session.commit()
         log_activity(f"Quick created product {product_obj.name}")
         return (

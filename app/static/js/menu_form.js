@@ -138,6 +138,18 @@
         var quickProductErrors = document.getElementById("quick-product-errors");
         var quickProductFeedback = document.getElementById("quick-product-feedback");
         var quickProductModalEl = document.getElementById("quickProductModal");
+        var quickRecipeContainer = document.getElementById("quick-recipe-items");
+        var quickAddRecipeItemButton = document.getElementById("quick-add-recipe-item");
+        var quickRecipeInitialMarkup = quickRecipeContainer
+            ? quickRecipeContainer.innerHTML
+            : "";
+        var quickRecipeInitialNextIndex = quickRecipeContainer
+            ? quickRecipeContainer.dataset.nextIndex || "0"
+            : "0";
+        var quickRecipeCountableLabel = quickRecipeContainer
+            ? quickRecipeContainer.dataset.countableLabel || "Countable"
+            : "Countable";
+        var quickItemIndex = 0;
 
         function showQuickProductFeedback(message, isError) {
             if (!quickProductFeedback) {
@@ -200,6 +212,276 @@
             productSelect.innerHTML = "";
             options.forEach(function (option) {
                 productSelect.appendChild(option);
+            });
+        }
+
+        function fetchQuickRecipeUnits(row, itemId, selected) {
+            if (!row) {
+                return;
+            }
+            var unitSelect = row.querySelector(".unit-select");
+            if (!itemId) {
+                if (unitSelect) {
+                    unitSelect.innerHTML = "";
+                }
+                return;
+            }
+            fetch("/items/" + encodeURIComponent(itemId) + "/units")
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("Unable to load units");
+                    }
+                    return response.json();
+                })
+                .then(function (data) {
+                    if (!unitSelect) {
+                        return;
+                    }
+                    var options = "";
+                    if (data && data.base_unit) {
+                        options +=
+                            '<option value="">' +
+                            data.base_unit +
+                            "</option>";
+                    }
+                    if (data && Array.isArray(data.units)) {
+                        data.units.forEach(function (unit) {
+                            options +=
+                                '<option value="' +
+                                unit.id +
+                                '\">' +
+                                unit.name +
+                                " of " +
+                                unit.factor +
+                                " " +
+                                data.base_unit +
+                                (unit.factor !== 1 ? "s" : "") +
+                                "</option>";
+                        });
+                    }
+                    unitSelect.innerHTML = options;
+                    if (selected) {
+                        unitSelect.value = selected;
+                    }
+                })
+                .catch(function (error) {
+                    console.error(error);
+                });
+        }
+
+        function createQuickRecipeRow(index) {
+            var row = document.createElement("div");
+            row.classList.add(
+                "row",
+                "g-2",
+                "align-items-center",
+                "quick-item-row",
+                "mb-2"
+            );
+            row.innerHTML =
+                '<div class="col position-relative">' +
+                '<input type="hidden" name="items-' +
+                index +
+                '-item" class="item-id">' +
+                '<input type="text" class="form-control form-control-sm item-search" placeholder="Search item…" autocomplete="off">' +
+                '<div class="list-group item-suggestions"></div>' +
+                "</div>" +
+                '<div class="col">' +
+                '<select name="items-' +
+                index +
+                '-unit" class="form-select form-select-sm unit-select"></select>' +
+                "</div>" +
+                '<div class="col">' +
+                '<input type="number" step="any" name="items-' +
+                index +
+                '-quantity" class="form-control form-control-sm" placeholder="Qty">' +
+                "</div>" +
+                '<div class="col-auto form-check d-flex align-items-center">' +
+                '<input type="checkbox" name="items-' +
+                index +
+                '-countable" class="form-check-input" id="items-' +
+                index +
+                '-countable">' +
+                '<label class="form-check-label ms-1" for="items-' +
+                index +
+                '-countable">' +
+                quickRecipeCountableLabel +
+                "</label>" +
+                "</div>" +
+                '<div class="col-auto">' +
+                '<button type="button" class="btn btn-sm btn-outline-danger quick-remove-item">Remove</button>' +
+                "</div>";
+            return row;
+        }
+
+        function computeQuickItemIndex() {
+            if (!quickRecipeContainer) {
+                return;
+            }
+            var nextIndex = parseInt(
+                quickRecipeContainer.dataset.nextIndex || "0",
+                10
+            );
+            if (Number.isNaN(nextIndex)) {
+                nextIndex = 0;
+            }
+            quickRecipeContainer
+                .querySelectorAll(".quick-item-row .item-id")
+                .forEach(function (input) {
+                    if (!input.name) {
+                        return;
+                    }
+                    var match = input.name.match(/items-(\d+)-item/);
+                    if (match) {
+                        var idx = parseInt(match[1], 10);
+                        if (!Number.isNaN(idx) && idx >= nextIndex) {
+                            nextIndex = idx + 1;
+                        }
+                    }
+                });
+            quickItemIndex = nextIndex;
+            quickRecipeContainer.dataset.nextIndex = String(nextIndex);
+        }
+
+        function setupQuickRecipeRows() {
+            if (!quickRecipeContainer) {
+                return;
+            }
+            quickRecipeContainer
+                .querySelectorAll(".quick-item-row")
+                .forEach(function (row) {
+                    var hiddenInput = row.querySelector(".item-id");
+                    var unitSelect = row.querySelector(".unit-select");
+                    var selected = unitSelect ? unitSelect.dataset.selected : null;
+                    if (hiddenInput && hiddenInput.value) {
+                        fetchQuickRecipeUnits(row, hiddenInput.value, selected);
+                    } else if (unitSelect) {
+                        unitSelect.innerHTML = "";
+                    }
+                });
+            computeQuickItemIndex();
+        }
+
+        function resetQuickProductForm() {
+            if (quickProductForm) {
+                quickProductForm.reset();
+            }
+            if (quickRecipeContainer) {
+                quickRecipeContainer.innerHTML = quickRecipeInitialMarkup;
+                quickRecipeContainer.dataset.nextIndex = quickRecipeInitialNextIndex;
+                setupQuickRecipeRows();
+            }
+        }
+
+        if (quickRecipeContainer) {
+            setupQuickRecipeRows();
+
+            if (quickAddRecipeItemButton) {
+                quickAddRecipeItemButton.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    var row = createQuickRecipeRow(quickItemIndex);
+                    quickRecipeContainer.appendChild(row);
+                    quickItemIndex += 1;
+                    quickRecipeContainer.dataset.nextIndex = String(quickItemIndex);
+                });
+            }
+
+            quickRecipeContainer.addEventListener("click", function (event) {
+                var target = event.target;
+                if (!target) {
+                    return;
+                }
+                if (target.classList.contains("quick-remove-item")) {
+                    event.preventDefault();
+                    var row = target.closest(".quick-item-row");
+                    if (row) {
+                        row.remove();
+                    }
+                    return;
+                }
+                if (target.classList.contains("item-suggestion")) {
+                    event.preventDefault();
+                    var suggestionRow = target.closest(".quick-item-row");
+                    if (!suggestionRow) {
+                        return;
+                    }
+                    var hidden = suggestionRow.querySelector(".item-id");
+                    if (hidden) {
+                        hidden.value = target.dataset.id || "";
+                    }
+                    var searchField = suggestionRow.querySelector(".item-search");
+                    if (searchField) {
+                        searchField.value = target.textContent || "";
+                    }
+                    var suggestions = suggestionRow.querySelector(
+                        ".item-suggestions"
+                    );
+                    if (suggestions) {
+                        suggestions.innerHTML = "";
+                    }
+                    fetchQuickRecipeUnits(
+                        suggestionRow,
+                        target.dataset.id || null,
+                        null
+                    );
+                }
+            });
+
+            quickRecipeContainer.addEventListener("input", function (event) {
+                var target = event.target;
+                if (!target || !target.classList.contains("item-search")) {
+                    return;
+                }
+                var row = target.closest(".quick-item-row");
+                if (!row) {
+                    return;
+                }
+                var query = target.value.trim();
+                var hiddenField = row.querySelector(".item-id");
+                var suggestionList = row.querySelector(".item-suggestions");
+                if (!query) {
+                    if (hiddenField) {
+                        hiddenField.value = "";
+                    }
+                    if (suggestionList) {
+                        suggestionList.innerHTML = "";
+                    }
+                    fetchQuickRecipeUnits(row, null, null);
+                    return;
+                }
+                fetch("/items/search?term=" + encodeURIComponent(query))
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error("Unable to search items");
+                        }
+                        return response.json();
+                    })
+                    .then(function (data) {
+                        if (!suggestionList) {
+                            return;
+                        }
+                        if (!Array.isArray(data)) {
+                            suggestionList.innerHTML = "";
+                            return;
+                        }
+                        suggestionList.innerHTML = data
+                            .map(function (item) {
+                                return (
+                                    '<a href="#" class="list-group-item list-group-item-action item-suggestion" data-id="' +
+                                    item.id +
+                                    '\">' +
+                                    item.name +
+                                    "</a>"
+                                );
+                            })
+                            .join("");
+                    })
+                    .catch(function (error) {
+                        console.error(error);
+                        if (suggestionList) {
+                            suggestionList.innerHTML = "";
+                        }
+                    });
             });
         }
 
@@ -270,7 +552,7 @@
                             }
                             modalInstance.hide();
                         }
-                        quickProductForm.reset();
+                        resetQuickProductForm();
                     })
                     .catch(function (error) {
                         if (error && error.response && error.response.errors) {
@@ -296,7 +578,7 @@
             if (quickProductModalEl && window.bootstrap) {
                 quickProductModalEl.addEventListener("hidden.bs.modal", function () {
                     displayQuickProductErrors(null);
-                    quickProductForm.reset();
+                    resetQuickProductForm();
                 });
             }
         }

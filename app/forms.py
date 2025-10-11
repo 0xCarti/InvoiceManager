@@ -780,39 +780,6 @@ class ProductForm(FlaskForm):
         self.sales_gl_code.choices = formatted_sales_codes
 
 
-class QuickProductForm(FlaskForm):
-    """Simplified product form used for quick product creation."""
-
-    name = StringField("Product Name", validators=[DataRequired(), Length(max=100)])
-    price = DecimalField(
-        "Price", validators=[DataRequired(), NumberRange(min=0.0001)]
-    )
-    cost = DecimalField(
-        "Cost", validators=[Optional(), NumberRange(min=0)], default=0.0
-    )
-    sales_gl_code = SelectField(
-        "Sales GL Code", coerce=int, validators=[Optional()], validate_choice=False
-    )
-    submit = SubmitField("Create Product")
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        sales_codes_raw = (
-            GLCode.query.filter(GLCode.code.like("4%"))
-            .order_by(GLCode.code)
-            .all()
-        )
-        self.sales_gl_code.choices = [
-            (0, "No Sales GL Code")
-        ] + [
-            (
-                g.id,
-                f"{g.code} - {g.description}" if g.description else g.code,
-            )
-            for g in sales_codes_raw
-        ]
-
-
 class RecipeItemForm(FlaskForm):
     item = SelectField("Item", coerce=int)
     unit = SelectField(
@@ -858,6 +825,56 @@ class ProductWithRecipeForm(ProductForm):
 
     def __init__(self, *args, **kwargs):
         super(ProductWithRecipeForm, self).__init__(*args, **kwargs)
+        self.countable_label = RecipeItemForm().countable.label.text
+        items = load_item_choices()
+        units = load_unit_choices()
+        for item_form in self.items:
+            item_form.item.choices = items
+            item_form.unit.choices = units
+
+
+class QuickProductForm(FlaskForm):
+    """Simplified product form used for quick product creation."""
+
+    name = StringField("Product Name", validators=[DataRequired(), Length(max=100)])
+    price = DecimalField(
+        "Price", validators=[DataRequired(), NumberRange(min=0.0001)]
+    )
+    cost = DecimalField(
+        "Cost", validators=[Optional(), NumberRange(min=0)], default=0.0
+    )
+    sales_gl_code = SelectField(
+        "Sales GL Code", coerce=int, validators=[Optional()], validate_choice=False
+    )
+    recipe_yield_quantity = DecimalField(
+        "Recipe Yield Quantity",
+        validators=[Optional(), NumberRange(min=0.0001)],
+        default=1,
+    )
+    recipe_yield_unit = StringField(
+        "Recipe Yield Unit", validators=[Optional(), Length(max=50)]
+    )
+    items = FieldList(FormField(RecipeItemForm), min_entries=0)
+    submit = SubmitField("Create Product")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        sales_codes_raw = (
+            GLCode.query.filter(GLCode.code.like("4%"))
+            .order_by(GLCode.code)
+            .all()
+        )
+        self.sales_gl_code.choices = [
+            (0, "No Sales GL Code")
+        ] + [
+            (
+                g.id,
+                f"{g.code} - {g.description}" if g.description else g.code,
+            )
+            for g in sales_codes_raw
+        ]
+
+        # Populate recipe item choices so quick created products can include recipes.
         self.countable_label = RecipeItemForm().countable.label.text
         items = load_item_choices()
         units = load_unit_choices()
