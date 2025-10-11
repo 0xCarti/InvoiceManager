@@ -2131,6 +2131,7 @@ def confirm_location(event_id, el_id):
         "price_mismatches": [],
         "menu_issues": [],
         "unmapped_products": [],
+        "summary": [],
         "has_details": False,
     }
     if summary_record is not None and summary_record.variance_details:
@@ -2260,6 +2261,52 @@ def confirm_location(event_id, el_id):
         variance_breakdown["price_mismatches"] = price_mismatches
         variance_breakdown["menu_issues"] = menu_issue_details
         variance_breakdown["unmapped_products"] = unmatched_details
+
+        summary_items: list[dict[str, object]] = []
+        if product_deltas:
+            delta_values = [
+                entry["amount_delta"]
+                for entry in product_deltas
+                if entry.get("amount_delta") is not None
+            ]
+            summary_items.append(
+                {
+                    "label": "Product differences",
+                    "count": len(product_deltas),
+                    "impact": sum(delta_values) if delta_values else None,
+                }
+            )
+        if price_mismatches:
+            summary_items.append(
+                {
+                    "label": "Price mismatches",
+                    "count": len(price_mismatches),
+                    "impact": None,
+                }
+            )
+        if menu_issue_details:
+            summary_items.append(
+                {
+                    "label": "Menu issues",
+                    "count": len(menu_issue_details),
+                    "impact": None,
+                }
+            )
+        if unmatched_details:
+            unmatched_amounts = [
+                entry["file_amount"]
+                for entry in unmatched_details
+                if entry.get("file_amount") is not None
+            ]
+            summary_items.append(
+                {
+                    "label": "Unmapped or missing items",
+                    "count": len(unmatched_details),
+                    "impact": sum(unmatched_amounts) if unmatched_amounts else None,
+                }
+            )
+
+        variance_breakdown["summary"] = summary_items
         variance_breakdown["has_details"] = any(
             (
                 product_deltas,
