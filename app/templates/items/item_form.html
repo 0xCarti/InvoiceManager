@@ -103,7 +103,11 @@
                             {% set selected_value = record.purchase_gl_code_id if record.purchase_gl_code_id else '' %}
                         {% endif %}
                         <tr>
-                            <td>{{ record.location.name }}</td>
+                            <td>
+                                <a href="{{ url_for('locations.location_items', location_id=record.location_id) }}">
+                                    {{ record.location.name }}
+                                </a>
+                            </td>
                             <td>
                                 <select name="{{ field_name }}" class="form-select">
                                     <option value="" {% if not selected_value %}selected{% endif %}>
