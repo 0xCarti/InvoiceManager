@@ -139,7 +139,6 @@
         var quickProductFeedback = document.getElementById("quick-product-feedback");
         var quickProductModalEl = document.getElementById("quickProductModal");
         var quickRecipeContainer = document.getElementById("quick-recipe-items");
-        var quickAddRecipeItemButton = document.getElementById("quick-add-recipe-item");
         var quickRecipeInitialMarkup = quickRecipeContainer
             ? quickRecipeContainer.innerHTML
             : "";
@@ -317,6 +316,23 @@
             return row;
         }
 
+        function addQuickRecipeRow() {
+            if (!quickRecipeContainer) {
+                return;
+            }
+            // Update the index from existing DOM nodes in case the dataset was
+            // reset or rows were removed before this click.
+            computeQuickItemIndex();
+            var row = createQuickRecipeRow(quickItemIndex);
+            quickRecipeContainer.appendChild(row);
+            quickItemIndex += 1;
+            quickRecipeContainer.dataset.nextIndex = String(quickItemIndex);
+            var searchInput = row.querySelector(".item-search");
+            if (searchInput) {
+                searchInput.focus();
+            }
+        }
+
         function computeQuickItemIndex() {
             if (!quickRecipeContainer) {
                 return;
@@ -379,15 +395,24 @@
         if (quickRecipeContainer) {
             setupQuickRecipeRows();
 
-            if (quickAddRecipeItemButton) {
-                quickAddRecipeItemButton.addEventListener("click", function (event) {
+            document.addEventListener("click", function (event) {
+                var target = event.target;
+                if (!target) {
+                    return;
+                }
+                if (target.id === "quick-add-recipe-item") {
                     event.preventDefault();
-                    var row = createQuickRecipeRow(quickItemIndex);
-                    quickRecipeContainer.appendChild(row);
-                    quickItemIndex += 1;
-                    quickRecipeContainer.dataset.nextIndex = String(quickItemIndex);
-                });
-            }
+                    addQuickRecipeRow();
+                    return;
+                }
+                if (typeof target.closest === "function") {
+                    var button = target.closest("#quick-add-recipe-item");
+                    if (button) {
+                        event.preventDefault();
+                        addQuickRecipeRow();
+                    }
+                }
+            });
 
             quickRecipeContainer.addEventListener("click", function (event) {
                 var target = event.target;
