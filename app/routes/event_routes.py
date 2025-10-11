@@ -502,9 +502,32 @@ def add_terminal_sale(event_id, el_id):
     if el.confirmed or el.event.closed:
         flash("This location is closed and cannot accept new sales.")
         return redirect(url_for("event.view_event", event_id=event_id))
+
+    def _collect_event_location_products(event_location: EventLocation):
+        location_obj = event_location.location
+        products: list[Product] = []
+        if location_obj is not None:
+            products.extend(location_obj.products)
+        for sale in event_location.terminal_sales:
+            product = sale.product
+            if product is None:
+                continue
+            if product not in products:
+                products.append(product)
+        products.sort(key=lambda prod: prod.name.lower())
+        return products
+
+    available_products = _collect_event_location_products(el)
+    location_obj = el.location
+    if location_obj is not None:
+        for product in available_products:
+            if product not in location_obj.products:
+                location_obj.products.append(product)
+                _ensure_location_items(location_obj, product)
+
     if request.method == "POST":
         updated = False
-        for product in el.location.products:
+        for product in available_products:
             qty = request.form.get(f"qty_{product.id}")
             try:
                 amount = float(qty) if qty else 0
@@ -544,6 +567,7 @@ def add_terminal_sale(event_id, el_id):
         "events/add_terminal_sales.html",
         event_location=el,
         existing_sales=existing_sales,
+        products=available_products,
     )
 
 
@@ -1069,6 +1093,11 @@ def upload_terminal_sales(event_id):
                     alias.product = product
             entry["product_id"] = product.id
             entry.setdefault("product_name", product.name)
+            location_obj = event_location.location
+            if location_obj is not None:
+                if product not in location_obj.products:
+                    location_obj.products.append(product)
+                _ensure_location_items(location_obj, product)
             sale = TerminalSale.query.filter_by(
                 event_location_id=event_location.id, product_id=product.id
             ).first()
