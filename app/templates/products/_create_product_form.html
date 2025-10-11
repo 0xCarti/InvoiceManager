@@ -36,9 +36,21 @@
         {% set selected_name = item.item.choices | selectattr('0', 'equalto', item.item.data) | map(attribute=1) | first %}
         <div class="row mb-2 align-items-center item-row">
             <div class="col position-relative">
-                <input type="hidden" name="{{ item.item.name }}" value="{{ item.item.data or '' }}" class="item-id">
+                <input type="hidden" name="{{ item.item.name }}" value="{{ item.item.data or '' }}" class="item-id" data-item-name="{{ selected_name or '' }}">
                 <input type="text" class="form-control item-search" placeholder="Search item..." autocomplete="off" value="{{ selected_name or '' }}">
                 <div class="list-group item-suggestions"></div>
+                <div class="form-text mt-1">
+                    <a
+                        {% if item.item.data %}
+                            href="{{ url_for('item.view_item', item_id=item.item.data) }}"
+                        {% else %}
+                            href="#"
+                        {% endif %}
+                        class="item-link{% if not item.item.data %} d-none{% endif %}"
+                        target="_blank"
+                        rel="noopener"
+                    >{{ selected_name or '' }}</a>
+                </div>
             </div>
             <div class="col">
                 <select name="{{ item.unit.name }}" class="form-control unit-select" data-selected="{{ item.unit.data or '' }}"></select>
@@ -168,14 +180,41 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function updateItemLink(row, itemId, itemName) {
+        if (!row) {
+            return;
+        }
+        const link = row.querySelector('.item-link');
+        if (!link) {
+            return;
+        }
+        const name = (itemName || '').trim();
+        if (itemId && name) {
+            link.href = `/items/${itemId}`;
+            link.textContent = name;
+            link.classList.remove('d-none');
+            const itemInput = row.querySelector('.item-id');
+            if (itemInput) {
+                itemInput.dataset.itemName = name;
+            }
+        } else {
+            link.removeAttribute('href');
+            link.textContent = '';
+            link.classList.add('d-none');
+        }
+    }
+
     function createRow(idx) {
         const row = document.createElement('div');
         row.classList.add('row', 'mb-2', 'align-items-center', 'item-row');
         row.innerHTML = `
             <div class="col position-relative">
-                <input type="hidden" name="items-${idx}-item" class="item-id">
+                <input type="hidden" name="items-${idx}-item" class="item-id" data-item-name="">
                 <input type="text" class="form-control item-search" placeholder="Search item..." autocomplete="off">
                 <div class="list-group item-suggestions"></div>
+                <div class="form-text mt-1">
+                    <a href="#" class="item-link d-none" target="_blank" rel="noopener"></a>
+                </div>
             </div>
             <div class="col"><select name="items-${idx}-unit" class="form-control unit-select"></select></div>
             <div class="col"><input type="number" step="any" name="items-${idx}-quantity" class="form-control"></div>
@@ -206,6 +245,7 @@ document.addEventListener('DOMContentLoaded', function() {
             row.querySelector('.item-search').value = e.target.textContent;
             row.querySelector('.item-suggestions').innerHTML = '';
             fetchUnits(row, id);
+            updateItemLink(row, id, e.target.textContent);
         }
     });
 
@@ -213,9 +253,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.target && e.target.classList.contains('item-search')) {
             const row = e.target.closest('.item-row');
             const query = e.target.value;
+            updateItemLink(row);
             const sugg = row.querySelector('.item-suggestions');
             if (!query) {
                 row.querySelector('.item-id').value = '';
+                const hiddenInput = row.querySelector('.item-id');
+                if (hiddenInput) {
+                    hiddenInput.dataset.itemName = '';
+                }
                 sugg.innerHTML = '';
                 row.querySelector('.unit-select').innerHTML = '';
                 return;
@@ -225,6 +270,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(data => {
                     sugg.innerHTML = data.map(it => `<a href="#" class="list-group-item list-group-item-action item-suggestion" data-id="${it.id}">${it.name}</a>`).join('');
                 });
+        }
+    });
+
+    document.getElementById('item-list').addEventListener('focusout', function(e) {
+        if (e.target && e.target.classList.contains('item-search')) {
+            const row = e.target.closest('.item-row');
+            const hiddenInput = row ? row.querySelector('.item-id') : null;
+            if (!hiddenInput) {
+                return;
+            }
+            const itemId = hiddenInput.value;
+            const storedName = hiddenInput.dataset.itemName;
+            if (itemId && storedName) {
+                updateItemLink(row, itemId, storedName);
+            }
         }
     });
 
