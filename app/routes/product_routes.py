@@ -410,6 +410,7 @@ def edit_product(product_id):
     if product is None:
         abort(404)
     form = ProductWithRecipeForm()
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     if form.validate_on_submit():
         product.name = form.name.data
         product.price = form.price.data
@@ -445,8 +446,15 @@ def edit_product(product_id):
                 )
         db.session.commit()
         log_activity(f"Edited product {product.id}")
-        flash("Product updated successfully!", "success")
-        return redirect(url_for("product.view_products"))
+        if not is_ajax:
+            flash("Product updated successfully!", "success")
+            return redirect(url_for("product.view_products"))
+        row_html = render_template(
+            "products/_product_row.html",
+            product=product,
+            delete_form=DeleteForm(),
+        )
+        return jsonify(success=True, product_id=product.id, row_html=row_html)
     elif request.method == "GET":
         form.name.data = product.name
         form.price.data = product.price
@@ -477,6 +485,18 @@ def edit_product(product_id):
     else:
         print(form.errors)
         print(form.cost.data)
+    form_action = url_for("product.edit_product", product_id=product.id)
+    if is_ajax:
+        form_html = render_template(
+            "products/_create_product_form.html",
+            form=form,
+            product_id=product.id,
+            form_action=form_action,
+            form_id="edit-product-form",
+        )
+        if request.method == "POST":
+            return jsonify(success=False, form_html=form_html), 400
+        return form_html
     return render_template(
         "products/edit_product.html", form=form, product_id=product.id
     )
