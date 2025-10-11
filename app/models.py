@@ -133,6 +133,11 @@ class Location(db.Model):
         order_by="MenuAssignment.assigned_at.desc()",
         cascade="all, delete-orphan",
     )
+    terminal_sale_location_aliases = relationship(
+        "TerminalSaleLocationAlias",
+        back_populates="location",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (db.Index("ix_location_archived", "archived"),)
 
@@ -848,6 +853,24 @@ class TerminalSaleProductAlias(db.Model):
     )
 
     product = relationship("Product", back_populates="terminal_sale_aliases")
+
+
+class TerminalSaleLocationAlias(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    source_name = db.Column(db.String(255), nullable=False)
+    normalized_name = db.Column(
+        db.String(255), nullable=False, unique=True
+    )
+    location_id = db.Column(
+        db.Integer, db.ForeignKey("location.id"), nullable=False
+    )
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow
+    )
+
+    location = relationship(
+        "Location", back_populates="terminal_sale_location_aliases"
+    )
 
 
 class EventStandSheetItem(db.Model):

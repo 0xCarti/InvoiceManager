@@ -5,7 +5,9 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
     </div>
     <div class="modal-body">
-        {% include 'locations/_location_form_fields.html' with menu_help_text="Changing the menu updates the products and stand sheet for this location." %}
+        {% with menu_help_text="Changing the menu updates the products and stand sheet for this location." %}
+            {% include 'locations/_location_form_fields.html' %}
+        {% endwith %}
     </div>
     <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

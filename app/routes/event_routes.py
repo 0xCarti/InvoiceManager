@@ -44,6 +44,7 @@ from app.models import (
     Product,
     TerminalSale,
     TerminalSaleProductAlias,
+    TerminalSaleLocationAlias,
 )
 from app.utils.activity import log_activity
 from app.utils.numeric import coerce_float
@@ -63,6 +64,64 @@ _STAND_SHEET_FIELDS = (
     "spoiled",
     "closing_count",
 )
+
+
+def _normalize_alias_key(value: str) -> str:
+    if not value:
+        return ""
+    value = value.strip().lower()
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def suggest_terminal_sales_location_mapping(
+    open_locations: list[EventLocation],
+    sales_summary: dict[str, dict],
+) -> dict[int, str]:
+    """Return default mapping suggestions using stored location aliases."""
+
+    if not open_locations:
+        return {}
+
+    sales_location_names = list(sales_summary.keys())
+    if not sales_location_names:
+        return {el.id: "" for el in open_locations}
+
+    normalized_lookup = {
+        name: _normalize_alias_key(name) for name in sales_location_names
+    }
+    normalized_values = [
+        norm for norm in normalized_lookup.values() if norm
+    ]
+    alias_lookup: dict[str, TerminalSaleLocationAlias] = {}
+    if normalized_values:
+        alias_rows = (
+            TerminalSaleLocationAlias.query.filter(
+                TerminalSaleLocationAlias.normalized_name.in_(normalized_values)
+            ).all()
+        )
+        alias_lookup = {alias.normalized_name: alias for alias in alias_rows}
+
+    default_mapping: dict[int, str] = {}
+    for el in open_locations:
+        assigned_value = ""
+        location_obj = el.location
+        if location_obj and location_obj.name in sales_summary:
+            assigned_value = location_obj.name
+        else:
+            for sales_name, normalized in normalized_lookup.items():
+                if not normalized:
+                    continue
+                alias = alias_lookup.get(normalized)
+                if (
+                    alias
+                    and location_obj is not None
+                    and alias.location_id == location_obj.id
+                ):
+                    assigned_value = sales_name
+                    break
+        default_mapping[el.id] = assigned_value
+    return default_mapping
 
 
 def _conversion_mapping():
@@ -841,11 +900,10 @@ def upload_terminal_sales(event_id):
     assignment_errors: list[str] = []
 
     def _normalize_product_name(value: str) -> str:
-        if not value:
-            return ""
-        value = value.strip().lower()
-        value = re.sub(r"[^a-z0-9]+", " ", value)
-        return re.sub(r"\s+", " ", value).strip()
+        return _normalize_alias_key(value)
+
+    def _normalize_location_name(value: str) -> str:
+        return _normalize_alias_key(value)
 
     def _to_float(value):
         if value is None:
@@ -1182,6 +1240,56 @@ def upload_terminal_sales(event_id):
                 menu_updates.append(f"{product.name} @ {location_obj.name}")
         return price_updates, menu_updates
 
+    def _store_location_aliases(pending_totals: list[dict]) -> set[str]:
+        if not pending_totals:
+            return set()
+
+        normalized_entries: dict[str, tuple[str, int]] = {}
+        for entry in pending_totals:
+            source_name = entry.get("source_location")
+            event_location_id = entry.get("event_location_id")
+            if not source_name or event_location_id is None:
+                continue
+            event_location = db.session.get(EventLocation, event_location_id)
+            if event_location is None or event_location.location_id is None:
+                continue
+            normalized = _normalize_location_name(source_name)
+            if not normalized:
+                continue
+            normalized_entries[normalized] = (
+                source_name,
+                event_location.location_id,
+            )
+
+        if not normalized_entries:
+            return set()
+
+        existing_aliases = {
+            alias.normalized_name: alias
+            for alias in TerminalSaleLocationAlias.query.filter(
+                TerminalSaleLocationAlias.normalized_name.in_(
+                    list(normalized_entries.keys())
+                )
+            ).all()
+        }
+
+        saved_sources: set[str] = set()
+        for normalized, (source_name, location_id) in normalized_entries.items():
+            alias = existing_aliases.get(normalized)
+            if alias is None:
+                alias = TerminalSaleLocationAlias(
+                    source_name=source_name,
+                    normalized_name=normalized,
+                    location_id=location_id,
+                )
+                db.session.add(alias)
+            else:
+                alias.source_name = source_name
+                alias.location_id = location_id
+            saved_sources.add(source_name)
+
+        return saved_sources
+
     if request.method == "POST":
         step = request.form.get("step")
         if step == "resolve":
@@ -1300,10 +1408,16 @@ def upload_terminal_sales(event_id):
                 updated_locations = _apply_pending_sales(
                     pending_sales, pending_totals
                 )
+                saved_location_aliases = _store_location_aliases(pending_totals)
                 price_updates, menu_updates = _apply_resolution_actions(
                     {"queue": queue}
                 )
-                if updated_locations or price_updates or menu_updates:
+                if (
+                    updated_locations
+                    or price_updates
+                    or menu_updates
+                    or saved_location_aliases
+                ):
                     db.session.commit()
                     log_activity(
                         "Uploaded terminal sales for event "
@@ -1322,6 +1436,11 @@ def upload_terminal_sales(event_id):
                     if menu_updates:
                         success_parts.append(
                             "Added products to menus: " + ", ".join(sorted(set(menu_updates)))
+                        )
+                    if saved_location_aliases:
+                        success_parts.append(
+                            "Remembered location mappings for: "
+                            + ", ".join(sorted(saved_location_aliases))
                         )
                     flash(" ".join(success_parts), "success")
                 else:
@@ -1423,12 +1542,6 @@ def upload_terminal_sales(event_id):
                 if name not in assigned_sales_locations
                 and name not in ignored_sales_locations
             ]
-            if unassigned_sales_locations:
-                assignment_errors.append(
-                    "Assign each sales location to an event location or mark it "
-                    "to be ignored before continuing."
-                )
-
             product_price_lookup = _derive_price_map(active_sales_summary)
 
             product_names = {
@@ -1869,17 +1982,25 @@ def upload_terminal_sales(event_id):
                 )
 
             updated_locations = _apply_pending_sales(pending_sales, pending_totals)
-            if updated_locations:
+            saved_location_aliases = _store_location_aliases(pending_totals)
+            if updated_locations or saved_location_aliases:
                 db.session.commit()
                 log_activity(
                     "Uploaded terminal sales for event "
                     f"{event_id} from {mapping_filename or 'uploaded file'}"
                 )
-                flash(
-                    "Terminal sales were imported for: "
-                    + ", ".join(sorted(updated_locations)),
-                    "success",
-                )
+                success_parts = []
+                if updated_locations:
+                    success_parts.append(
+                        "Terminal sales were imported for: "
+                        + ", ".join(sorted(updated_locations))
+                    )
+                if saved_location_aliases:
+                    success_parts.append(
+                        "Remembered location mappings for: "
+                        + ", ".join(sorted(saved_location_aliases))
+                    )
+                flash(" ".join(success_parts), "success")
             else:
                 flash(
                     "No event locations were linked to the uploaded sales data.",
@@ -2106,12 +2227,9 @@ def upload_terminal_sales(event_id):
                 {"rows": rows_data, "filename": filename}
             )
             mapping_filename = filename
-            default_mapping = {
-                el.id: el.location.name
-                if el.location.name in sales_summary
-                else ""
-                for el in open_locations
-            }
+            default_mapping = suggest_terminal_sales_location_mapping(
+                open_locations, sales_summary
+            )
             assigned_sales_locations = {
                 value for value in default_mapping.values() if value
             }
