@@ -58,6 +58,7 @@ from app.utils.units import (
     get_unit_label,
 )
 from itsdangerous import BadSignature, URLSafeSerializer
+from sqlalchemy import func
 
 _STAND_SHEET_FIELDS = (
     "opening_count",
@@ -131,6 +132,21 @@ def suggest_terminal_sales_location_mapping(
     normalized_lookup = {
         name: _normalize_alias_key(name) for name in sales_location_names
     }
+    normalized_to_originals: dict[str, list[str]] = {}
+    for original, normalized in normalized_lookup.items():
+        if not normalized:
+            continue
+        normalized_to_originals.setdefault(normalized, []).append(original)
+
+    lowercase_lookup: dict[str, str] = {}
+    ambiguous_lowercase: set[str] = set()
+    for original in sales_location_names:
+        lowered = original.casefold()
+        existing = lowercase_lookup.get(lowered)
+        if existing is None:
+            lowercase_lookup[lowered] = original
+        elif existing != original:
+            ambiguous_lowercase.add(lowered)
     normalized_values = [
         norm for norm in normalized_lookup.values() if norm
     ]
@@ -147,20 +163,56 @@ def suggest_terminal_sales_location_mapping(
     for el in open_locations:
         assigned_value = ""
         location_obj = el.location
-        if location_obj and location_obj.name in sales_summary:
-            assigned_value = location_obj.name
-        else:
-            for sales_name, normalized in normalized_lookup.items():
-                if not normalized:
-                    continue
-                alias = alias_lookup.get(normalized)
+        if location_obj:
+            if location_obj.name in sales_summary:
+                assigned_value = location_obj.name
+            else:
+                normalized_location = _normalize_alias_key(location_obj.name)
+                lowered_location = location_obj.name.casefold()
+
                 if (
-                    alias
-                    and location_obj is not None
-                    and alias.location_id == location_obj.id
+                    lowered_location in lowercase_lookup
+                    and lowered_location not in ambiguous_lowercase
                 ):
-                    assigned_value = sales_name
-                    break
+                    assigned_value = lowercase_lookup[lowered_location]
+
+                if not assigned_value and normalized_location:
+                    direct_candidates = normalized_to_originals.get(
+                        normalized_location, []
+                    )
+                    if len(direct_candidates) == 1:
+                        assigned_value = direct_candidates[0]
+                    else:
+                        for candidate in direct_candidates:
+                            if candidate.casefold() == lowered_location:
+                                assigned_value = candidate
+                                break
+
+                if not assigned_value and normalized_location:
+                    alias = alias_lookup.get(normalized_location)
+                    if (
+                        alias is not None
+                        and alias.location_id == location_obj.id
+                    ):
+                        candidates = normalized_to_originals.get(
+                            normalized_location
+                        )
+                        if candidates:
+                            assigned_value = candidates[0]
+                        else:
+                            assigned_value = alias.source_name
+
+                if not assigned_value:
+                    for sales_name, normalized in normalized_lookup.items():
+                        if not normalized:
+                            continue
+                        alias = alias_lookup.get(normalized)
+                        if (
+                            alias
+                            and alias.location_id == location_obj.id
+                        ):
+                            assigned_value = sales_name
+                            break
         default_mapping[el.id] = assigned_value
     return default_mapping
 
@@ -1007,6 +1059,12 @@ def upload_terminal_sales(event_id):
     def _normalize_location_name(value: str) -> str:
         return _normalize_alias_key(value)
 
+    def _normalized_sql_expression(column):
+        lowered = func.lower(column)
+        alphanumeric = func.regexp_replace(lowered, r"[^a-z0-9]+", " ", "g")
+        compacted = func.regexp_replace(alphanumeric, r"\s+", " ", "g")
+        return func.trim(compacted)
+
     def _to_float(value):
         if value is None:
             return None
@@ -1696,6 +1754,7 @@ def upload_terminal_sales(event_id):
                     norm for norm in normalized_lookup.values() if norm
                 ]
                 alias_lookup: dict[str, TerminalSaleProductAlias] = {}
+                normalized_product_candidates: dict[str, set[Product]] = {}
                 if normalized_values:
                     alias_rows = (
                         TerminalSaleProductAlias.query.filter(
@@ -1716,6 +1775,32 @@ def upload_terminal_sales(event_id):
                             product_lookup[original_name] = alias_lookup[
                                 normalized
                             ].product
+
+                    normalized_expression = _normalized_sql_expression(
+                        Product.name
+                    ).label("normalized_name")
+                    for product, normalized_name in (
+                        Product.query.add_columns(normalized_expression)
+                        .filter(normalized_expression.in_(normalized_values))
+                        .all()
+                    ):
+                        if not normalized_name:
+                            continue
+                        normalized_product_candidates.setdefault(
+                            normalized_name, set()
+                        ).add(product)
+                    if normalized_product_candidates:
+                        for original_name, normalized in normalized_lookup.items():
+                            if not normalized or original_name in product_lookup:
+                                continue
+                            candidates = normalized_product_candidates.get(
+                                normalized
+                            )
+                            if not candidates or len(candidates) != 1:
+                                continue
+                            product_lookup[original_name] = next(
+                                iter(candidates)
+                            )
             else:
                 alias_lookup = {}
 
