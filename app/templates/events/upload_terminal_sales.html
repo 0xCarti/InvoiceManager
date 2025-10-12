@@ -25,56 +25,73 @@
     {% endif %}
     {% if sales_location_names %}
         {% if not resolving_issues %}
-            <div class="alert alert-secondary">
-                <strong>Detected sales locations:</strong>
-                {{ sales_location_names | join(', ') }}
+            <div class="mb-3">
+                <button type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        data-role="toggle-sales-summary"
+                        data-show-text="Show sales summary"
+                        data-hide-text="Hide sales summary"
+                        aria-controls="sales-summary-panel"
+                        aria-expanded="false">
+                    Show sales summary
+                </button>
             </div>
         {% endif %}
-        <div class="table-responsive mb-4">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th scope="col">Sales Location</th>
-                        <th scope="col">Total Quantity</th>
-                        <th scope="col">Total Amount</th>
-                        <th scope="col">Products</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for location_name in sales_location_names %}
-                        {% set data = sales_summary[location_name] %}
+        <div class="mb-4 {% if not resolving_issues %}d-none{% endif %}"
+             id="sales-summary-panel"
+             data-role="sales-summary-panel">
+            {% if not resolving_issues %}
+                <div class="alert alert-secondary">
+                    <strong>Detected sales locations:</strong>
+                    {{ sales_location_names | join(', ') }}
+                </div>
+            {% endif %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
                         <tr>
-                            <th scope="row">{{ location_name }}</th>
-                            <td>{{ '%.2f'|format(data.total) }}</td>
-                            <td>
-                                {% if data.total_amount %}
-                                    {{ '%.2f'|format(data.total_amount) }}
-                                {% else %}
-                                    &mdash;
-                                {% endif %}
-                            </td>
-                            <td>
-                                <ul class="mb-0 ps-3">
-                                    {% for product_name, info in data.products.items() %}
-                                        <li>
-                                            {{ product_name }} &mdash; {{ '%.2f'|format(info.quantity) }}
-                                            {% if info.prices %}
-                                                @ $
-                                                {% for price in info.prices %}
-                                                    {{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
-                                                {% endfor %}
-                                            {% endif %}
-                                            {% if info.amount %}
-                                                <span class="text-muted">(Total ${{ '%.2f'|format(info.amount) }})</span>
-                                            {% endif %}
-                                        </li>
-                                    {% endfor %}
-                                </ul>
-                            </td>
+                            <th scope="col">Sales Location</th>
+                            <th scope="col">Total Quantity</th>
+                            <th scope="col">Total Amount</th>
+                            <th scope="col">Products</th>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {% for location_name in sales_location_names %}
+                            {% set data = sales_summary[location_name] %}
+                            <tr>
+                                <th scope="row">{{ location_name }}</th>
+                                <td>{{ '%.2f'|format(data.total) }}</td>
+                                <td>
+                                    {% if data.total_amount %}
+                                        {{ '%.2f'|format(data.total_amount) }}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <ul class="mb-0 ps-3">
+                                        {% for product_name, info in data.products.items() %}
+                                            <li>
+                                                {{ product_name }} &mdash; {{ '%.2f'|format(info.quantity) }}
+                                                {% if info.prices %}
+                                                    @ $
+                                                    {% for price in info.prices %}
+                                                        {{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
+                                                    {% endfor %}
+                                                {% endif %}
+                                                {% if info.amount %}
+                                                    <span class="text-muted">(Total ${{ '%.2f'|format(info.amount) }})</span>
+                                                {% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     {% endif %}
 
@@ -169,6 +186,12 @@
                     {% else %}
                         Finish Import
                     {% endif %}
+                </button>
+                <button type="submit"
+                        class="btn btn-outline-secondary ms-2"
+                        name="action"
+                        value="back_to_mapping">
+                    Back to Mapping
                 </button>
                 {% if unresolved_total > 0 %}
                     <span class="ms-3 text-danger">Resolve all issues above to continue.</span>
@@ -358,6 +381,9 @@
         </div>
         {{ form.submit(class="btn btn-primary mt-3") }}
     </form>
+{% endif %}
+{% if mapping_payload %}
+<script src="{{ url_for('static', filename='js/terminal_sales_summary_toggle.js') }}" defer></script>
 {% endif %}
 {% if mapping_payload and product_resolution_required %}
 <script src="{{ url_for('static', filename='js/terminal_sales_mapping.js') }}" defer></script>
