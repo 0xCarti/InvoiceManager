@@ -488,16 +488,20 @@ def edit_product(product_id):
         print(form.cost.data)
     form_action = url_for("product.edit_product", product_id=product.id)
     if is_ajax:
-        form_html = render_template(
-            "products/_create_product_form.html",
+        modal_html = render_template(
+            "products/_edit_product_tabs.html",
             form=form,
             product_id=product.id,
+            terminal_sale_aliases=product.terminal_sale_aliases,
+            alias_delete_form=DeleteForm(),
             form_action=form_action,
             form_id="edit-product-form",
+            tabs_id="productEditTabsModal",
+            tabs_content_id="productEditTabsModalContent",
         )
         if request.method == "POST":
-            return jsonify(success=False, form_html=form_html), 400
-        return form_html
+            return jsonify(success=False, form_html=modal_html), 400
+        return modal_html
     return render_template(
         "products/edit_product.html",
         form=form,
