@@ -1055,6 +1055,7 @@ def upload_terminal_sales(event_id):
     assigned_sales_locations: set[str] = set()
     unassigned_sales_locations: list[str] = []
     assignment_errors: list[str] = []
+    active_stage = "locations"
 
     def _normalize_product_name(value: str) -> str:
         return _normalize_alias_key(value)
@@ -1463,6 +1464,7 @@ def upload_terminal_sales(event_id):
     if request.method == "POST":
         step = request.form.get("step")
         if step == "resolve":
+            active_stage = "issues"
             payload = request.form.get("payload")
             state_token = request.form.get("state_token")
             mapping_filename = request.form.get("mapping_filename")
@@ -1575,6 +1577,7 @@ def upload_terminal_sales(event_id):
                     assigned_sales_locations=sorted(assigned_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
+                    active_stage=active_stage,
                 )
 
             if issue_index < 0:
@@ -1764,6 +1767,7 @@ def upload_terminal_sales(event_id):
                     assigned_sales_locations=sorted(assigned_sales_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
+                    active_stage=active_stage,
                 )
 
         elif step == "map":
@@ -1784,6 +1788,13 @@ def upload_terminal_sales(event_id):
                 return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
 
             sales_summary = _group_rows(rows)
+
+            stage = request.form.get("stage")
+            if not stage and request.form.get("product-resolution-step"):
+                stage = "products"
+            stage = stage or "locations"
+            navigate = request.form.get("navigate") or ""
+            active_stage = stage if stage in {"locations", "products"} else "locations"
 
             ignored_sales_locations = set(request.form.getlist("ignored_locations"))
 
@@ -1914,6 +1925,7 @@ def upload_terminal_sales(event_id):
             ]
 
             if assignment_errors:
+                active_stage = "locations"
                 return render_template(
                     "events/upload_terminal_sales.html",
                     form=form,
@@ -1939,13 +1951,16 @@ def upload_terminal_sales(event_id):
                     assigned_sales_locations=sorted(assigned_sales_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
+                    active_stage=active_stage,
                 )
 
             if unmatched_names:
                 product_resolution_required = True
-                resolution_requested = request.form.get(
-                    "product-resolution-step"
-                ) == "1"
+                resolution_requested = (
+                    stage == "products"
+                    and navigate != "back"
+                    and request.form.get("product-resolution-step") == "1"
+                )
                 if not product_choices:
                     product_choices = Product.query.order_by(Product.name).all()
                 product_search_options = [
@@ -2004,6 +2019,9 @@ def upload_terminal_sales(event_id):
                     )
 
                 if not resolution_requested:
+                    active_stage = (
+                        "locations" if navigate == "back" else "products"
+                    )
                     return render_template(
                         "events/upload_terminal_sales.html",
                         form=form,
@@ -2029,6 +2047,7 @@ def upload_terminal_sales(event_id):
                         assigned_sales_locations=sorted(assigned_sales_locations),
                         unassigned_sales_locations=unassigned_sales_locations,
                         assignment_errors=assignment_errors,
+                        active_stage=active_stage,
                     )
 
                 if (
@@ -2042,6 +2061,7 @@ def upload_terminal_sales(event_id):
                     )
 
                 if resolution_errors:
+                    active_stage = "products"
                     return render_template(
                         "events/upload_terminal_sales.html",
                         form=form,
@@ -2067,6 +2087,7 @@ def upload_terminal_sales(event_id):
                         assigned_sales_locations=sorted(assigned_sales_locations),
                         unassigned_sales_locations=unassigned_sales_locations,
                         assignment_errors=assignment_errors,
+                        active_stage=active_stage,
                     )
 
                 for original_name in pending_creations:
@@ -2289,6 +2310,7 @@ def upload_terminal_sales(event_id):
                     "selected_mapping": selected_mapping,
                 }
                 state_token = serializer.dumps(state_data)
+                active_stage = "issues"
                 return render_template(
                     "events/upload_terminal_sales.html",
                     form=form,
@@ -2320,6 +2342,7 @@ def upload_terminal_sales(event_id):
                     assigned_sales_locations=sorted(assigned_sales_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
+                    active_stage=active_stage,
                 )
 
             updated_locations = _apply_pending_sales(pending_sales, pending_totals)
@@ -2605,6 +2628,7 @@ def upload_terminal_sales(event_id):
         assigned_sales_locations=sorted(assigned_sales_locations),
         unassigned_sales_locations=unassigned_sales_locations,
         assignment_errors=assignment_errors,
+        active_stage=active_stage,
     )
 
 
