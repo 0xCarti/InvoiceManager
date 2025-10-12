@@ -305,6 +305,56 @@ def _ensure_location_items(location_obj: Location, product_obj: Product) -> None
             )
 
 
+def _derive_summary_totals_from_details(
+    details: dict | None,
+) -> tuple[float | None, float | None]:
+    """Derive total quantity and amount values from variance details."""
+
+    if not details:
+        return (None, None)
+
+    def _coerce(value):
+        try:
+            if value is None:
+                return None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    total_quantity = 0.0
+    total_amount = 0.0
+    have_quantity = False
+    have_amount = False
+
+    def _accumulate(entries: list[dict]) -> None:
+        nonlocal total_quantity, total_amount, have_quantity, have_amount
+        for entry in entries:
+            quantity_value = _coerce(entry.get("quantity"))
+            if quantity_value is not None:
+                total_quantity += quantity_value
+                have_quantity = True
+
+            amount_value = _coerce(entry.get("file_amount"))
+            if amount_value is None and quantity_value is not None:
+                for price in entry.get("file_prices") or []:
+                    price_value = _coerce(price)
+                    if price_value is not None:
+                        amount_value = quantity_value * price_value
+                        break
+
+            if amount_value is not None:
+                total_amount += amount_value
+                have_amount = True
+
+    _accumulate(details.get("products") or [])
+    _accumulate(details.get("unmapped_products") or [])
+
+    return (
+        total_quantity if have_quantity else None,
+        total_amount if have_amount else None,
+    )
+
+
 event = Blueprint("event", __name__)
 
 
@@ -1245,6 +1295,13 @@ def upload_terminal_sales(event_id):
                 summary.variance_details = _sanitize_variance_details(
                     data.get("variance_details")
                 )
+                fallback_quantity, fallback_amount = _derive_summary_totals_from_details(
+                    summary.variance_details
+                )
+                if summary.total_quantity is None and fallback_quantity is not None:
+                    summary.total_quantity = fallback_quantity
+                if summary.total_amount is None and fallback_amount is not None:
+                    summary.total_amount = fallback_amount
         return updated_locations
 
     def _apply_resolution_actions(issue_state: dict) -> tuple[list[str], list[str]]:
@@ -2401,6 +2458,13 @@ def confirm_location(event_id, el_id):
         file_total_amount = summary_record.total_amount
         file_total_quantity = summary_record.total_quantity
         source_location_name = summary_record.source_location
+        fallback_quantity, fallback_amount = _derive_summary_totals_from_details(
+            summary_record.variance_details
+        )
+        if file_total_quantity is None and fallback_quantity is not None:
+            file_total_quantity = fallback_quantity
+        if file_total_amount is None and fallback_amount is not None:
+            file_total_amount = fallback_amount
     amount_variance = None
     if file_total_amount is not None:
         amount_variance = app_total_amount - float(file_total_amount)
