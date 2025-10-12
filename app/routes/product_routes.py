@@ -33,6 +33,7 @@ from app.models import (
     Invoice,
     InvoiceProduct,
     TerminalSale,
+    TerminalSaleProductAlias,
 )
 from app.utils.activity import log_activity
 from app.utils.numeric import coerce_float
@@ -498,7 +499,47 @@ def edit_product(product_id):
             return jsonify(success=False, form_html=form_html), 400
         return form_html
     return render_template(
-        "products/edit_product.html", form=form, product_id=product.id
+        "products/edit_product.html",
+        form=form,
+        product_id=product.id,
+        terminal_sale_aliases=product.terminal_sale_aliases,
+        alias_delete_form=DeleteForm(),
+    )
+
+
+@product.route(
+    "/products/<int:product_id>/terminal_sale_aliases/<int:alias_id>/delete",
+    methods=["POST"],
+)
+@login_required
+def remove_terminal_sale_alias(product_id: int, alias_id: int):
+    """Remove a terminal sale alias mapping from a product."""
+
+    product = db.session.get(Product, product_id)
+    if product is None:
+        abort(404)
+
+    alias = TerminalSaleProductAlias.query.filter_by(
+        id=alias_id, product_id=product.id
+    ).first()
+    if alias is None:
+        abort(404)
+
+    form = DeleteForm()
+    if form.validate_on_submit():
+        db.session.delete(alias)
+        db.session.commit()
+        log_activity(
+            f"Removed terminal sale alias {alias.id} from product {product.id}"
+        )
+        flash("Terminal sales product mapping removed.", "success")
+    else:
+        flash("Unable to remove mapping. Please try again.", "danger")
+
+    return redirect(
+        url_for(
+            "product.edit_product", product_id=product.id, _anchor="terminal-sales"
+        )
     )
 
 
