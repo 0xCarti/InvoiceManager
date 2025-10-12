@@ -315,6 +315,12 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin.terminal_sales_mappings') }}">Terminal Sales Mappings</a>
+                            <a href="{{ url_for('auth.toggle_favorite', link='admin.terminal_sales_mappings') }}" class="ms-1">
+                                {% if 'admin.terminal_sales_mappings' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('admin.import_page') }}">Data Imports</a>
                             <a href="{{ url_for('auth.toggle_favorite', link='admin.import_page') }}" class="ms-1">
                                 {% if 'admin.import_page' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{%

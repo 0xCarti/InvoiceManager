@@ -36,6 +36,7 @@ from app.forms import (
     RestoreBackupForm,
     SetPasswordForm,
     SettingsForm,
+    TerminalSalesMappingDeleteForm,
     TimezoneForm,
     UserForm,
     MAX_BACKUP_SIZE,
@@ -47,6 +48,8 @@ from app.models import (
     GLCode,
     Invoice,
     Setting,
+    TerminalSaleLocationAlias,
+    TerminalSaleProductAlias,
     Transfer,
     User,
     Vendor,
@@ -828,3 +831,120 @@ def settings():
         return redirect(url_for("admin.settings"))
 
     return render_template("admin/settings.html", form=form)
+
+
+@admin.route("/controlpanel/terminal-sales-mappings", methods=["GET", "POST"])
+@login_required
+def terminal_sales_mappings():
+    """Allow admins to remove stored terminal sales aliases."""
+
+    if not current_user.is_admin:
+        abort(403)
+
+    product_aliases = (
+        TerminalSaleProductAlias.query.options(
+            selectinload(TerminalSaleProductAlias.product)
+        )
+        .order_by(TerminalSaleProductAlias.source_name)
+        .all()
+    )
+    location_aliases = (
+        TerminalSaleLocationAlias.query.options(
+            selectinload(TerminalSaleLocationAlias.location)
+        )
+        .order_by(TerminalSaleLocationAlias.source_name)
+        .all()
+    )
+
+    product_form = TerminalSalesMappingDeleteForm(prefix="product")
+    location_form = TerminalSalesMappingDeleteForm(prefix="location")
+
+    product_form.selected_ids.choices = [
+        (alias.id, alias.source_name) for alias in product_aliases
+    ]
+    location_form.selected_ids.choices = [
+        (alias.id, alias.source_name) for alias in location_aliases
+    ]
+
+    if product_form.delete_all.data or product_form.delete_selected.data:
+        if product_form.validate_on_submit():
+            deleted_count = 0
+            if product_form.delete_all.data:
+                deleted_count = TerminalSaleProductAlias.query.delete()
+            else:
+                selected_ids = product_form.selected_ids.data or []
+                if selected_ids:
+                    deleted_count = (
+                        TerminalSaleProductAlias.query.filter(
+                            TerminalSaleProductAlias.id.in_(selected_ids)
+                        ).delete(synchronize_session=False)
+                    )
+                else:
+                    flash("Select at least one product mapping to remove.", "warning")
+            if deleted_count:
+                db.session.commit()
+                action = (
+                    "all terminal sales product mappings"
+                    if product_form.delete_all.data
+                    else f"{deleted_count} terminal sales product mapping"
+                )
+                if deleted_count > 1 and not product_form.delete_all.data:
+                    action += "s"
+                log_activity(f"Deleted {action} via admin panel")
+                flash(
+                    f"Removed {deleted_count} product mapping"
+                    f"{'s' if deleted_count != 1 else ''}.",
+                    "success",
+                )
+            elif product_form.delete_all.data:
+                flash("There were no product mappings to remove.", "info")
+            return redirect(url_for("admin.terminal_sales_mappings"))
+        flash("Unable to process the request. Please try again.", "danger")
+        return redirect(url_for("admin.terminal_sales_mappings"))
+
+    if location_form.delete_all.data or location_form.delete_selected.data:
+        if location_form.validate_on_submit():
+            deleted_count = 0
+            if location_form.delete_all.data:
+                deleted_count = TerminalSaleLocationAlias.query.delete()
+            else:
+                selected_ids = location_form.selected_ids.data or []
+                if selected_ids:
+                    deleted_count = (
+                        TerminalSaleLocationAlias.query.filter(
+                            TerminalSaleLocationAlias.id.in_(selected_ids)
+                        ).delete(synchronize_session=False)
+                    )
+                else:
+                    flash(
+                        "Select at least one location mapping to remove.",
+                        "warning",
+                    )
+            if deleted_count:
+                db.session.commit()
+                action = (
+                    "all terminal sales location mappings"
+                    if location_form.delete_all.data
+                    else f"{deleted_count} terminal sales location mapping"
+                )
+                if deleted_count > 1 and not location_form.delete_all.data:
+                    action += "s"
+                log_activity(f"Deleted {action} via admin panel")
+                flash(
+                    f"Removed {deleted_count} location mapping"
+                    f"{'s' if deleted_count != 1 else ''}.",
+                    "success",
+                )
+            elif location_form.delete_all.data:
+                flash("There were no location mappings to remove.", "info")
+            return redirect(url_for("admin.terminal_sales_mappings"))
+        flash("Unable to process the request. Please try again.", "danger")
+        return redirect(url_for("admin.terminal_sales_mappings"))
+
+    return render_template(
+        "admin/terminal_sales_mappings.html",
+        product_form=product_form,
+        location_form=location_form,
+        product_aliases=product_aliases,
+        location_aliases=location_aliases,
+    )
