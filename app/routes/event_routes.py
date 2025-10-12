@@ -1490,12 +1490,92 @@ def upload_terminal_sales(event_id):
                 )
                 return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
 
+            stored_mapping = state_data.get("selected_mapping") or {}
+            ignored_sales_locations = set(
+                state_data.get("ignored_sales_locations") or []
+            )
+            assigned_sales_locations = {
+                value for value in stored_mapping.values() if value
+            }
+
             queue: list[dict] = state_data.get("queue") or []
             pending_sales: list[dict] = state_data.get("pending_sales") or []
             pending_totals: list[dict] = state_data.get("pending_totals") or []
             selected_locations: list[str] = state_data.get("selected_locations") or []
             issue_index = state_data.get("issue_index", 0)
             action = request.form.get("action", "")
+
+            if action == "back_to_mapping":
+                if event_state_key in state_store:
+                    state_store.pop(event_state_key, None)
+                    session[_TERMINAL_SALES_STATE_KEY] = state_store
+                    session.modified = True
+
+                if not payload:
+                    flash("Unable to process the uploaded sales data.", "danger")
+                    return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+
+                try:
+                    payload_data = json.loads(payload)
+                except (TypeError, ValueError):
+                    flash("The uploaded sales data is invalid.", "danger")
+                    return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+
+                rows = payload_data.get("rows", [])
+                mapping_filename = payload_data.get("filename") or mapping_filename
+                if not rows:
+                    flash(
+                        "No sales records were found in the uploaded file.",
+                        "warning",
+                    )
+                    return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+
+                sales_summary = _group_rows(rows)
+                sales_location_names = list(sales_summary.keys())
+                default_mapping: dict[int, str] = {}
+                for key, value in stored_mapping.items():
+                    try:
+                        default_mapping[int(key)] = value
+                    except (TypeError, ValueError):
+                        continue
+                assigned_locations = {
+                    value for value in default_mapping.values() if value
+                }
+                unassigned_sales_locations = sorted(
+                    [
+                        name
+                        for name in sales_location_names
+                        if name not in assigned_locations
+                        and name not in ignored_sales_locations
+                    ]
+                )
+
+                return render_template(
+                    "events/upload_terminal_sales.html",
+                    form=form,
+                    event=ev,
+                    open_locations=open_locations,
+                    mapping_payload=payload,
+                    mapping_filename=mapping_filename,
+                    sales_summary=sales_summary,
+                    sales_location_names=sales_location_names,
+                    default_mapping=default_mapping,
+                    unresolved_products=[],
+                    product_choices=product_choices,
+                    product_search_options=product_search_options,
+                    skip_selection_value=SKIP_SELECTION_VALUE,
+                    create_selection_value=CREATE_SELECTION_VALUE,
+                    resolution_errors=[],
+                    product_resolution_required=False,
+                    price_discrepancies={},
+                    menu_mismatches={},
+                    warnings_required=False,
+                    warnings_acknowledged=False,
+                    ignored_sales_locations=sorted(ignored_sales_locations),
+                    assigned_sales_locations=sorted(assigned_locations),
+                    unassigned_sales_locations=unassigned_sales_locations,
+                    assignment_errors=assignment_errors,
+                )
 
             if issue_index < 0:
                 issue_index = 0
@@ -1648,6 +1728,8 @@ def upload_terminal_sales(event_id):
             state_data["selected_locations"] = selected_locations
             state_data["issue_index"] = issue_index
             state_data["token_id"] = token_id
+            state_data["ignored_sales_locations"] = sorted(ignored_sales_locations)
+            state_data["selected_mapping"] = stored_mapping
             state_token = serializer.dumps(state_data)
 
             total_locations = len(queue)
@@ -2203,6 +2285,8 @@ def upload_terminal_sales(event_id):
                     "pending_totals": pending_totals,
                     "issue_index": 0,
                     "token_id": token_id,
+                    "ignored_sales_locations": sorted(ignored_sales_locations),
+                    "selected_mapping": selected_mapping,
                 }
                 state_token = serializer.dumps(state_data)
                 return render_template(
