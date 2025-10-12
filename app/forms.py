@@ -1139,6 +1139,14 @@ class DeleteForm(FlaskForm):
     submit = SubmitField("Delete")
 
 
+class TerminalSalesMappingDeleteForm(FlaskForm):
+    """Form used to delete stored terminal sales aliases."""
+
+    selected_ids = SelectMultipleField(coerce=int)
+    delete_selected = SubmitField("Delete Selected")
+    delete_all = SubmitField("Delete All")
+
+
 class BulkProductCostForm(FlaskForm):
     """Form used when bulk-updating product costs from their recipes."""
 

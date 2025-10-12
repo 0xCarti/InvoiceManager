@@ -65,6 +65,7 @@ NAV_LINKS = {
     "admin.users": "Control Panel",
     "admin.backups": "Backups",
     "admin.settings": "Settings",
+    "admin.terminal_sales_mappings": "Terminal Sales Mappings",
     "admin.import_page": "Data Imports",
     "admin.activity_logs": "Activity Logs",
     "admin.system_info": "System Info",
