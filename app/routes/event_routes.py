@@ -1044,6 +1044,9 @@ def upload_terminal_sales(event_id):
     resolution_errors: list[str] = []
     product_resolution_required = False
     product_choices: list[Product] = []
+    product_search_options: list[dict[str, str]] = []
+    CREATE_SELECTION_VALUE = "__create__"
+    SKIP_SELECTION_VALUE = "__skip__"
     price_discrepancies: dict[str, list[dict]] = {}
     menu_mismatches: dict[str, list[dict]] = {}
     warnings_required = False
@@ -1660,6 +1663,9 @@ def upload_terminal_sales(event_id):
                     default_mapping={},
                     unresolved_products=[],
                     product_choices=[],
+                    product_search_options=product_search_options,
+                    skip_selection_value=SKIP_SELECTION_VALUE,
+                    create_selection_value=CREATE_SELECTION_VALUE,
                     resolution_errors=[],
                     product_resolution_required=False,
                     price_discrepancies={},
@@ -1821,6 +1827,9 @@ def upload_terminal_sales(event_id):
                     default_mapping=selected_mapping,
                     unresolved_products=[],
                     product_choices=[],
+                    product_search_options=product_search_options,
+                    skip_selection_value=SKIP_SELECTION_VALUE,
+                    create_selection_value=CREATE_SELECTION_VALUE,
                     resolution_errors=resolution_errors,
                     product_resolution_required=False,
                     price_discrepancies=price_discrepancies,
@@ -1840,12 +1849,18 @@ def upload_terminal_sales(event_id):
                 ) == "1"
                 if not product_choices:
                     product_choices = Product.query.order_by(Product.name).all()
+                product_search_options = [
+                    {
+                        "id": str(product.id),
+                        "value": f"{product.name} (ID: {product.id})",
+                        "label": product.name,
+                    }
+                    for product in product_choices
+                ]
 
                 manual_mappings: dict[str, Product] = {}
                 pending_creations: list[str] = []
                 skipped_products: list[str] = []
-                CREATE_SELECTION_VALUE = "__create__"
-                SKIP_SELECTION_VALUE = "__skip__"
                 for idx, original_name in enumerate(unmatched_names):
                     field_name = f"product-match-{idx}"
                     selected_value = request.form.get(field_name)
@@ -1902,7 +1917,9 @@ def upload_terminal_sales(event_id):
                         default_mapping=selected_mapping,
                         unresolved_products=unresolved_products,
                         product_choices=product_choices,
+                        product_search_options=product_search_options,
                         skip_selection_value=SKIP_SELECTION_VALUE,
+                        create_selection_value=CREATE_SELECTION_VALUE,
                         resolution_errors=resolution_errors,
                         product_resolution_required=True,
                         price_discrepancies=price_discrepancies,
@@ -1938,7 +1955,9 @@ def upload_terminal_sales(event_id):
                         default_mapping=selected_mapping,
                         unresolved_products=unresolved_products,
                         product_choices=product_choices,
+                        product_search_options=product_search_options,
                         skip_selection_value=SKIP_SELECTION_VALUE,
+                        create_selection_value=CREATE_SELECTION_VALUE,
                         resolution_errors=resolution_errors,
                         product_resolution_required=True,
                         price_discrepancies=price_discrepancies,
@@ -2181,6 +2200,9 @@ def upload_terminal_sales(event_id):
                     default_mapping=selected_mapping,
                     unresolved_products=[],
                     product_choices=product_choices,
+                    product_search_options=product_search_options,
+                    skip_selection_value=SKIP_SELECTION_VALUE,
+                    create_selection_value=CREATE_SELECTION_VALUE,
                     resolution_errors=resolution_errors,
                     product_resolution_required=False,
                     price_discrepancies={},
@@ -2469,6 +2491,9 @@ def upload_terminal_sales(event_id):
         default_mapping=default_mapping,
         unresolved_products=unresolved_products,
         product_choices=product_choices,
+        product_search_options=product_search_options,
+        skip_selection_value=SKIP_SELECTION_VALUE,
+        create_selection_value=CREATE_SELECTION_VALUE,
         resolution_errors=resolution_errors,
         product_resolution_required=product_resolution_required,
         price_discrepancies=price_discrepancies,

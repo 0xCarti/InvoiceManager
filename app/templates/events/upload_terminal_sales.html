@@ -206,25 +206,66 @@
                         </ul>
                     {% endif %}
                 </div>
+                {% set search_options = product_search_options|default([], true) %}
+                {% set skip_value = skip_selection_value|default('__skip__') %}
+                {% set create_value = create_selection_value|default('__create__') %}
                 <div class="card mb-3">
                     <div class="card-header">Match Unknown Products</div>
                     <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            Start typing to search by product name, then choose the matching product
+                            or use the buttons to skip or create a new product.
+                        </p>
+                        <datalist id="terminal-product-options">
+                            {% for option in search_options %}
+                                <option value="{{ option.value }}" data-id="{{ option.id }}" label="{{ option.label }}"></option>
+                            {% endfor %}
+                        </datalist>
                         {% for product in unresolved_products %}
-                            <div class="mb-3">
-                                <label class="form-label" for="{{ product.field }}">
+                            {% set selected_value = product.selected|default('', true) %}
+                            {% set selected_value = '%s' % selected_value %}
+                            {% set selected_display = '' %}
+                            {% if selected_value and selected_value not in [skip_value, create_value] %}
+                                {% set match = (search_options | selectattr('id', 'equalto', selected_value) | list) %}
+                                {% if match %}
+                                    {% set selected_display = match[0].value %}
+                                {% endif %}
+                            {% endif %}
+                            <div class="mb-3 terminal-product-mapping"
+                                 data-terminal-product-mapping
+                                 data-skip-value="{{ skip_value }}"
+                                 data-create-value="{{ create_value }}">
+                                <label class="form-label" for="{{ product.field }}-search">
                                     {{ product.name }}
                                 </label>
-                                {% set selected_value = product.selected|default('', true) %}
-                                {% set selected_value = '%s' % selected_value %}
-                                <select class="form-select" id="{{ product.field }}" name="{{ product.field }}">
-                                    <option value="">Select a product</option>
-                                    {% for choice in product_choices %}
-                                        {% set choice_id = '%s' % choice.id %}
-                                        <option value="{{ choice_id }}" {% if selected_value == choice_id %}selected{% endif %}>{{ choice.name }}</option>
-                                    {% endfor %}
-                                    <option value="{{ skip_selection_value }}" {% if selected_value == skip_selection_value %}selected{% endif %}>Skip this product</option>
-                                    <option value="__create__" {% if selected_value == '__create__' %}selected{% endif %}>Create a new product</option>
-                                </select>
+                                <div class="input-group">
+                                    <input type="search"
+                                           class="form-control"
+                                           id="{{ product.field }}-search"
+                                           name="{{ product.field }}-search"
+                                           list="terminal-product-options"
+                                           data-role="product-search-input"
+                                           placeholder="Start typing to search by product name..."
+                                           value="{{ selected_display }}">
+                                    <button type="button" class="btn btn-outline-secondary" data-action="clear">Clear</button>
+                                </div>
+                                <input type="hidden"
+                                       name="{{ product.field }}"
+                                       id="{{ product.field }}"
+                                       value="{{ selected_value }}"
+                                       data-role="product-value">
+                                <div class="btn-group mt-2" role="group" aria-label="Mapping actions">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-action="skip">
+                                        Skip this product
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" data-action="create">
+                                        Create a new product
+                                    </button>
+                                </div>
+                                <div class="form-text" data-role="selection-status"></div>
+                                <div class="form-text text-danger d-none" data-role="selection-error">
+                                    Select a product from the suggestions or choose Skip/Create.
+                                </div>
                                 {% if product.price is not none %}
                                     <div class="form-text">
                                         Creating a new product will use the sale price of ${{ '%.2f'|format(product.price) }} from the uploaded file.
@@ -317,5 +358,8 @@
         </div>
         {{ form.submit(class="btn btn-primary mt-3") }}
     </form>
+{% endif %}
+{% if mapping_payload and product_resolution_required %}
+<script src="{{ url_for('static', filename='js/terminal_sales_mapping.js') }}" defer></script>
 {% endif %}
 {% endblock %}
