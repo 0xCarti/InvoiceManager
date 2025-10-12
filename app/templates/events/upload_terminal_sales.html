@@ -4,13 +4,59 @@
 
 {% set resolving_issues = current_issue is defined %}
 {% set issue_total = issue_total if issue_total is defined else 0 %}
+{% set active_stage = active_stage if active_stage is defined else 'locations' %}
+{% set stage_index = 1 %}
+{% if active_stage == 'products' %}
+    {% set stage_index = 2 %}
+{% elif active_stage == 'issues' %}
+    {% set stage_index = 3 %}
+{% endif %}
 
 {% if mapping_payload %}
+    <div class="mb-4" aria-label="Terminal sales upload steps">
+        {% set steps = [
+            {'number': 1, 'label': 'Map Locations'},
+            {'number': 2, 'label': 'Resolve Products'},
+            {'number': 3, 'label': 'Finalize Issues'}
+        ] %}
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            {% for step in steps %}
+                {% set is_active = step.number == stage_index %}
+                {% set is_complete = step.number < stage_index %}
+                {% set badge_classes = 'badge rounded-pill me-2' %}
+                {% if is_active %}
+                    {% set badge_classes = badge_classes ~ ' bg-primary' %}
+                {% elif is_complete %}
+                    {% set badge_classes = badge_classes ~ ' bg-success' %}
+                {% else %}
+                    {% set badge_classes = badge_classes ~ ' bg-secondary' %}
+                {% endif %}
+                {% set label_classes = 'mb-0' %}
+                {% if is_active %}
+                    {% set label_classes = label_classes ~ ' fw-semibold text-primary' %}
+                {% elif is_complete %}
+                    {% set label_classes = label_classes ~ ' text-success' %}
+                {% else %}
+                    {% set label_classes = label_classes ~ ' text-muted' %}
+                {% endif %}
+                <div class="d-flex align-items-center">
+                    <span class="{{ badge_classes }}">{{ step.number }}</span>
+                    <span class="{{ label_classes }}">{{ step.label }}</span>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
     <div class="alert alert-info">
         {% if resolving_issues %}
             <p class="mb-0">
                 Resolve the discrepancies detected in the uploaded terminal sales
                 before importing them. Each location must be handled separately.
+            </p>
+        {% elif active_stage == 'products' %}
+            <p class="mb-0">
+                Match any unknown products from the uploaded file to products in
+                the app or choose to skip them. Use the buttons below to update
+                each product, or go back to adjust your location selections.
             </p>
         {% else %}
             <p class="mb-0">
@@ -24,7 +70,7 @@
         <p><strong>Source file:</strong> {{ mapping_filename }}</p>
     {% endif %}
     {% if sales_location_names %}
-        {% if not resolving_issues %}
+        {% if not resolving_issues and active_stage == 'locations' %}
             <div class="mb-3">
                 <button type="button"
                         class="btn btn-outline-secondary btn-sm"
@@ -204,6 +250,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="step" value="map">
             <input type="hidden" name="payload" value="{{ mapping_payload }}">
+            <input type="hidden" name="stage" value="{{ active_stage }}">
             {% if assignment_errors %}
                 <div class="alert alert-danger">
                     <ul class="mb-0 ps-3">
@@ -213,7 +260,7 @@
                     </ul>
                 </div>
             {% endif %}
-            {% if product_resolution_required %}
+            {% if product_resolution_required and active_stage == 'products' %}
                 <input type="hidden" name="product-resolution-step" value="1">
                 <div class="alert alert-warning">
                     <p class="mb-2">
@@ -302,9 +349,13 @@
                         {% endfor %}
                     </div>
                 </div>
+            {% elif active_stage == 'products' %}
+                <div class="alert alert-success">
+                    <p class="mb-0">All products in the uploaded file have been matched automatically.</p>
+                </div>
             {% endif %}
             {% if sales_location_names %}
-                <div class="card mb-3">
+                <div class="card mb-3 {% if active_stage != 'locations' %}d-none{% endif %}">
                     <div class="card-header">Manage Terminal Sales Locations</div>
                     <div class="card-body">
                         <p class="mb-3">
@@ -341,8 +392,38 @@
                     </div>
                 </div>
             {% endif %}
-            {% if open_locations %}
+            {% if active_stage == 'products' %}
                 <div class="card mb-3">
+                    <div class="card-header">Location Mapping Summary</div>
+                    <div class="card-body">
+                        {% if ignored_sales_locations %}
+                            <p class="mb-2">
+                                <strong>Ignored locations:</strong>
+                                {{ ignored_sales_locations | join(', ') }}
+                            </p>
+                        {% endif %}
+                        {% if open_locations %}
+                            <ul class="mb-0 ps-3">
+                                {% for el in open_locations %}
+                                    {% set selected_location = default_mapping.get(el.id) %}
+                                    <li>
+                                        <strong>{{ el.location.name }}</strong>
+                                        {% if selected_location %}
+                                            &rarr; {{ selected_location }}
+                                        {% else %}
+                                            <span class="text-muted">&rarr; Skipped</span>
+                                        {% endif %}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="mb-0 text-muted">There are no open event locations to link.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+            {% if open_locations %}
+                <div class="card mb-3 {% if active_stage != 'locations' %}d-none{% endif %}">
                     <div class="card-header">Link Event Locations</div>
                     <div class="card-body">
                         {% for el in open_locations %}
@@ -362,8 +443,34 @@
                         {% endfor %}
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary">Review Issues</button>
-                <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}" class="btn btn-secondary ms-2">Start Over</a>
+                <div class="d-flex flex-wrap align-items-center">
+                    {% if active_stage == 'locations' %}
+                        <button type="submit" class="btn btn-primary" name="navigate" value="next">
+                            Next: Resolve Products
+                        </button>
+                        <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}"
+                           class="btn btn-outline-secondary ms-2">
+                            Start Over
+                        </a>
+                    {% else %}
+                        <button type="submit"
+                                class="btn btn-outline-secondary"
+                                name="navigate"
+                                value="back">
+                            Back to Locations
+                        </button>
+                        <button type="submit"
+                                class="btn btn-primary ms-2"
+                                name="navigate"
+                                value="finish">
+                            Finish
+                        </button>
+                        <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}"
+                           class="btn btn-link ms-2">
+                            Start Over
+                        </a>
+                    {% endif %}
+                </div>
             {% else %}
                 <div class="alert alert-warning">
                     There are no open locations for this event available for mapping.
@@ -385,7 +492,7 @@
 {% if mapping_payload %}
 <script src="{{ url_for('static', filename='js/terminal_sales_summary_toggle.js') }}" defer></script>
 {% endif %}
-{% if mapping_payload and product_resolution_required %}
+{% if mapping_payload and product_resolution_required and active_stage == 'products' %}
 <script src="{{ url_for('static', filename='js/terminal_sales_mapping.js') }}" defer></script>
 {% endif %}
 {% endblock %}
