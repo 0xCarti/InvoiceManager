@@ -7,6 +7,7 @@ import re
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime
+from secrets import token_urlsafe
 from types import SimpleNamespace
 
 from flask import (
@@ -19,6 +20,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import login_required
@@ -311,6 +313,9 @@ def _terminal_sales_serializer() -> URLSafeSerializer:
     if not secret_key:
         raise RuntimeError("Application secret key is not configured.")
     return URLSafeSerializer(secret_key, salt="terminal-sales-resolution")
+
+
+_TERMINAL_SALES_STATE_KEY = "terminal_sales_state"
 
 
 def _parse_date(value):
@@ -915,6 +920,14 @@ def upload_terminal_sales(event_id):
         abort(404)
 
     form = TerminalSalesUploadForm()
+    state_store = session.get(_TERMINAL_SALES_STATE_KEY)
+    if not isinstance(state_store, dict):
+        state_store = {}
+    event_state_key = str(event_id)
+    if request.method != "POST" and event_state_key in state_store:
+        state_store.pop(event_state_key, None)
+        session[_TERMINAL_SALES_STATE_KEY] = state_store
+        session.modified = True
     open_locations = [
         el
         for el in ev.locations
@@ -1345,6 +1358,20 @@ def upload_terminal_sales(event_id):
                 flash("The resolution data could not be verified.", "danger")
                 return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
 
+            token_id = state_data.get("token_id")
+            expected_id = state_store.get(event_state_key)
+            if not token_id or expected_id != token_id:
+                if event_state_key in state_store:
+                    state_store.pop(event_state_key, None)
+                    session[_TERMINAL_SALES_STATE_KEY] = state_store
+                    session.modified = True
+                flash(
+                    "The terminal sales resolution session is no longer valid. "
+                    "Upload the sales file again to start over.",
+                    "danger",
+                )
+                return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+
             queue: list[dict] = state_data.get("queue") or []
             pending_sales: list[dict] = state_data.get("pending_sales") or []
             pending_totals: list[dict] = state_data.get("pending_totals") or []
@@ -1487,6 +1514,10 @@ def upload_terminal_sales(event_id):
                         "No event locations were linked to the uploaded sales data.",
                         "warning",
                     )
+                if event_state_key in state_store:
+                    state_store.pop(event_state_key, None)
+                    session[_TERMINAL_SALES_STATE_KEY] = state_store
+                    session.modified = True
                 return redirect(url_for("event.view_event", event_id=event_id))
 
             if error_messages:
@@ -1498,6 +1529,7 @@ def upload_terminal_sales(event_id):
             state_data["pending_totals"] = pending_totals
             state_data["selected_locations"] = selected_locations
             state_data["issue_index"] = issue_index
+            state_data["token_id"] = token_id
             state_token = serializer.dumps(state_data)
 
             total_locations = len(queue)
@@ -1982,12 +2014,17 @@ def upload_terminal_sales(event_id):
 
             if issue_queue:
                 serializer = _terminal_sales_serializer()
+                token_id = token_urlsafe(16)
+                state_store[event_state_key] = token_id
+                session[_TERMINAL_SALES_STATE_KEY] = state_store
+                session.modified = True
                 state_data = {
                     "queue": issue_queue,
                     "pending_sales": pending_sales,
                     "selected_locations": selected_locations,
                     "pending_totals": pending_totals,
                     "issue_index": 0,
+                    "token_id": token_id,
                 }
                 state_token = serializer.dumps(state_data)
                 return render_template(
