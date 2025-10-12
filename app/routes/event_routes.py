@@ -5,6 +5,7 @@ import math
 import os
 import re
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -72,6 +73,44 @@ def _normalize_alias_key(value: str) -> str:
     value = value.strip().lower()
     value = re.sub(r"[^a-z0-9]+", " ", value)
     return re.sub(r"\s+", " ", value).strip()
+
+
+def _terminal_sales_cell_is_blank(value) -> bool:
+    """Return ``True`` when an Excel cell should be treated as empty."""
+
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    try:
+        return float(value) == 0.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _extract_terminal_sales_location(row: Sequence[object]) -> str | None:
+    """Extract a location header from a parsed Excel row.
+
+    Location rows contain a name in the first column while the remaining cells
+    are effectively empty. Some spreadsheets populate the trailing cells with
+    whitespace or zero values, so we treat those as blank as well.
+    """
+
+    if not row:
+        return None
+
+    first = row[0]
+    if not isinstance(first, str):
+        return None
+
+    candidate = first.strip()
+    if not candidate:
+        return None
+
+    if all(_terminal_sales_cell_is_blank(cell) for cell in row[1:]):
+        return candidate
+
+    return None
 
 
 def suggest_terminal_sales_location_mapping(
@@ -2139,16 +2178,16 @@ def upload_terminal_sales(event_id):
 
                 current_loc = None
                 for row in rows_iter:
-                    first = row[0] if row else None
-                    second = row[1] if len(row) > 1 else None
-
-                    if (second is None or second == "") and isinstance(first, str):
-                        cleaned = first.strip()
-                        if cleaned:
-                            current_loc = cleaned
+                    location_name = _extract_terminal_sales_location(row)
+                    if location_name:
+                        current_loc = location_name
                         continue
 
-                    if not current_loc or not isinstance(second, str):
+                    if not current_loc:
+                        continue
+
+                    second = row[1] if len(row) > 1 else None
+                    if not isinstance(second, str):
                         continue
 
                     quantity = row[4] if len(row) > 4 else None
