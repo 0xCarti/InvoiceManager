@@ -257,6 +257,68 @@ def test_no_sales_after_confirmation(client, app):
         assert resp.status_code == 302
 
 
+def test_undo_location_confirmation(client, app):
+    email, loc_id, _, _ = setup_event_env(app)
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/events/create",
+            data={
+                "name": "Undo Confirmation Event",
+                "start_date": "2023-05-01",
+                "end_date": "2023-05-02",
+                "event_type": "inventory",
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        ev = Event.query.filter_by(name="Undo Confirmation Event").first()
+        assert ev is not None
+        event_id = ev.id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/events/{event_id}/add_location",
+            data={"location_id": loc_id},
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        el = EventLocation.query.filter_by(
+            event_id=event_id, location_id=loc_id
+        ).first()
+        assert el is not None
+        el_id = el.id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/events/{event_id}/locations/{el_id}/confirm",
+            data={"submit": "Confirm"},
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        el = db.session.get(EventLocation, el_id)
+        assert el.confirmed is True
+
+    with client:
+        login(client, email, "pass")
+        response = client.post(
+            f"/events/{event_id}/locations/{el_id}/undo-confirm",
+            data={"submit": "Undo Confirmation"},
+            follow_redirects=True,
+        )
+        assert b"Location confirmation undone." in response.data
+
+    with app.app_context():
+        el = db.session.get(EventLocation, el_id)
+        assert el.confirmed is False
+
+
 def test_bulk_stand_sheets_render_multiple_pages(client, app):
     email, loc_id, prod_id, item_id = setup_event_env(app)
     with client:

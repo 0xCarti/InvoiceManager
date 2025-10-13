@@ -32,6 +32,7 @@ from app.forms import (
     EventForm,
     EventLocationConfirmForm,
     EventLocationForm,
+    EventLocationUndoConfirmForm,
     UpdateOpeningCountsForm,
     ScanCountForm,
     TerminalSalesUploadForm,
@@ -752,6 +753,7 @@ def view_event(event_id):
         opening_form=opening_form,
         confirmed_sales=confirmed_sales,
         physical_terminal_variance=physical_terminal_variance,
+        undo_confirm_form_factory=EventLocationUndoConfirmForm,
     )
 
 
@@ -3064,6 +3066,44 @@ def confirm_location(event_id, el_id):
         variance_breakdown=variance_breakdown,
         location=location,
     )
+
+
+@event.route(
+    "/events/<int:event_id>/locations/<int:el_id>/undo-confirm",
+    methods=["POST"],
+)
+@login_required
+def undo_confirm_location(event_id, el_id):
+    el = db.session.get(EventLocation, el_id)
+    if el is None or el.event_id != event_id:
+        abort(404)
+
+    form = EventLocationUndoConfirmForm()
+    if not form.validate_on_submit():
+        flash("Unable to undo the confirmation. Please try again.", "warning")
+        return redirect(url_for("event.view_event", event_id=event_id))
+
+    ev = el.event
+    if ev is not None and ev.closed:
+        flash(
+            "This event is closed and location confirmations cannot be changed.",
+            "warning",
+        )
+        return redirect(url_for("event.view_event", event_id=event_id))
+
+    if not el.confirmed:
+        flash("This location has not been confirmed.", "warning")
+        return redirect(url_for("event.view_event", event_id=event_id))
+
+    el.confirmed = False
+    db.session.commit()
+
+    log_activity(
+        f"Reopened event location {el_id} for event {event_id}"
+    )
+    flash("Location confirmation undone.", "success")
+
+    return redirect(url_for("event.view_event", event_id=event_id))
 
 
 def _get_stand_items(location_id, event_id=None):

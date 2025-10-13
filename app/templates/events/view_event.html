@@ -97,7 +97,22 @@
                                 <a href="{{ url_for('event.add_terminal_sale', event_id=event.id, el_id=el.id) }}">Enter Sales</a> |
                                 <a href="{{ url_for('event.confirm_location', event_id=event.id, el_id=el.id) }}">Confirm</a>
                             {% else %}
-                                Stand Sheet | Terminal Sales {% if el.confirmed %}| Confirmed{% endif %}
+                                <span class="text-muted">Stand Sheet | Terminal Sales</span>
+                                {% if el.confirmed %}
+                                    <span class="text-muted">|</span>
+                                    <span class="badge bg-secondary">Confirmed</span>
+                                    {% if not event.closed %}
+                                        {% set undo_form = undo_confirm_form_factory() %}
+                                        <form
+                                            method="post"
+                                            action="{{ url_for('event.undo_confirm_location', event_id=event.id, el_id=el.id) }}"
+                                            class="d-inline"
+                                        >
+                                            {{ undo_form.hidden_tag() }}
+                                            {{ undo_form.submit(class_='btn btn-link p-0 ms-2 align-baseline') }}
+                                        </form>
+                                    {% endif %}
+                                {% endif %}
                             {% endif %}
                         </td>
                     </tr>
