@@ -67,11 +67,13 @@
                             <dd class="col-sm-5 text-sm-end">{{ format_qty(report.totals.terminal_quantity) }}</dd>
                             <dt class="col-sm-7">Terminal sales (amount)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.terminal_amount) }}</dd>
+                            <dt class="col-sm-7">System terminal sales (amount)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.system_terminal_amount) }}</dd>
                             <dt class="col-sm-7">Entered sales (quantity)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_qty(report.totals.entered_quantity) }}</dd>
                             <dt class="col-sm-7">Entered sales (amount)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.entered_amount) }}</dd>
-                            <dt class="col-sm-7">Difference (terminal - entered)</dt>
+                            <dt class="col-sm-7">Difference (system - entered)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.entered_difference) }}</dd>
                             <dt class="col-sm-7">Physical vs terminal variance</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.variance_amount) }}</dd>
@@ -119,7 +121,8 @@
                     {% endif %}
                 </div>
                 <div class="text-md-end">
-                    <div class="small">Terminal Sales: {{ format_currency(location.totals.terminal_amount) }}</div>
+                    <div class="small">Terminal Sales (register): {{ format_currency(location.totals.terminal_amount) }}</div>
+                    <div class="small">System Terminal Sales: {{ format_currency(location.totals.system_terminal_amount) }}</div>
                     <div class="small">Variance ($): {{ format_currency(location.totals.variance_amount) }}</div>
                     <div class="small">Priced Coverage: {% if location.totals.priced_coverage is not none %}{{ '%.1f'|format(location.totals.priced_coverage) }}%{% else %}<span class="text-muted">—</span>{% endif %}</div>
                 </div>
@@ -192,11 +195,13 @@
                             <dd class="col-sm-5 text-sm-end">{{ format_qty(location.totals.terminal_quantity) }}</dd>
                             <dt class="col-sm-7">Terminal sales (amount)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.terminal_amount) }}</dd>
+                            <dt class="col-sm-7">System terminal sales (amount)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.system_terminal_amount) }}</dd>
                             <dt class="col-sm-7">Entered sales (quantity)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_qty(location.totals.entered_quantity) }}</dd>
                             <dt class="col-sm-7">Entered sales (amount)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.entered_amount) }}</dd>
-                            <dt class="col-sm-7">Difference (terminal - entered)</dt>
+                            <dt class="col-sm-7">Difference (system - entered)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.entered_difference) }}</dd>
                             {% if location.entered_sales_source %}
                             <dt class="col-sm-7">Sales file source</dt>
