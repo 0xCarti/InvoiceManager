@@ -134,6 +134,7 @@ def _compile_event_closeout_report(event: Event) -> dict:
 
     total_terminal_quantity = 0.0
     total_terminal_amount = Decimal("0.00")
+    total_system_terminal_amount = Decimal("0.00")
     total_priced_items = 0
     total_items = 0
     unpriced_item_total = 0
@@ -263,12 +264,16 @@ def _compile_event_closeout_report(event: Event) -> dict:
                 product_price or 0.0
             )
 
-        terminal_amount = _quantize(calculated_terminal_amount)
+        system_terminal_amount = _quantize(calculated_terminal_amount)
+        terminal_amount = system_terminal_amount
 
         summary_record = event_location.terminal_sales_summary
         entered_quantity = None
         entered_amount = None
         entered_source = None
+
+        derived_quantity = None
+        derived_amount = None
 
         if summary_record is not None:
             entered_quantity = _coerce_float(summary_record.total_quantity)
@@ -283,12 +288,26 @@ def _compile_event_closeout_report(event: Event) -> dict:
                     entered_quantity = _coerce_float(fallback_quantity)
                 if entered_amount_value is None:
                     entered_amount_value = fallback_amount
+                derived_quantity = fallback_quantity
+                derived_amount = fallback_amount
+            else:
+                derived_quantity, derived_amount = _derive_summary_totals_from_details(
+                    summary_record.variance_details
+                )
 
             if entered_amount_value is not None:
                 entered_amount = _quantize(_to_decimal(entered_amount_value))
 
             if entered_quantity is not None:
                 entered_quantity = float(entered_quantity)
+
+        derived_quantity_value = None
+        if derived_quantity is not None:
+            derived_quantity_value = _coerce_float(derived_quantity)
+
+        derived_amount_value = None
+        if derived_amount is not None:
+            derived_amount_value = _quantize(_to_decimal(derived_amount))
 
         if entered_amount is not None:
             if entered_amount_total is None:
@@ -300,17 +319,23 @@ def _compile_event_closeout_report(event: Event) -> dict:
                 entered_quantity_total = 0.0
             entered_quantity_total += entered_quantity
 
-        if not has_recorded_terminal_sales and entered_quantity is not None:
-            terminal_quantity = entered_quantity
+        terminal_quantity_display = terminal_quantity
+        if derived_quantity_value is not None:
+            terminal_quantity_display = float(derived_quantity_value)
+        elif not has_recorded_terminal_sales and entered_quantity is not None:
+            terminal_quantity_display = entered_quantity
 
-        if entered_amount is not None and (
+        if derived_amount_value is not None:
+            terminal_amount = derived_amount_value
+        elif entered_amount is not None and (
             not has_recorded_terminal_sales or terminal_amount == Decimal("0.00")
         ):
             terminal_amount = entered_amount
 
         terminal_amount = _quantize(terminal_amount)
-        total_terminal_quantity += terminal_quantity
+        total_terminal_quantity += terminal_quantity_display
         total_terminal_amount += terminal_amount
+        total_system_terminal_amount += system_terminal_amount
 
         variance_amount_display = None
         if location_priced_items > 0:
@@ -321,7 +346,7 @@ def _compile_event_closeout_report(event: Event) -> dict:
 
         entered_difference = None
         if entered_amount is not None:
-            entered_difference = _quantize(terminal_amount - entered_amount)
+            entered_difference = _quantize(system_terminal_amount - entered_amount)
 
         priced_coverage = None
         if item_rows:
@@ -336,8 +361,9 @@ def _compile_event_closeout_report(event: Event) -> dict:
                 "notes": event_location.notes,
                 "line_items": item_rows,
                 "totals": {
-                    "terminal_quantity": terminal_quantity,
+                    "terminal_quantity": terminal_quantity_display,
                     "terminal_amount": terminal_amount,
+                    "system_terminal_amount": system_terminal_amount,
                     "entered_quantity": entered_quantity,
                     "entered_amount": entered_amount,
                     "entered_difference": entered_difference,
@@ -353,6 +379,7 @@ def _compile_event_closeout_report(event: Event) -> dict:
         )
 
     total_terminal_amount = _quantize(total_terminal_amount)
+    total_system_terminal_amount = _quantize(total_system_terminal_amount)
     variance_total_value = None
     if any_priced_variance:
         variance_total_value = _quantize(total_variance_amount)
@@ -361,7 +388,7 @@ def _compile_event_closeout_report(event: Event) -> dict:
     if entered_amount_total is not None:
         entered_amount_total = _quantize(entered_amount_total)
         entered_difference_total = _quantize(
-            total_terminal_amount - entered_amount_total
+            total_system_terminal_amount - entered_amount_total
         )
 
     estimated_sales_value = None
@@ -378,6 +405,7 @@ def _compile_event_closeout_report(event: Event) -> dict:
         "totals": {
             "terminal_quantity": total_terminal_quantity,
             "terminal_amount": total_terminal_amount,
+            "system_terminal_amount": total_system_terminal_amount,
             "entered_quantity": entered_quantity_total,
             "entered_amount": entered_amount_total,
             "entered_difference": entered_difference_total,
