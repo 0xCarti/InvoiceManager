@@ -2812,11 +2812,13 @@ def confirm_location(event_id, el_id):
         out_val = getattr(sheet_values, "transferred_out", None) or 0.0
         eaten_val = getattr(sheet_values, "eaten", None) or 0.0
         spoiled_val = getattr(sheet_values, "spoiled", None) or 0.0
+        adjustments_val = getattr(sheet_values, "adjustments", None) or 0.0
         closing_val = getattr(sheet_values, "closing_count", None) or 0.0
         sales_val = entry.get("sales") or 0.0
         variance = (
             opening_val
             + in_val
+            + adjustments_val
             - out_val
             - sales_val
             - eaten_val
