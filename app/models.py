@@ -773,6 +773,7 @@ class EventLocation(db.Model):
     confirmed = db.Column(
         db.Boolean, nullable=False, default=False, server_default="0"
     )
+    notes = db.Column(db.Text, nullable=True)
 
     event = relationship("Event", back_populates="locations")
     location = relationship("Location", back_populates="event_locations")

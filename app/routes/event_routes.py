@@ -3396,6 +3396,8 @@ def stand_sheet(event_id, location_id):
             sheet.closing_count = _convert_report_value_to_base(
                 closing or 0, base_unit, report_unit
             )
+        notes_text = request.form.get("notes", "")
+        el.notes = notes_text.strip() or None
         db.session.commit()
         log_activity(
             f"Updated stand sheet for event {event_id} location {location_id}"
@@ -3408,6 +3410,7 @@ def stand_sheet(event_id, location_id):
         event=ev,
         location=location,
         stand_items=stand_items,
+        event_location=el,
     )
 
 
