@@ -480,14 +480,64 @@
         </form>
     {% endif %}
 {% else %}
-    <form method="post" enctype="multipart/form-data">
+    <form method="post" enctype="multipart/form-data" class="mb-4">
         {{ form.hidden_tag() }}
-        <div class="form-group">
-            {{ form.file.label }}
-            {{ form.file(class="form-control") }}
+        <div class="mb-3">
+            {{ form.program.label(class="form-label") }}
+            {{ form.program(class="form-select") }}
+            <div class="form-text">Select the point of sale system the sales file was exported from.</div>
         </div>
-        {{ form.submit(class="btn btn-primary mt-3") }}
+        <div class="mb-3">
+            {{ form.file.label(class="form-label") }}
+            {{ form.file(class="form-control") }}
+            <div class="form-text">Accepted formats: .xls or .pdf exports.</div>
+        </div>
+        {{ form.submit(class="btn btn-primary") }}
     </form>
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title mb-3">IdealPOS sales export example</h5>
+            <p class="mb-2">File type: <span class="fw-semibold">Excel spreadsheet (.xls)</span></p>
+            <p class="mb-3">The upload should contain one row per product sale with location and quantity information similar to the layout below.</p>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-3 text-nowrap">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">Location</th>
+                            <th scope="col">Product</th>
+                            <th scope="col" class="text-end">Quantity</th>
+                            <th scope="col" class="text-end">Price</th>
+                            <th scope="col" class="text-end">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Main Bar</td>
+                            <td>House Lager</td>
+                            <td class="text-end">120</td>
+                            <td class="text-end">$6.50</td>
+                            <td class="text-end">$780.00</td>
+                        </tr>
+                        <tr>
+                            <td>Main Bar</td>
+                            <td>Soft Drink Can</td>
+                            <td class="text-end">85</td>
+                            <td class="text-end">$3.00</td>
+                            <td class="text-end">$255.00</td>
+                        </tr>
+                        <tr>
+                            <td>Food Truck</td>
+                            <td>Loaded Fries</td>
+                            <td class="text-end">45</td>
+                            <td class="text-end">$9.50</td>
+                            <td class="text-end">$427.50</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="mb-0 text-muted">Use your IdealPOS export with matching columns to ensure a smooth import. Totals and additional fields are optional.</p>
+        </div>
+    </div>
 {% endif %}
 {% if mapping_payload %}
 <script src="{{ url_for('static', filename='js/terminal_sales_summary_toggle.js') }}" defer></script>
