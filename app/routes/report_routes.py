@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 from typing import Dict
 
@@ -14,6 +15,7 @@ from flask_login import login_required
 
 from app import db
 from app.forms import (
+    EventCloseoutReportForm,
     PurchaseCostForecastForm,
     PurchaseInventorySummaryForm,
     ProductRecipeReportForm,
@@ -23,6 +25,7 @@ from app.forms import (
 )
 from app.models import (
     Customer,
+    Event,
     EventLocation,
     GLCode,
     Invoice,
@@ -37,6 +40,11 @@ from app.models import (
     PurchaseOrder,
     TerminalSale,
     User,
+)
+from app.routes.event_routes import (
+    _build_item_price_lookup,
+    _derive_summary_totals_from_details,
+    _get_stand_items,
 )
 from app.utils.forecasting import DemandForecastingHelper
 from app.utils.units import (
@@ -109,6 +117,307 @@ def _allocate_amount(total: Decimal, weights: Dict[str, Decimal]):
             allocations[key] += _CENT
 
     return allocations
+
+
+def _coerce_float(value):
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _compile_event_closeout_report(event: Event) -> dict:
+    conversions = _get_base_unit_conversions()
+    generated_at = datetime.now()
+
+    total_terminal_quantity = 0.0
+    total_terminal_amount = Decimal("0.00")
+    total_priced_items = 0
+    total_items = 0
+    unpriced_item_total = 0
+    locations_with_pricing = 0
+    any_priced_variance = False
+    total_variance_amount = Decimal("0.00")
+    entered_quantity_total: float | None = None
+    entered_amount_total: Decimal | None = None
+
+    location_reports: list[dict] = []
+
+    for event_location in sorted(
+        event.locations,
+        key=lambda el: (el.location.name.lower() if el.location else ""),
+    ):
+        location_obj, stand_items = _get_stand_items(
+            event_location.location_id, event.id
+        )
+        price_lookup = _build_item_price_lookup(event_location, stand_items)
+
+        ordered_items = sorted(
+            stand_items,
+            key=lambda entry: (
+                entry.get("item").name.lower()
+                if entry.get("item") is not None
+                else ""
+            ),
+        )
+
+        item_rows: list[dict] = []
+        location_priced_items = 0
+        location_unpriced_items = 0
+        location_variance_amount = Decimal("0.00")
+
+        for entry in ordered_items:
+            item = entry.get("item")
+            base_unit = entry.get("base_unit")
+            sheet = entry.get("sheet")
+            sheet_values = entry.get("sheet_values")
+            sales_display = entry.get("sales")
+            sales_base = _coerce_float(entry.get("sales_base")) or 0.0
+
+            price_per_unit = None
+            if item is not None:
+                price_per_unit = price_lookup.get(item.id)
+            price_per_unit_decimal = (
+                _to_decimal(price_per_unit) if price_per_unit is not None else None
+            )
+
+            def _sheet_value(field_name):
+                raw = getattr(sheet, field_name, None) if sheet is not None else None
+                return float(raw or 0.0)
+
+            opening = _sheet_value("opening_count")
+            transferred_in = _sheet_value("transferred_in")
+            transferred_out = _sheet_value("transferred_out")
+            adjustments = _sheet_value("adjustments")
+            eaten = _sheet_value("eaten")
+            spoiled = _sheet_value("spoiled")
+            closing = _sheet_value("closing_count")
+
+            variance_base = (
+                opening
+                + transferred_in
+                + adjustments
+                - transferred_out
+                - sales_base
+                - eaten
+                - spoiled
+                - closing
+            )
+
+            variance_display = None
+            if sheet is not None or sales_base:
+                try:
+                    converted, _ = convert_quantity_for_reporting(
+                        variance_base, base_unit, conversions
+                    )
+                    variance_display = converted
+                except (TypeError, ValueError):
+                    variance_display = variance_base
+
+            variance_amount = None
+            if price_per_unit_decimal is not None:
+                variance_amount = _quantize(
+                    price_per_unit_decimal * _to_decimal(variance_base)
+                )
+                location_variance_amount += variance_amount
+                location_priced_items += 1
+            else:
+                location_unpriced_items += 1
+
+            terminal_sales_amount = None
+            if price_per_unit_decimal is not None:
+                terminal_sales_amount = _quantize(
+                    price_per_unit_decimal * _to_decimal(sales_base)
+                )
+
+            item_rows.append(
+                {
+                    "item": item,
+                    "unit_label": entry.get("report_unit_label"),
+                    "sheet_values": sheet_values,
+                    "terminal_sales_units": sales_display,
+                    "terminal_sales_amount": terminal_sales_amount,
+                    "variance_units": variance_display,
+                    "variance_amount": variance_amount,
+                    "has_sheet": sheet is not None,
+                }
+            )
+
+        total_items += len(item_rows)
+        total_priced_items += location_priced_items
+        unpriced_item_total += location_unpriced_items
+
+        terminal_quantity = 0.0
+        terminal_amount = Decimal("0.00")
+        for sale in event_location.terminal_sales:
+            quantity = _coerce_float(sale.quantity) or 0.0
+            terminal_quantity += quantity
+            quantity_decimal = _to_decimal(sale.quantity or 0.0)
+            product_price = getattr(sale.product, "price", 0.0)
+            terminal_amount += quantity_decimal * _to_decimal(product_price or 0.0)
+
+        terminal_amount = _quantize(terminal_amount)
+        total_terminal_quantity += terminal_quantity
+        total_terminal_amount += terminal_amount
+
+        summary_record = event_location.terminal_sales_summary
+        entered_quantity = None
+        entered_amount = None
+        entered_source = None
+
+        if summary_record is not None:
+            entered_quantity = _coerce_float(summary_record.total_quantity)
+            entered_amount_value = summary_record.total_amount
+            entered_source = summary_record.source_location
+
+            if entered_quantity is None or entered_amount_value is None:
+                fallback_quantity, fallback_amount = _derive_summary_totals_from_details(
+                    summary_record.variance_details
+                )
+                if entered_quantity is None:
+                    entered_quantity = _coerce_float(fallback_quantity)
+                if entered_amount_value is None:
+                    entered_amount_value = fallback_amount
+
+            if entered_amount_value is not None:
+                entered_amount = _quantize(_to_decimal(entered_amount_value))
+
+            if entered_quantity is not None:
+                entered_quantity = float(entered_quantity)
+
+        if entered_amount is not None:
+            if entered_amount_total is None:
+                entered_amount_total = Decimal("0.00")
+            entered_amount_total += entered_amount
+
+        if entered_quantity is not None:
+            if entered_quantity_total is None:
+                entered_quantity_total = 0.0
+            entered_quantity_total += entered_quantity
+
+        variance_amount_display = None
+        if location_priced_items > 0:
+            locations_with_pricing += 1
+            any_priced_variance = True
+            variance_amount_display = _quantize(location_variance_amount)
+            total_variance_amount += variance_amount_display
+
+        entered_difference = None
+        if entered_amount is not None:
+            entered_difference = _quantize(terminal_amount - entered_amount)
+
+        priced_coverage = None
+        if item_rows:
+            priced_coverage = round((location_priced_items / len(item_rows)) * 100, 1)
+
+        location_reports.append(
+            {
+                "location_name": location_obj.name
+                if location_obj is not None
+                else (event_location.location.name if event_location.location else "Unknown location"),
+                "event_location": event_location,
+                "notes": event_location.notes,
+                "items": item_rows,
+                "totals": {
+                    "terminal_quantity": terminal_quantity,
+                    "terminal_amount": terminal_amount,
+                    "entered_quantity": entered_quantity,
+                    "entered_amount": entered_amount,
+                    "entered_difference": entered_difference,
+                    "variance_amount": variance_amount_display,
+                    "priced_item_count": location_priced_items,
+                    "total_item_count": len(item_rows),
+                    "unpriced_item_count": location_unpriced_items,
+                    "priced_coverage": priced_coverage,
+                },
+                "entered_sales_source": entered_source,
+                "has_stand_data": any(row["has_sheet"] for row in item_rows),
+            }
+        )
+
+    total_terminal_amount = _quantize(total_terminal_amount)
+    variance_total_value = None
+    if any_priced_variance:
+        variance_total_value = _quantize(total_variance_amount)
+
+    entered_difference_total = None
+    if entered_amount_total is not None:
+        entered_amount_total = _quantize(entered_amount_total)
+        entered_difference_total = _quantize(
+            total_terminal_amount - entered_amount_total
+        )
+
+    estimated_sales_value = None
+    estimate_difference = None
+    if event.estimated_sales is not None:
+        estimated_sales_value = _quantize(_to_decimal(event.estimated_sales))
+        estimate_difference = _quantize(
+            total_terminal_amount - estimated_sales_value
+        )
+
+    return {
+        "generated_at": generated_at,
+        "locations": location_reports,
+        "totals": {
+            "terminal_quantity": total_terminal_quantity,
+            "terminal_amount": total_terminal_amount,
+            "entered_quantity": entered_quantity_total,
+            "entered_amount": entered_amount_total,
+            "entered_difference": entered_difference_total,
+            "variance_amount": variance_total_value,
+            "priced_item_count": total_priced_items,
+            "total_item_count": total_items,
+            "unpriced_item_count": unpriced_item_total,
+            "locations_with_pricing": locations_with_pricing,
+            "location_count": len(location_reports),
+            "confirmed_locations": sum(1 for el in event.locations if el.confirmed),
+        },
+        "estimated_sales": estimated_sales_value,
+        "estimate_difference": estimate_difference,
+    }
+
+
+@report.route("/reports/events/closeout", methods=["GET", "POST"])
+@login_required
+def event_closeout_report():
+    form = EventCloseoutReportForm()
+    if form.validate_on_submit():
+        return redirect(
+            url_for("report.event_closeout_report", event_id=form.event_id.data)
+        )
+
+    selected_event_id = request.args.get("event_id", type=int)
+    selected_event = None
+    report_payload = None
+
+    if selected_event_id:
+        selected_event = (
+            Event.query.options(
+                selectinload(Event.locations).selectinload(EventLocation.location),
+                selectinload(Event.locations)
+                .selectinload(EventLocation.terminal_sales)
+                .selectinload(TerminalSale.product),
+                selectinload(Event.locations).selectinload(
+                    EventLocation.terminal_sales_summary
+                ),
+            )
+            .filter(Event.id == selected_event_id)
+            .first()
+        )
+        if selected_event and selected_event.closed:
+            form.event_id.data = selected_event.id
+            report_payload = _compile_event_closeout_report(selected_event)
+        else:
+            selected_event = None
+
+    return render_template(
+        "report_event_closeout.html",
+        form=form,
+        event=selected_event,
+        report=report_payload,
+    )
 
 
 @report.route("/reports/vendor-invoices", methods=["GET", "POST"])
