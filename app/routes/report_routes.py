@@ -319,7 +319,7 @@ def _compile_event_closeout_report(event: Event) -> dict:
                 else (event_location.location.name if event_location.location else "Unknown location"),
                 "event_location": event_location,
                 "notes": event_location.notes,
-                "items": item_rows,
+                "line_items": item_rows,
                 "totals": {
                     "terminal_quantity": terminal_quantity,
                     "terminal_amount": terminal_amount,
