@@ -2803,6 +2803,7 @@ def confirm_location(event_id, el_id):
         return redirect(url_for("event.view_event", event_id=event_id))
     location, stand_items = _get_stand_items(el.location_id, event_id)
     stand_variances: list[dict] = []
+    price_lookup = _build_item_price_lookup(el, stand_items)
     for entry in stand_items:
         sheet_values = entry.get("sheet_values")
         opening_val = getattr(sheet_values, "opening_count", None) or 0.0
@@ -2822,12 +2823,25 @@ def confirm_location(event_id, el_id):
             - closing_val
         )
         has_sheet = entry.get("sheet") is not None
+        item_obj = entry.get("item")
+        price_per_unit = (
+            price_lookup.get(item_obj.id)
+            if item_obj is not None and price_lookup is not None
+            else None
+        )
+        variance_amount = (
+            variance * price_per_unit
+            if has_sheet and price_per_unit is not None
+            else None
+        )
         stand_variances.append(
             {
                 "item": entry.get("item"),
                 "report_unit_label": entry.get("report_unit_label"),
                 "variance": variance if has_sheet else 0.0,
                 "closing": closing_val if has_sheet else None,
+                "price": price_per_unit,
+                "variance_amount": variance_amount,
             }
         )
 

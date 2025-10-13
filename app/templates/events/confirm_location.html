@@ -244,8 +244,10 @@
                         <thead>
                             <tr>
                                 <th scope="col">Item</th>
+                                <th scope="col">Opening Item Price</th>
                                 <th scope="col">Closing Count</th>
                                 <th scope="col">Variance</th>
+                                <th scope="col">Variance ($)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -258,6 +260,16 @@
                                         {% endif %}
                                     </td>
                                     <td>
+                                        {% if entry.price is not none %}
+                                            ${{ '%.2f'|format(entry.price) }}
+                                            {% if entry.report_unit_label %}
+                                                <div class="text-muted small">per {{ entry.report_unit_label }}</div>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
                                         {% if entry.closing is not none %}
                                             {{ '%.2f'|format(entry.closing) }}
                                         {% else %}
@@ -267,6 +279,13 @@
                                     <td>
                                         {% if entry.variance is not none %}
                                             {{ '%.2f'|format(entry.variance) }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if entry.variance_amount is not none %}
+                                            ${{ '%.2f'|format(entry.variance_amount) }}
                                         {% else %}
                                             <span class="text-muted">—</span>
                                         {% endif %}
