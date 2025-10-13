@@ -230,6 +230,13 @@
                     <p class="mb-1"><strong>Event:</strong> {{ event_location.event.name }}</p>
                     <p class="mb-1"><strong>Location:</strong> {{ location.name }}</p>
                     <p class="mb-0"><strong>Event Dates:</strong> {{ event_location.event.start_date }} – {{ event_location.event.end_date }}</p>
+                    <hr>
+                    <h6 class="fw-semibold">Stand Sheet Notes</h6>
+                    {% if event_location.notes %}
+                        <p class="mb-0" style="white-space: pre-wrap;">{{ event_location.notes }}</p>
+                    {% else %}
+                        <p class="mb-0 text-muted">No notes were recorded for this location.</p>
+                    {% endif %}
                 </div>
             </div>
         </div>

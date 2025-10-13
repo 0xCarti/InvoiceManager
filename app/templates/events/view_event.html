@@ -95,6 +95,9 @@
                         <td>
                             {% if el.location %}
                                 <a href="{{ url_for('locations.edit_location', location_id=el.location_id, next=request.full_path) }}">{{ el.location.name }}</a>
+                                {% if el.notes %}
+                                    <div class="text-muted small mt-1" style="white-space: pre-wrap;">{{ el.notes }}</div>
+                                {% endif %}
                             {% else %}
                                 <span class="text-muted">Unknown location</span>
                             {% endif %}

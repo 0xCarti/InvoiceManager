@@ -119,7 +119,20 @@
         </tbody>
     </table>
     </div>
-    <button type="submit" class="btn btn-primary">Save</button>
+    <div class="mt-4">
+        <label class="form-label" for="notes">Notes</label>
+        <textarea
+            class="form-control"
+            id="notes"
+            name="notes"
+            rows="4"
+            placeholder="Add context about adjustments, transfers, or other changes"
+        >{{- event_location.notes or '' -}}</textarea>
+        <div class="form-text">
+            Notes will be saved with the stand sheet and remain visible after the location is confirmed.
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary mt-3">Save</button>
     </form>
 </div>
 <script nonce="{{ csp_nonce }}">
