@@ -38,7 +38,9 @@ def upgrade():
         table_name,
         sa.Column(column_name, sa.Float(), nullable=False, server_default="0.0"),
     )
-    op.alter_column(table_name, column_name, server_default=None)
+
+    if bind.dialect.name != "sqlite":
+        op.alter_column(table_name, column_name, server_default=None)
 
 
 def downgrade():
