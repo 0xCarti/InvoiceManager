@@ -490,7 +490,7 @@
         <div class="mb-3">
             {{ form.file.label(class="form-label") }}
             {{ form.file(class="form-control") }}
-            <div class="form-text">Accepted formats: .xls or .pdf exports.</div>
+            <div class="form-text">Accepted format: IdealPOS Excel export (.xls).</div>
         </div>
         {{ form.submit(class="btn btn-primary") }}
     </form>
@@ -498,44 +498,67 @@
         <div class="card-body">
             <h5 class="card-title mb-3">IdealPOS sales export example</h5>
             <p class="mb-2">File type: <span class="fw-semibold">Excel spreadsheet (.xls)</span></p>
-            <p class="mb-3">The upload should contain one row per product sale with location and quantity information similar to the layout below.</p>
+            <p class="mb-3">The IdealPOS export groups sales by location. Each location is followed by item rows with the columns shown below (values are taken from <code>sales(1).xls</code>).</p>
             <div class="table-responsive">
                 <table class="table table-sm table-bordered mb-3 text-nowrap">
                     <thead class="table-light">
                         <tr>
-                            <th scope="col">Location</th>
-                            <th scope="col">Product</th>
-                            <th scope="col" class="text-end">Quantity</th>
-                            <th scope="col" class="text-end">Price</th>
-                            <th scope="col" class="text-end">Amount</th>
+                            <th scope="col">Product Code</th>
+                            <th scope="col">Product Description</th>
+                            <th scope="col" class="text-end">Unit Price (incl. tax)</th>
+                            <th scope="col" class="text-end">Unit Tax</th>
+                            <th scope="col" class="text-end">Quantity Sold</th>
+                            <th scope="col" class="text-end">Net Sales (ex tax)</th>
+                            <th scope="col" class="text-end">Tax Total</th>
+                            <th scope="col" class="text-end">Gross Sales (incl. tax)</th>
+                            <th scope="col" class="text-end">Discounts (incl. tax)</th>
+                            <th scope="col" class="text-end">Net Sales After Discounts (ex tax)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>Main Bar</td>
-                            <td>House Lager</td>
-                            <td class="text-end">120</td>
-                            <td class="text-end">$6.50</td>
-                            <td class="text-end">$780.00</td>
+                        <tr class="table-secondary">
+                            <th scope="row" colspan="10" class="text-uppercase">PRIVATE SUITES</th>
                         </tr>
                         <tr>
-                            <td>Main Bar</td>
-                            <td>Soft Drink Can</td>
-                            <td class="text-end">85</td>
-                            <td class="text-end">$3.00</td>
-                            <td class="text-end">$255.00</td>
+                            <td>799</td>
+                            <td>17oz Draft Beer - Pilsner BWK</td>
+                            <td class="text-end">9.441765</td>
+                            <td class="text-end">1.010588</td>
+                            <td class="text-end">17</td>
+                            <td class="text-end">143.33</td>
+                            <td class="text-end">17.18</td>
+                            <td class="text-end">160.51</td>
+                            <td class="text-end">-24.51</td>
+                            <td class="text-end">118.82</td>
                         </tr>
                         <tr>
-                            <td>Food Truck</td>
-                            <td>Loaded Fries</td>
-                            <td class="text-end">45</td>
-                            <td class="text-end">$9.50</td>
-                            <td class="text-end">$427.50</td>
+                            <td>1169</td>
+                            <td>473ml Farmery Light</td>
+                            <td class="text-end">9.73</td>
+                            <td class="text-end">1.04</td>
+                            <td class="text-end">6</td>
+                            <td class="text-end">52.14</td>
+                            <td class="text-end">6.24</td>
+                            <td class="text-end">58.38</td>
+                            <td class="text-end">-8.88</td>
+                            <td class="text-end">43.26</td>
+                        </tr>
+                        <tr>
+                            <td>353</td>
+                            <td>Can - Blue Moon</td>
+                            <td class="text-end">10.62</td>
+                            <td class="text-end">1.136667</td>
+                            <td class="text-end">3</td>
+                            <td class="text-end">28.45</td>
+                            <td class="text-end">3.41</td>
+                            <td class="text-end">31.86</td>
+                            <td class="text-end">-4.86</td>
+                            <td class="text-end">23.59</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-            <p class="mb-0 text-muted">Use your IdealPOS export with matching columns to ensure a smooth import. Totals and additional fields are optional.</p>
+            <p class="mb-0 text-muted">Totals rows and the trailing cost/margin columns that IdealPOS adds after the net sales figures can remain in the spreadsheet—the importer ignores them.</p>
         </div>
     </div>
 {% endif %}
