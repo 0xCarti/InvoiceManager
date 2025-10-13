@@ -290,6 +290,151 @@ def _build_stand_item_entry(
     }
 
 
+def _calculate_confirmed_sales_summary(event: Event) -> SimpleNamespace | None:
+    """Return aggregated terminal sales for confirmed locations within an event."""
+
+    total_quantity = 0.0
+    total_amount = 0.0
+    has_confirmed = False
+
+    for event_location in event.locations:
+        if not event_location.confirmed:
+            continue
+        has_confirmed = True
+        for sale in event_location.terminal_sales:
+            quantity = float(sale.quantity or 0.0)
+            product = sale.product
+            price = float(getattr(product, "price", 0.0) or 0.0) if product else 0.0
+            total_quantity += quantity
+            total_amount += quantity * price
+
+    if not has_confirmed:
+        return None
+
+    return SimpleNamespace(quantity=total_quantity, amount=total_amount)
+
+
+def _fallback_item_price(item, allowed_product_ids: set[int] | None = None) -> float | None:
+    """Estimate a per-unit price for an inventory item based on recipe products."""
+
+    if item is None:
+        return None
+
+    prices: list[float] = []
+    for recipe in item.recipe_items:
+        product = recipe.product
+        if product is None:
+            continue
+        if allowed_product_ids is not None and product.id not in allowed_product_ids:
+            continue
+        factor = recipe.unit.factor if recipe.unit else 1.0
+        units_per_product = float(recipe.quantity or 0.0) * factor
+        if units_per_product <= 0:
+            continue
+        price = float(getattr(product, "price", 0.0) or 0.0)
+        prices.append(price / units_per_product)
+
+    if prices:
+        return sum(prices) / len(prices)
+
+    return None
+
+
+def _build_item_price_lookup(
+    event_location: EventLocation, stand_items: list[dict]
+) -> dict[int, float]:
+    """Return a mapping of item IDs to price-per-unit estimates for a location."""
+
+    usage_totals: dict[int, float] = defaultdict(float)
+    revenue_totals: dict[int, float] = defaultdict(float)
+
+    for sale in event_location.terminal_sales:
+        product = sale.product
+        if product is None:
+            continue
+        quantity = float(sale.quantity or 0.0)
+        price = float(getattr(product, "price", 0.0) or 0.0)
+        if quantity == 0:
+            continue
+        sale_revenue = quantity * price
+        for recipe in product.recipe_items:
+            if not recipe.countable or recipe.item_id is None:
+                continue
+            factor = recipe.unit.factor if recipe.unit else 1.0
+            units_per_product = float(recipe.quantity or 0.0) * factor
+            if units_per_product <= 0:
+                continue
+            item_units = quantity * units_per_product
+            usage_totals[recipe.item_id] += item_units
+            revenue_totals[recipe.item_id] += sale_revenue
+
+    price_lookup: dict[int, float] = {}
+    for item_id, units in usage_totals.items():
+        if units > 0:
+            price_lookup[item_id] = revenue_totals[item_id] / units
+
+    location_obj = event_location.location
+    allowed_product_ids: set[int] | None = None
+    if location_obj is not None:
+        allowed_product_ids = {product.id for product in location_obj.products}
+
+    for entry in stand_items:
+        item = entry.get("item")
+        if item is None:
+            continue
+        item_id = item.id
+        if item_id in price_lookup:
+            continue
+        fallback_price = _fallback_item_price(item, allowed_product_ids)
+        if fallback_price is not None:
+            price_lookup[item_id] = fallback_price
+
+    return price_lookup
+
+
+def _calculate_physical_vs_terminal_variance(event: Event) -> float | None:
+    """Return the total dollar variance for confirmed locations in an event."""
+
+    total_variance = 0.0
+    any_confirmed = False
+    has_priced_variance = False
+
+    for event_location in event.locations:
+        if not event_location.confirmed:
+            continue
+        any_confirmed = True
+        _, stand_items = _get_stand_items(event_location.location_id, event_location.event_id)
+        price_lookup = _build_item_price_lookup(event_location, stand_items)
+        for entry in stand_items:
+            sheet = entry.get("sheet")
+            if sheet is None:
+                continue
+            price_per_unit = price_lookup.get(sheet.item_id)
+            if price_per_unit is None:
+                continue
+            variance_units = (
+                float(sheet.opening_count or 0.0)
+                + float(sheet.transferred_in or 0.0)
+                - float(sheet.transferred_out or 0.0)
+                - float(entry.get("sales_base") or 0.0)
+                - float(sheet.eaten or 0.0)
+                - float(sheet.spoiled or 0.0)
+                - float(sheet.closing_count or 0.0)
+            )
+            if variance_units == 0:
+                continue
+            total_variance += variance_units * price_per_unit
+            has_priced_variance = True
+
+    if not any_confirmed:
+        return None
+
+    if not has_priced_variance:
+        return 0.0
+
+    return total_variance
+
+
 def _sync_event_location_opening_counts(event_location: EventLocation) -> int:
     """Ensure stand sheet opening counts mirror the location inventory."""
 
@@ -598,11 +743,15 @@ def view_event(event_id):
         for el in ev.locations
         if el.location is not None
     ]
+    confirmed_sales = _calculate_confirmed_sales_summary(ev)
+    physical_terminal_variance = _calculate_physical_vs_terminal_variance(ev)
     return render_template(
         "events/view_event.html",
         event=ev,
         event_type_label=type_labels.get(ev.event_type, ev.event_type),
         opening_form=opening_form,
+        confirmed_sales=confirmed_sales,
+        physical_terminal_variance=physical_terminal_variance,
     )
 
 
