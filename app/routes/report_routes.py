@@ -250,17 +250,20 @@ def _compile_event_closeout_report(event: Event) -> dict:
         unpriced_item_total += location_unpriced_items
 
         terminal_quantity = 0.0
-        terminal_amount = Decimal("0.00")
+        calculated_terminal_amount = Decimal("0.00")
+        has_recorded_terminal_sales = False
         for sale in event_location.terminal_sales:
             quantity = _coerce_float(sale.quantity) or 0.0
+            if quantity:
+                has_recorded_terminal_sales = True
             terminal_quantity += quantity
             quantity_decimal = _to_decimal(sale.quantity or 0.0)
             product_price = getattr(sale.product, "price", 0.0)
-            terminal_amount += quantity_decimal * _to_decimal(product_price or 0.0)
+            calculated_terminal_amount += quantity_decimal * _to_decimal(
+                product_price or 0.0
+            )
 
-        terminal_amount = _quantize(terminal_amount)
-        total_terminal_quantity += terminal_quantity
-        total_terminal_amount += terminal_amount
+        terminal_amount = _quantize(calculated_terminal_amount)
 
         summary_record = event_location.terminal_sales_summary
         entered_quantity = None
@@ -296,6 +299,18 @@ def _compile_event_closeout_report(event: Event) -> dict:
             if entered_quantity_total is None:
                 entered_quantity_total = 0.0
             entered_quantity_total += entered_quantity
+
+        if not has_recorded_terminal_sales and entered_quantity is not None:
+            terminal_quantity = entered_quantity
+
+        if entered_amount is not None and (
+            not has_recorded_terminal_sales or terminal_amount == Decimal("0.00")
+        ):
+            terminal_amount = entered_amount
+
+        terminal_amount = _quantize(terminal_amount)
+        total_terminal_quantity += terminal_quantity
+        total_terminal_amount += terminal_amount
 
         variance_amount_display = None
         if location_priced_items > 0:
