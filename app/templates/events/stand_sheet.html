@@ -1,6 +1,33 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<style>
+    .stand-sheet-table {
+        font-size: 0.95rem;
+    }
+
+    .stand-sheet-table th,
+    .stand-sheet-table td {
+        white-space: nowrap;
+    }
+
+    .stand-sheet-table th:first-child,
+    .stand-sheet-table td:first-child {
+        min-width: 14rem;
+        white-space: normal;
+    }
+
+    .stand-sheet-table input.form-control {
+        max-width: 6.5rem;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .stand-sheet-table .sales,
+    .stand-sheet-table .variance {
+        min-width: 5.5rem;
+    }
+</style>
 <div class="container mt-4">
     <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -10,7 +37,7 @@
             <div>Event Date/Time: {{ event.start_date }}</div>
         </div>
     <div class="table-responsive">
-    <table class="table table-bordered">
+    <table class="table table-bordered stand-sheet-table">
         <thead>
             <tr>
                 <th>Item (Report Unit)</th>
