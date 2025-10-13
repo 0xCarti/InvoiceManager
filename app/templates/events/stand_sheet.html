@@ -11,10 +11,22 @@
         white-space: nowrap;
     }
 
+    .stand-sheet-table thead th {
+        background-color: #f8f9fa;
+    }
+
     .stand-sheet-table th:first-child,
     .stand-sheet-table td:first-child {
         min-width: 14rem;
         white-space: normal;
+        position: sticky;
+        left: 0;
+        background-color: #fff;
+        z-index: 2;
+    }
+
+    .stand-sheet-table thead th:first-child {
+        z-index: 3;
     }
 
     .stand-sheet-table input.form-control {
