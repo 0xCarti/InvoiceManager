@@ -1246,7 +1246,7 @@ class TerminalSaleForm(FlaskForm):
 
 
 class TerminalSalesUploadForm(FlaskForm):
-    """Form for uploading terminal sales from XLS or PDF."""
+    """Form for uploading terminal sales from legacy Excel exports."""
 
     program = SelectField(
         "Point of Sale Program",
@@ -1257,9 +1257,7 @@ class TerminalSalesUploadForm(FlaskForm):
         "Sales File",
         validators=[
             FileRequired(),
-            FileAllowed(
-                {"xls", "pdf"}, "Only .xls or .pdf files are allowed."
-            ),
+            FileAllowed({"xls"}, "Only .xls files are allowed."),
         ],
     )
     submit = SubmitField("Upload")
