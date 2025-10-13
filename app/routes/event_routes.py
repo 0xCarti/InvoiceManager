@@ -65,6 +65,7 @@ _STAND_SHEET_FIELDS = (
     "opening_count",
     "transferred_in",
     "transferred_out",
+    "adjustments",
     "eaten",
     "spoiled",
     "closing_count",
@@ -3363,6 +3364,9 @@ def stand_sheet(event_id, location_id):
             transferred_out = coerce_float(
                 request.form.get(f"out_{item_id}"), default=0.0
             )
+            adjustments = coerce_float(
+                request.form.get(f"adjust_{item_id}"), default=0.0
+            )
             eaten = coerce_float(request.form.get(f"eaten_{item_id}"), default=0.0)
             spoiled = coerce_float(
                 request.form.get(f"spoiled_{item_id}"), default=0.0
@@ -3376,6 +3380,9 @@ def stand_sheet(event_id, location_id):
             )
             sheet.transferred_out = _convert_report_value_to_base(
                 transferred_out or 0, base_unit, report_unit
+            )
+            sheet.adjustments = _convert_report_value_to_base(
+                adjustments or 0, base_unit, report_unit
             )
             sheet.eaten = _convert_report_value_to_base(
                 eaten or 0, base_unit, report_unit

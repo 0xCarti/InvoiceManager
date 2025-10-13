@@ -39,6 +39,10 @@
     .stand-sheet-table .variance {
         min-width: 5.5rem;
     }
+
+    .stand-sheet-table .adjustments {
+        min-width: 5.5rem;
+    }
 </style>
 <div class="container mt-4">
     <form method="post">
@@ -57,6 +61,7 @@
                 <th>Pre-Event Count</th>
                 <th>Transferred In</th>
                 <th>Transferred Out</th>
+                <th>Adjustments</th>
                 <th>Sales</th>
                 <th>Eaten</th>
                 <th>Spoiled</th>
@@ -71,8 +76,9 @@
             {% set out_val = entry.sheet_values.transferred_out or 0 %}
             {% set eaten_val = entry.sheet_values.eaten or 0 %}
             {% set spoiled_val = entry.sheet_values.spoiled or 0 %}
+            {% set adjustments_val = entry.sheet_values.adjustments or 0 %}
             {% set close_val = entry.sheet_values.closing_count or 0 %}
-            {% set variance = opening_val + in_val - out_val - entry.sales - eaten_val - spoiled_val - close_val %}
+            {% set variance = opening_val + in_val + adjustments_val - out_val - entry.sales - eaten_val - spoiled_val - close_val %}
             <tr>
                 <td>
                     {{ entry.item.name }}
@@ -93,6 +99,9 @@
                 </td>
                 <td>
                     <input type="text" inputmode="decimal" data-numeric-input="1" class="form-control" name="out_{{ entry.item.id }}" value="{% if entry.sheet_values.transferred_out is not none %}{{ '%.4f'|format(entry.sheet_values.transferred_out) }}{% endif %}">
+                </td>
+                <td>
+                    <input type="text" inputmode="decimal" data-numeric-input="1" class="form-control adjustments" name="adjust_{{ entry.item.id }}" value="{% if entry.sheet_values.adjustments is not none %}{{ '%.4f'|format(entry.sheet_values.adjustments) }}{% endif %}">
                 </td>
                 <td class="sales" data-sales="{{ '%.4f'|format(entry.sales) }}">{{ '%.2f'|format(entry.sales) }}</td>
                 <td>
@@ -128,10 +137,12 @@
         const pre = parseNumber(row.querySelector('input[name^="open_"]').value, 0);
         const tin = parseNumber(row.querySelector('input[name^="in_"]').value, 0);
         const tout = parseNumber(row.querySelector('input[name^="out_"]').value, 0);
+        const adjustmentsInput = row.querySelector('input[name^="adjust_"]');
+        const adjustments = adjustmentsInput ? parseNumber(adjustmentsInput.value, 0) : 0;
         const eaten = parseNumber(row.querySelector('input[name^="eaten_"]').value, 0);
         const spoiled = parseNumber(row.querySelector('input[name^="spoiled_"]').value, 0);
         const close = parseNumber(row.querySelector('input[name^="close_"]').value, 0);
-        const variance = pre + tin - tout - sales - eaten - spoiled - close;
+        const variance = pre + tin + adjustments - tout - sales - eaten - spoiled - close;
         row.querySelector('.variance').textContent = variance.toFixed(2);
     }
 
