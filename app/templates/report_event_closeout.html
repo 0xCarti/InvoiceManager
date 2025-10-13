@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% macro format_qty(value) -%}
+    {% if value is none %}
+        <span class="text-muted">—</span>
+    {% else %}
+        {{ '%.2f'|format(value) }}
+    {% endif %}
+{%- endmacro %}
+
+{% macro format_currency(value) -%}
+    {% if value is none %}
+        <span class="text-muted">—</span>
+    {% else %}
+        ${{ '{:,.2f}'.format(value) }}
+    {% endif %}
+{%- endmacro %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 d-print-none">
+        <h2 class="mb-0">Event Closeout Report</h2>
+        {% if event %}
+        <a class="btn btn-outline-secondary" href="{{ url_for('event.view_event', event_id=event.id) }}">Back to Event</a>
+        {% endif %}
+    </div>
+    <div class="card mt-3 d-print-none">
+        <div class="card-body">
+            <form method="post" class="row g-3 align-items-end">
+                {{ form.hidden_tag() }}
+                <div class="col-md-6 col-lg-4">
+                    {{ form.event_id.label(class="form-label") }}
+                    {{ form.event_id(class="form-select") }}
+                    {% if not form.event_id.choices %}
+                    <div class="form-text text-muted">No closed events are available yet.</div>
+                    {% endif %}
+                    {% if form.event_id.errors %}
+                    <div class="text-danger small">{{ form.event_id.errors[0] }}</div>
+                    {% endif %}
+                </div>
+                <div class="col-md-3 col-lg-2">
+                    {{ form.submit(class="btn btn-primary w-100") }}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if report %}
+    <div class="mt-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <h3 class="mb-1">{{ event.name }}</h3>
+                <p class="mb-0 text-muted">Dates: {{ event.start_date }} – {{ event.end_date }}</p>
+                <p class="mb-0 text-muted">Generated: {{ report.generated_at.strftime('%Y-%m-%d %H:%M') }}</p>
+            </div>
+            <div class="text-md-end d-print-none">
+                <button type="button" class="btn btn-outline-secondary" onclick="window.print()">Print</button>
+            </div>
+        </div>
+
+        <div class="row g-3 mt-3">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">Event Totals</div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-7">Terminal sales (quantity)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_qty(report.totals.terminal_quantity) }}</dd>
+                            <dt class="col-sm-7">Terminal sales (amount)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.terminal_amount) }}</dd>
+                            <dt class="col-sm-7">Entered sales (quantity)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_qty(report.totals.entered_quantity) }}</dd>
+                            <dt class="col-sm-7">Entered sales (amount)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.entered_amount) }}</dd>
+                            <dt class="col-sm-7">Difference (terminal - entered)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.entered_difference) }}</dd>
+                            <dt class="col-sm-7">Physical vs terminal variance</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.variance_amount) }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">Event Snapshot</div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-7">Estimated revenue</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.estimated_sales) }}</dd>
+                            <dt class="col-sm-7">Variance vs estimate</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.estimate_difference) }}</dd>
+                            <dt class="col-sm-7">Confirmed locations</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ report.totals.confirmed_locations }} / {{ report.totals.location_count }}</dd>
+                            <dt class="col-sm-7">Items with pricing coverage</dt>
+                            <dd class="col-sm-5 text-sm-end">
+                                {% if report.totals.total_item_count %}
+                                    {{ report.totals.priced_item_count }} of {{ report.totals.total_item_count }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </dd>
+                            <dt class="col-sm-7">Locations with pricing coverage</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ report.totals.locations_with_pricing }} / {{ report.totals.location_count }}</dd>
+                        </dl>
+                        <p class="mb-0 mt-2 text-muted small">Variance quantities are reported per item and are not aggregated across items due to mixed units.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% for location in report.locations %}
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h4 class="mb-0">{{ location.location_name }}</h4>
+                    {% if location.event_location.confirmed %}
+                    <span class="badge bg-success">Confirmed</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Not Confirmed</span>
+                    {% endif %}
+                </div>
+                <div class="text-md-end">
+                    <div class="small">Terminal Sales: {{ format_currency(location.totals.terminal_amount) }}</div>
+                    <div class="small">Variance ($): {{ format_currency(location.totals.variance_amount) }}</div>
+                    <div class="small">Priced Coverage: {% if location.totals.priced_coverage is not none %}{{ '%.1f'|format(location.totals.priced_coverage) }}%{% else %}<span class="text-muted">—</span>{% endif %}</div>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if location.notes %}
+                <div class="mb-3">
+                    <h6 class="fw-semibold">Stand Sheet Notes</h6>
+                    <p class="mb-0" style="white-space: pre-wrap;">{{ location.notes }}</p>
+                </div>
+                {% endif %}
+
+                {% if location.items %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">Item</th>
+                                <th scope="col" class="text-end">Opening</th>
+                                <th scope="col" class="text-end">In</th>
+                                <th scope="col" class="text-end">Out</th>
+                                <th scope="col" class="text-end">Adjustments</th>
+                                <th scope="col" class="text-end">Eaten</th>
+                                <th scope="col" class="text-end">Spoiled</th>
+                                <th scope="col" class="text-end">Closing</th>
+                                <th scope="col" class="text-end">Terminal Sales</th>
+                                <th scope="col" class="text-end">Terminal Sales ($)</th>
+                                <th scope="col" class="text-end">Variance</th>
+                                <th scope="col" class="text-end">Variance ($)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in location.items %}
+                            <tr>
+                                <td>
+                                    {% if row.item %}
+                                        {{ row.item.name }}
+                                        {% if row.unit_label %}
+                                            <span class="text-muted">({{ row.unit_label }})</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">Item removed</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">{{ format_qty(row.sheet_values.opening_count) }}</td>
+                                <td class="text-end">{{ format_qty(row.sheet_values.transferred_in) }}</td>
+                                <td class="text-end">{{ format_qty(row.sheet_values.transferred_out) }}</td>
+                                <td class="text-end">{{ format_qty(row.sheet_values.adjustments) }}</td>
+                                <td class="text-end">{{ format_qty(row.sheet_values.eaten) }}</td>
+                                <td class="text-end">{{ format_qty(row.sheet_values.spoiled) }}</td>
+                                <td class="text-end">{{ format_qty(row.sheet_values.closing_count) }}</td>
+                                <td class="text-end">{{ format_qty(row.terminal_sales_units) }}</td>
+                                <td class="text-end">{{ format_currency(row.terminal_sales_amount) }}</td>
+                                <td class="text-end">{{ format_qty(row.variance_units) }}</td>
+                                <td class="text-end">{{ format_currency(row.variance_amount) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No stand sheet data was recorded for this location.</p>
+                {% endif %}
+
+                <div class="row g-3 mt-3">
+                    <div class="col-md-6">
+                        <h6 class="fw-semibold">Sales Summary</h6>
+                        <dl class="row mb-0 small">
+                            <dt class="col-sm-7">Terminal sales (quantity)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_qty(location.totals.terminal_quantity) }}</dd>
+                            <dt class="col-sm-7">Terminal sales (amount)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.terminal_amount) }}</dd>
+                            <dt class="col-sm-7">Entered sales (quantity)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_qty(location.totals.entered_quantity) }}</dd>
+                            <dt class="col-sm-7">Entered sales (amount)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.entered_amount) }}</dd>
+                            <dt class="col-sm-7">Difference (terminal - entered)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.entered_difference) }}</dd>
+                            {% if location.entered_sales_source %}
+                            <dt class="col-sm-7">Sales file source</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ location.entered_sales_source }}</dd>
+                            {% endif %}
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-semibold">Variance Coverage</h6>
+                        <dl class="row mb-0 small">
+                            <dt class="col-sm-7">Items with pricing</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ location.totals.priced_item_count }} / {{ location.totals.total_item_count }}</dd>
+                            <dt class="col-sm-7">Variance (amount)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.variance_amount) }}</dd>
+                            <dt class="col-sm-7">Unpriced items</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ location.totals.unpriced_item_count }}</dd>
+                            <dt class="col-sm-7">Coverage</dt>
+                            <dd class="col-sm-5 text-sm-end">{% if location.totals.priced_coverage is not none %}{{ '%.1f'|format(location.totals.priced_coverage) }}%{% else %}<span class="text-muted">—</span>{% endif %}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% elif event %}
+    <div class="alert alert-info mt-4" role="alert">
+        No stand sheet data was found for this event.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

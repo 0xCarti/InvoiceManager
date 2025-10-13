@@ -39,6 +39,7 @@ from wtforms.validators import (
 from wtforms.widgets import CheckboxInput, ListWidget
 
 from app.models import (
+    Event,
     EventLocation,
     GLCode,
     Item,
@@ -913,6 +914,29 @@ class ReceivedInvoiceReportForm(FlaskForm):
 
 
 # forms.py
+class EventCloseoutReportForm(FlaskForm):
+    event_id = SelectField(
+        "Closed Event", coerce=int, validators=[DataRequired()], validate_choice=False
+    )
+    submit = SubmitField("View Report")
+
+    def __init__(self, *args, **kwargs):
+        super(EventCloseoutReportForm, self).__init__(*args, **kwargs)
+        closed_events = (
+            Event.query.filter_by(closed=True)
+            .order_by(Event.end_date.desc(), Event.start_date.desc())
+            .all()
+        )
+        self.event_id.choices = [
+            (
+                ev.id,
+                f"{ev.name} ({ev.start_date.strftime('%Y-%m-%d')} – {ev.end_date.strftime('%Y-%m-%d')})",
+            )
+            for ev in closed_events
+        ]
+
+
+# forms.py
 class PurchaseInventorySummaryForm(FlaskForm):
     start_date = DateField("Start Date", validators=[DataRequired()])
     end_date = DateField("End Date", validators=[DataRequired()])
@@ -1261,7 +1285,7 @@ class TerminalSalesUploadForm(FlaskForm):
         "Sales File",
         validators=[
             FileRequired(),
-            FileAllowed({"xls"}, "Only .xls files are allowed."),
+            FileAllowed({"xls", "pdf"}, "Only .xls or .pdf files are allowed."),
         ],
     )
     submit = SubmitField("Upload")
