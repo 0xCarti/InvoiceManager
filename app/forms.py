@@ -1214,6 +1214,10 @@ class EventLocationConfirmForm(FlaskForm):
     submit = SubmitField("Confirm")
 
 
+class EventLocationUndoConfirmForm(FlaskForm):
+    submit = SubmitField("Undo Confirmation")
+
+
 class UpdateOpeningCountsForm(FlaskForm):
     location_ids = SelectMultipleField("Locations", coerce=int)
     submit = SubmitField("Update Opening Counts")
