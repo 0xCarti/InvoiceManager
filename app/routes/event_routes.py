@@ -417,6 +417,7 @@ def _calculate_physical_vs_terminal_variance(event: Event) -> float | None:
             variance_units = (
                 float(sheet.opening_count or 0.0)
                 + float(sheet.transferred_in or 0.0)
+                + float(sheet.adjustments or 0.0)
                 - float(sheet.transferred_out or 0.0)
                 - float(entry.get("sales_base") or 0.0)
                 - float(sheet.eaten or 0.0)

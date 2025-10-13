@@ -28,7 +28,10 @@ from app.models import (
     TerminalSaleProductAlias,
     User,
 )
-from app.routes.event_routes import suggest_terminal_sales_location_mapping
+from app.routes.event_routes import (
+    _calculate_physical_vs_terminal_variance,
+    suggest_terminal_sales_location_mapping,
+)
 from app.utils.units import DEFAULT_BASE_UNIT_CONVERSIONS, convert_quantity
 from tests.utils import login
 
@@ -1151,3 +1154,77 @@ def test_terminal_sale_last_sale(app):
             .first()
         )
         assert last_sale.quantity == 2
+
+
+def test_physical_terminal_variance_includes_adjustments(app):
+    with app.app_context():
+        event = Event(
+            name="Variance Check",
+            start_date=date(2023, 1, 1),
+            end_date=date(2023, 1, 1),
+            event_type="inventory",
+        )
+        location = Location(name="Prairie Grill")
+        item = Item(name="Test Item", base_unit="each")
+        product = Product(name="Test Product", price=5.0, cost=3.0)
+        db.session.add_all([event, location, item, product])
+        db.session.commit()
+
+        unit = ItemUnit(
+            item_id=item.id,
+            name="each",
+            factor=1,
+            receiving_default=True,
+            transfer_default=True,
+        )
+        recipe = ProductRecipeItem(
+            product_id=product.id,
+            item_id=item.id,
+            unit_id=unit.id,
+            quantity=1,
+            countable=True,
+        )
+        location.products.append(product)
+        db.session.add_all([
+            unit,
+            recipe,
+            LocationStandItem(
+                location_id=location.id,
+                item_id=item.id,
+                expected_count=0,
+            ),
+        ])
+        db.session.commit()
+
+        event_location = EventLocation(
+            event_id=event.id,
+            location_id=location.id,
+            confirmed=True,
+        )
+        db.session.add(event_location)
+        db.session.commit()
+
+        db.session.add_all(
+            [
+                TerminalSale(
+                    event_location_id=event_location.id,
+                    product_id=product.id,
+                    quantity=15,
+                ),
+                EventStandSheetItem(
+                    event_location_id=event_location.id,
+                    item_id=item.id,
+                    opening_count=10,
+                    transferred_in=0,
+                    transferred_out=0,
+                    adjustments=5,
+                    eaten=0,
+                    spoiled=0,
+                    closing_count=0,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        variance = _calculate_physical_vs_terminal_variance(event)
+        assert variance == pytest.approx(0)
