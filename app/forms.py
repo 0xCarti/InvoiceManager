@@ -1248,6 +1248,11 @@ class TerminalSaleForm(FlaskForm):
 class TerminalSalesUploadForm(FlaskForm):
     """Form for uploading terminal sales from XLS or PDF."""
 
+    program = SelectField(
+        "Point of Sale Program",
+        choices=[("idealpos", "IdealPOS")],
+        default="idealpos",
+    )
     file = FileField(
         "Sales File",
         validators=[
