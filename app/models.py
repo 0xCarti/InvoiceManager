@@ -888,6 +888,9 @@ class EventStandSheetItem(db.Model):
     transferred_out = db.Column(
         db.Float, nullable=False, default=0.0, server_default="0.0"
     )
+    adjustments = db.Column(
+        db.Float, nullable=False, default=0.0, server_default="0.0"
+    )
     eaten = db.Column(
         db.Float, nullable=False, default=0.0, server_default="0.0"
     )
