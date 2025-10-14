@@ -2796,6 +2796,40 @@ def confirm_location(event_id, el_id):
         abort(404)
     form = EventLocationConfirmForm()
     if form.validate_on_submit():
+        summary_record = el.terminal_sales_summary
+        manual_sales = (
+            TerminalSale.query.filter_by(event_location_id=el.id).all()
+        )
+        has_file_summary = False
+        if summary_record is not None:
+            has_file_summary = (
+                any(
+                    field is not None
+                    for field in (
+                        summary_record.total_amount,
+                        summary_record.total_quantity,
+                    )
+                )
+                or bool(summary_record.source_location)
+                or bool(summary_record.variance_details)
+            )
+
+        if manual_sales and not has_file_summary:
+            if summary_record is None:
+                summary_record = EventLocationTerminalSalesSummary(
+                    event_location=el
+                )
+                db.session.add(summary_record)
+
+            total_quantity = sum(float(sale.quantity or 0.0) for sale in manual_sales)
+            total_amount = sum(
+                float(sale.quantity or 0.0)
+                * float(getattr(sale.product, "price", 0.0) or 0.0)
+                for sale in manual_sales
+            )
+            summary_record.total_quantity = total_quantity
+            summary_record.total_amount = total_amount
+
         el.confirmed = True
         db.session.commit()
         log_activity(
@@ -3661,7 +3695,6 @@ def close_event(event_id):
                 location_id=el.location_id
             ).delete()
 
-        TerminalSale.query.filter_by(event_location_id=el.id).delete()
     ev.closed = True
     db.session.commit()
     log_activity(f"Closed event {event_id}")
