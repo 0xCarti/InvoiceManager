@@ -88,6 +88,7 @@
                                     <th scope="col">Spoiled</th>
                                     <th scope="col">Closing Count</th>
                                     <th scope="col">Physical Sales</th>
+                                    <th scope="col">Sales Variance</th>
                                     <th scope="col">Physical Amount</th>
                                 </tr>
                             </thead>
@@ -164,6 +165,15 @@
                                         <td>
                                             {% if entry.physical_units_display is not none %}
                                                 {{ '%.2f'|format(entry.physical_units_display) }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% set terminal_sales = entry.sales if entry.sales is not none else none %}
+                                            {% set physical_sales = entry.physical_units_display %}
+                                            {% if terminal_sales is not none and physical_sales is not none %}
+                                                {{ '%.2f'|format(physical_sales - terminal_sales) }}
                                             {% else %}
                                                 <span class="text-muted">—</span>
                                             {% endif %}
