@@ -4,6 +4,7 @@ import json
 import math
 import os
 import re
+from decimal import Decimal, ROUND_HALF_UP
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime
@@ -60,6 +61,7 @@ from app.utils.units import (
 )
 from itsdangerous import BadSignature, URLSafeSerializer
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 
 _STAND_SHEET_FIELDS = (
     "opening_count",
@@ -226,6 +228,15 @@ def _conversion_mapping():
     merged = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
     merged.update(configured)
     return merged
+
+
+_CURRENCY_QUANTIZE = Decimal("0.01")
+
+
+def _quantize_currency(value: Decimal) -> Decimal:
+    """Return a currency amount rounded to two decimal places."""
+
+    return value.quantize(_CURRENCY_QUANTIZE, rounding=ROUND_HALF_UP)
 
 
 def _convert_value_for_reporting(value, base_unit, conversions):
@@ -756,6 +767,175 @@ def view_event(event_id):
         confirmed_sales=confirmed_sales,
         physical_terminal_variance=physical_terminal_variance,
         undo_confirm_form_factory=EventLocationUndoConfirmForm,
+    )
+
+
+@event.route("/events/<int:event_id>/close-report")
+@login_required
+def closed_event_report(event_id):
+    event = (
+        Event.query.options(
+            selectinload(Event.locations).selectinload(EventLocation.location),
+            selectinload(Event.locations)
+            .selectinload(EventLocation.terminal_sales)
+            .selectinload(TerminalSale.product),
+            selectinload(Event.locations)
+            .selectinload(EventLocation.stand_sheet_items)
+            .selectinload(EventStandSheetItem.item),
+        )
+        .filter(Event.id == event_id)
+        .first()
+    )
+
+    if event is None or not event.closed:
+        abort(404)
+
+    conversions = _conversion_mapping()
+    location_reports: list[SimpleNamespace] = []
+    total_terminal_quantity = 0.0
+    total_terminal_amount = Decimal("0.00")
+    total_physical_quantity = 0.0
+    total_physical_amount = Decimal("0.00")
+    has_priced_physical_total = False
+    any_sheet_data = False
+
+    for event_location in sorted(
+        event.locations,
+        key=lambda el: (el.location.name.lower() if el.location else ""),
+    ):
+        location_obj, stand_items = _get_stand_items(
+            event_location.location_id, event.id
+        )
+        stand_items.sort(
+            key=lambda entry: (
+                entry.get("item").name.lower() if entry.get("item") else ""
+            )
+        )
+        price_lookup = _build_item_price_lookup(event_location, stand_items)
+
+        location_terminal_quantity = 0.0
+        location_terminal_amount = Decimal("0.00")
+        for sale in event_location.terminal_sales:
+            quantity_value = sale.quantity or 0.0
+            quantity = float(quantity_value)
+            quantity_decimal = Decimal(str(quantity_value or 0.0))
+            product = sale.product
+            price_decimal = (
+                Decimal(str(getattr(product, "price", 0.0) or 0.0))
+                if product
+                else Decimal("0.00")
+            )
+            location_terminal_quantity += quantity
+            location_terminal_amount += quantity_decimal * price_decimal
+
+        location_physical_quantity = 0.0
+        location_physical_amount = Decimal("0.00")
+        location_has_priced_physical = False
+        location_has_sheet_data = False
+
+        for entry in stand_items:
+            item = entry.get("item")
+            price_per_unit = (
+                price_lookup.get(item.id) if item is not None else None
+            )
+            entry["price_per_unit"] = price_per_unit
+
+            sheet = entry.get("sheet")
+            if sheet is None:
+                entry["physical_units"] = None
+                entry["physical_units_display"] = None
+                entry["physical_amount"] = None
+                continue
+
+            location_has_sheet_data = True
+            any_sheet_data = True
+
+            opening = float(sheet.opening_count or 0.0)
+            transferred_in = float(sheet.transferred_in or 0.0)
+            transferred_out = float(sheet.transferred_out or 0.0)
+            adjustments = float(sheet.adjustments or 0.0)
+            eaten = float(sheet.eaten or 0.0)
+            spoiled = float(sheet.spoiled or 0.0)
+            closing = float(sheet.closing_count or 0.0)
+
+            physical_units_base = (
+                opening
+                + transferred_in
+                + adjustments
+                - transferred_out
+                - eaten
+                - spoiled
+                - closing
+            )
+
+            entry["physical_units"] = physical_units_base
+            entry["physical_units_display"] = _convert_value_for_reporting(
+                physical_units_base, entry.get("base_unit"), conversions
+            )
+
+            location_physical_quantity += physical_units_base
+            total_physical_quantity += physical_units_base
+
+            if price_per_unit is not None:
+                amount_decimal = Decimal(str(physical_units_base)) * Decimal(
+                    str(price_per_unit)
+                )
+                entry["physical_amount"] = _quantize_currency(amount_decimal)
+                location_physical_amount += amount_decimal
+                location_has_priced_physical = True
+            else:
+                entry["physical_amount"] = None
+
+        total_terminal_quantity += location_terminal_quantity
+        total_terminal_amount += location_terminal_amount
+
+        location_terminal_amount_display = _quantize_currency(
+            location_terminal_amount
+        )
+        location_physical_amount_display = (
+            _quantize_currency(location_physical_amount)
+            if location_has_priced_physical
+            else None
+        )
+
+        if location_has_priced_physical:
+            total_physical_amount += location_physical_amount
+            has_priced_physical_total = True
+
+        location_reports.append(
+            SimpleNamespace(
+                event_location=event_location,
+                location=location_obj,
+                stand_items=stand_items,
+                has_sheet_data=location_has_sheet_data,
+                notes=event_location.notes,
+                terminal=SimpleNamespace(
+                    quantity=location_terminal_quantity,
+                    amount=location_terminal_amount_display,
+                ),
+                physical=SimpleNamespace(
+                    quantity=location_physical_quantity,
+                    amount=location_physical_amount_display,
+                ),
+            )
+        )
+
+    totals = SimpleNamespace(
+        terminal_quantity=total_terminal_quantity,
+        terminal_amount=_quantize_currency(total_terminal_amount),
+        physical_quantity=total_physical_quantity,
+        physical_amount=
+        _quantize_currency(total_physical_amount)
+        if has_priced_physical_total
+        else None,
+    )
+
+    return render_template(
+        "events/close_report.html",
+        event=event,
+        totals=totals,
+        locations=location_reports,
+        has_stand_data=any_sheet_data,
     )
 
 

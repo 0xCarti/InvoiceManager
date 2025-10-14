@@ -1,7 +1,9 @@
+from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
 
 import pytest
+from flask import template_rendered
 from werkzeug.security import generate_password_hash
 
 from app import db
@@ -19,15 +21,33 @@ from app.models import (
     TerminalSale,
     User,
 )
-from app.routes.report_routes import _compile_event_closeout_report
 from tests.utils import login
 
 
-def test_closeout_report_uses_summary_totals_for_terminal_sales(app):
+@contextmanager
+def captured_templates(app):
+    recorded = []
+
+    def record(sender, template, context, **extra):
+        recorded.append((template, context))
+
+    template_rendered.connect(record, app)
+    try:
+        yield recorded
+    finally:
+        template_rendered.disconnect(record, app)
+
+
+def test_closed_event_report_returns_totals_and_stand_sheet_data(app, client):
     with app.app_context():
+        user = User(
+            email="close-report@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
         location = Location(name="Main Stand")
-        item = Item(name="591ml Pepsi", base_unit="each")
         product = Product(name="Hot Dog", price=5.0, cost=2.0)
+        item = Item(name="591ml Pepsi", base_unit="each")
         event = Event(
             name="Sample Event",
             start_date=date(2024, 1, 1),
@@ -36,7 +56,7 @@ def test_closeout_report_uses_summary_totals_for_terminal_sales(app):
             estimated_sales=Decimal("40.00"),
         )
 
-        db.session.add_all([location, product, item, event])
+        db.session.add_all([user, location, product, item, event])
         db.session.commit()
 
         unit = ItemUnit(
@@ -79,38 +99,6 @@ def test_closeout_report_uses_summary_totals_for_terminal_sales(app):
             )
         )
 
-        summary = EventLocationTerminalSalesSummary(
-            event_location_id=event_location.id,
-            source_location="Register 1",
-            total_quantity=2.0,
-            total_amount=23.0,
-            variance_details={
-                "products": [
-                    {
-                        "product_id": product.id,
-                        "product_name": product.name,
-                        "quantity": 2.0,
-                        "file_amount": 18.0,
-                        "file_prices": [9.0],
-                        "app_price": 5.0,
-                        "sales_location": "Register 1",
-                    }
-                ],
-                "price_mismatches": [],
-                "menu_issues": [],
-                "unmapped_products": [
-                    {
-                        "product_name": "Extra Sauce",
-                        "quantity": 0.0,
-                        "file_amount": 5.0,
-                        "file_prices": [5.0],
-                        "sales_location": "Register 1",
-                    }
-                ],
-            },
-        )
-        db.session.add(summary)
-
         sheet = EventStandSheetItem(
             event_location_id=event_location.id,
             item_id=item.id,
@@ -125,31 +113,44 @@ def test_closeout_report_uses_summary_totals_for_terminal_sales(app):
         db.session.add(sheet)
         db.session.commit()
 
-        event = db.session.get(Event, event.id)
-        report = _compile_event_closeout_report(event)
+        event_id = event.id
+        item_id = item.id
+        user_email = user.email
 
-        location_report = report["locations"][0]
-        assert location_report["totals"]["terminal_amount"] == Decimal("23.00")
-        assert location_report["totals"]["system_terminal_amount"] == Decimal("10.00")
-        assert location_report["totals"]["entered_amount"] == Decimal("23.00")
-        assert location_report["totals"]["entered_difference"] == Decimal("-13.00")
-        assert location_report["totals"]["physical_quantity"] == 10.0
-        assert location_report["totals"]["physical_amount"] == Decimal("50.00")
-        assert location_report["totals"]["physical_vs_terminal_amount"] == Decimal("27.00")
+    with captured_templates(app) as templates:
+        login_response = login(client, user_email, "pass")
+        assert login_response.status_code == 200
+        response = client.get(f"/events/{event_id}/close-report")
+        assert response.status_code == 200
 
-        totals = report["totals"]
-        assert totals["terminal_amount"] == Decimal("23.00")
-        assert totals["system_terminal_amount"] == Decimal("10.00")
-        assert totals["entered_amount"] == Decimal("23.00")
-        assert totals["entered_difference"] == Decimal("-13.00")
-        assert totals["physical_quantity"] == 10.0
-        assert totals["physical_amount"] == Decimal("50.00")
-        assert totals["physical_vs_terminal_amount"] == Decimal("27.00")
+    template_matches = [
+        (template, context)
+        for template, context in templates
+        if template.name == "events/close_report.html"
+    ]
+    assert template_matches, "Expected the close report template to render"
+    template, context = template_matches[0]
 
-        snapshot = report["snapshot"]
-        assert snapshot["estimated_sales"] == Decimal("40.00")
-        assert snapshot["terminal_vs_estimate"] == Decimal("-17.00")
-        assert snapshot["physical_vs_estimate"] == Decimal("10.00")
+    totals = context["totals"]
+    assert totals.terminal_amount == Decimal("10.00")
+    assert totals.terminal_quantity == pytest.approx(2.0)
+    assert totals.physical_quantity == pytest.approx(10.0)
+    assert totals.physical_amount == Decimal("50.00")
+    assert context["has_stand_data"] is True
+
+    location_report = context["locations"][0]
+    assert location_report.has_sheet_data is True
+    assert location_report.terminal.amount == Decimal("10.00")
+    assert location_report.physical.amount == Decimal("50.00")
+
+    stand_entry = next(
+        entry
+        for entry in location_report.stand_items
+        if entry["item"] and entry["item"].id == item_id
+    )
+    assert stand_entry["sheet_values"].opening_count == pytest.approx(10.0)
+    assert stand_entry["physical_units"] == pytest.approx(10.0)
+    assert stand_entry["physical_amount"] == Decimal("50.00")
 
 
 def test_close_event_preserves_manual_terminal_sales(app, client):

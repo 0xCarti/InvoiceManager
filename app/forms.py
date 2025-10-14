@@ -914,31 +914,6 @@ class ReceivedInvoiceReportForm(FlaskForm):
 
 
 # forms.py
-class EventCloseoutReportForm(FlaskForm):
-    event_id = SelectField(
-        "Closed Event", coerce=int, validators=[DataRequired()], validate_choice=False
-    )
-    submit = SubmitField("View Report")
-
-    def __init__(self, *args, **kwargs):
-        super(EventCloseoutReportForm, self).__init__(*args, **kwargs)
-        closed_events = (
-            Event.query.filter_by(closed=True)
-            .order_by(Event.end_date.desc(), Event.start_date.desc())
-            .all()
-        )
-        eligible_events = [
-            ev for ev in closed_events if all(loc.confirmed for loc in ev.locations)
-        ]
-        self.event_id.choices = [
-            (
-                ev.id,
-                f"{ev.name} ({ev.start_date.strftime('%Y-%m-%d')} – {ev.end_date.strftime('%Y-%m-%d')})",
-            )
-            for ev in eligible_events
-        ]
-
-
 # forms.py
 class PurchaseInventorySummaryForm(FlaskForm):
     start_date = DateField("Start Date", validators=[DataRequired()])
