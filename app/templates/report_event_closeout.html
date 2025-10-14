@@ -67,17 +67,14 @@
                             <dd class="col-sm-5 text-sm-end">{{ format_qty(report.totals.terminal_quantity) }}</dd>
                             <dt class="col-sm-7">Terminal sales (amount)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.terminal_amount) }}</dd>
-                            <dt class="col-sm-7">System terminal sales (amount)</dt>
-                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.system_terminal_amount) }}</dd>
-                            <dt class="col-sm-7">Entered sales (quantity)</dt>
-                            <dd class="col-sm-5 text-sm-end">{{ format_qty(report.totals.entered_quantity) }}</dd>
-                            <dt class="col-sm-7">Entered sales (amount)</dt>
-                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.entered_amount) }}</dd>
-                            <dt class="col-sm-7">Difference (system - entered)</dt>
-                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.entered_difference) }}</dd>
+                            <dt class="col-sm-7">Physical sales (quantity)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_qty(report.totals.physical_quantity) }}</dd>
+                            <dt class="col-sm-7">Physical sales (amount)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.physical_amount) }}</dd>
                             <dt class="col-sm-7">Physical vs terminal variance</dt>
-                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.variance_amount) }}</dd>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.totals.physical_vs_terminal_amount) }}</dd>
                         </dl>
+                        <p class="text-muted small mb-0 mt-2">System totals and entered file amounts remain available in the location breakdown below.</p>
                     </div>
                 </div>
             </div>
@@ -87,11 +84,13 @@
                     <div class="card-body">
                         <dl class="row mb-0">
                             <dt class="col-sm-7">Estimated revenue</dt>
-                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.estimated_sales) }}</dd>
-                            <dt class="col-sm-7">Variance vs estimate</dt>
-                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.estimate_difference) }}</dd>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.snapshot.estimated_sales) }}</dd>
+                            <dt class="col-sm-7">Terminal vs estimate</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.snapshot.terminal_vs_estimate) }}</dd>
+                            <dt class="col-sm-7">Physical vs estimate</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(report.snapshot.physical_vs_estimate) }}</dd>
                             <dt class="col-sm-7">Confirmed locations</dt>
-                            <dd class="col-sm-5 text-sm-end">{{ report.totals.confirmed_locations }} / {{ report.totals.location_count }}</dd>
+                            <dd class="col-sm-5 text-sm-end">{{ report.snapshot.confirmed_locations }} / {{ report.snapshot.total_locations }}</dd>
                             <dt class="col-sm-7">Items with pricing coverage</dt>
                             <dd class="col-sm-5 text-sm-end">
                                 {% if report.totals.total_item_count %}
@@ -121,7 +120,9 @@
                     {% endif %}
                 </div>
                 <div class="text-md-end">
-                    <div class="small">Terminal Sales (register): {{ format_currency(location.totals.terminal_amount) }}</div>
+                    <div class="small">Terminal Sales: {{ format_currency(location.totals.terminal_amount) }}</div>
+                    <div class="small">Physical Sales: {{ format_currency(location.totals.physical_amount) }}</div>
+                    <div class="small">Physical vs Terminal: {{ format_currency(location.totals.physical_vs_terminal_amount) }}</div>
                     <div class="small">System Terminal Sales: {{ format_currency(location.totals.system_terminal_amount) }}</div>
                     <div class="small">Variance ($): {{ format_currency(location.totals.variance_amount) }}</div>
                     <div class="small">Priced Coverage: {% if location.totals.priced_coverage is not none %}{{ '%.1f'|format(location.totals.priced_coverage) }}%{% else %}<span class="text-muted">—</span>{% endif %}</div>
@@ -150,6 +151,8 @@
                                 <th scope="col" class="text-end">Closing</th>
                                 <th scope="col" class="text-end">Terminal Sales</th>
                                 <th scope="col" class="text-end">Terminal Sales ($)</th>
+                                <th scope="col" class="text-end">Physical Sales</th>
+                                <th scope="col" class="text-end">Physical Sales ($)</th>
                                 <th scope="col" class="text-end">Variance</th>
                                 <th scope="col" class="text-end">Variance ($)</th>
                             </tr>
@@ -176,6 +179,8 @@
                                 <td class="text-end">{{ format_qty(row.sheet_values.closing_count) }}</td>
                                 <td class="text-end">{{ format_qty(row.terminal_sales_units) }}</td>
                                 <td class="text-end">{{ format_currency(row.terminal_sales_amount) }}</td>
+                                <td class="text-end">{{ format_qty(row.physical_sales_units) }}</td>
+                                <td class="text-end">{{ format_currency(row.physical_sales_amount) }}</td>
                                 <td class="text-end">{{ format_qty(row.variance_units) }}</td>
                                 <td class="text-end">{{ format_currency(row.variance_amount) }}</td>
                             </tr>
@@ -195,6 +200,12 @@
                             <dd class="col-sm-5 text-sm-end">{{ format_qty(location.totals.terminal_quantity) }}</dd>
                             <dt class="col-sm-7">Terminal sales (amount)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.terminal_amount) }}</dd>
+                            <dt class="col-sm-7">Physical sales (quantity)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_qty(location.totals.physical_quantity) }}</dd>
+                            <dt class="col-sm-7">Physical sales (amount)</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.physical_amount) }}</dd>
+                            <dt class="col-sm-7">Physical vs terminal variance</dt>
+                            <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.physical_vs_terminal_amount) }}</dd>
                             <dt class="col-sm-7">System terminal sales (amount)</dt>
                             <dd class="col-sm-5 text-sm-end">{{ format_currency(location.totals.system_terminal_amount) }}</dd>
                             <dt class="col-sm-7">Entered sales (quantity)</dt>

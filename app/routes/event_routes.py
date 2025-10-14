@@ -3620,6 +3620,12 @@ def close_event(event_id):
     ev = db.session.get(Event, event_id)
     if ev is None:
         abort(404)
+    if any(not el.confirmed for el in ev.locations):
+        flash(
+            "All locations must be confirmed before closing the event.",
+            "warning",
+        )
+        return redirect(url_for("event.view_event", event_id=event_id))
     for el in ev.locations:
         counted_item_ids = set()
         for sheet in el.stand_sheet_items:

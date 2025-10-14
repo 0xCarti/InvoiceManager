@@ -50,7 +50,11 @@
         {% endif %}
         {% if not event.closed %}
         <a class="btn btn-secondary me-2" href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}">Upload Sales</a>
+        {% if unconfirmed_count == 0 %}
         <a class="btn btn-danger" id="close-event-btn" href="{{ url_for('event.close_event', event_id=event.id) }}">Close Event</a>
+        {% else %}
+        <button type="button" class="btn btn-danger" disabled title="All locations must be confirmed before closing this event.">Close Event</button>
+        {% endif %}
         {% endif %}
     </div>
     {% if not event.closed %}
