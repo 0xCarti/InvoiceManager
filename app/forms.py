@@ -927,12 +927,15 @@ class EventCloseoutReportForm(FlaskForm):
             .order_by(Event.end_date.desc(), Event.start_date.desc())
             .all()
         )
+        eligible_events = [
+            ev for ev in closed_events if all(loc.confirmed for loc in ev.locations)
+        ]
         self.event_id.choices = [
             (
                 ev.id,
                 f"{ev.name} ({ev.start_date.strftime('%Y-%m-%d')} – {ev.end_date.strftime('%Y-%m-%d')})",
             )
-            for ev in closed_events
+            for ev in eligible_events
         ]
 
 

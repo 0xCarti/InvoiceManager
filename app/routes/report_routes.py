@@ -135,6 +135,10 @@ def _compile_event_closeout_report(event: Event) -> dict:
     total_terminal_quantity = 0.0
     total_terminal_amount = Decimal("0.00")
     total_system_terminal_amount = Decimal("0.00")
+    total_physical_quantity = 0.0
+    has_physical_quantity_total = False
+    total_physical_amount = Decimal("0.00")
+    has_priced_physical_total = False
     total_priced_items = 0
     total_items = 0
     unpriced_item_total = 0
@@ -168,6 +172,9 @@ def _compile_event_closeout_report(event: Event) -> dict:
         location_priced_items = 0
         location_unpriced_items = 0
         location_variance_amount = Decimal("0.00")
+        location_physical_quantity = 0.0
+        location_physical_amount = Decimal("0.00")
+        location_has_priced_physical = False
 
         for entry in ordered_items:
             item = entry.get("item")
@@ -233,6 +240,39 @@ def _compile_event_closeout_report(event: Event) -> dict:
                     price_per_unit_decimal * _to_decimal(sales_base)
                 )
 
+            physical_quantity_base = (
+                opening
+                + transferred_in
+                + adjustments
+                - transferred_out
+                - eaten
+                - spoiled
+                - closing
+            )
+
+            physical_sales_units_display = None
+            if sheet is not None or physical_quantity_base:
+                try:
+                    converted_physical, _ = convert_quantity_for_reporting(
+                        physical_quantity_base, base_unit, conversions
+                    )
+                    physical_sales_units_display = converted_physical
+                except (TypeError, ValueError):
+                    physical_sales_units_display = physical_quantity_base
+
+            location_physical_quantity += physical_quantity_base
+
+            physical_sales_amount_display = None
+            if price_per_unit_decimal is not None:
+                physical_sales_amount_value = (
+                    price_per_unit_decimal * _to_decimal(physical_quantity_base)
+                )
+                physical_sales_amount_display = _quantize(
+                    physical_sales_amount_value
+                )
+                location_physical_amount += physical_sales_amount_value
+                location_has_priced_physical = True
+
             item_rows.append(
                 {
                     "item": item,
@@ -240,6 +280,8 @@ def _compile_event_closeout_report(event: Event) -> dict:
                     "sheet_values": sheet_values,
                     "terminal_sales_units": sales_display,
                     "terminal_sales_amount": terminal_sales_amount,
+                    "physical_sales_units": physical_sales_units_display,
+                    "physical_sales_amount": physical_sales_amount_display,
                     "variance_units": variance_display,
                     "variance_amount": variance_amount,
                     "has_sheet": sheet is not None,
@@ -337,6 +379,20 @@ def _compile_event_closeout_report(event: Event) -> dict:
         total_terminal_amount += terminal_amount
         total_system_terminal_amount += system_terminal_amount
 
+        location_physical_amount_display = None
+        if location_has_priced_physical:
+            location_physical_amount_display = _quantize(
+                location_physical_amount
+            )
+            total_physical_amount += location_physical_amount
+            has_priced_physical_total = True
+
+        physical_vs_terminal_amount = None
+        if location_physical_amount_display is not None:
+            physical_vs_terminal_amount = _quantize(
+                location_physical_amount_display - terminal_amount
+            )
+
         variance_amount_display = None
         if location_priced_items > 0:
             locations_with_pricing += 1
@@ -352,6 +408,14 @@ def _compile_event_closeout_report(event: Event) -> dict:
         if item_rows:
             priced_coverage = round((location_priced_items / len(item_rows)) * 100, 1)
 
+        has_stand_data = any(row["has_sheet"] for row in item_rows)
+
+        location_physical_quantity_display = None
+        if has_stand_data or location_physical_quantity != 0:
+            location_physical_quantity_display = location_physical_quantity
+            total_physical_quantity += location_physical_quantity
+            has_physical_quantity_total = True
+
         location_reports.append(
             {
                 "location_name": location_obj.name
@@ -364,6 +428,9 @@ def _compile_event_closeout_report(event: Event) -> dict:
                     "terminal_quantity": terminal_quantity_display,
                     "terminal_amount": terminal_amount,
                     "system_terminal_amount": system_terminal_amount,
+                    "physical_quantity": location_physical_quantity_display,
+                    "physical_amount": location_physical_amount_display,
+                    "physical_vs_terminal_amount": physical_vs_terminal_amount,
                     "entered_quantity": entered_quantity,
                     "entered_amount": entered_amount,
                     "entered_difference": entered_difference,
@@ -374,12 +441,22 @@ def _compile_event_closeout_report(event: Event) -> dict:
                     "priced_coverage": priced_coverage,
                 },
                 "entered_sales_source": entered_source,
-                "has_stand_data": any(row["has_sheet"] for row in item_rows),
+                "has_stand_data": has_stand_data,
             }
         )
 
     total_terminal_amount = _quantize(total_terminal_amount)
     total_system_terminal_amount = _quantize(total_system_terminal_amount)
+    total_physical_amount_display = None
+    if has_priced_physical_total:
+        total_physical_amount_display = _quantize(total_physical_amount)
+
+    physical_vs_terminal_total = None
+    if total_physical_amount_display is not None:
+        physical_vs_terminal_total = _quantize(
+            total_physical_amount_display - total_terminal_amount
+        )
+
     variance_total_value = None
     if any_priced_variance:
         variance_total_value = _quantize(total_variance_amount)
@@ -392,12 +469,21 @@ def _compile_event_closeout_report(event: Event) -> dict:
         )
 
     estimated_sales_value = None
-    estimate_difference = None
+    terminal_vs_estimate = None
+    physical_vs_estimate = None
     if event.estimated_sales is not None:
         estimated_sales_value = _quantize(_to_decimal(event.estimated_sales))
-        estimate_difference = _quantize(
+        terminal_vs_estimate = _quantize(
             total_terminal_amount - estimated_sales_value
         )
+        if total_physical_amount_display is not None:
+            physical_vs_estimate = _quantize(
+                total_physical_amount_display - estimated_sales_value
+            )
+
+    total_physical_quantity_display = None
+    if has_physical_quantity_total:
+        total_physical_quantity_display = total_physical_quantity
 
     return {
         "generated_at": generated_at,
@@ -406,6 +492,9 @@ def _compile_event_closeout_report(event: Event) -> dict:
             "terminal_quantity": total_terminal_quantity,
             "terminal_amount": total_terminal_amount,
             "system_terminal_amount": total_system_terminal_amount,
+            "physical_quantity": total_physical_quantity_display,
+            "physical_amount": total_physical_amount_display,
+            "physical_vs_terminal_amount": physical_vs_terminal_total,
             "entered_quantity": entered_quantity_total,
             "entered_amount": entered_amount_total,
             "entered_difference": entered_difference_total,
@@ -417,8 +506,13 @@ def _compile_event_closeout_report(event: Event) -> dict:
             "location_count": len(location_reports),
             "confirmed_locations": sum(1 for el in event.locations if el.confirmed),
         },
-        "estimated_sales": estimated_sales_value,
-        "estimate_difference": estimate_difference,
+        "snapshot": {
+            "estimated_sales": estimated_sales_value,
+            "terminal_vs_estimate": terminal_vs_estimate,
+            "physical_vs_estimate": physical_vs_estimate,
+            "confirmed_locations": sum(1 for el in event.locations if el.confirmed),
+            "total_locations": len(event.locations),
+        },
     }
 
 
@@ -449,7 +543,9 @@ def event_closeout_report():
             .filter(Event.id == selected_event_id)
             .first()
         )
-        if selected_event and selected_event.closed:
+        if selected_event and selected_event.closed and all(
+            el.confirmed for el in selected_event.locations
+        ):
             form.event_id.data = selected_event.id
             report_payload = _compile_event_closeout_report(selected_event)
         else:
