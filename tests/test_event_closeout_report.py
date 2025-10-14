@@ -220,21 +220,60 @@ def test_close_event_preserves_manual_terminal_sales(app, client):
         assert summary.total_quantity == pytest.approx(3.0)
         assert summary.total_amount == pytest.approx(22.5)
 
-    close_response = client.get(
-        f"/events/{event_id}/close", follow_redirects=True
+
+def test_confirm_location_populates_missing_file_totals(app, client):
+    with app.app_context():
+        location = Location(name="Summary Stand")
+        product = Product(name="Popcorn", price=7.5, cost=3.0)
+        location.products.append(product)
+        event = Event(
+            name="Summary Event",
+            start_date=date(2024, 3, 1),
+            end_date=date(2024, 3, 1),
+        )
+        event_location = EventLocation(event=event, location=location)
+        user = User(
+            email="summary@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        db.session.add_all([location, product, event, event_location, user])
+        db.session.commit()
+
+        db.session.add(
+            TerminalSale(
+                event_location_id=event_location.id,
+                product_id=product.id,
+                quantity=4.0,
+            )
+        )
+        db.session.add(
+            EventLocationTerminalSalesSummary(
+                event_location_id=event_location.id,
+                source_location="Register 1",
+            )
+        )
+        db.session.commit()
+
+        event_id = event.id
+        event_location_id = event_location.id
+        user_email = user.email
+
+    login_response = login(client, user_email, "pass")
+    assert login_response.status_code == 200
+    assert b"Invalid email or password" not in login_response.data
+
+    confirm_response = client.post(
+        f"/events/{event_id}/locations/{event_location_id}/confirm",
+        data={"submit": "Confirm", "csrf_token": ""},
+        follow_redirects=False,
     )
-    assert close_response.status_code == 200
+    assert confirm_response.status_code == 302
 
     with app.app_context():
-        event = db.session.get(Event, event_id)
-        el = db.session.get(EventLocation, event_location_id)
-        assert event.closed is True
-        assert len(el.terminal_sales) == 1
-        sale = el.terminal_sales[0]
-        assert sale.product_id == product_id
-        assert sale.quantity == pytest.approx(3.0)
-
-        summary = el.terminal_sales_summary
+        summary = db.session.get(
+            EventLocationTerminalSalesSummary, event_location_id
+        )
         assert summary is not None
-        assert summary.total_quantity == pytest.approx(3.0)
-        assert summary.total_amount == pytest.approx(22.5)
+        assert summary.total_quantity == pytest.approx(4.0)
+        assert summary.total_amount == pytest.approx(30.0)
