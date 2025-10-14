@@ -358,11 +358,13 @@
                 {% if countable_products %}
                     <div class="card mb-3">
                         <div class="card-header">Assign Countable Items</div>
-                        <div class="card-body">
-                            <p class="text-muted small mb-3">
-                                Choose the countable inventory item that should be added to the
-                                stand sheet when creating each new product.
-                            </p>
+                    <div class="card-body" data-countable-selection>
+                        <p class="text-muted small mb-3">
+                            Choose the countable inventory item that should be added to the
+                            stand sheet when creating each new product. Use the
+                            <span class="fw-semibold">Create new item</span> links if you need to
+                            add an item that does not exist yet.
+                        </p>
                             {% if countable_selection_errors %}
                                 <div class="alert alert-danger" role="alert">
                                     <ul class="mb-0 ps-3">
@@ -377,20 +379,30 @@
                                     <label class="form-label" for="{{ entry.field }}">
                                         {{ entry.product_name }}
                                     </label>
-                                    <select class="form-select"
-                                            id="{{ entry.field }}"
-                                            name="{{ entry.field }}"
-                                            required>
-                                        <option value="">
-                                            Select a countable item to track on the stand sheet...
-                                        </option>
-                                        {% for option in countable_item_options %}
-                                            <option value="{{ option.id }}"
-                                                    {% if option.id == entry.selected %}selected{% endif %}>
-                                                {{ option.label }}
+                                    <div class="d-flex flex-column flex-sm-row align-items-start gap-2">
+                                        <select class="form-select"
+                                                id="{{ entry.field }}"
+                                                name="{{ entry.field }}"
+                                                data-countable-select
+                                                required>
+                                            <option value="">
+                                                Select a countable item to track on the stand sheet...
                                             </option>
-                                        {% endfor %}
-                                    </select>
+                                            {% for option in countable_item_options %}
+                                                <option value="{{ option.id }}"
+                                                        {% if option.id == entry.selected %}selected{% endif %}>
+                                                    {{ option.label }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="button"
+                                                class="btn btn-link btn-sm p-0"
+                                                data-countable-action="quick-add-item"
+                                                data-target-select="{{ entry.field }}"
+                                                aria-label="Create a new item for {{ entry.product_name }}">
+                                            Create new item
+                                        </button>
+                                    </div>
                                 </div>
                             {% endfor %}
                         </div>
@@ -614,5 +626,9 @@
 {% endif %}
 {% if mapping_payload and product_resolution_required and active_stage == 'products' %}
 <script src="{{ url_for('static', filename='js/terminal_sales_mapping.js') }}" defer></script>
+{% endif %}
+{% if countable_products %}
+{% include 'purchase_orders/_create_item_modal.html' %}
+<script src="{{ url_for('static', filename='js/countable_item_quick_create.js') }}" defer></script>
 {% endif %}
 {% endblock %}
