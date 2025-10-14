@@ -11,6 +11,9 @@
 {% elif active_stage == 'issues' %}
     {% set stage_index = 3 %}
 {% endif %}
+{% set countable_products = countable_products if countable_products is defined else [] %}
+{% set countable_item_options = countable_item_options if countable_item_options is defined else [] %}
+{% set countable_selection_errors = countable_selection_errors if countable_selection_errors is defined else [] %}
 
 {% if mapping_payload %}
     <div class="mb-4" aria-label="Terminal sales upload steps">
@@ -262,6 +265,9 @@
             {% endif %}
             {% if product_resolution_required and active_stage == 'products' %}
                 <input type="hidden" name="product-resolution-step" value="1">
+                {% if countable_products %}
+                    <input type="hidden" name="countable-selection-step" value="1">
+                {% endif %}
                 <div class="alert alert-warning">
                     <p class="mb-2">
                         We couldn't automatically match every product in the terminal
@@ -349,6 +355,47 @@
                         {% endfor %}
                     </div>
                 </div>
+                {% if countable_products %}
+                    <div class="card mb-3">
+                        <div class="card-header">Assign Countable Items</div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-3">
+                                Choose the countable inventory item that should be added to the
+                                stand sheet when creating each new product.
+                            </p>
+                            {% if countable_selection_errors %}
+                                <div class="alert alert-danger" role="alert">
+                                    <ul class="mb-0 ps-3">
+                                        {% for message in countable_selection_errors %}
+                                            <li>{{ message }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
+                            {% for entry in countable_products %}
+                                <div class="mb-3">
+                                    <label class="form-label" for="{{ entry.field }}">
+                                        {{ entry.product_name }}
+                                    </label>
+                                    <select class="form-select"
+                                            id="{{ entry.field }}"
+                                            name="{{ entry.field }}"
+                                            required>
+                                        <option value="">
+                                            Select a countable item to track on the stand sheet...
+                                        </option>
+                                        {% for option in countable_item_options %}
+                                            <option value="{{ option.id }}"
+                                                    {% if option.id == entry.selected %}selected{% endif %}>
+                                                {{ option.label }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
             {% elif active_stage == 'products' %}
                 <div class="alert alert-success">
                     <p class="mb-0">All products in the uploaded file have been matched automatically.</p>
