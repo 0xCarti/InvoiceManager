@@ -47,6 +47,7 @@ from app.models import (
     Location,
     LocationStandItem,
     Product,
+    ProductRecipeItem,
     TerminalSale,
     TerminalSaleProductAlias,
     TerminalSaleLocationAlias,
@@ -1389,6 +1390,12 @@ def upload_terminal_sales(event_id):
     unassigned_sales_locations: list[str] = []
     assignment_errors: list[str] = []
     active_stage = "locations"
+    countable_products: list[dict] = []
+    countable_item_options: list[dict[str, str]] = []
+    countable_selection_errors: list[str] = []
+    countable_stage_requested = (
+        request.form.get("countable-selection-step") == "1"
+    )
 
     def _normalize_product_name(value: str) -> str:
         return _normalize_alias_key(value)
@@ -2423,6 +2430,7 @@ def upload_terminal_sales(event_id):
                         active_stage=active_stage,
                     )
 
+                pending_recipe_links: list[tuple[Product, Item]] = []
                 for original_name in pending_creations:
                     existing_product = Product.query.filter_by(
                         name=original_name
@@ -2443,6 +2451,111 @@ def upload_terminal_sales(event_id):
                     db.session.flush()
                     product_lookup[original_name] = new_product
                     manual_mappings[original_name] = new_product
+
+                if pending_creations:
+                    item_options = (
+                        Item.query.filter_by(archived=False)
+                        .order_by(Item.name)
+                        .all()
+                    )
+                    item_lookup = {str(item.id): item for item in item_options}
+                    countable_item_options = [
+                        {
+                            "id": str(item.id),
+                            "label": f"{item.name} ({get_unit_label(item.base_unit)})",
+                        }
+                        for item in item_options
+                    ]
+                    for original_name in pending_creations:
+                        product = manual_mappings.get(original_name)
+                        if product is None:
+                            continue
+                        field_name = f"countable-item-{product.id}"
+                        selected_raw = (request.form.get(field_name) or "").strip()
+                        selected_item = item_lookup.get(selected_raw) if selected_raw else None
+                        countable_products.append(
+                            {
+                                "product_id": product.id,
+                                "product_name": product.name,
+                                "field": field_name,
+                                "selected": selected_raw,
+                            }
+                        )
+                        if selected_item is None:
+                            if selected_raw and selected_raw not in item_lookup:
+                                countable_selection_errors.append(
+                                    f"The selected countable item is no longer available for {product.name}."
+                                )
+                            elif countable_stage_requested:
+                                countable_selection_errors.append(
+                                    f"Select a countable item to track inventory for {product.name}."
+                                )
+                        else:
+                            pending_recipe_links.append((product, selected_item))
+
+                    if len(pending_recipe_links) != len(pending_creations) or countable_selection_errors:
+                        active_stage = "products"
+                        if not countable_selection_errors:
+                            countable_selection_errors.append(
+                                "Choose a countable item for each newly created product before continuing."
+                            )
+                        return render_template(
+                            "events/upload_terminal_sales.html",
+                            form=form,
+                            event=ev,
+                            open_locations=open_locations,
+                            mapping_payload=payload,
+                            mapping_filename=mapping_filename,
+                            sales_summary=sales_summary,
+                            sales_location_names=list(sales_summary.keys()),
+                            default_mapping=selected_mapping,
+                            unresolved_products=unresolved_products,
+                            product_choices=product_choices,
+                            product_search_options=product_search_options,
+                            skip_selection_value=SKIP_SELECTION_VALUE,
+                            create_selection_value=CREATE_SELECTION_VALUE,
+                            resolution_errors=resolution_errors,
+                            product_resolution_required=True,
+                            price_discrepancies=price_discrepancies,
+                            menu_mismatches=menu_mismatches,
+                            warnings_required=warnings_required,
+                            warnings_acknowledged=warnings_acknowledged,
+                            ignored_sales_locations=sorted(ignored_sales_locations),
+                            assigned_sales_locations=sorted(assigned_sales_locations),
+                            unassigned_sales_locations=unassigned_sales_locations,
+                            assignment_errors=assignment_errors,
+                            active_stage=active_stage,
+                            countable_products=countable_products,
+                            countable_item_options=countable_item_options,
+                            countable_selection_errors=countable_selection_errors,
+                        )
+
+                    for product, item_obj in pending_recipe_links:
+                        existing_recipe = next(
+                            (
+                                recipe
+                                for recipe in product.recipe_items
+                                if recipe.item_id == item_obj.id
+                            ),
+                            None,
+                        )
+                        if existing_recipe:
+                            existing_recipe.countable = True
+                            if not existing_recipe.quantity:
+                                existing_recipe.quantity = 1.0
+                        else:
+                            db.session.add(
+                                ProductRecipeItem(
+                                    product_id=product.id,
+                                    item_id=item_obj.id,
+                                    quantity=1.0,
+                                    countable=True,
+                                )
+                            )
+
+                    countable_products = []
+                    countable_item_options = []
+                    countable_selection_errors = []
 
                 if manual_mappings and normalized_lookup:
                     for original_name, product in manual_mappings.items():
@@ -2962,6 +3075,9 @@ def upload_terminal_sales(event_id):
         unassigned_sales_locations=unassigned_sales_locations,
         assignment_errors=assignment_errors,
         active_stage=active_stage,
+        countable_products=countable_products,
+        countable_item_options=countable_item_options,
+        countable_selection_errors=countable_selection_errors,
     )
 
 
