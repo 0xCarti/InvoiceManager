@@ -3146,6 +3146,54 @@ def confirm_location(event_id, el_id):
         flash("Location confirmed")
         return redirect(url_for("event.view_event", event_id=event_id))
     location, stand_items = _get_stand_items(el.location_id, event_id)
+    stand_sheet_item_ids: set[int] = set()
+    if location is not None:
+        stand_sheet_item_ids = {
+            item.item_id for item in (location.stand_items or []) if item.item_id
+        }
+
+    untracked_sales: list[dict[str, object]] = []
+    if el.terminal_sales:
+        aggregated: dict[int, dict[str, object]] = {}
+        for sale in el.terminal_sales:
+            quantity = float(sale.quantity or 0.0)
+            if not quantity:
+                continue
+
+            product = sale.product
+            if product is None:
+                continue
+
+            countable_items = [
+                ri.item_id
+                for ri in (product.recipe_items or [])
+                if ri.countable and ri.item_id is not None
+            ]
+            if not countable_items:
+                continue
+
+            if not all(item_id in stand_sheet_item_ids for item_id in countable_items):
+                amount = quantity * float(getattr(product, "price", 0.0) or 0.0)
+                product_id = product.id
+                if product_id in aggregated:
+                    aggregated_entry = aggregated[product_id]
+                    aggregated_entry["quantity"] += quantity
+                    aggregated_entry["amount"] += amount
+                else:
+                    aggregated[product_id] = {
+                        "product": product,
+                        "product_name": getattr(product, "name", "Unnamed product"),
+                        "quantity": quantity,
+                        "amount": amount,
+                    }
+
+        if aggregated:
+            untracked_sales = sorted(
+                aggregated.values(),
+                key=lambda entry: entry["product_name"].casefold()
+                if isinstance(entry.get("product_name"), str)
+                else "",
+            )
     stand_variances: list[dict] = []
     price_lookup = _build_item_price_lookup(el, stand_items)
     for entry in stand_items:
@@ -3425,6 +3473,7 @@ def confirm_location(event_id, el_id):
         },
         variance_breakdown=variance_breakdown,
         location=location,
+        untracked_sales=untracked_sales,
     )
 
 

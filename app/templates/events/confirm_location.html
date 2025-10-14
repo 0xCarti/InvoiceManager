@@ -70,6 +70,37 @@
                             {% endif %}
                         </dd>
                     </dl>
+                    {% if untracked_sales %}
+                        <hr class="my-3" />
+                        <h6 class="fw-semibold">Sales not tracked on the stand sheet</h6>
+                        <p class="small text-muted mb-2">
+                            These products use countable items that are missing from the stand sheet for this location.
+                            <a href="{{ url_for('event.stand_sheet', event_id=event_location.event_id, location_id=event_location.location_id) }}">
+                                Update the stand sheet
+                            </a>
+                            to assign the items before confirming.
+                        </p>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Product</th>
+                                        <th scope="col" class="text-end">Quantity</th>
+                                        <th scope="col" class="text-end">Estimated Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sale in untracked_sales %}
+                                        <tr>
+                                            <td>{{ sale.product_name }}</td>
+                                            <td class="text-end">{{ '%.2f'|format(sale.quantity) }}</td>
+                                            <td class="text-end">${{ '%.2f'|format(sale.amount) }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
                     {% if variance_breakdown.show_toggle %}
                         <div class="mt-3">
                             <button
