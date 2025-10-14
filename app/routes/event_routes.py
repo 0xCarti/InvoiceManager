@@ -2982,17 +2982,13 @@ def confirm_location(event_id, el_id):
         )
         has_file_summary = False
         if summary_record is not None:
-            has_file_summary = (
-                any(
-                    field is not None
-                    for field in (
-                        summary_record.total_amount,
-                        summary_record.total_quantity,
-                    )
+            has_file_summary = any(
+                field is not None
+                for field in (
+                    summary_record.total_amount,
+                    summary_record.total_quantity,
                 )
-                or bool(summary_record.source_location)
-                or bool(summary_record.variance_details)
-            )
+            ) or bool(summary_record.variance_details)
 
         if manual_sales and not has_file_summary:
             if summary_record is None:
