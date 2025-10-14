@@ -3798,7 +3798,7 @@ def stand_sheet(event_id, location_id):
             f"Updated stand sheet for event {event_id} location {location_id}"
         )
         flash("Stand sheet saved")
-        location, stand_items = _get_stand_items(location_id, event_id)
+        return redirect(url_for("event.view_event", event_id=event_id))
 
     return render_template(
         "events/stand_sheet.html",
