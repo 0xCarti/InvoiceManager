@@ -43,6 +43,7 @@ from app.models import (
     EventLocation,
     EventLocationTerminalSalesSummary,
     EventStandSheetItem,
+    GLCode,
     Item,
     Location,
     LocationStandItem,
@@ -61,7 +62,7 @@ from app.utils.units import (
     get_unit_label,
 )
 from itsdangerous import BadSignature, URLSafeSerializer
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
 
 _STAND_SHEET_FIELDS = (
@@ -1396,6 +1397,19 @@ def upload_terminal_sales(event_id):
     countable_stage_requested = (
         request.form.get("countable-selection-step") == "1"
     )
+    purchase_gl_codes: list[GLCode] = []
+
+    def _get_purchase_gl_codes() -> list[GLCode]:
+        nonlocal purchase_gl_codes
+        if not purchase_gl_codes:
+            purchase_gl_codes = (
+                GLCode.query.filter(
+                    or_(GLCode.code.like("5%"), GLCode.code.like("6%"))
+                )
+                .order_by(GLCode.code)
+                .all()
+            )
+        return purchase_gl_codes
 
     def _normalize_product_name(value: str) -> str:
         return _normalize_alias_key(value)
@@ -2528,6 +2542,7 @@ def upload_terminal_sales(event_id):
                             countable_products=countable_products,
                             countable_item_options=countable_item_options,
                             countable_selection_errors=countable_selection_errors,
+                            gl_codes=_get_purchase_gl_codes(),
                         )
 
                     for product, item_obj in pending_recipe_links:
@@ -3078,6 +3093,7 @@ def upload_terminal_sales(event_id):
         countable_products=countable_products,
         countable_item_options=countable_item_options,
         countable_selection_errors=countable_selection_errors,
+        gl_codes=_get_purchase_gl_codes() if countable_products else [],
     )
 
 
