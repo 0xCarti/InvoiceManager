@@ -43,7 +43,7 @@
         {% endif %}
         <a class="btn btn-secondary me-2" href="{{ url_for('event.bulk_stand_sheets', event_id=event.id) }}">Stand Sheets</a>
         {% if event.closed %}
-        <a class="btn btn-secondary me-2" href="{{ url_for('report.event_closeout_report', event_id=event.id) }}">Closeout Report</a>
+        <a class="btn btn-secondary me-2" href="{{ url_for('event.closed_event_report', event_id=event.id) }}">Closed Event Report</a>
         {% endif %}
         {% if event.event_type == 'inventory' %}
         <a class="btn btn-secondary me-2" href="{{ url_for('event.bulk_count_sheets', event_id=event.id) }}">Count Sheets</a>
