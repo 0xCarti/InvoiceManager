@@ -5,6 +5,7 @@ from app import db
 from app.models import Event, EventLocation, Location
 from app.routes.event_routes import (
     _TERMINAL_SALES_STATE_KEY,
+    _should_store_terminal_summary,
     _terminal_sales_serializer,
 )
 
@@ -92,3 +93,22 @@ def test_stale_terminal_sales_state_is_rejected_after_reset(client, app):
     page = stale_post.get_data(as_text=True)
     assert "resolution session is no longer valid" in page
     assert "Sales File" in page
+
+
+def test_should_store_summary_when_totals_present():
+    loc_sales = {
+        "total": 0.0,
+        "total_amount": 125.0,
+        "net_including_tax_total": None,
+        "discount_total": None,
+    }
+
+    assert _should_store_terminal_summary(loc_sales, False, []) is True
+
+
+def test_should_store_summary_when_unmatched_entries_exist():
+    assert _should_store_terminal_summary({}, False, [{"product_name": "Popcorn"}]) is True
+
+
+def test_should_not_store_summary_when_no_data():
+    assert _should_store_terminal_summary({}, False, []) is False

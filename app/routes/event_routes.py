@@ -568,6 +568,30 @@ def _derive_summary_totals_from_details(
     )
 
 
+def _should_store_terminal_summary(
+    loc_sales: dict | None,
+    location_updated: bool,
+    unmatched_entries: list[dict],
+) -> bool:
+    if location_updated:
+        return True
+
+    if unmatched_entries:
+        return True
+
+    if not loc_sales:
+        return False
+
+    totals_to_check = (
+        loc_sales.get("total"),
+        loc_sales.get("total_amount"),
+        loc_sales.get("net_including_tax_total"),
+        loc_sales.get("discount_total"),
+    )
+
+    return any(value is not None for value in totals_to_check)
+
+
 event = Blueprint("event", __name__)
 
 
@@ -2727,7 +2751,16 @@ def upload_terminal_sales(event_id):
                             "sales_location": selected_loc,
                         }
                     )
-            if location_updated:
+            variance_details = {
+                "products": product_variances,
+                "price_mismatches": price_mismatch_details,
+                "menu_issues": menu_issue_details,
+                "unmapped_products": unmatched_entries,
+            }
+
+            if _should_store_terminal_summary(
+                loc_sales, location_updated, unmatched_entries
+            ):
                 selected_locations.append(el.location.name)
                 pending_totals.append(
                     {
@@ -2735,14 +2768,11 @@ def upload_terminal_sales(event_id):
                         "source_location": selected_loc,
                         "total_quantity": loc_sales.get("total"),
                         "total_amount": loc_sales.get("total_amount"),
-                        "variance_details": {
-                            "products": product_variances,
-                            "price_mismatches": price_mismatch_details,
-                            "menu_issues": menu_issue_details,
-                            "unmapped_products": unmatched_entries,
-                        },
+                        "variance_details": variance_details,
                     }
                 )
+
+            if location_updated:
                 if price_issues or menu_issues:
                     issue_queue.append(
                         {
