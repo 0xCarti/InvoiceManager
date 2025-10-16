@@ -1046,9 +1046,15 @@ class POItemForm(FlaskForm):
 
 class PurchaseOrderForm(FlaskForm):
     vendor = SelectField("Vendor", coerce=int, validators=[DataRequired()])
-    order_date = DateField("Order Date", validators=[DataRequired()])
+    order_date = DateField(
+        "Order Date",
+        validators=[DataRequired()],
+        render_kw={"type": "date"},
+    )
     expected_date = DateField(
-        "Expected Delivery Date", validators=[DataRequired()]
+        "Expected Delivery Date",
+        validators=[DataRequired()],
+        render_kw={"type": "date"},
     )
     delivery_charge = DecimalField(
         "Delivery Charge", validators=[Optional()], default=0
