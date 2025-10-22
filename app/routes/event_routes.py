@@ -3,10 +3,8 @@ import io
 import json
 import math
 import os
-import re
 from decimal import Decimal, ROUND_HALF_UP
 from collections import defaultdict
-from collections.abc import Sequence
 from datetime import datetime
 from secrets import token_urlsafe
 from types import SimpleNamespace
@@ -55,6 +53,12 @@ from app.models import (
 )
 from app.utils.activity import log_activity
 from app.utils.numeric import coerce_float
+from app.utils.pos_import import (
+    extract_terminal_sales_location,
+    group_terminal_sales_rows,
+    normalize_pos_alias,
+    terminal_sales_cell_is_blank,
+)
 from app.utils.units import (
     DEFAULT_BASE_UNIT_CONVERSIONS,
     convert_quantity,
@@ -76,52 +80,6 @@ _STAND_SHEET_FIELDS = (
 )
 
 
-def _normalize_alias_key(value: str) -> str:
-    if not value:
-        return ""
-    value = value.strip().lower()
-    value = re.sub(r"[^a-z0-9]+", " ", value)
-    return re.sub(r"\s+", " ", value).strip()
-
-
-def _terminal_sales_cell_is_blank(value) -> bool:
-    """Return ``True`` when an Excel cell should be treated as empty."""
-
-    if value is None:
-        return True
-    if isinstance(value, str):
-        return not value.strip()
-    try:
-        return float(value) == 0.0
-    except (TypeError, ValueError):
-        return False
-
-
-def _extract_terminal_sales_location(row: Sequence[object]) -> str | None:
-    """Extract a location header from a parsed Excel row.
-
-    Location rows contain a name in the first column while the remaining cells
-    are effectively empty. Some spreadsheets populate the trailing cells with
-    whitespace or zero values, so we treat those as blank as well.
-    """
-
-    if not row:
-        return None
-
-    first = row[0]
-    if not isinstance(first, str):
-        return None
-
-    candidate = first.strip()
-    if not candidate:
-        return None
-
-    if all(_terminal_sales_cell_is_blank(cell) for cell in row[1:]):
-        return candidate
-
-    return None
-
-
 def suggest_terminal_sales_location_mapping(
     open_locations: list[EventLocation],
     sales_summary: dict[str, dict],
@@ -136,7 +94,7 @@ def suggest_terminal_sales_location_mapping(
         return {el.id: "" for el in open_locations}
 
     normalized_lookup = {
-        name: _normalize_alias_key(name) for name in sales_location_names
+        name: normalize_pos_alias(name) for name in sales_location_names
     }
     normalized_to_originals: dict[str, list[str]] = {}
     for original, normalized in normalized_lookup.items():
@@ -173,7 +131,7 @@ def suggest_terminal_sales_location_mapping(
             if location_obj.name in sales_summary:
                 assigned_value = location_obj.name
             else:
-                normalized_location = _normalize_alias_key(location_obj.name)
+                normalized_location = normalize_pos_alias(location_obj.name)
                 lowered_location = location_obj.name.casefold()
 
                 if (
@@ -1436,10 +1394,10 @@ def upload_terminal_sales(event_id):
         return purchase_gl_codes
 
     def _normalize_product_name(value: str) -> str:
-        return _normalize_alias_key(value)
+        return normalize_pos_alias(value)
 
     def _normalize_location_name(value: str) -> str:
-        return _normalize_alias_key(value)
+        return normalize_pos_alias(value)
 
     def _normalized_sql_expression(column):
         lowered = func.lower(column)
@@ -1461,65 +1419,7 @@ def upload_terminal_sales(event_id):
             return None
 
     def _group_rows(row_data):
-        grouped: dict[str, dict] = {}
-        for entry in row_data:
-            loc = entry["location"]
-            prod = entry["product"]
-            qty = float(entry.get("quantity", 0.0))
-            price = entry.get("price")
-            amount = entry.get("amount")
-            loc_entry = grouped.setdefault(
-                loc,
-                {
-                    "products": {},
-                    "total": 0.0,
-                    "total_amount": 0.0,
-                    "net_including_tax_total": 0.0,
-                    "discount_total": 0.0,
-                    "_has_net_including_tax_total": False,
-                    "_has_discount_total": False,
-                    "_raw_amount_total": 0.0,
-                },
-            )
-            product_entry = loc_entry["products"].setdefault(
-                prod,
-                {
-                    "quantity": 0.0,
-                    "prices": [],
-                    "amount": 0.0,
-                },
-            )
-            product_entry["quantity"] += qty
-            if price is not None:
-                product_entry["prices"].append(price)
-            if amount is not None:
-                product_entry["amount"] += amount
-                loc_entry["_raw_amount_total"] += amount
-            loc_entry["total"] += qty
-            net_including_total = entry.get("net_including_tax_total")
-            if net_including_total is not None:
-                loc_entry["net_including_tax_total"] += net_including_total
-                loc_entry["_has_net_including_tax_total"] = True
-            discount_total = entry.get("discount_total")
-            if discount_total is not None:
-                loc_entry["discount_total"] += discount_total
-                loc_entry["_has_discount_total"] = True
-
-        for loc_entry in grouped.values():
-            for product_entry in loc_entry["products"].values():
-                if product_entry["prices"]:
-                    unique_prices = sorted({round(p, 4) for p in product_entry["prices"]})
-                    product_entry["prices"] = unique_prices
-            has_net = loc_entry.pop("_has_net_including_tax_total", False)
-            has_discount = loc_entry.pop("_has_discount_total", False)
-            raw_total = loc_entry.pop("_raw_amount_total", 0.0)
-            if has_net or has_discount:
-                net_total = loc_entry["net_including_tax_total"] if has_net else 0.0
-                discount_total = loc_entry["discount_total"] if has_discount else 0.0
-                loc_entry["total_amount"] = net_total + discount_total
-            else:
-                loc_entry["total_amount"] = raw_total
-        return grouped
+        return group_terminal_sales_rows(row_data)
 
     def _derive_price_map(summary: dict[str, dict]) -> dict[str, float | None]:
         """Build a mapping of product names to representative sale prices."""
@@ -2994,7 +2894,7 @@ def upload_terminal_sales(event_id):
 
                 current_loc = None
                 for row in rows_iter:
-                    location_name = _extract_terminal_sales_location(row)
+                    location_name = extract_terminal_sales_location(row)
                     if location_name:
                         current_loc = location_name
                         continue
