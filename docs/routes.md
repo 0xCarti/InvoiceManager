@@ -258,6 +258,9 @@ that developers should keep in mind when working on or extending the routes.
 - **Cross-cutting behaviors:** All routes require authentication. The forms are
   responsible for validating date ranges and selections before the report query
   executes. Reporting endpoints share logic for redirect-after-post patterns.
+  The department sales forecast workflow hides automatically linked POS rows
+  from the mapping form while listing them in the "Current Mappings" summary so
+  that staff can focus on unresolved products.
 
 ### `event_routes`
 

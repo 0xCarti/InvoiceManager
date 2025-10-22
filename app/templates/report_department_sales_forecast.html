@@ -56,8 +56,8 @@
                         <option value="{{ option.value }}" data-id="{{ option.id }}" label="{{ option.label }}"></option>
                     {% endfor %}
                 </datalist>
-                {% if product_entries %}
-                    {% for entry in product_entries %}
+                {% if pending_entries %}
+                    {% for entry in pending_entries %}
                         <div class="mb-3 terminal-product-mapping" data-terminal-product-mapping data-skip-value="{{ skip_selection_value }}" data-create-value="">
                             <label class="form-label" for="{{ entry.field }}-search">
                                 {{ entry.name }}
@@ -101,6 +101,8 @@
                             </p>
                         </div>
                     {% endfor %}
+                {% elif product_entries %}
+                    <p class="text-muted mb-0">All products are currently mapped or skipped.</p>
                 {% else %}
                     <p class="text-muted mb-0">No products were detected in the uploaded file.</p>
                 {% endif %}

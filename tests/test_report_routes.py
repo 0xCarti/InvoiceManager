@@ -853,6 +853,8 @@ def test_invoice_gl_code_report(client, app):
 
 def test_department_sales_forecast_workflow(client, app):
     product_ids = setup_department_sales_forecast_data(app)
+    auto_mapped_keys = set()
+    auto_display_lookup = {}
 
     with app.app_context():
         user = User.query.filter_by(email="forecast@example.com").first()
@@ -905,21 +907,36 @@ def test_department_sales_forecast_workflow(client, app):
         assert set(totals.keys()) == expected_keys
 
         auto_map = _auto_resolve_department_products(totals)
+        auto_display_lookup = {
+            totals[normalized]["display_name"]: product_id
+            for normalized, product_id in auto_map.items()
+        }
         assert auto_map[normalize_pos_alias("Sample Soda")] == product_ids["soda"]
         assert auto_map[normalize_pos_alias("Sample Water")] == product_ids["water"]
         assert auto_map[normalize_pos_alias("Sample Chips")] == product_ids["chips"]
         assert normalize_pos_alias("Sample Candy") not in auto_map
 
+        resolved_map_initial = _merge_product_mappings(
+            totals,
+            auto_map,
+            payload.get("manual_mappings"),
+        )
+        auto_mapped_keys = {
+            normalized
+            for normalized, entry in resolved_map_initial.items()
+            if entry.get("product_id") and entry.get("status") == "auto"
+        }
         sorted_keys = sorted(
             totals.keys(), key=lambda key: totals[key]["display_name"].lower()
         )
         mapping_form = {"state_token": state_token, "only_mapped": "1"}
+        candy_key = normalize_pos_alias("Sample Candy")
         for index, normalized in enumerate(sorted_keys):
+            if resolved_map_initial.get(normalized, {}).get("product_id"):
+                continue
             mapping_form[f"product-key-{index}"] = normalized
-            if normalized == normalize_pos_alias("Sample Candy"):
+            if normalized == candy_key:
                 mapping_form[f"mapping-{index}"] = str(product_ids["candy"])
-            elif normalized in auto_map:
-                mapping_form[f"mapping-{index}"] = str(auto_map[normalized])
             else:
                 mapping_form[f"mapping-{index}"] = ""
 
@@ -933,6 +950,17 @@ def test_department_sales_forecast_workflow(client, app):
     mapping_page = mapping_response.get_data(as_text=True)
     assert "Product mappings updated." in mapping_page
     assert "Overall Stock Usage" in mapping_page
+    product_key_entries = re.findall(
+        r'name="product-key-(\d+)" value="([^"]+)"', mapping_page
+    )
+    product_key_values = [value for _, value in product_key_entries]
+    for normalized in auto_mapped_keys:
+        assert normalized not in product_key_values
+    for display_name, product_id in auto_display_lookup.items():
+        assert f"{display_name} (ID {product_id})" in mapping_page
+    assert mapping_page.count('badge bg-secondary">Auto</span>') >= len(
+        auto_mapped_keys
+    )
 
     state_match_updated = re.search(
         r'name="state_token" value="([^"]+)"', mapping_page
