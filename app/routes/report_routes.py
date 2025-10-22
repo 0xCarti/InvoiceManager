@@ -444,6 +444,7 @@ def department_sales_forecast():
     error_targets: set[str] = set()
     posted_selections: dict[str, str] = {}
     product_entries: list[dict] = []
+    pending_entries: list[dict] = []
     resolved_entries: list[dict] = []
     product_search_options: list[dict[str, str]] = []
     report_departments: list[dict] = []
@@ -704,6 +705,12 @@ def department_sales_forecast():
                 }
             )
 
+        pending_entries = [
+            entry
+            for entry in product_entries
+            if not entry.get("product_id") and entry.get("status") != "skipped"
+        ]
+
         resolved_entries = [
             {
                 "name": entry["name"],
@@ -742,6 +749,7 @@ def department_sales_forecast():
         state_token=state_token,
         filename=filename,
         product_entries=product_entries,
+        pending_entries=pending_entries,
         resolved_entries=resolved_entries,
         product_search_options=product_search_options,
         skip_selection_value=_SKIP_SELECTION_VALUE,
