@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import (
     Blueprint,
     abort,
+    current_app,
     flash,
     redirect,
     render_template,
@@ -12,7 +13,7 @@ from flask import (
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
-from app import GST, RETAIL_POP_PRICE, db
+from app import GST, db
 from app.forms import DeleteForm, InvoiceFilterForm, InvoiceForm
 from app.models import Customer, Invoice, InvoiceProduct, Product
 from app.utils.activity import log_activity
@@ -199,7 +200,7 @@ def view_invoice(invoice_id):
         pst=pst_total,
         total=total,
         GST=GST,
-        retail_pop_price=RETAIL_POP_PRICE,
+        retail_pop_price=current_app.config.get("RETAIL_POP_PRICE", "0.00"),
     )
 
 
