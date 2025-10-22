@@ -30,6 +30,7 @@ from app.routes.report_routes import (
     _calculate_department_usage,
     _collect_department_product_totals,
     _department_sales_serializer,
+    _SKIP_SELECTION_VALUE,
     _merge_product_mappings,
 )
 from app.utils.pos_import import normalize_pos_alias
@@ -931,12 +932,15 @@ def test_department_sales_forecast_workflow(client, app):
         )
         mapping_form = {"state_token": state_token, "only_mapped": "1"}
         candy_key = normalize_pos_alias("Sample Candy")
+        donut_key = normalize_pos_alias("Glazed Donut")
         for index, normalized in enumerate(sorted_keys):
             if resolved_map_initial.get(normalized, {}).get("product_id"):
                 continue
             mapping_form[f"product-key-{index}"] = normalized
             if normalized == candy_key:
                 mapping_form[f"mapping-{index}"] = str(product_ids["candy"])
+            elif normalized == donut_key:
+                mapping_form[f"mapping-{index}"] = _SKIP_SELECTION_VALUE
             else:
                 mapping_form[f"mapping-{index}"] = ""
 
@@ -956,11 +960,15 @@ def test_department_sales_forecast_workflow(client, app):
     product_key_values = [value for _, value in product_key_entries]
     for normalized in auto_mapped_keys:
         assert normalized not in product_key_values
+    assert donut_key not in product_key_values
     for display_name, product_id in auto_display_lookup.items():
         assert f"{display_name} (ID {product_id})" in mapping_page
     assert mapping_page.count('badge bg-secondary">Auto</span>') >= len(
         auto_mapped_keys
     )
+    assert "No further product mappings are required." in mapping_page
+    assert "Skipped products:</strong> Glazed Donut" in mapping_page
+    assert "terminal_sales_mapping.js" not in mapping_page
 
     state_match_updated = re.search(
         r'name="state_token" value="([^"]+)"', mapping_page
@@ -976,8 +984,11 @@ def test_department_sales_forecast_workflow(client, app):
 
         manual_mappings = updated_payload.get("manual_mappings") or {}
         candy_key = normalize_pos_alias("Sample Candy")
+        donut_key = normalize_pos_alias("Glazed Donut")
         assert manual_mappings[candy_key]["product_id"] == product_ids["candy"]
         assert manual_mappings[candy_key]["status"] == "manual"
+        assert manual_mappings[donut_key]["status"] == "skipped"
+        assert "product_id" not in manual_mappings[donut_key]
 
         totals = _collect_department_product_totals(updated_payload)
         resolved_map = _merge_product_mappings(
@@ -997,8 +1008,8 @@ def test_department_sales_forecast_workflow(client, app):
             "Encountered product rows before any department header; those rows were skipped."
         )
         assert warnings == [expected_warning]
-        assert skipped_products == []
-        assert unmapped_products == ["Glazed Donut"]
+        assert skipped_products == ["Glazed Donut"]
+        assert unmapped_products == []
 
         dept_lookup = {dept["department_name"]: dept for dept in department_reports}
         assert set(dept_lookup.keys()) == {"Sample Beverages", "Sample Snacks"}
