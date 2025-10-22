@@ -102,7 +102,7 @@
                         </div>
                     {% endfor %}
                 {% elif product_entries %}
-                    <p class="text-muted mb-0">All products are currently mapped or skipped.</p>
+                    <p class="text-muted mb-0">No further product mappings are required. Review the summaries below for details.</p>
                 {% else %}
                     <p class="text-muted mb-0">No products were detected in the uploaded file.</p>
                 {% endif %}
@@ -265,7 +265,7 @@
 
 {% block scripts %}
     {{ super() }}
-    {% if product_entries %}
+    {% if pending_entries %}
         <script src="{{ url_for('static', filename='js/terminal_sales_mapping.js') }}"></script>
     {% endif %}
 {% endblock %}
