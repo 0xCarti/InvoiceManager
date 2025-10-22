@@ -3,6 +3,7 @@ import platform
 import sqlite3
 import subprocess
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
 import flask
@@ -711,6 +712,15 @@ def settings():
         gst_setting = Setting(name="GST", value="")
         db.session.add(gst_setting)
 
+    retail_pop_price_setting = Setting.query.filter_by(
+        name="RETAIL_POP_PRICE"
+    ).first()
+    if retail_pop_price_setting is None:
+        retail_pop_price_setting = Setting(
+            name="RETAIL_POP_PRICE", value="4.25"
+        )
+        db.session.add(retail_pop_price_setting)
+
     tz_setting = Setting.query.filter_by(name="DEFAULT_TIMEZONE").first()
     if tz_setting is None:
         tz_setting = Setting(name="DEFAULT_TIMEZONE", value="UTC")
@@ -758,6 +768,11 @@ def settings():
 
     conversion_mapping = parse_conversion_setting(conversions_setting.value)
     receive_defaults = Setting.get_receive_location_defaults()
+    retail_pop_price_value = retail_pop_price_setting.value or "0"
+    try:
+        retail_pop_price_decimal = Decimal(retail_pop_price_value)
+    except (InvalidOperation, TypeError):
+        retail_pop_price_decimal = Decimal("0")
 
     form = SettingsForm(
         gst_number=gst_setting.value,
@@ -768,6 +783,7 @@ def settings():
         max_backups=int(max_backups_setting.value),
         base_unit_mapping=conversion_mapping,
         receive_location_defaults=receive_defaults,
+        retail_pop_price=retail_pop_price_decimal,
     )
     if form.validate_on_submit():
         conversion_updates = {}
@@ -803,11 +819,20 @@ def settings():
         conversions_setting.value = serialize_conversion_setting(
             conversion_updates
         )
+        if form.retail_pop_price.data is None:
+            retail_pop_price_setting.value = ""
+        else:
+            retail_pop_price_setting.value = format(
+                form.retail_pop_price.data, ".2f"
+            )
         Setting.set_receive_location_defaults(receive_location_updates)
         db.session.commit()
         import app
 
         app.GST = gst_setting.value
+        app.RETAIL_POP_PRICE = (
+            retail_pop_price_setting.value or "0.00"
+        )
         app.DEFAULT_TIMEZONE = tz_setting.value
         current_app.config["AUTO_BACKUP_ENABLED"] = (
             form.auto_backup_enabled.data
@@ -823,6 +848,7 @@ def settings():
             form.auto_backup_interval_value.data
             * UNIT_SECONDS[form.auto_backup_interval_unit.data]
         )
+        current_app.config["RETAIL_POP_PRICE"] = app.RETAIL_POP_PRICE
         conversion_mapping = parse_conversion_setting(conversions_setting.value)
         app.BASE_UNIT_CONVERSIONS = conversion_mapping
         current_app.config["BASE_UNIT_CONVERSIONS"] = conversion_mapping

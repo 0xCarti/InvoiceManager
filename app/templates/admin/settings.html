@@ -10,6 +10,16 @@
             {{ form.gst_number(class='form-control') }}
         </div>
         <div class="form-group mt-2">
+            {{ form.retail_pop_price.label }}
+            <div class="input-group">
+                <span class="input-group-text">$</span>
+                {{ form.retail_pop_price(class='form-control') }}
+            </div>
+            {% if form.retail_pop_price.errors %}
+                <div class="text-danger small">{{ form.retail_pop_price.errors[0] }}</div>
+            {% endif %}
+        </div>
+        <div class="form-group mt-2">
             {{ form.default_timezone.label }}
             {{ form.default_timezone(class='form-control') }}
         </div>

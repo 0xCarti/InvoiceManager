@@ -46,6 +46,7 @@ DEFAULT_CSP_TEMPLATE = (
     "base-uri 'self'"
 )
 GST = ""
+RETAIL_POP_PRICE = "4.25"
 DEFAULT_TIMEZONE = "UTC"
 BASE_UNIT_CONVERSIONS = {}
 NAV_LINKS = {
@@ -113,7 +114,7 @@ def create_admin_user():
 
 def create_app(args=None):
     """Application factory used by Flask."""
-    global socketio, GST, DEFAULT_TIMEZONE, BASE_UNIT_CONVERSIONS
+    global socketio, GST, RETAIL_POP_PRICE, DEFAULT_TIMEZONE, BASE_UNIT_CONVERSIONS
     if args is None:
         args = sys.argv[1:]
     else:
@@ -328,6 +329,12 @@ def create_app(args=None):
             if setting is not None:
                 GST = setting.value
 
+            retail_price_setting = Setting.query.filter_by(
+                name="RETAIL_POP_PRICE"
+            ).first()
+            if retail_price_setting is not None:
+                RETAIL_POP_PRICE = retail_price_setting.value or "0.00"
+
             tz_setting = Setting.query.filter_by(
                 name="DEFAULT_TIMEZONE"
             ).first()
@@ -374,6 +381,7 @@ def create_app(args=None):
                 if max_backups_setting and max_backups_setting.value
                 else 5
             )
+            app.config["RETAIL_POP_PRICE"] = RETAIL_POP_PRICE
             if conversions_setting is not None and conversions_setting.value:
                 BASE_UNIT_CONVERSIONS = parse_conversion_setting(
                     conversions_setting.value
