@@ -1279,6 +1279,11 @@ class SettingsForm(FlaskForm):
     gst_number = StringField(
         "GST Number", validators=[Optional(), Length(max=50)]
     )
+    retail_pop_price = DecimalField(
+        "Retail Pop Price",
+        validators=[Optional(), NumberRange(min=0)],
+        places=2,
+    )
     default_timezone = SelectField("Default Timezone")
     auto_backup_enabled = BooleanField("Enable Automatic Backups")
     auto_backup_interval_value = IntegerField(
