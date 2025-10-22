@@ -1275,6 +1275,23 @@ class TerminalSalesUploadForm(FlaskForm):
     submit = SubmitField("Upload")
 
 
+class DepartmentSalesForecastForm(FlaskForm):
+    """Upload IdealPOS exports for department sales forecasting."""
+
+    upload = FileField(
+        "Department Sales Export",
+        validators=[
+            FileRequired(),
+            FileAllowed({"xls", "xlsx"}, "Only .xls or .xlsx files are allowed."),
+        ],
+    )
+    only_mapped_products = BooleanField(
+        "Only include mapped products in usage totals",
+        default=False,
+    )
+    submit = SubmitField("Upload")
+
+
 class SettingsForm(FlaskForm):
     gst_number = StringField(
         "GST Number", validators=[Optional(), Length(max=50)]

@@ -1,4 +1,9 @@
+import re
 from datetime import date
+from io import BytesIO
+
+import pytest
+from openpyxl import Workbook
 
 from werkzeug.security import generate_password_hash
 
@@ -11,15 +16,267 @@ from app.models import (
     Item,
     Location,
     Product,
+    ProductRecipeItem,
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseOrder,
     Setting,
     User,
+    TerminalSaleProductAlias,
     Vendor,
 )
+from app.routes.report_routes import (
+    _auto_resolve_department_products,
+    _calculate_department_usage,
+    _collect_department_product_totals,
+    _department_sales_serializer,
+    _merge_product_mappings,
+)
+from app.utils.pos_import import normalize_pos_alias
 from app.utils.units import serialize_conversion_setting
 from tests.utils import login
+
+
+def build_department_sales_workbook() -> BytesIO:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Department Sales"
+
+    sheet.append(
+        [
+            "Unit Price inc",
+            "Unit Tax",
+            "Quantity",
+            "Net ex",
+            "Tax",
+            "Net inc",
+            "Discounts",
+            "Gross ex",
+            None,
+            None,
+            None,
+            "Amount",
+            "%",
+            None,
+            None,
+        ]
+    )
+    sheet.append(
+        [
+            "401000 Sample Beverages",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ]
+    )
+    sheet.append(
+        [
+            "2001",
+            "Sample Soda",
+            2.5,
+            0.25,
+            10,
+            22.5,
+            2.5,
+            25,
+            0,
+            22.5,
+            None,
+            None,
+            0,
+            22.5,
+            100,
+        ]
+    )
+    sheet.append(
+        [
+            "2002",
+            "Sample Water",
+            1.5,
+            0.15,
+            5,
+            6.75,
+            0.75,
+            7.5,
+            0,
+            6.75,
+            None,
+            None,
+            0,
+            6.75,
+            100,
+        ]
+    )
+    sheet.append(
+        [
+            None,
+            15,
+            29.25,
+            3.25,
+            32.5,
+            0,
+            29.25,
+            None,
+            None,
+            0,
+            29.25,
+            100,
+            None,
+            None,
+            None,
+        ]
+    )
+    sheet.append([None] * 15)
+    sheet.append(
+        [
+            "401001 Sample Snacks",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ]
+    )
+    sheet.append(
+        [
+            "3001",
+            "Sample Chips",
+            3,
+            0.3,
+            4,
+            10.8,
+            1.2,
+            12,
+            0,
+            10.8,
+            None,
+            None,
+            0,
+            10.8,
+            100,
+        ]
+    )
+    sheet.append(
+        [
+            "3002",
+            "Sample Candy",
+            2,
+            0.2,
+            3,
+            5.4,
+            0.6,
+            6,
+            0,
+            5.4,
+            None,
+            None,
+            0,
+            5.4,
+            100,
+        ]
+    )
+    sheet.append(
+        [
+            None,
+            7,
+            16.2,
+            1.8,
+            18,
+            0,
+            16.2,
+            None,
+            None,
+            0,
+            16.2,
+            100,
+            None,
+            None,
+            None,
+        ]
+    )
+    sheet.append([None] * 15)
+    sheet.append(
+        [
+            "DONUTS",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ]
+    )
+    sheet.append(
+        [
+            "4001",
+            "Glazed Donut",
+            4,
+            0.4,
+            6,
+            21.6,
+            2.4,
+            24,
+            0,
+            21.6,
+            None,
+            None,
+            0,
+            21.6,
+            100,
+        ]
+    )
+    sheet.append(
+        [
+            None,
+            6,
+            21.6,
+            2.4,
+            24,
+            0,
+            21.6,
+            None,
+            None,
+            0,
+            21.6,
+            100,
+            None,
+            None,
+            None,
+        ]
+    )
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+    return buffer
 
 
 def setup_invoice(app):
@@ -210,6 +467,57 @@ def setup_purchase_invoice(app):
             db.session.commit()
 
         return user.email, invoice.received_date, item.name
+
+
+def setup_department_sales_forecast_data(app):
+    with app.app_context():
+        soda_item = Item(name="Soda Syrup", base_unit="each", cost=2.0)
+        water_item = Item(name="Water Bottle", base_unit="each", cost=0.5)
+        snack_item = Item(name="Snack Bag", base_unit="each", cost=1.5)
+        candy_item = Item(name="Candy Bulk", base_unit="each", cost=0.75)
+        db.session.add_all([soda_item, water_item, snack_item, candy_item])
+        db.session.flush()
+
+        soda_product = Product(name="Sample Soda", price=3.0, cost=2.0)
+        water_product = Product(name="Sample Water", price=2.5, cost=1.0)
+        chips_product = Product(name="Sample Chips", price=4.0, cost=1.5)
+        candy_product = Product(name="Candy Delight", price=3.0, cost=1.2)
+        db.session.add_all([soda_product, water_product, chips_product, candy_product])
+        db.session.flush()
+
+        db.session.add_all(
+            [
+                ProductRecipeItem(
+                    product_id=soda_product.id, item_id=soda_item.id, quantity=1.0
+                ),
+                ProductRecipeItem(
+                    product_id=water_product.id, item_id=water_item.id, quantity=1.0
+                ),
+                ProductRecipeItem(
+                    product_id=chips_product.id, item_id=snack_item.id, quantity=1.0
+                ),
+                ProductRecipeItem(
+                    product_id=candy_product.id, item_id=candy_item.id, quantity=1.0
+                ),
+            ]
+        )
+
+        db.session.add(
+            TerminalSaleProductAlias(
+                source_name="Sample Soda",
+                normalized_name=normalize_pos_alias("Sample Soda"),
+                product_id=soda_product.id,
+            )
+        )
+
+        db.session.commit()
+
+        return {
+            "soda": soda_product.id,
+            "water": water_product.id,
+            "chips": chips_product.id,
+            "candy": candy_product.id,
+        }
 
 
 def setup_purchase_invoice_with_gl_allocations(app):
@@ -541,3 +849,163 @@ def test_invoice_gl_code_report(client, app):
     assert b"$5.00" in resp.data
     assert b"$3.75" in resp.data
     assert b"$62.50" in resp.data
+
+
+def test_department_sales_forecast_workflow(client, app):
+    product_ids = setup_department_sales_forecast_data(app)
+
+    with app.app_context():
+        user = User.query.filter_by(email="forecast@example.com").first()
+        if not user:
+            user = User(
+                email="forecast@example.com",
+                password=generate_password_hash("pass"),
+                active=True,
+            )
+            db.session.add(user)
+            db.session.commit()
+        user_id = user.id
+
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(user_id)
+        sess["_fresh"] = True
+
+    upload_file = build_department_sales_workbook()
+    upload_response = client.post(
+        "/reports/department-sales-forecast",
+        data={"upload": (upload_file, "department_sales_sample.xlsx")},
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    assert upload_response.status_code == 200
+    upload_page = upload_response.get_data(as_text=True)
+    state_match = re.search(r'name="state_token" value="([^"]+)"', upload_page)
+    assert state_match is not None
+    state_token = state_match.group(1)
+
+    with app.app_context():
+        serializer = _department_sales_serializer()
+        state_data = serializer.loads(state_token)
+        payload = state_data["payload"]
+        assert len(payload["departments"]) == 3
+        assert payload["departments"][0]["gl_code"] == "401000"
+        assert payload["departments"][0]["department_name"] == "Sample Beverages"
+        options = payload.get("options")
+        assert options and options.get("only_mapped") is False
+
+        totals = _collect_department_product_totals(payload)
+        expected_keys = {
+            normalize_pos_alias("Sample Soda"),
+            normalize_pos_alias("Sample Water"),
+            normalize_pos_alias("Sample Chips"),
+            normalize_pos_alias("Sample Candy"),
+            normalize_pos_alias("Glazed Donut"),
+        }
+        assert set(totals.keys()) == expected_keys
+
+        auto_map = _auto_resolve_department_products(totals)
+        assert auto_map[normalize_pos_alias("Sample Soda")] == product_ids["soda"]
+        assert auto_map[normalize_pos_alias("Sample Water")] == product_ids["water"]
+        assert auto_map[normalize_pos_alias("Sample Chips")] == product_ids["chips"]
+        assert normalize_pos_alias("Sample Candy") not in auto_map
+
+        sorted_keys = sorted(
+            totals.keys(), key=lambda key: totals[key]["display_name"].lower()
+        )
+        mapping_form = {"state_token": state_token, "only_mapped": "1"}
+        for index, normalized in enumerate(sorted_keys):
+            mapping_form[f"product-key-{index}"] = normalized
+            if normalized == normalize_pos_alias("Sample Candy"):
+                mapping_form[f"mapping-{index}"] = str(product_ids["candy"])
+            elif normalized in auto_map:
+                mapping_form[f"mapping-{index}"] = str(auto_map[normalized])
+            else:
+                mapping_form[f"mapping-{index}"] = ""
+
+    mapping_response = client.post(
+        "/reports/department-sales-forecast",
+        data=mapping_form,
+        follow_redirects=True,
+    )
+
+    assert mapping_response.status_code == 200
+    mapping_page = mapping_response.get_data(as_text=True)
+    assert "Product mappings updated." in mapping_page
+    assert "Overall Stock Usage" in mapping_page
+
+    state_match_updated = re.search(
+        r'name="state_token" value="([^"]+)"', mapping_page
+    )
+    assert state_match_updated is not None
+    updated_state_token = state_match_updated.group(1)
+
+    with app.app_context():
+        serializer = _department_sales_serializer()
+        updated_state = serializer.loads(updated_state_token)
+        updated_payload = updated_state["payload"]
+        assert updated_payload["options"].get("only_mapped") is True
+
+        manual_mappings = updated_payload.get("manual_mappings") or {}
+        candy_key = normalize_pos_alias("Sample Candy")
+        assert manual_mappings[candy_key]["product_id"] == product_ids["candy"]
+        assert manual_mappings[candy_key]["status"] == "manual"
+
+        totals = _collect_department_product_totals(updated_payload)
+        resolved_map = _merge_product_mappings(
+            totals,
+            _auto_resolve_department_products(totals),
+            manual_mappings,
+        )
+        (
+            department_reports,
+            overall_summary,
+            warnings,
+            unmapped_products,
+            skipped_products,
+        ) = _calculate_department_usage(updated_payload, resolved_map, True)
+
+        expected_warning = (
+            "Encountered product rows before any department header; those rows were skipped."
+        )
+        assert warnings == [expected_warning]
+        assert skipped_products == []
+        assert unmapped_products == ["Glazed Donut"]
+
+        dept_lookup = {dept["department_name"]: dept for dept in department_reports}
+        assert set(dept_lookup.keys()) == {"Sample Beverages", "Sample Snacks"}
+
+        beverages = dept_lookup["Sample Beverages"]
+        snacks = dept_lookup["Sample Snacks"]
+
+        beverages_items = {
+            item["item_name"]: item for item in beverages["items"]
+        }
+        assert pytest.approx(
+            beverages_items["Soda Syrup"]["quantity"], rel=1e-6
+        ) == 10.0
+        assert pytest.approx(
+            beverages_items["Soda Syrup"]["total_cost"], rel=1e-6
+        ) == 20.0
+        assert pytest.approx(
+            beverages_items["Water Bottle"]["quantity"], rel=1e-6
+        ) == 5.0
+        assert pytest.approx(
+            beverages_items["Water Bottle"]["total_cost"], rel=1e-6
+        ) == 2.5
+
+        snacks_items = {item["item_name"]: item for item in snacks["items"]}
+        assert pytest.approx(snacks_items["Snack Bag"]["quantity"], rel=1e-6) == 4.0
+        assert pytest.approx(snacks_items["Snack Bag"]["total_cost"], rel=1e-6) == 6.0
+        assert pytest.approx(snacks_items["Candy Bulk"]["quantity"], rel=1e-6) == 3.0
+        assert pytest.approx(snacks_items["Candy Bulk"]["total_cost"], rel=1e-6) == 2.25
+
+        assert pytest.approx(overall_summary["total_cost"], rel=1e-6) == 30.75
+
+        alias = TerminalSaleProductAlias.query.filter_by(
+            normalized_name=normalize_pos_alias("Sample Candy")
+        ).first()
+        assert alias is not None
+        assert alias.product_id == product_ids["candy"]
+        assert alias.source_name == "Sample Candy"
+

@@ -1,20 +1,27 @@
+import os
+import tempfile
+from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
+from secrets import token_urlsafe
 from typing import Dict
 
 from flask import (
     Blueprint,
     abort,
     current_app,
+    flash,
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import login_required
 
 from app import db
 from app.forms import (
+    DepartmentSalesForecastForm,
     PurchaseCostForecastForm,
     PurchaseInventorySummaryForm,
     ProductRecipeReportForm,
@@ -38,17 +45,21 @@ from app.models import (
     PurchaseInvoiceItem,
     PurchaseOrder,
     TerminalSale,
+    TerminalSaleProductAlias,
     User,
 )
 from app.utils.forecasting import DemandForecastingHelper
+from app.utils.pos_import import parse_department_sales_forecast
 from app.utils.units import (
     DEFAULT_BASE_UNIT_CONVERSIONS,
     convert_cost_for_reporting,
     convert_quantity_for_reporting,
     get_unit_label,
 )
-from sqlalchemy import or_
+from itsdangerous import BadSignature, URLSafeSerializer
+from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
+from werkzeug.utils import secure_filename
 
 report = Blueprint("report", __name__)
 
@@ -120,6 +131,628 @@ def _coerce_float(value):
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+_DEPARTMENT_SALES_STATE_KEY = "department_sales_forecast_state"
+_SKIP_SELECTION_VALUE = "__skip__"
+
+
+def _department_sales_serializer() -> URLSafeSerializer:
+    secret_key = current_app.config.get("SECRET_KEY")
+    if not secret_key:  # pragma: no cover - configuration guard
+        raise RuntimeError("Application secret key is not configured.")
+    return URLSafeSerializer(secret_key, salt="department-sales-forecast")
+
+
+def _collect_department_product_totals(payload: dict) -> dict[str, dict]:
+    totals: dict[str, dict] = {}
+    for department in payload.get("departments", []):
+        department_name = department.get("department_name") or ""
+        for row in department.get("rows", []):
+            normalized = row.get("normalized_name") or ""
+            entry = totals.setdefault(
+                normalized,
+                {
+                    "normalized": normalized,
+                    "display_name": row.get("product_name")
+                    or normalized
+                    or "Unmapped product",
+                    "quantity": 0.0,
+                    "sample_price": row.get("unit_price"),
+                    "departments": set(),
+                    "source_name": row.get("product_name") or "",
+                },
+            )
+            entry["departments"].add(department_name)
+            entry["quantity"] += float(row.get("quantity") or 0.0)
+            if entry["sample_price"] is None and row.get("unit_price") is not None:
+                entry["sample_price"] = row.get("unit_price")
+            if not entry["source_name"]:
+                entry["source_name"] = row.get("product_name") or ""
+    return totals
+
+
+def _auto_resolve_department_products(
+    product_totals: dict[str, dict]
+) -> dict[str, int]:
+    mapping: dict[str, int] = {}
+    normalized_values = [key for key in product_totals.keys() if key]
+    if normalized_values:
+        alias_rows = (
+            TerminalSaleProductAlias.query.filter(
+                TerminalSaleProductAlias.normalized_name.in_(normalized_values)
+            ).all()
+        )
+        for alias in alias_rows:
+            if alias.product_id:
+                mapping[alias.normalized_name] = alias.product_id
+
+    pending_names: dict[str, str] = {}
+    for normalized, entry in product_totals.items():
+        if normalized in mapping:
+            continue
+        name = (entry.get("display_name") or "").strip().lower()
+        if not name:
+            continue
+        pending_names.setdefault(name, normalized)
+
+    if pending_names:
+        products = (
+            Product.query.filter(func.lower(Product.name).in_(pending_names.keys()))
+            .all()
+        )
+        for product in products:
+            key = (product.name or "").strip().lower()
+            normalized = pending_names.get(key)
+            if normalized and normalized not in mapping:
+                mapping[normalized] = product.id
+
+    return mapping
+
+
+def _merge_product_mappings(
+    product_totals: dict[str, dict],
+    auto_map: dict[str, int],
+    manual_mappings: dict[str, dict] | None,
+) -> dict[str, dict]:
+    resolved: dict[str, dict] = {}
+    manual_mappings = manual_mappings or {}
+
+    for normalized in product_totals.keys():
+        manual_entry = manual_mappings.get(normalized)
+        if manual_entry:
+            status = manual_entry.get("status")
+            if status == "skipped":
+                resolved[normalized] = {"status": "skipped", "product_id": None}
+            elif manual_entry.get("product_id"):
+                resolved[normalized] = {
+                    "status": "manual",
+                    "product_id": manual_entry["product_id"],
+                }
+            else:
+                resolved[normalized] = {"status": "unmapped", "product_id": None}
+            continue
+
+        product_id = auto_map.get(normalized)
+        if product_id:
+            resolved[normalized] = {"status": "auto", "product_id": product_id}
+        else:
+            resolved[normalized] = {"status": "unmapped", "product_id": None}
+
+    return resolved
+
+
+def _calculate_department_usage(
+    payload: dict, resolved_map: dict[str, dict], only_mapped: bool
+):
+    conversions = _get_base_unit_conversions()
+    product_ids = {
+        entry.get("product_id")
+        for entry in resolved_map.values()
+        if entry.get("product_id")
+    }
+    products = []
+    if product_ids:
+        products = (
+            Product.query.options(
+                selectinload(Product.recipe_items).selectinload(
+                    ProductRecipeItem.item
+                ),
+                selectinload(Product.recipe_items).selectinload(
+                    ProductRecipeItem.unit
+                ),
+            )
+            .filter(Product.id.in_(product_ids))
+            .all()
+        )
+    product_lookup = {product.id: product for product in products}
+
+    warnings = list(payload.get("warnings") or [])
+    warning_set = set(warnings)
+
+    def add_warning(message: str) -> None:
+        if message not in warning_set:
+            warnings.append(message)
+            warning_set.add(message)
+
+    overall_items: dict[int, dict] = {}
+    overall_unmapped: set[str] = set()
+    overall_skipped: set[str] = set()
+    department_reports: list[dict] = []
+
+    for department in payload.get("departments", []):
+        department_name = department.get("department_name") or ""
+        gl_code = department.get("gl_code")
+        dept_items: dict[int, dict] = {}
+        dept_total_cost = 0.0
+        dept_warnings: list[str] = []
+        dept_unmapped: list[str] = []
+        dept_skipped: list[str] = []
+
+        for row in department.get("rows", []):
+            normalized = row.get("normalized_name") or ""
+            product_name = row.get("product_name") or "Unmapped product"
+            mapping = resolved_map.get(normalized)
+            if mapping is None:
+                dept_unmapped.append(product_name)
+                overall_unmapped.add(product_name)
+                continue
+
+            status = mapping.get("status")
+            if status == "skipped":
+                dept_skipped.append(product_name)
+                overall_skipped.add(product_name)
+                continue
+
+            product_id = mapping.get("product_id")
+            if not product_id:
+                dept_unmapped.append(product_name)
+                overall_unmapped.add(product_name)
+                continue
+
+            product = product_lookup.get(product_id)
+            if product is None:
+                message = (
+                    f"Mapped product '{product_name}' (ID {product_id}) could not be "
+                    "loaded for usage calculations."
+                )
+                add_warning(message)
+                dept_warnings.append(message)
+                continue
+
+            if not product.recipe_items:
+                message = (
+                    f"Product '{product.name}' does not have any recipe items; "
+                    f"usage for '{product_name}' was skipped."
+                )
+                add_warning(message)
+                dept_warnings.append(message)
+                continue
+
+            quantity = float(row.get("quantity") or 0.0)
+            if quantity == 0:
+                continue
+
+            for recipe_item in product.recipe_items:
+                item = recipe_item.item
+                if item is None:
+                    continue
+                base_quantity = float(recipe_item.quantity or 0.0) * quantity
+                if recipe_item.unit:
+                    base_quantity *= float(recipe_item.unit.factor or 1.0)
+                if base_quantity == 0:
+                    continue
+                entry = dept_items.setdefault(
+                    item.id,
+                    {"item": item, "quantity": 0.0},
+                )
+                entry["quantity"] += base_quantity
+
+        department_items_output: list[dict] = []
+        for entry in dept_items.values():
+            item = entry["item"]
+            quantity = entry["quantity"]
+            converted_qty, report_unit = convert_quantity_for_reporting(
+                quantity, item.base_unit, conversions
+            )
+            cost_each = convert_cost_for_reporting(
+                float(item.cost or 0.0), item.base_unit, conversions
+            )
+            total_cost = converted_qty * cost_each
+            dept_total_cost += total_cost
+            department_items_output.append(
+                {
+                    "item_id": item.id,
+                    "item_name": item.name,
+                    "quantity": converted_qty,
+                    "unit": get_unit_label(report_unit),
+                    "cost_each": cost_each,
+                    "total_cost": total_cost,
+                }
+            )
+            overall_entry = overall_items.setdefault(
+                item.id,
+                {"item": item, "quantity": 0.0},
+            )
+            overall_entry["quantity"] += quantity
+
+        department_items_output.sort(key=lambda row: row["item_name"].lower())
+        include_department = bool(department_items_output) or not only_mapped
+        if include_department:
+            department_reports.append(
+                {
+                    "department_name": department_name,
+                    "gl_code": gl_code,
+                    "items": department_items_output,
+                    "total_cost": dept_total_cost,
+                    "warnings": dept_warnings,
+                    "unmapped_products": dept_unmapped,
+                    "skipped_products": dept_skipped,
+                }
+            )
+
+    department_reports.sort(key=lambda entry: entry["department_name"].lower())
+
+    overall_items_output: list[dict] = []
+    overall_total_cost = 0.0
+    for entry in overall_items.values():
+        item = entry["item"]
+        quantity = entry["quantity"]
+        converted_qty, report_unit = convert_quantity_for_reporting(
+            quantity, item.base_unit, conversions
+        )
+        cost_each = convert_cost_for_reporting(
+            float(item.cost or 0.0), item.base_unit, conversions
+        )
+        total_cost = converted_qty * cost_each
+        overall_total_cost += total_cost
+        overall_items_output.append(
+            {
+                "item_id": item.id,
+                "item_name": item.name,
+                "quantity": converted_qty,
+                "unit": get_unit_label(report_unit),
+                "cost_each": cost_each,
+                "total_cost": total_cost,
+            }
+        )
+
+    overall_items_output.sort(key=lambda row: row["item_name"].lower())
+    overall_summary = {"items": overall_items_output, "total_cost": overall_total_cost}
+
+    return (
+        department_reports,
+        overall_summary,
+        warnings,
+        sorted(overall_unmapped),
+        sorted(overall_skipped),
+    )
+
+@report.route("/reports/department-sales-forecast", methods=["GET", "POST"])
+@login_required
+def department_sales_forecast():
+    if request.args.get("reset") == "1":
+        session.pop(_DEPARTMENT_SALES_STATE_KEY, None)
+        session.modified = True
+        return redirect(url_for("report.department_sales_forecast"))
+
+    form = DepartmentSalesForecastForm()
+    state_token = None
+    filename = None
+    payload = None
+    mapping_errors: list[str] = []
+    error_targets: set[str] = set()
+    posted_selections: dict[str, str] = {}
+    product_entries: list[dict] = []
+    resolved_entries: list[dict] = []
+    product_search_options: list[dict[str, str]] = []
+    report_departments: list[dict] = []
+    report_overall = None
+    overall_warnings: list[str] = []
+    overall_unmapped_products: list[str] = []
+    overall_skipped_products: list[str] = []
+    only_mapped = False
+
+    if request.method == "POST" and request.form.get("state_token"):
+        serializer = _department_sales_serializer()
+        raw_token = request.form.get("state_token", "")
+        try:
+            state_data = serializer.loads(raw_token)
+        except BadSignature:
+            session.pop(_DEPARTMENT_SALES_STATE_KEY, None)
+            session.modified = True
+            flash(
+                "The uploaded sales data could not be verified. Upload the file again.",
+                "danger",
+            )
+            return redirect(url_for("report.department_sales_forecast"))
+
+        token_id = state_data.get("token_id")
+        expected_id = session.get(_DEPARTMENT_SALES_STATE_KEY)
+        if not token_id or expected_id != token_id:
+            session.pop(_DEPARTMENT_SALES_STATE_KEY, None)
+            session.modified = True
+            flash(
+                "The department sales forecast session is no longer valid. Upload the file again.",
+                "danger",
+            )
+            return redirect(url_for("report.department_sales_forecast"))
+
+        payload = state_data.get("payload") or {}
+        if not isinstance(payload, dict):
+            flash("Unable to continue processing the uploaded data.", "danger")
+            return redirect(url_for("report.department_sales_forecast"))
+
+        filename = state_data.get("filename")
+        options = payload.setdefault("options", {})
+        only_mapped = bool(request.form.get("only_mapped"))
+        options["only_mapped"] = only_mapped
+
+        totals = _collect_department_product_totals(payload)
+        auto_map = _auto_resolve_department_products(totals)
+        manual_mappings = payload.get("manual_mappings") or {}
+        updated_manual_mappings = dict(manual_mappings)
+        pending_alias_updates: list[tuple[str, str, int]] = []
+
+        for key in request.form:
+            if not key.startswith("product-key-"):
+                continue
+            normalized = (request.form.get(key) or "").strip()
+            if not normalized:
+                continue
+            suffix = key[len("product-key-") :]
+            selection = request.form.get(f"mapping-{suffix}", "")
+            posted_selections[normalized] = selection
+
+            if selection == _SKIP_SELECTION_VALUE:
+                updated_manual_mappings[normalized] = {"status": "skipped"}
+                continue
+
+            if not selection:
+                updated_manual_mappings.pop(normalized, None)
+                continue
+
+            try:
+                product_id = int(selection)
+            except (TypeError, ValueError):
+                mapping_errors.append(
+                    "Select a valid product for "
+                    f"{totals.get(normalized, {}).get('display_name', 'the selected product')}.",
+                )
+                error_targets.add(normalized)
+                continue
+
+            product = db.session.get(Product, product_id)
+            if product is None:
+                mapping_errors.append(
+                    f"Product ID {product_id} is no longer available. Choose another product."
+                )
+                error_targets.add(normalized)
+                continue
+
+            source_name = totals.get(normalized, {}).get("source_name") or product.name
+            updated_manual_mappings[normalized] = {
+                "status": "manual",
+                "product_id": product.id,
+                "source_name": source_name,
+            }
+            if not normalized.startswith("__unnamed_"):
+                pending_alias_updates.append((normalized, source_name, product.id))
+
+        if mapping_errors:
+            db.session.rollback()
+        else:
+            payload["manual_mappings"] = updated_manual_mappings
+            for normalized, source_name, product_id in pending_alias_updates:
+                alias = TerminalSaleProductAlias.query.filter_by(
+                    normalized_name=normalized
+                ).first()
+                if alias is None:
+                    alias = TerminalSaleProductAlias(
+                        source_name=source_name,
+                        normalized_name=normalized,
+                        product_id=product_id,
+                    )
+                    db.session.add(alias)
+                else:
+                    alias.source_name = source_name
+                    alias.product_id = product_id
+            if pending_alias_updates:
+                db.session.commit()
+            flash("Product mappings updated.", "success")
+
+    elif request.method == "POST" and form.validate_on_submit():
+        upload = form.upload.data
+        filename = secure_filename(upload.filename or "department-sales.xlsx")
+        extension = os.path.splitext(filename)[1].lower()
+        tmp_path = None
+
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as tmp:
+                tmp_path = tmp.name
+                upload.save(tmp_path)
+            parsed = parse_department_sales_forecast(tmp_path, extension)
+        except RuntimeError as exc:
+            reason = str(exc)
+            if reason == "legacy_xls_missing":
+                flash("Legacy Excel support is unavailable on this server.", "danger")
+            elif reason in {"legacy_xls_error", "xlsx_error"}:
+                flash("The uploaded Excel file could not be read.", "danger")
+            elif reason == "xlsx_missing":
+                flash("Excel support libraries are unavailable on this server.", "danger")
+            elif reason == "unsupported_extension":
+                flash("Upload an IdealPOS .xls or .xlsx export.", "danger")
+            else:
+                flash(
+                    "An unexpected error occurred while reading the uploaded file.",
+                    "danger",
+                )
+            return redirect(url_for("report.department_sales_forecast"))
+        finally:
+            if tmp_path:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+        payload = asdict(parsed)
+        if not payload.get("departments"):
+            flash(
+                "No department sales records were detected in the uploaded file.",
+                "warning",
+            )
+            payload = None
+        else:
+            payload["manual_mappings"] = {}
+            payload["options"] = {"only_mapped": bool(form.only_mapped_products.data)}
+            only_mapped = payload["options"]["only_mapped"]
+            token_id = token_urlsafe(16)
+            session[_DEPARTMENT_SALES_STATE_KEY] = token_id
+            session.modified = True
+            serializer = _department_sales_serializer()
+            state_token = serializer.dumps(
+                {"token_id": token_id, "payload": payload, "filename": filename}
+            )
+
+    elif request.method == "POST":
+        # Form submission failed validation; errors will be displayed.
+        pass
+
+    if payload:
+        options = payload.setdefault("options", {})
+        only_mapped = bool(options.get("only_mapped"))
+        form.only_mapped_products.data = only_mapped
+
+        totals = _collect_department_product_totals(payload)
+        auto_map = _auto_resolve_department_products(totals)
+        resolved_map = _merge_product_mappings(
+            totals, auto_map, payload.get("manual_mappings")
+        )
+
+        product_choices = Product.query.order_by(Product.name).all()
+        product_lookup = {product.id: product for product in product_choices}
+        product_search_options = [
+            {
+                "id": str(product.id),
+                "value": f"{product.name} (ID: {product.id})",
+                "label": product.name,
+            }
+            for product in product_choices
+        ]
+
+        manual_mappings = payload.get("manual_mappings") or {}
+        sorted_keys = sorted(
+            totals.keys(), key=lambda key: totals[key]["display_name"].lower()
+        )
+
+        for index, normalized in enumerate(sorted_keys):
+            entry_totals = totals[normalized]
+            resolved = resolved_map.get(
+                normalized, {"status": "unmapped", "product_id": None}
+            )
+            product_id = resolved.get("product_id")
+            status = resolved.get("status", "unmapped")
+
+            if normalized in posted_selections:
+                selected_value = posted_selections[normalized]
+            elif status == "skipped":
+                selected_value = _SKIP_SELECTION_VALUE
+            elif product_id:
+                selected_value = str(product_id)
+            else:
+                selected_value = ""
+
+            selected_display = ""
+            effective_product_id = None
+            if selected_value == _SKIP_SELECTION_VALUE:
+                status = "skipped"
+            elif selected_value:
+                try:
+                    effective_product_id = int(selected_value)
+                except (TypeError, ValueError):
+                    effective_product_id = None
+                else:
+                    product_obj = product_lookup.get(effective_product_id)
+                    if product_obj:
+                        selected_display = (
+                            f"{product_obj.name} (ID: {product_obj.id})"
+                        )
+                if normalized in manual_mappings:
+                    status = manual_mappings.get(normalized, {}).get("status", "manual")
+                elif status not in {"auto", "manual"}:
+                    status = "manual"
+            elif product_id:
+                effective_product_id = product_id
+                product_obj = product_lookup.get(product_id)
+                if product_obj:
+                    selected_display = f"{product_obj.name} (ID: {product_obj.id})"
+
+            product_entries.append(
+                {
+                    "field": f"mapping-{index}",
+                    "key_field": f"product-key-{index}",
+                    "normalized_name": normalized,
+                    "name": entry_totals["display_name"],
+                    "departments": sorted(entry_totals["departments"]),
+                    "quantity": entry_totals["quantity"],
+                    "sample_price": entry_totals.get("sample_price"),
+                    "selected": selected_value,
+                    "selected_display": selected_display,
+                    "status": status,
+                    "product_id": effective_product_id or product_id,
+                    "has_error": normalized in error_targets,
+                }
+            )
+
+        resolved_entries = [
+            {
+                "name": entry["name"],
+                "status": entry["status"],
+                "product": product_lookup.get(entry["product_id"])
+                if entry["product_id"]
+                else None,
+            }
+            for entry in product_entries
+            if entry["status"] in {"auto", "manual"} and entry["product_id"]
+        ]
+
+        (
+            report_departments,
+            report_overall,
+            overall_warnings,
+            overall_unmapped_products,
+            overall_skipped_products,
+        ) = _calculate_department_usage(payload, resolved_map, only_mapped)
+
+        token_id = session.get(_DEPARTMENT_SALES_STATE_KEY)
+        if not token_id:
+            token_id = token_urlsafe(16)
+            session[_DEPARTMENT_SALES_STATE_KEY] = token_id
+            session.modified = True
+        serializer = _department_sales_serializer()
+        state_token = serializer.dumps(
+            {"token_id": token_id, "payload": payload, "filename": filename}
+        )
+    else:
+        form.only_mapped_products.data = False
+
+    return render_template(
+        "report_department_sales_forecast.html",
+        form=form,
+        state_token=state_token,
+        filename=filename,
+        product_entries=product_entries,
+        resolved_entries=resolved_entries,
+        product_search_options=product_search_options,
+        skip_selection_value=_SKIP_SELECTION_VALUE,
+        mapping_errors=mapping_errors,
+        report_departments=report_departments,
+        report_overall=report_overall,
+        overall_warnings=overall_warnings,
+        overall_unmapped_products=overall_unmapped_products,
+        overall_skipped_products=overall_skipped_products,
+        only_mapped=only_mapped,
+    )
 
 
 @report.route("/reports/vendor-invoices", methods=["GET", "POST"])
