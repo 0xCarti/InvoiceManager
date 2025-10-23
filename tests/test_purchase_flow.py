@@ -1,3 +1,4 @@
+import datetime
 import re
 
 from werkzeug.security import generate_password_hash
@@ -197,6 +198,96 @@ def test_receive_form_includes_department_defaults(client, app):
         assert resp.status_code == 200
         page = resp.get_data(as_text=True)
         assert f'"Kitchen": {default_location_id}' in page
+
+
+def test_purchase_order_item_filter(client, app):
+    with app.app_context():
+        password = generate_password_hash("pass")
+        user = User(email="filter@example.com", password=password, active=True)
+        vendor = Vendor(first_name="Alpha", last_name="Vendor")
+        widget = Item(name="Widget", base_unit="each")
+        gadget = Item(name="Gadget", base_unit="each")
+        db.session.add_all([user, vendor, widget, gadget])
+        db.session.commit()
+
+        order1 = PurchaseOrder(
+            vendor_id=vendor.id,
+            user_id=user.id,
+            vendor_name=f"{vendor.first_name} {vendor.last_name}",
+            order_date=datetime.date(2024, 1, 1),
+            expected_date=datetime.date(2024, 1, 2),
+            delivery_charge=0,
+            received=False,
+        )
+        order2 = PurchaseOrder(
+            vendor_id=vendor.id,
+            user_id=user.id,
+            vendor_name=f"{vendor.first_name} {vendor.last_name}",
+            order_date=datetime.date(2024, 1, 3),
+            expected_date=datetime.date(2024, 1, 4),
+            delivery_charge=0,
+            received=False,
+        )
+        db.session.add_all([order1, order2])
+        db.session.commit()
+
+        item1 = PurchaseOrderItem(
+            purchase_order_id=order1.id,
+            item_id=widget.id,
+            quantity=5,
+            position=0,
+        )
+        item2 = PurchaseOrderItem(
+            purchase_order_id=order2.id,
+            item_id=gadget.id,
+            quantity=3,
+            position=0,
+        )
+        db.session.add_all([item1, item2])
+        db.session.commit()
+
+        order1_id = order1.id
+        order2_id = order2.id
+        vendor_id = vendor.id
+        widget_id = widget.id
+        gadget_id = gadget.id
+        widget_name = widget.name
+        gadget_name = gadget.name
+        user_email = user.email
+
+    with client:
+        login(client, user_email, "pass")
+
+        resp = client.get(f"/purchase_orders?item_id={widget_id}")
+        assert resp.status_code == 200
+        page = resp.get_data(as_text=True)
+        assert f'data-id="{order1_id}"' in page
+        assert f'data-id="{order2_id}"' not in page
+        assert f'<option value="{widget_id}" selected' in page
+        assert f'<option value="{gadget_id}" selected' not in page
+        assert "Items:" in page
+        assert widget_name in page
+
+        resp_multi = client.get(
+            "/purchase_orders",
+            query_string={
+                "vendor_id": vendor_id,
+                "item_id": [widget_id, gadget_id],
+                "per_page": 1,
+            },
+        )
+        assert resp_multi.status_code == 200
+        page_multi = resp_multi.get_data(as_text=True)
+        assert f'data-id="{order1_id}"' in page_multi
+        assert f'data-id="{order2_id}"' in page_multi
+        assert page_multi.count("Items:") >= 1
+        assert widget_name in page_multi
+        assert gadget_name in page_multi
+        assert f'<option value="{widget_id}" selected' in page_multi
+        assert f'<option value="{gadget_id}" selected' in page_multi
+        assert f'item_id={widget_id}' in page_multi
+        assert f'item_id={gadget_id}' in page_multi
+        assert "Filtering by Vendor:" in page_multi
 
 
 def test_item_cost_visible_on_items_page(client, app):

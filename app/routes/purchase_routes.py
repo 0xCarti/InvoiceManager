@@ -110,6 +110,24 @@ def view_purchase_orders():
     status = request.args.get("status", "pending")
     start_date_str = request.args.get("start_date")
     end_date_str = request.args.get("end_date")
+    raw_item_ids = request.args.getlist("item_id")
+
+    item_ids = []
+    for raw_id in raw_item_ids:
+        try:
+            parsed_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if parsed_id <= 0 or parsed_id in item_ids:
+            continue
+        item_ids.append(parsed_id)
+
+    selected_items = []
+    if item_ids:
+        selected_item_records = Item.query.filter(Item.id.in_(item_ids)).all()
+        item_lookup = {item.id: item for item in selected_item_records}
+        item_ids = [item_id for item_id in item_ids if item_id in item_lookup]
+        selected_items = [item_lookup[item_id] for item_id in item_ids]
 
     start_date = (
         datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
@@ -128,6 +146,13 @@ def view_purchase_orders():
         query = query.filter_by(received=False)
     elif status == "completed":
         query = query.filter_by(received=True)
+
+    if item_ids:
+        query = query.filter(
+            PurchaseOrder.items.any(
+                PurchaseOrderItem.item_id.in_(item_ids)
+            )
+        )
 
     if vendor_id:
         query = query.filter(PurchaseOrder.vendor_id == vendor_id)
@@ -148,6 +173,15 @@ def view_purchase_orders():
     )
 
     vendors = Vendor.query.filter_by(archived=False).all()
+    filter_items = (
+        Item.query.filter_by(archived=False)
+        .order_by(Item.name)
+        .all()
+    )
+    active_item_ids = {item.id for item in filter_items}
+    extra_item_options = [
+        item for item in selected_items if item.id not in active_item_ids
+    ]
     selected_vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
     return render_template(
         "purchase_orders/view_purchase_orders.html",
@@ -159,6 +193,10 @@ def view_purchase_orders():
         end_date=end_date_str,
         status=status,
         selected_vendor=selected_vendor,
+        filter_items=filter_items,
+        extra_item_options=extra_item_options,
+        selected_item_ids=item_ids,
+        selected_items=selected_items,
         per_page=per_page,
         pagination_args=build_pagination_args(per_page),
     )
