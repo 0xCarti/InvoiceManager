@@ -1,6 +1,6 @@
-from pathlib import Path
-
+import json
 import math
+from pathlib import Path
 
 from py_mini_racer import py_mini_racer
 
@@ -63,4 +63,40 @@ def test_parse_value_returns_nan_for_invalid_tokens():
     ctx = _load_numeric_input_context()
     value = ctx.eval('window.NumericInput.parseValue("1+foo")')
     assert isinstance(value, float) and math.isnan(value)
+
+
+def test_parse_value_returns_nan_for_date_like_strings():
+    ctx = _load_numeric_input_context()
+    date_values = [
+        "2024-07-01",
+        "07/01/2024",
+        "2024/07/01",
+    ]
+    for date_value in date_values:
+        result = ctx.eval(
+            f'window.NumericInput.parseValue({json.dumps(date_value)})'
+        )
+        assert isinstance(result, float) and math.isnan(result)
+
+
+def test_parse_value_does_not_mutate_inputs_for_date_like_strings():
+    ctx = _load_numeric_input_context()
+    date_values = [
+        "2024-07-01",
+        "07/01/2024",
+        "2024/07/01",
+    ]
+    for date_value in date_values:
+        ctx.eval(
+            f"""
+            (function () {{
+              var input = new window.HTMLInputElement();
+              input.value = {json.dumps(date_value)};
+              window.__dateParseResult = window.NumericInput.parseValue(input);
+              window.__dateValueAfterParse = input.value;
+            }})()
+            """
+        )
+        assert ctx.eval('isNaN(window.__dateParseResult)')
+        assert ctx.eval('window.__dateValueAfterParse') == date_value
 
