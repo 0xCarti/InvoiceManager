@@ -255,9 +255,9 @@ def _calculate_department_usage(
     if product_ids:
         products = (
             Product.query.options(
-                selectinload(Product.recipe_items).selectinload(
-                    ProductRecipeItem.item
-                ),
+                selectinload(Product.recipe_items)
+                .selectinload(ProductRecipeItem.item)
+                .selectinload(Item.units),
                 selectinload(Product.recipe_items).selectinload(
                     ProductRecipeItem.unit
                 ),
@@ -279,6 +279,41 @@ def _calculate_department_usage(
     overall_unmapped: set[str] = set()
     overall_skipped: set[str] = set()
     department_reports: list[dict] = []
+
+    def build_usage_row(item: Item, base_quantity: float) -> dict:
+        converted_qty, report_unit = convert_quantity_for_reporting(
+            base_quantity, item.base_unit, conversions
+        )
+        cost_each = convert_cost_for_reporting(
+            float(item.cost or 0.0), item.base_unit, conversions
+        )
+        total_cost = converted_qty * cost_each
+
+        units = getattr(item, "units", None) or []
+        receiving_unit = next(
+            (unit for unit in units if unit.receiving_default), None
+        )
+        receiving_unit_name = None
+        receiving_quantity = None
+        if receiving_unit is not None:
+            receiving_unit_name = receiving_unit.name or None
+            factor = float(receiving_unit.factor or 0.0)
+            if factor:
+                receiving_quantity = base_quantity / factor
+
+        return {
+            "item_id": item.id,
+            "item_name": item.name,
+            "quantity": converted_qty,
+            "unit": get_unit_label(report_unit),
+            "cost_each": cost_each,
+            "total_cost": total_cost,
+            "base_quantity": base_quantity,
+            "base_unit": item.base_unit,
+            "base_unit_label": get_unit_label(item.base_unit),
+            "receiving_unit": receiving_unit_name,
+            "receiving_quantity": receiving_quantity,
+        }
 
     for department in payload.get("departments", []):
         department_name = department.get("department_name") or ""
@@ -344,37 +379,22 @@ def _calculate_department_usage(
                     continue
                 entry = dept_items.setdefault(
                     item.id,
-                    {"item": item, "quantity": 0.0},
+                    {"item": item, "base_quantity": 0.0},
                 )
-                entry["quantity"] += base_quantity
+                entry["base_quantity"] += base_quantity
 
         department_items_output: list[dict] = []
         for entry in dept_items.values():
             item = entry["item"]
-            quantity = entry["quantity"]
-            converted_qty, report_unit = convert_quantity_for_reporting(
-                quantity, item.base_unit, conversions
-            )
-            cost_each = convert_cost_for_reporting(
-                float(item.cost or 0.0), item.base_unit, conversions
-            )
-            total_cost = converted_qty * cost_each
-            dept_total_cost += total_cost
-            department_items_output.append(
-                {
-                    "item_id": item.id,
-                    "item_name": item.name,
-                    "quantity": converted_qty,
-                    "unit": get_unit_label(report_unit),
-                    "cost_each": cost_each,
-                    "total_cost": total_cost,
-                }
-            )
+            base_quantity = entry["base_quantity"]
+            usage_row = build_usage_row(item, base_quantity)
+            dept_total_cost += usage_row["total_cost"]
+            department_items_output.append(usage_row)
             overall_entry = overall_items.setdefault(
                 item.id,
-                {"item": item, "quantity": 0.0},
+                {"item": item, "base_quantity": 0.0},
             )
-            overall_entry["quantity"] += quantity
+            overall_entry["base_quantity"] += base_quantity
 
         department_items_output.sort(key=lambda row: row["item_name"].lower())
         include_department = bool(department_items_output) or not only_mapped
@@ -397,25 +417,10 @@ def _calculate_department_usage(
     overall_total_cost = 0.0
     for entry in overall_items.values():
         item = entry["item"]
-        quantity = entry["quantity"]
-        converted_qty, report_unit = convert_quantity_for_reporting(
-            quantity, item.base_unit, conversions
-        )
-        cost_each = convert_cost_for_reporting(
-            float(item.cost or 0.0), item.base_unit, conversions
-        )
-        total_cost = converted_qty * cost_each
-        overall_total_cost += total_cost
-        overall_items_output.append(
-            {
-                "item_id": item.id,
-                "item_name": item.name,
-                "quantity": converted_qty,
-                "unit": get_unit_label(report_unit),
-                "cost_each": cost_each,
-                "total_cost": total_cost,
-            }
-        )
+        base_quantity = entry["base_quantity"]
+        usage_row = build_usage_row(item, base_quantity)
+        overall_total_cost += usage_row["total_cost"]
+        overall_items_output.append(usage_row)
 
     overall_items_output.sort(key=lambda row: row["item_name"].lower())
     overall_summary = {"items": overall_items_output, "total_cost": overall_total_cost}

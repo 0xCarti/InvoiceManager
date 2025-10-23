@@ -172,6 +172,10 @@
                                 <th scope="col">Item</th>
                                 <th scope="col">Quantity</th>
                                 <th scope="col">Unit</th>
+                                <th scope="col">Base Quantity</th>
+                                <th scope="col">Base Unit</th>
+                                <th scope="col">Receiving Quantity</th>
+                                <th scope="col">Receiving Unit</th>
                                 <th scope="col">Cost Each</th>
                                 <th scope="col">Total Cost</th>
                             </tr>
@@ -182,6 +186,22 @@
                                     <th scope="row">{{ item.item_name }}</th>
                                     <td>{{ '%.2f' | format(item.quantity) }}</td>
                                     <td>{{ item.unit or 'N/A' }}</td>
+                                    <td>
+                                        {% if item.base_quantity is not none %}
+                                            {{ '%.2f' | format(item.base_quantity) }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.base_unit_label or 'N/A' }}</td>
+                                    <td>
+                                        {% if item.receiving_quantity is not none %}
+                                            {{ '%.2f' | format(item.receiving_quantity) }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.receiving_unit or 'N/A' }}</td>
                                     <td>{{ '%.2f' | format(item.cost_each) }}</td>
                                     <td>{{ '%.2f' | format(item.total_cost) }}</td>
                                 </tr>
@@ -214,6 +234,10 @@
                                 <th scope="col">Item</th>
                                 <th scope="col">Quantity</th>
                                 <th scope="col">Unit</th>
+                                <th scope="col">Base Quantity</th>
+                                <th scope="col">Base Unit</th>
+                                <th scope="col">Receiving Quantity</th>
+                                <th scope="col">Receiving Unit</th>
                                 <th scope="col">Cost Each</th>
                                 <th scope="col">Total Cost</th>
                             </tr>
@@ -224,6 +248,22 @@
                                     <th scope="row">{{ item.item_name }}</th>
                                     <td>{{ '%.2f' | format(item.quantity) }}</td>
                                     <td>{{ item.unit or 'N/A' }}</td>
+                                    <td>
+                                        {% if item.base_quantity is not none %}
+                                            {{ '%.2f' | format(item.base_quantity) }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.base_unit_label or 'N/A' }}</td>
+                                    <td>
+                                        {% if item.receiving_quantity is not none %}
+                                            {{ '%.2f' | format(item.receiving_quantity) }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.receiving_unit or 'N/A' }}</td>
                                     <td>{{ '%.2f' | format(item.cost_each) }}</td>
                                     <td>{{ '%.2f' | format(item.total_cost) }}</td>
                                 </tr>
