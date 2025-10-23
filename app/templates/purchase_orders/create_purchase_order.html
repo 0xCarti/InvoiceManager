@@ -64,8 +64,12 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/purchase_order_form.js') }}"></script>
+<script src="{{ url_for('static', filename='js/date_pickers.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
+    initDatePickers({
+        fieldSelectors: ['#{{ form.order_date.id }}', '#{{ form.expected_date.id }}']
+    });
     initPurchaseOrderForm({
         container: document.getElementById('items'),
         addRowButton: document.getElementById('add-item'),
