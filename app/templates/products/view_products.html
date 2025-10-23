@@ -325,6 +325,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const salesGlSelect = document.getElementById('sales_gl_code_id');
+    if (salesGlSelect) {
+        const emptyOption = salesGlSelect.querySelector('option[value=""]');
+        const syncSalesGlSelectionState = () => {
+            const hasNonEmptySelection = Array.from(salesGlSelect.selectedOptions || [])
+                .some(option => option.value.trim() !== '');
+            if (hasNonEmptySelection) {
+                if (emptyOption) {
+                    emptyOption.selected = false;
+                }
+            } else if (emptyOption) {
+                emptyOption.selected = true;
+            }
+        };
+        salesGlSelect.addEventListener('change', () => {
+            syncSalesGlSelectionState();
+        });
+        syncSalesGlSelectionState();
+    }
+
     const form = document.getElementById('create-product-form');
     if (form) {
         form.addEventListener('submit', function(e) {
