@@ -145,6 +145,17 @@
                             </div>
                         </div>
                         <div class="row g-3 mb-3">
+                            <div class="col-12">
+                                <label for="item_id" class="form-label">Items</label>
+                                <select id="item_id" name="item_id" class="form-select" multiple size="8">
+                                    {% for itm in items %}
+                                    <option value="{{ itm.id }}" {% if itm.id in selected_item_ids %}selected{% endif %}>{{ itm.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">Use Ctrl (Windows) or Command (macOS) to select multiple items.</div>
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
                             <div class="col-md-6">
                                 <label for="start_date" class="form-label">Start Date</label>
                                 <input type="date" id="start_date" name="start_date" class="form-control" value="{{ start_date or '' }}">
@@ -175,6 +186,9 @@
     {% endif %}
     {% if active_location %}
     <div class="mb-3"><strong>Filtering by Location:</strong> {{ active_location.name }}</div>
+    {% endif %}
+    {% if selected_item_names %}
+    <div class="mb-3"><strong>Filtering by Items:</strong> {{ selected_item_names | join(', ') }}</div>
     {% endif %}
     {% if start_date or end_date %}
     <div class="mb-3"><strong>Filtering by Date:</strong>

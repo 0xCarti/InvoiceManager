@@ -1,3 +1,4 @@
+import datetime
 import re
 
 from werkzeug.security import generate_password_hash
@@ -42,6 +43,23 @@ def extract_selected_option(page: str, select_id: str) -> str:
     )
     assert option_match is not None, f"No selected option found for {select_id}"
     return option_match.group(1) or option_match.group(2)
+
+
+def extract_selected_options(page: str, select_id: str):
+    select_pattern = rf'<select[^>]*id="{re.escape(select_id)}"[^>]*>(.*?)</select>'
+    select_match = re.search(select_pattern, page, re.DOTALL)
+    assert select_match is not None, f"Select {select_id} not found"
+    options_html = select_match.group(1)
+    selected_values = []
+    for match in re.finditer(
+        r'<option[^>]*value="([^"]*)"[^>]*>(.*?)</option>',
+        options_html,
+        re.DOTALL,
+    ):
+        option_html = match.group(0)
+        if "selected" in option_html:
+            selected_values.append(match.group(1))
+    return selected_values
 
 
 def setup_purchase(app):
@@ -1468,3 +1486,119 @@ def test_invoice_retains_item_and_unit_names_after_unit_removed(client, app):
         assert inv_item.unit is None
         assert inv_item.item_name == "Part"
         assert inv_item.unit_name == "each"
+
+
+def test_view_purchase_invoices_item_filters(client, app):
+    with app.app_context():
+        user = User(
+            email="filter@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        vendor = Vendor(first_name="Filter", last_name="Vendor")
+        location = Location(name="Filter Warehouse")
+        item_alpha = Item(name="Item Alpha", base_unit="each")
+        item_beta = Item(name="Item Beta", base_unit="each")
+        item_gamma = Item(name="Item Gamma", base_unit="each")
+        db.session.add_all(
+            [user, vendor, location, item_alpha, item_beta, item_gamma]
+        )
+        db.session.commit()
+
+        invoice_definitions = [
+            ("INV-A", [item_alpha]),
+            ("INV-B", [item_beta]),
+            ("INV-C", [item_gamma]),
+        ]
+        for index, (invoice_number, invoice_items) in enumerate(
+            invoice_definitions, start=1
+        ):
+            po = PurchaseOrder(
+                vendor_id=vendor.id,
+                user_id=user.id,
+                vendor_name=f"{vendor.first_name} {vendor.last_name}",
+                order_date=datetime.date(2024, 1, index),
+                expected_date=datetime.date(2024, 1, index + 1),
+                delivery_charge=0,
+                received=True,
+            )
+            db.session.add(po)
+            db.session.flush()
+            invoice = PurchaseInvoice(
+                purchase_order_id=po.id,
+                user_id=user.id,
+                location_id=location.id,
+                vendor_name=f"{vendor.first_name} {vendor.last_name}",
+                location_name=location.name,
+                received_date=datetime.date(2024, 2, index),
+                invoice_number=invoice_number,
+            )
+            db.session.add(invoice)
+            db.session.flush()
+            for position, item in enumerate(invoice_items):
+                db.session.add(
+                    PurchaseInvoiceItem(
+                        invoice=invoice,
+                        position=position,
+                        item_id=item.id,
+                        item_name=item.name,
+                        quantity=1,
+                        cost=10 + index,
+                    )
+                )
+        db.session.commit()
+
+        user_email = user.email
+        alpha_id = item_alpha.id
+        beta_id = item_beta.id
+        gamma_id = item_gamma.id
+        alpha_name = item_alpha.name
+        gamma_name = item_gamma.name
+
+    with client:
+        login(client, user_email, "pass")
+
+        resp = client.get(
+            "/purchase_invoices",
+            query_string=[("item_id", str(alpha_id))],
+        )
+        assert resp.status_code == 200
+        page = resp.get_data(as_text=True)
+        assert "INV-A" in page
+        assert "INV-B" not in page
+        assert "INV-C" not in page
+        selected = extract_selected_options(page, "item_id")
+        assert selected == [str(alpha_id)]
+
+        resp = client.get(
+            "/purchase_invoices",
+            query_string=[
+                ("item_id", str(alpha_id)),
+                ("item_id", str(gamma_id)),
+            ],
+        )
+        assert resp.status_code == 200
+        page = resp.get_data(as_text=True)
+        assert "INV-A" in page
+        assert "INV-B" not in page
+        assert "INV-C" in page
+        selected = extract_selected_options(page, "item_id")
+        assert set(selected) == {str(alpha_id), str(gamma_id)}
+        assert "Filtering by Items:" in page
+        assert alpha_name in page
+        assert gamma_name in page
+
+        resp = client.get(
+            "/purchase_invoices",
+            query_string=[
+                ("item_id", "not-a-number"),
+                ("item_id", str(beta_id)),
+            ],
+        )
+        assert resp.status_code == 200
+        page = resp.get_data(as_text=True)
+        assert "INV-A" not in page
+        assert "INV-B" in page
+        assert "INV-C" not in page
+        selected = extract_selected_options(page, "item_id")
+        assert selected == [str(beta_id)]
