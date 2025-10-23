@@ -316,6 +316,38 @@
 </div>
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
+    function initializeLastSoldBeforePicker(root) {
+        const context = root || document;
+        if (typeof flatpickr !== 'function') {
+            return;
+        }
+        const input = context.querySelector('#last_sold_before');
+        if (!input) {
+            return;
+        }
+        if (!input._flatpickr) {
+            flatpickr(input, {
+                dateFormat: 'Y-m-d',
+                allowInput: true
+            });
+            return;
+        }
+        if (input.value) {
+            input._flatpickr.setDate(input.value, false, 'Y-m-d');
+        } else {
+            input._flatpickr.clear();
+        }
+    }
+
+    initializeLastSoldBeforePicker(document);
+
+    const filterModalEl = document.getElementById('filterModal');
+    if (filterModalEl) {
+        filterModalEl.addEventListener('shown.bs.modal', function() {
+            initializeLastSoldBeforePicker(filterModalEl);
+        });
+    }
+
     const selectAllProducts = document.getElementById('select-all-products');
     if (selectAllProducts) {
         selectAllProducts.addEventListener('click', function() {
