@@ -393,6 +393,7 @@
     <script src="{{ url_for('static', filename='js/table-sort.js') }}"></script>
     <script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
     <script src="{{ url_for('static', filename='js/security.js') }}" defer></script>
+    {% block scripts %}{% endblock %}
 </body>
 
 </html>
