@@ -948,6 +948,29 @@ def view_purchase_invoices():
         flash("Invalid date range: start cannot be after end.", "error")
         return redirect(url_for("purchase.view_purchase_invoices"))
 
+    raw_item_ids = request.args.getlist("item_id")
+    selected_item_ids = []
+    seen_item_ids = set()
+    for raw_item_id in raw_item_ids:
+        try:
+            parsed_id = int(raw_item_id)
+        except (TypeError, ValueError):
+            continue
+        if parsed_id in seen_item_ids:
+            continue
+        seen_item_ids.add(parsed_id)
+        selected_item_ids.append(parsed_id)
+
+    items = Item.query.order_by(Item.name).all()
+    item_lookup = {item.id: item for item in items}
+    selected_items = [
+        item_lookup[item_id]
+        for item_id in selected_item_ids
+        if item_id in item_lookup
+    ]
+    selected_item_ids = [item.id for item in selected_items]
+    selected_item_names = [item.name for item in selected_items]
+
     query = PurchaseInvoice.query.options(
         selectinload(PurchaseInvoice.purchase_order).selectinload(PurchaseOrder.vendor),
         selectinload(PurchaseInvoice.items)
@@ -973,6 +996,12 @@ def view_purchase_invoices():
         query = query.filter(PurchaseInvoice.received_date >= start_date)
     if end_date:
         query = query.filter(PurchaseInvoice.received_date <= end_date)
+    if selected_item_ids:
+        query = query.filter(
+            PurchaseInvoice.items.any(
+                PurchaseInvoiceItem.item_id.in_(selected_item_ids)
+            )
+        )
 
     invoices = query.order_by(
         PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc()
@@ -996,6 +1025,10 @@ def view_purchase_invoices():
         end_date=end_date_str,
         active_vendor=active_vendor,
         active_location=active_location,
+        items=items,
+        selected_items=selected_items,
+        selected_item_ids=selected_item_ids,
+        selected_item_names=selected_item_names,
         per_page=per_page,
         pagination_args=build_pagination_args(per_page),
     )
