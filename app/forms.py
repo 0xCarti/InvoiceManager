@@ -1046,15 +1046,15 @@ class POItemForm(FlaskForm):
 
 class PurchaseOrderForm(FlaskForm):
     vendor = SelectField("Vendor", coerce=int, validators=[DataRequired()])
-    order_date = DateField(
+    order_date = FlexibleDateField(
         "Order Date",
         validators=[DataRequired()],
-        render_kw={"type": "date"},
+        render_kw={"data-flatpickr": "1", "autocomplete": "off"},
     )
-    expected_date = DateField(
+    expected_date = FlexibleDateField(
         "Expected Delivery Date",
         validators=[DataRequired()],
-        render_kw={"type": "date"},
+        render_kw={"data-flatpickr": "1", "autocomplete": "off"},
     )
     delivery_charge = DecimalField(
         "Delivery Charge", validators=[Optional()], default=0
@@ -1099,8 +1099,11 @@ class InvoiceItemReceiveForm(FlaskForm):
 
 class ReceiveInvoiceForm(FlaskForm):
     invoice_number = StringField("Invoice Number", validators=[Optional()])
-    received_date = DateField(
-        "Received Date", validators=[DataRequired()], default=date.today
+    received_date = FlexibleDateField(
+        "Received Date",
+        validators=[DataRequired()],
+        default=date.today,
+        render_kw={"data-flatpickr": "1", "autocomplete": "off"},
     )
     location_id = SelectField(
         "Location", coerce=int, validators=[DataRequired()] 

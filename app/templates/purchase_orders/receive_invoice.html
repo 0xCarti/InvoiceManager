@@ -129,6 +129,7 @@
         <button type="submit" class="btn btn-primary mt-3">Submit</button>
     </form>
 </div>
+<script src="{{ url_for('static', filename='js/date_pickers.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
     const departmentDefaults = {{ department_defaults|tojson }};
     const itemOptions = `<option value="">Select Item</option>{% for val, label in form.items[0].item.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
@@ -137,6 +138,10 @@
     let itemIndex = {{ form.items|length }};
     const departmentField = document.getElementById('department');
     const invoiceLocationField = document.getElementById('location_id');
+
+    initDatePickers({
+        fieldSelectors: ['#{{ form.received_date.id }}']
+    });
 
     function applyDepartmentDefault(department, { skipIfSet = false } = {}) {
         if (!invoiceLocationField) {

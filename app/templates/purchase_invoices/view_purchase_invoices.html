@@ -158,11 +158,11 @@
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
                                 <label for="start_date" class="form-label">Start Date</label>
-                                <input type="date" id="start_date" name="start_date" class="form-control" value="{{ start_date or '' }}">
+                                <input type="text" id="start_date" name="start_date" class="form-control" data-flatpickr autocomplete="off" value="{{ start_date or '' }}">
                             </div>
                             <div class="col-md-6">
                                 <label for="end_date" class="form-label">End Date</label>
-                                <input type="date" id="end_date" name="end_date" class="form-control" value="{{ end_date or '' }}">
+                                <input type="text" id="end_date" name="end_date" class="form-control" data-flatpickr autocomplete="off" value="{{ end_date or '' }}">
                             </div>
                         </div>
                     </form>
@@ -306,4 +306,16 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/date_pickers.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    initDatePickers({
+        modalSelectors: ['#filterModal']
+    });
+});
+</script>
 {% endblock %}
