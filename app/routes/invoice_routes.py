@@ -187,7 +187,13 @@ def view_invoice(invoice_id):
             if invoice_product.product
             else invoice_product.product_name
         )
-        invoice_lines.append((invoice_product, name))
+        tax_flags = ""
+        if invoice_product.line_gst > 0:
+            tax_flags += "G"
+        if invoice_product.line_pst > 0:
+            tax_flags += "P"
+
+        invoice_lines.append((invoice_product, name, tax_flags))
 
     total = subtotal + gst_total + pst_total
 
