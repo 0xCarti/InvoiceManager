@@ -27,15 +27,17 @@
                         <th>Product Name</th>
                         <th>Quantity</th>
                         <th>Price</th>
+                        <th>Tax</th>
                         <th>Total</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for invoice_product, name in invoice_lines %}
+                    {% for invoice_product, name, tax_flags in invoice_lines %}
                     <tr>
                         <td>{{ name }}</td>
                         <td>{{ invoice_product.quantity }}</td>
                         <td>${{ "%.2f"|format(invoice_product.unit_price) }}</td>
+                        <td>{{ tax_flags }}</td>
                         <td>${{ "%.2f"|format(invoice_product.line_subtotal + invoice_product.line_pst) }}</td>
                     </tr>
                     {% endfor %}
