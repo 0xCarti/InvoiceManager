@@ -116,8 +116,8 @@
                     <form id="filter-form" method="get">
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
-                                <label for="invoice_id" class="form-label">Invoice ID</label>
-                                <input type="number" id="invoice_id" name="invoice_id" class="form-control" value="{{ invoice_id or '' }}">
+                                <label for="invoice_number" class="form-label">Invoice #</label>
+                                <input type="text" id="invoice_number" name="invoice_number" class="form-control" value="{{ invoice_number or '' }}">
                             </div>
                             <div class="col-md-6">
                                 <label for="po_number" class="form-label">PO Number</label>
@@ -164,8 +164,8 @@
             </div>
         </div>
     </div>
-    {% if invoice_id %}
-    <div class="mb-3"><strong>Filtering by Invoice ID:</strong> {{ invoice_id }}</div>
+    {% if invoice_number %}
+    <div class="mb-3"><strong>Filtering by Invoice #:</strong> {{ invoice_number }}</div>
     {% endif %}
     {% if po_number %}
     <div class="mb-3"><strong>Filtering by PO Number:</strong> {{ po_number }}</div>

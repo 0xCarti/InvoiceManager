@@ -881,7 +881,11 @@ def view_purchase_invoices():
     """List all received purchase invoices."""
     page = request.args.get("page", 1, type=int)
     per_page = get_per_page()
-    invoice_id = request.args.get("invoice_id", type=int)
+    invoice_number = request.args.get("invoice_number")
+    if invoice_number is not None:
+        invoice_number = invoice_number.strip()
+    if not invoice_number:
+        invoice_number = None
     po_number = request.args.get("po_number", type=int)
     vendor_id = request.args.get("vendor_id", type=int)
     location_id = request.args.get("location_id", type=int)
@@ -917,8 +921,10 @@ def view_purchase_invoices():
         selectinload(PurchaseInvoice.items)
         .selectinload(PurchaseInvoiceItem.purchase_gl_code),
     )
-    if invoice_id:
-        query = query.filter(PurchaseInvoice.id == invoice_id)
+    if invoice_number:
+        query = query.filter(
+            PurchaseInvoice.invoice_number.ilike(f"%{invoice_number}%")
+        )
     if po_number:
         query = query.filter(PurchaseInvoice.purchase_order_id == po_number)
     if vendor_id:
@@ -944,7 +950,7 @@ def view_purchase_invoices():
         invoices=invoices,
         vendors=vendors,
         locations=locations,
-        invoice_id=invoice_id,
+        invoice_number=invoice_number,
         po_number=po_number,
         vendor_id=vendor_id,
         location_id=location_id,
