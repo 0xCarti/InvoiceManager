@@ -29,8 +29,8 @@
 
 {% if state_token %}
     <div class="card mb-4">
-        <div class="card-header">Map Products</div>
-        <div class="card-body">
+        <div class="card-header" data-role="collapse-toggle" data-target="map-products" role="button" tabindex="0" aria-expanded="false">Map Products</div>
+        <div class="card-body d-none" id="map-products">
             {% if filename %}
                 <p class="mb-3"><strong>Source file:</strong> {{ filename }}</p>
             {% endif %}
@@ -116,8 +116,8 @@
 
     {% if resolved_entries %}
         <div class="card mb-4">
-            <div class="card-header">Current Mappings</div>
-            <div class="card-body">
+            <div class="card-header" data-role="collapse-toggle" data-target="current-mappings" role="button" tabindex="0" aria-expanded="false">Current Mappings</div>
+            <div class="card-body d-none" id="current-mappings">
                 <ul class="mb-0 ps-3">
                     {% for entry in resolved_entries %}
                         <li>
@@ -162,8 +162,8 @@
 
 {% if report_overall %}
     <div class="card mb-4">
-        <div class="card-header">Overall Stock Usage</div>
-        <div class="card-body">
+        <div class="card-header" data-role="collapse-toggle" data-target="overall-usage" role="button" tabindex="0" aria-expanded="false">Overall Stock Usage</div>
+        <div class="card-body d-none" id="overall-usage">
             {% if report_overall['items'] %}
                 <div class="table-responsive">
                     <table class="table table-striped">
@@ -199,13 +199,13 @@
 
 {% for department in report_departments %}
     <div class="card mb-4">
-        <div class="card-header">
+        <div class="card-header" data-role="collapse-toggle" data-target="department-{{ loop.index }}" role="button" tabindex="0" aria-expanded="false">
             {{ department.department_name }}
             {% if department.gl_code %}
                 <small class="text-muted">({{ department.gl_code }})</small>
             {% endif %}
         </div>
-        <div class="card-body">
+        <div class="card-body d-none" id="department-{{ loop.index }}">
             {% if department['items'] %}
                 <div class="table-responsive">
                     <table class="table table-striped">
@@ -265,6 +265,7 @@
 
 {% block scripts %}
     {{ super() }}
+    <script src="{{ url_for('static', filename='js/department_sales_forecast_sections.js') }}"></script>
     {% if pending_entries %}
         <script src="{{ url_for('static', filename='js/terminal_sales_mapping.js') }}"></script>
     {% endif %}
