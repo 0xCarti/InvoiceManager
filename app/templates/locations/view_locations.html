@@ -32,6 +32,23 @@
     {% elif archived == 'all' %}
     <div class="mb-3"><strong>Viewing:</strong> All locations</div>
     {% endif %}
+    {% if spoilage_filter == 'spoilage' %}
+    <div class="mb-3"><strong>Spoilage Filter:</strong> Spoilage only</div>
+    {% elif spoilage_filter == 'non_spoilage' %}
+    <div class="mb-3"><strong>Spoilage Filter:</strong> Non-spoilage only</div>
+    {% endif %}
+    {% set menu_filters = namespace(values=[]) %}
+    {% if include_no_menu %}
+        {% set menu_filters.values = menu_filters.values + ['No Menu'] %}
+    {% endif %}
+    {% for menu in menus %}
+        {% if menu.id in selected_menu_ids %}
+            {% set menu_filters.values = menu_filters.values + [menu.name] %}
+        {% endif %}
+    {% endfor %}
+    {% if menu_filters.values %}
+    <div class="mb-3"><strong>Menus:</strong> {{ menu_filters.values | join(', ') }}</div>
+    {% endif %}
     <div class="table-responsive">
     <table class="table sortable" id="locations-table">
         <thead>
@@ -134,6 +151,40 @@
                                 <option value="all" {% if archived == 'all' %}selected{% endif %}>All</option>
                             </select>
                         </div>
+                        <div class="col-md-6">
+                            <label class="form-label d-block">Spoilage</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="spoilage" id="spoilage-all" value="all" {% if spoilage_filter == 'all' %}checked{% endif %}>
+                                <label class="form-check-label" for="spoilage-all">All locations</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="spoilage" id="spoilage-only" value="spoilage" {% if spoilage_filter == 'spoilage' %}checked{% endif %}>
+                                <label class="form-check-label" for="spoilage-only">Spoilage only</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="spoilage" id="spoilage-non" value="non_spoilage" {% if spoilage_filter == 'non_spoilage' %}checked{% endif %}>
+                                <label class="form-check-label" for="spoilage-non">Non-spoilage only</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label d-block" for="menu-filter-options">Menus</label>
+                        {% if menus %}
+                        <div id="menu-filter-options" class="border rounded p-2" style="max-height: 250px; overflow-y: auto;">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="menu-option-none" name="menu_ids" value="0" {% if include_no_menu %}checked{% endif %}>
+                                <label class="form-check-label" for="menu-option-none">No Menu</label>
+                            </div>
+                            {% for menu in menus %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="menu-option-{{ menu.id }}" name="menu_ids" value="{{ menu.id }}" {% if menu.id in selected_menu_ids %}checked{% endif %}>
+                                <label class="form-check-label" for="menu-option-{{ menu.id }}">{{ menu.name }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">No menus available.</p>
+                        {% endif %}
                     </div>
                 </form>
             </div>

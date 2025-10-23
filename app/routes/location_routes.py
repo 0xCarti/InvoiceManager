@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from flask_login import login_required
 
 from app import db
+from sqlalchemy import or_
 from sqlalchemy.orm import selectinload
 
 from app.forms import (
@@ -581,6 +582,24 @@ def view_locations():
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
     archived = request.args.get("archived", "active")
+    raw_menu_ids = request.args.getlist("menu_ids")
+    spoilage_filter = request.args.get("spoilage", "all")
+
+    include_no_menu = False
+    menu_ids: set[int] = set()
+    for raw_value in raw_menu_ids:
+        try:
+            menu_id = int(raw_value)
+        except (TypeError, ValueError):
+            continue
+        if menu_id == 0:
+            include_no_menu = True
+        else:
+            menu_ids.add(menu_id)
+
+    valid_spoilage_filters = {"all", "spoilage", "non_spoilage"}
+    if spoilage_filter not in valid_spoilage_filters:
+        spoilage_filter = "all"
 
     query = Location.query.options(selectinload(Location.current_menu))
     if archived == "active":
@@ -598,9 +617,27 @@ def view_locations():
         else:
             query = query.filter(Location.name.like(f"%{name_query}%"))
 
+    if include_no_menu and menu_ids:
+        query = query.filter(
+            or_(
+                Location.current_menu_id.in_(menu_ids),
+                Location.current_menu_id.is_(None),
+            )
+        )
+    elif include_no_menu:
+        query = query.filter(Location.current_menu_id.is_(None))
+    elif menu_ids:
+        query = query.filter(Location.current_menu_id.in_(menu_ids))
+
+    if spoilage_filter == "spoilage":
+        query = query.filter(Location.is_spoilage.is_(True))
+    elif spoilage_filter == "non_spoilage":
+        query = query.filter(Location.is_spoilage.is_(False))
+
     locations = query.order_by(Location.name).paginate(
         page=page, per_page=per_page
     )
+    menus = Menu.query.order_by(Menu.name).all()
     delete_form = DeleteForm()
     return render_template(
         "locations/view_locations.html",
@@ -609,6 +646,10 @@ def view_locations():
         name_query=name_query,
         match_mode=match_mode,
         archived=archived,
+        menus=menus,
+        selected_menu_ids=menu_ids,
+        include_no_menu=include_no_menu,
+        spoilage_filter=spoilage_filter,
         per_page=per_page,
         pagination_args=build_pagination_args(per_page),
     )

@@ -200,6 +200,89 @@ def test_edit_location_without_menu_preserves_products(client, app):
         assert stand_items[0].item_id == expected_item_id
 
 
+def test_view_locations_filters_by_menu_and_spoilage(client, app):
+    email, _, base_menu_id = setup_data(app)
+    with app.app_context():
+        menu_primary = db.session.get(Menu, base_menu_id)
+        menu_secondary = Menu(name="FilterTest Menu B", description="Secondary options")
+        db.session.add(menu_secondary)
+        db.session.commit()
+        loc_with_menu = Location(
+            name="FilterTest Alpha",
+            current_menu=menu_primary,
+            is_spoilage=False,
+        )
+        loc_spoilage = Location(
+            name="FilterTest Beta",
+            current_menu=menu_secondary,
+            is_spoilage=True,
+        )
+        loc_no_menu = Location(
+            name="FilterTest Gamma",
+            is_spoilage=False,
+        )
+        db.session.add_all([loc_with_menu, loc_spoilage, loc_no_menu])
+        db.session.commit()
+        menu_primary_id = menu_primary.id
+        menu_secondary_id = menu_secondary.id
+
+    def fetch_context(query_params):
+        with captured_templates(app) as templates:
+            response = client.get("/locations", query_string=query_params)
+            assert response.status_code == 200
+        assert templates
+        return templates[-1][1]
+
+    with client:
+        login(client, email, "pass")
+
+        base_query = [
+            ("name_query", "FilterTest"),
+            ("match_mode", "startswith"),
+        ]
+
+        context = fetch_context(base_query + [("menu_ids", str(menu_primary_id))])
+        names = [location.name for location in context["locations"].items]
+        assert names == ["FilterTest Alpha"]
+        assert context["selected_menu_ids"] == {menu_primary_id}
+        assert context["include_no_menu"] is False
+
+        context = fetch_context(base_query + [("menu_ids", "0")])
+        names = [location.name for location in context["locations"].items]
+        assert names == ["FilterTest Gamma"]
+        assert context["selected_menu_ids"] == set()
+        assert context["include_no_menu"] is True
+
+        context = fetch_context(
+            base_query
+            + [("menu_ids", str(menu_primary_id)), ("menu_ids", "0")]
+        )
+        names = {location.name for location in context["locations"].items}
+        assert names == {"FilterTest Alpha", "FilterTest Gamma"}
+        assert context["selected_menu_ids"] == {menu_primary_id}
+        assert context["include_no_menu"] is True
+
+        context = fetch_context(base_query + [("spoilage", "spoilage")])
+        names = [location.name for location in context["locations"].items]
+        assert names == ["FilterTest Beta"]
+        assert context["spoilage_filter"] == "spoilage"
+
+        context = fetch_context(base_query + [("spoilage", "non_spoilage")])
+        names = {location.name for location in context["locations"].items}
+        assert names == {"FilterTest Alpha", "FilterTest Gamma"}
+        assert context["spoilage_filter"] == "non_spoilage"
+
+        context = fetch_context(
+            base_query
+            + [
+                ("menu_ids", str(menu_secondary_id)),
+                ("spoilage", "spoilage"),
+            ]
+        )
+        names = [location.name for location in context["locations"].items]
+        assert names == ["FilterTest Beta"]
+
+
 def test_location_filters(client, app):
     email, *_ = setup_data(app)
     with app.app_context():
