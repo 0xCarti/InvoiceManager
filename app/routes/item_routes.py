@@ -14,6 +14,7 @@ from flask import (
 from flask_login import login_required
 from werkzeug.utils import secure_filename
 
+from sqlalchemy import or_
 from sqlalchemy.orm import selectinload
 
 from app import db
@@ -60,14 +61,22 @@ def view_items():
         return redirect(url_for("item.view_items", **session["item_filters"]))
 
     if request.args:
-        session["item_filters"] = request.args.to_dict(flat=False)
+        filters = request.args.to_dict(flat=False)
+        if "gl_code_id" in filters and "purchase_gl_code_id" not in filters:
+            filters["purchase_gl_code_id"] = filters.pop("gl_code_id")
+        session["item_filters"] = filters
 
     page = request.args.get("page", 1, type=int)
     per_page = get_per_page()
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
-    gl_code_ids = [
-        int(x) for x in request.args.getlist("gl_code_id") if x.isdigit()
+    purchase_gl_code_params = request.args.getlist("purchase_gl_code_id")
+    if not purchase_gl_code_params:
+        purchase_gl_code_params = request.args.getlist("gl_code_id")
+    purchase_gl_code_ids = [
+        int(x)
+        for x in purchase_gl_code_params
+        if x.isdigit()
     ]
     archived = request.args.get("archived", "active")
     base_unit = request.args.get("base_unit")
@@ -98,8 +107,8 @@ def view_items():
         else:
             query = query.filter(Item.name.like(f"%{name_query}%"))
 
-    if gl_code_ids:
-        query = query.filter(Item.gl_code_id.in_(gl_code_ids))
+    if purchase_gl_code_ids:
+        query = query.filter(Item.purchase_gl_code_id.in_(purchase_gl_code_ids))
 
     if vendor_ids:
         query = (
@@ -137,7 +146,13 @@ def view_items():
         extra_pagination["archived"] = archived
     create_form = ItemForm()
     bulk_delete_form = CSRFOnlyForm()
-    gl_codes = GLCode.query.order_by(GLCode.code).all()
+    purchase_gl_codes = (
+        GLCode.query.filter(
+            or_(GLCode.code.like("5%"), GLCode.code.like("6%"))
+        )
+        .order_by(GLCode.code)
+        .all()
+    )
     base_units = [
         u
         for (u,) in db.session.query(Item.base_unit)
@@ -145,8 +160,10 @@ def view_items():
         .order_by(Item.base_unit)
     ]
     vendors = Vendor.query.order_by(Vendor.first_name, Vendor.last_name).all()
-    active_gl_codes = (
-        GLCode.query.filter(GLCode.id.in_(gl_code_ids)).all() if gl_code_ids else []
+    active_purchase_gl_codes = (
+        GLCode.query.filter(GLCode.id.in_(purchase_gl_code_ids)).all()
+        if purchase_gl_code_ids
+        else []
     )
     active_vendors = (
         Vendor.query.filter(Vendor.id.in_(vendor_ids)).all() if vendor_ids else []
@@ -158,13 +175,13 @@ def view_items():
         bulk_delete_form=bulk_delete_form,
         name_query=name_query,
         match_mode=match_mode,
-        gl_codes=gl_codes,
-        gl_code_ids=gl_code_ids,
+        purchase_gl_codes=purchase_gl_codes,
+        purchase_gl_code_ids=purchase_gl_code_ids,
         base_units=base_units,
         base_unit=base_unit,
         cost_min=cost_min,
         cost_max=cost_max,
-        active_gl_codes=active_gl_codes,
+        active_purchase_gl_codes=active_purchase_gl_codes,
         archived=archived,
         vendors=vendors,
         vendor_ids=vendor_ids,

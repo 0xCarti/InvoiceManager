@@ -118,11 +118,11 @@
                         </div>
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
-                                <label for="gl_code_id" class="form-label">GL Code</label>
-                                <select id="gl_code_id" name="gl_code_id" class="form-select" multiple>
-                                    <option value="" {% if not gl_code_ids %}selected{% endif %}>All GL Codes</option>
-                                    {% for gl in gl_codes %}
-                                    <option value="{{ gl.id }}" {% if gl.id in gl_code_ids %}selected{% endif %}>{{ gl.code }} - {{ gl.description }}</option>
+                                <label for="purchase_gl_code_id" class="form-label">Purchase GL Code</label>
+                                <select id="purchase_gl_code_id" name="purchase_gl_code_id" class="form-select" multiple>
+                                    <option value="" {% if not purchase_gl_code_ids %}selected{% endif %}>All Purchase GL Codes</option>
+                                    {% for gl in purchase_gl_codes %}
+                                    <option value="{{ gl.id }}" {% if gl.id in purchase_gl_code_ids %}selected{% endif %}>{{ gl.code }} - {{ gl.description }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -175,9 +175,9 @@
             </div>
         </div>
     </div>
-    {% if active_gl_codes %}
+    {% if active_purchase_gl_codes %}
     <div class="mb-3">
-        <strong>Filtering by GL Code:</strong> {{ active_gl_codes | map(attribute='code') | join(', ') }}
+        <strong>Filtering by Purchase GL Code:</strong> {{ active_purchase_gl_codes | map(attribute='code') | join(', ') }}
     </div>
     {% endif %}
     {% if base_unit %}
