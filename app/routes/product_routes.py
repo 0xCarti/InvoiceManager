@@ -12,7 +12,7 @@ from flask import (
     url_for,
 )
 from flask_login import login_required
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import aliased, selectinload
 
 from app import db
@@ -134,8 +134,20 @@ def view_products():
         query = query.filter(Product.price >= price_min)
     if price_max is not None:
         query = query.filter(Product.price <= price_max)
-    last_sold_expr = func.max(
-        func.coalesce(Invoice.date_created, TerminalSale.sold_at)
+    invoice_last_sold = func.max(Invoice.date_created)
+    terminal_sale_last_sold = func.max(TerminalSale.sold_at)
+    bind = db.session.get_bind()
+    if bind is not None and bind.dialect.name == "sqlite":
+        greatest_last_sold = case(
+            (invoice_last_sold >= terminal_sale_last_sold, invoice_last_sold),
+            else_=terminal_sale_last_sold,
+        )
+    else:
+        greatest_last_sold = func.greatest(
+            invoice_last_sold, terminal_sale_last_sold
+        )
+    last_sold_expr = func.coalesce(
+        greatest_last_sold, invoice_last_sold, terminal_sale_last_sold
     )
     query = (
         query.outerjoin(InvoiceProduct, Product.invoice_products)
