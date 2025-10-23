@@ -3,6 +3,10 @@
 
   const EXPRESSION_ALLOWED_RE = /^[0-9+\-*/().\s]+$/;
   const PLAIN_NUMBER_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
+  const DATE_FORMAT_PATTERNS = [
+    /^\d{4}[-/]\d{2}[-/]\d{2}$/,
+    /^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/,
+  ];
 
   const OPERATOR_PRECEDENCE = {
     '+': 1,
@@ -262,6 +266,22 @@
     return evaluateRpn(rpn);
   }
 
+  function looksLikeDate(text) {
+    if (typeof text !== 'string') {
+      return false;
+    }
+    const normalized = text.replace(/\s+/g, '');
+    if (!normalized) {
+      return false;
+    }
+    for (let i = 0; i < DATE_FORMAT_PATTERNS.length; i += 1) {
+      if (DATE_FORMAT_PATTERNS[i].test(normalized)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function extractExpression(text) {
     if (typeof text !== 'string') {
       return null;
@@ -278,6 +298,10 @@
     }
 
     if (!trimmed) {
+      return null;
+    }
+
+    if (looksLikeDate(trimmed)) {
       return null;
     }
 
