@@ -1048,7 +1048,7 @@ def add_terminal_sale(event_id, el_id):
         flash("This location is closed and cannot accept new sales.")
         return redirect(url_for("event.view_event", event_id=event_id))
 
-    if el.confirmed and request.method != "GET":
+    if el.confirmed:
         flash("This location is closed and cannot accept new sales.")
         return redirect(url_for("event.view_event", event_id=event_id))
 
