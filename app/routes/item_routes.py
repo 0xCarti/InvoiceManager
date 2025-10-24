@@ -62,8 +62,6 @@ def view_items():
 
     if request.args:
         filters = request.args.to_dict(flat=False)
-        if "gl_code_id" in filters and "purchase_gl_code_id" not in filters:
-            filters["purchase_gl_code_id"] = filters.pop("gl_code_id")
         session["item_filters"] = filters
 
     page = request.args.get("page", 1, type=int)
@@ -71,13 +69,13 @@ def view_items():
     name_query = request.args.get("name_query", "")
     match_mode = request.args.get("match_mode", "contains")
     purchase_gl_code_params = request.args.getlist("purchase_gl_code_id")
-    if not purchase_gl_code_params:
-        purchase_gl_code_params = request.args.getlist("gl_code_id")
+    sales_gl_code_params = request.args.getlist("gl_code_id")
     purchase_gl_code_ids = [
         int(x)
         for x in purchase_gl_code_params
         if x.isdigit()
     ]
+    sales_gl_code_ids = [int(x) for x in sales_gl_code_params if x.isdigit()]
     archived = request.args.get("archived", "active")
     base_unit = request.args.get("base_unit")
     cost_min = request.args.get("cost_min", type=float)
@@ -109,6 +107,9 @@ def view_items():
 
     if purchase_gl_code_ids:
         query = query.filter(Item.purchase_gl_code_id.in_(purchase_gl_code_ids))
+
+    if sales_gl_code_ids:
+        query = query.filter(Item.gl_code_id.in_(sales_gl_code_ids))
 
     if vendor_ids:
         query = (
@@ -165,6 +166,22 @@ def view_items():
         if purchase_gl_code_ids
         else []
     )
+    active_sales_gl_codes = (
+        GLCode.query.filter(GLCode.id.in_(sales_gl_code_ids)).all()
+        if sales_gl_code_ids
+        else []
+    )
+    active_gl_code_filter = None
+    if active_purchase_gl_codes:
+        active_gl_code_filter = {
+            "label": "Purchase",
+            "codes": active_purchase_gl_codes,
+        }
+    elif active_sales_gl_codes:
+        active_gl_code_filter = {
+            "label": "Inventory",
+            "codes": active_sales_gl_codes,
+        }
     active_vendors = (
         Vendor.query.filter(Vendor.id.in_(vendor_ids)).all() if vendor_ids else []
     )
@@ -182,6 +199,8 @@ def view_items():
         cost_min=cost_min,
         cost_max=cost_max,
         active_purchase_gl_codes=active_purchase_gl_codes,
+        active_sales_gl_codes=active_sales_gl_codes,
+        active_gl_code_filter=active_gl_code_filter,
         archived=archived,
         vendors=vendors,
         vendor_ids=vendor_ids,
