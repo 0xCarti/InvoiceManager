@@ -167,9 +167,10 @@
             </div>
         </div>
     {% endcall %}
-    {% if active_purchase_gl_codes %}
+    {% if active_gl_code_filter %}
     <div class="mb-3">
-        <strong>Filtering by Purchase GL Code:</strong> {{ active_purchase_gl_codes | map(attribute='code') | join(', ') }}
+        <strong>Filtering by {{ active_gl_code_filter.label }} GL Code:</strong>
+        {{ active_gl_code_filter.codes | map(attribute='code') | join(', ') }}
     </div>
     {% endif %}
     {% if base_unit %}
