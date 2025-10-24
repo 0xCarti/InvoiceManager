@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from 'macros/column_visibility.html' import column_visibility_dropdown %}
+{% from 'macros/filter_modal.html' import filter_modal %}
 
 {% block content %}
 <div class="container mt-5">
@@ -45,57 +46,59 @@
 </div>
 
 <!-- Filter Modal -->
-<div class="modal fade" id="filterModal" tabindex="-1" aria-labelledby="filterModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form id="filterForm">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="filterModalLabel">Filters</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            {{ form.start_date.label }}
-                            {{ form.start_date(class='form-control') }}
-                        </div>
-                        <div class="col-12">
-                            {{ form.end_date.label }}
-                            {{ form.end_date(class='form-control') }}
-                        </div>
-                        <div class="col-12">
-                            {{ form.purchase_gl_code.label }}
-                            {{ form.purchase_gl_code(class='form-select') }}
-                        </div>
-                        <div class="col-12">
-                            {{ form.items.label }}
-                            {{ form.items(class='form-select', multiple=True) }}
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Apply</button>
-                </div>
-            </form>
+{% call filter_modal(
+    modal_id='filterModal',
+    title='Filters',
+    form_id='filterForm',
+    action=url_for('spoilage.view_spoilage'),
+    method='get',
+    reset_url=url_for('spoilage.view_spoilage'),
+    ajax=True,
+    target_selector='#spoilage-table-body'
+) %}
+    <div class="row g-3">
+        <div class="col-12">
+            {{ form.start_date.label }}
+            {{ form.start_date(class='form-control') }}
+        </div>
+        <div class="col-12">
+            {{ form.end_date.label }}
+            {{ form.end_date(class='form-control') }}
+        </div>
+        <div class="col-12">
+            {{ form.purchase_gl_code.label }}
+            {{ form.purchase_gl_code(class='form-select') }}
+        </div>
+        <div class="col-12">
+            {{ form.items.label }}
+            {{ form.items(class='form-select', multiple=True) }}
         </div>
     </div>
-</div>
+{% endcall %}
 
 <script nonce="{{ csp_nonce }}">
     $(function () {
-        $('#filterForm').on('submit', function (e) {
+        $('[data-filter-modal-form="ajax"]').on('submit', function (e) {
             e.preventDefault();
-            var params = $(this).serialize();
+            const $form = $(this);
+            const params = $form.serialize();
             $.ajax({
-                url: '{{ url_for('spoilage.view_spoilage') }}',
-                type: 'GET',
+                url: $form.attr('action'),
+                type: ($form.attr('method') || 'get').toUpperCase(),
                 data: params,
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
                 success: function (response) {
-                    $('#spoilage-table-body').html(response);
-                    var modalEl = document.getElementById('filterModal');
-                    var modal = bootstrap.Modal.getInstance(modalEl);
-                    modal.hide();
+                    const targetSelector = $form.data('filter-target');
+                    if (targetSelector) {
+                        $(targetSelector).html(response);
+                    }
+                    const modalEl = $form.closest('[data-filter-modal]').get(0);
+                    if (modalEl) {
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        if (modal) {
+                            modal.hide();
+                        }
+                    }
                 }
             });
         });

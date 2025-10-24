@@ -1,0 +1,26 @@
+{% macro filter_modal(modal_id, title, form_id, action='', method='get', reset_url=None, ajax=False, modal_dialog_class='', target_selector=None, submit_label='Apply') %}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-hidden="true" data-filter-modal{% if ajax %} data-filter-modal-ajax="true"{% endif %}>
+  <div class="modal-dialog{% if modal_dialog_class %} {{ modal_dialog_class }}{% endif %}">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{{ title }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="{{ form_id }}" method="{{ method|lower }}"{% if action %} action="{{ action }}"{% endif %}{% if ajax %} data-filter-modal-form="ajax"{% endif %}{% if target_selector %} data-filter-target="{{ target_selector }}"{% endif %}>
+        <div class="modal-body">
+          {{ caller() }}
+        </div>
+        <div class="modal-footer">
+          {% if reset_url %}
+          <a href="{{ reset_url }}" class="btn btn-outline-secondary" data-filter-modal-reset>Reset</a>
+          {% else %}
+          <button type="reset" class="btn btn-outline-secondary" data-filter-modal-reset>Reset</button>
+          {% endif %}
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endmacro %}

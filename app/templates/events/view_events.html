@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from 'macros/column_visibility.html' import column_visibility_dropdown %}
+{% from 'macros/filter_modal.html' import filter_modal %}
 {% block content %}
 <h2>Events</h2>
 <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
@@ -43,69 +44,63 @@
 </div>
 
 <!-- Filter Modal -->
-<div class="modal fade" id="filterModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Filter Events</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <form id="filterForm">
-        <div class="modal-body">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <div class="mb-3">
-                <label for="filter-type" class="form-label">Event Type</label>
-                <select name="type" id="filter-type" class="form-control">
-                    <option value="">All Types</option>
-                    {% for val, label in event_types %}
-                        <option value="{{ val }}" {% if filter_values.type == val %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label for="filter-name-contains" class="form-label">Name Contains</label>
-                <input type="text" name="name_contains" id="filter-name-contains" class="form-control" value="{{ filter_values.name_contains }}" placeholder="e.g. Summer" />
-            </div>
-            <div class="mb-3">
-                <label for="filter-name-not-contains" class="form-label">Name Does Not Contain</label>
-                <input type="text" name="name_not_contains" id="filter-name-not-contains" class="form-control" value="{{ filter_values.name_not_contains }}" placeholder="e.g. Test" />
-            </div>
-            <div class="row g-2 mb-3">
-                <div class="col-sm-6">
-                    <label for="filter-start-date-from" class="form-label">Start Date From</label>
-                    <input type="date" name="start_date_from" id="filter-start-date-from" class="form-control" value="{{ filter_values.start_date_from }}" />
-                </div>
-                <div class="col-sm-6">
-                    <label for="filter-start-date-to" class="form-label">Start Date To</label>
-                    <input type="date" name="start_date_to" id="filter-start-date-to" class="form-control" value="{{ filter_values.start_date_to }}" />
-                </div>
-            </div>
-            <div class="row g-2 mb-3">
-                <div class="col-sm-6">
-                    <label for="filter-end-date-from" class="form-label">End Date From</label>
-                    <input type="date" name="end_date_from" id="filter-end-date-from" class="form-control" value="{{ filter_values.end_date_from }}" />
-                </div>
-                <div class="col-sm-6">
-                    <label for="filter-end-date-to" class="form-label">End Date To</label>
-                    <input type="date" name="end_date_to" id="filter-end-date-to" class="form-control" value="{{ filter_values.end_date_to }}" />
-                </div>
-            </div>
-            <div class="mb-3">
-                <label for="filter-closed-status" class="form-label">Status</label>
-                <select name="closed_status" id="filter-closed-status" class="form-control">
-                    <option value="" {% if not filter_values.closed_status %}selected{% endif %}>All</option>
-                    <option value="open" {% if filter_values.closed_status == 'open' %}selected{% endif %}>Open</option>
-                    <option value="closed" {% if filter_values.closed_status == 'closed' %}selected{% endif %}>Closed</option>
-                </select>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button type="submit" class="btn btn-primary">Apply</button>
-        </div>
-      </form>
+{% call filter_modal(
+    modal_id='filterModal',
+    title='Filter Events',
+    form_id='filterForm',
+    action=url_for('event.filter_events_ajax'),
+    method='post',
+    reset_url=url_for('event.view_events'),
+    ajax=True,
+    target_selector='#events-table-body'
+) %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="mb-3">
+        <label for="filter-type" class="form-label">Event Type</label>
+        <select name="type" id="filter-type" class="form-control">
+            <option value="">All Types</option>
+            {% for val, label in event_types %}
+                <option value="{{ val }}" {% if filter_values.type == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
     </div>
-  </div>
-</div>
+    <div class="mb-3">
+        <label for="filter-name-contains" class="form-label">Name Contains</label>
+        <input type="text" name="name_contains" id="filter-name-contains" class="form-control" value="{{ filter_values.name_contains }}" placeholder="e.g. Summer" />
+    </div>
+    <div class="mb-3">
+        <label for="filter-name-not-contains" class="form-label">Name Does Not Contain</label>
+        <input type="text" name="name_not_contains" id="filter-name-not-contains" class="form-control" value="{{ filter_values.name_not_contains }}" placeholder="e.g. Test" />
+    </div>
+    <div class="row g-2 mb-3">
+        <div class="col-sm-6">
+            <label for="filter-start-date-from" class="form-label">Start Date From</label>
+            <input type="date" name="start_date_from" id="filter-start-date-from" class="form-control" value="{{ filter_values.start_date_from }}" />
+        </div>
+        <div class="col-sm-6">
+            <label for="filter-start-date-to" class="form-label">Start Date To</label>
+            <input type="date" name="start_date_to" id="filter-start-date-to" class="form-control" value="{{ filter_values.start_date_to }}" />
+        </div>
+    </div>
+    <div class="row g-2 mb-3">
+        <div class="col-sm-6">
+            <label for="filter-end-date-from" class="form-label">End Date From</label>
+            <input type="date" name="end_date_from" id="filter-end-date-from" class="form-control" value="{{ filter_values.end_date_from }}" />
+        </div>
+        <div class="col-sm-6">
+            <label for="filter-end-date-to" class="form-label">End Date To</label>
+            <input type="date" name="end_date_to" id="filter-end-date-to" class="form-control" value="{{ filter_values.end_date_to }}" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label for="filter-closed-status" class="form-label">Status</label>
+        <select name="closed_status" id="filter-closed-status" class="form-control">
+            <option value="" {% if not filter_values.closed_status %}selected{% endif %}>All</option>
+            <option value="open" {% if filter_values.closed_status == 'open' %}selected{% endif %}>Open</option>
+            <option value="closed" {% if filter_values.closed_status == 'closed' %}selected{% endif %}>Closed</option>
+        </select>
+    </div>
+{% endcall %}
 
 <!-- Create Event Modal -->
 <div class="modal fade" id="createEventModal" tabindex="-1" aria-hidden="true">
@@ -192,13 +187,22 @@ $(function(){
         });
     }
 
-    $('#filterForm').on('submit', function(e){
+    $('[data-filter-modal-form="ajax"]').on('submit', function(e){
         e.preventDefault();
-        $.post('{{ url_for('event.filter_events_ajax') }}', $(this).serialize(), function(data){
-            $('#events-table-body').html(data);
-            const modalEl = document.getElementById('filterModal');
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            if (modal) { modal.hide(); }
+        const $form = $(this);
+        $.ajax({
+            url: $form.attr('action'),
+            method: $form.attr('method') || 'post',
+            data: $form.serialize(),
+            success: function(data){
+                const targetSelector = $form.data('filter-target');
+                if (targetSelector) {
+                    $(targetSelector).html(data);
+                }
+                const modalEl = $form.closest('[data-filter-modal]').get(0);
+                const modal = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+                if (modal) { modal.hide(); }
+            }
         });
     });
     const $createEventForm = $('#createEventForm');
