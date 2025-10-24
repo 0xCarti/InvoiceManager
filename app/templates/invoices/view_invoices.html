@@ -33,13 +33,13 @@
     </div>
 
     <div class="table-responsive">
-    <table class="table" id="invoiceTable">
+    <table class="table sortable" id="invoiceTable">
         <thead>
             <tr>
-                <th scope="col" class="col-invoice-number">Invoice Number</th>
+                <th scope="col" class="col-invoice-number" data-type="number">Invoice Number</th>
                 <th scope="col" class="col-invoice-date">Date</th>
                 <th scope="col" class="col-invoice-customer">Customer Name</th>
-                <th scope="col" class="col-invoice-actions">Actions</th>
+                <th scope="col" class="col-invoice-actions" data-sortable="false">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -165,6 +165,9 @@ $(document).ready(function(){
             </tr>`;
             tbody.append(row);
         });
+        if (window.TableSort && typeof window.TableSort.bind === 'function') {
+            window.TableSort.bind(document.getElementById('invoiceTable'));
+        }
     }
 
     let currentFilters = '';

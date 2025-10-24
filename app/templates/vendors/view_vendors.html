@@ -25,13 +25,13 @@
         </div>
     </div>
     <div class="table-responsive">
-    <table class="table" id="vendorTable">
+    <table class="table sortable" id="vendorTable">
         <thead>
             <tr>
                 <th scope="col" class="col-vendor-name">Name</th>
                 <th scope="col" class="col-vendor-gst">GST Exempt</th>
                 <th scope="col" class="col-vendor-pst">PST Exempt</th>
-                <th scope="col" class="col-vendor-actions">Actions</th>
+                <th scope="col" class="col-vendor-actions" data-sortable="false">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -105,7 +105,11 @@ function bindVendorForm() {
             body: formData
         }).then(r => r.json()).then(data => {
             if (data.success) {
-                document.querySelector('#vendorTable tbody').insertAdjacentHTML('beforeend', data.row_html);
+                const table = document.getElementById('vendorTable');
+                table.querySelector('tbody').insertAdjacentHTML('beforeend', data.row_html);
+                if (window.TableSort && typeof window.TableSort.bind === 'function') {
+                    window.TableSort.bind(table);
+                }
                 bootstrap.Modal.getInstance(modalEl).hide();
             } else if (data.form_html) {
                 modalEl.querySelector('.modal-body').innerHTML = data.form_html;

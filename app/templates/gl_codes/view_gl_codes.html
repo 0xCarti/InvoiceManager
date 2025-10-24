@@ -58,12 +58,12 @@
     <p>Filtering by Description: {{ description_query }}</p>
     {% endif %}
     <div class="table-responsive">
-    <table class="table" id="gl-codes-table">
+    <table class="table sortable" id="gl-codes-table">
         <thead>
             <tr>
                 <th scope="col" class="col-gl-code">Code</th>
                 <th scope="col" class="col-gl-description">Description</th>
-                <th scope="col" class="col-gl-actions">Actions</th>
+                <th scope="col" class="col-gl-actions" data-sortable="false">Actions</th>
             </tr>
         </thead>
         <tbody id="gl-code-body">
@@ -195,9 +195,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const row = document.createElement('tr');
                 row.setAttribute('data-id', data.id);
                 row.innerHTML = `
-                    <td class="gl-code">${data.code}</td>
-                    <td class="gl-description">${data.description}</td>
-                    <td>
+                    <td class="col-gl-code gl-code">${data.code}</td>
+                    <td class="col-gl-description gl-description">${data.description}</td>
+                    <td class="col-gl-actions">
                         <button type="button" class="btn btn-secondary btn-sm edit-gl-code" data-id="${data.id}" data-code="${data.code}" data-description="${data.description}">Edit</button>
                         <form action="/gl_codes/${data.id}/delete" method="post" class="d-inline">
                             <input type="hidden" name="csrf_token" value="${csrfToken}">
@@ -206,6 +206,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     </td>`;
                 tbody.prepend(row);
                 attachEditHandlers();
+            }
+            if (window.TableSort && typeof window.TableSort.bind === 'function') {
+                window.TableSort.bind(document.getElementById('gl-codes-table'));
             }
             modal.hide();
         }).catch(err => {

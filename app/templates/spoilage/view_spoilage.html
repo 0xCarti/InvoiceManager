@@ -27,13 +27,13 @@
     </div>
 
     <div class="table-responsive">
-        <table class="table" id="spoilage-table">
+        <table class="table sortable" id="spoilage-table">
             <thead>
                 <tr>
                     <th scope="col" class="col-spoilage-date">Date</th>
                     <th scope="col" class="col-spoilage-from">From Location</th>
                     <th scope="col" class="col-spoilage-item">Item</th>
-                    <th scope="col" class="col-spoilage-quantity">Quantity</th>
+                    <th scope="col" class="col-spoilage-quantity" data-type="number">Quantity</th>
                     <th scope="col" class="col-spoilage-gl">Purchase GL Code</th>
                 </tr>
             </thead>
@@ -96,6 +96,9 @@
                     var modalEl = document.getElementById('filterModal');
                     var modal = bootstrap.Modal.getInstance(modalEl);
                     modal.hide();
+                    if (window.TableSort && typeof window.TableSort.bind === 'function') {
+                        window.TableSort.bind(document.getElementById('spoilage-table'));
+                    }
                 }
             });
         });
