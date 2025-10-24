@@ -60,8 +60,23 @@ def view_items():
     if not request.args and "item_filters" in session:
         return redirect(url_for("item.view_items", **session["item_filters"]))
 
+    def _coerce_int_list(values):
+        coerced = []
+        for raw in values:
+            try:
+                coerced.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        return coerced
+
     if request.args:
         filters = request.args.to_dict(flat=False)
+        purchase_filter_values = filters.get("purchase_gl_code_id", [])
+        if purchase_filter_values:
+            coerced_purchase_ids = _coerce_int_list(purchase_filter_values)
+            filters["purchase_gl_code_id"] = [
+                str(value) for value in coerced_purchase_ids
+            ]
         session["item_filters"] = filters
 
     page = request.args.get("page", 1, type=int)
@@ -70,11 +85,7 @@ def view_items():
     match_mode = request.args.get("match_mode", "contains")
     purchase_gl_code_params = request.args.getlist("purchase_gl_code_id")
     sales_gl_code_params = request.args.getlist("gl_code_id")
-    purchase_gl_code_ids = [
-        int(x)
-        for x in purchase_gl_code_params
-        if x.isdigit()
-    ]
+    purchase_gl_code_ids = _coerce_int_list(purchase_gl_code_params)
     sales_gl_code_ids = [int(x) for x in sales_gl_code_params if x.isdigit()]
     archived = request.args.get("archived", "active")
     base_unit = request.args.get("base_unit")
