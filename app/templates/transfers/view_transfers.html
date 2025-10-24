@@ -29,13 +29,13 @@
         </div>
     </div>
     <div class="table-responsive">
-    <table class="table" id="transfer-table">
+    <table class="table sortable" id="transfer-table">
         <thead>
         <tr>
-            <th scope="col" class="col-transfer-id">#</th>
+            <th scope="col" class="col-transfer-id" data-type="number">#</th>
             <th scope="col" class="col-transfer-from">From Location</th>
             <th scope="col" class="col-transfer-to">To Location</th>
-            <th scope="col" class="col-transfer-actions">Actions</th>
+            <th scope="col" class="col-transfer-actions" data-sortable="false">Actions</th>
         </tr>
         </thead>
         <tbody id="transfer-table-body">
@@ -257,7 +257,11 @@
             body: new FormData(this)
         }).then(r => r.json()).then(data => {
             if(data.success){
-                document.querySelector('#transfer-table-body').insertAdjacentHTML('afterbegin', data.html);
+                const table = document.getElementById('transfer-table');
+                table.querySelector('tbody').insertAdjacentHTML('afterbegin', data.html);
+                if (window.TableSort && typeof window.TableSort.bind === 'function') {
+                    window.TableSort.bind(table);
+                }
                 attachEditEvents();
                 var modal = bootstrap.Modal.getInstance(document.getElementById('addTransferModal'));
                 modal.hide();
@@ -359,6 +363,9 @@
             if(data.success){
                 var row = document.getElementById(`transfer-row-${data.id}`);
                 row.outerHTML = data.html;
+                if (window.TableSort && typeof window.TableSort.bind === 'function') {
+                    window.TableSort.bind(document.getElementById('transfer-table'));
+                }
                 attachEditEvents();
                 var modal = bootstrap.Modal.getInstance(document.getElementById('editTransferModal'));
                 modal.hide();

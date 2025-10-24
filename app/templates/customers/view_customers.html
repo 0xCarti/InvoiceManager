@@ -85,13 +85,13 @@
     <p>Filtering by PST Exempt: {{ 'Yes' if pst_exempt == 'yes' else 'No' }}</p>
     {% endif %}
     <div class="table-responsive">
-    <table class="table" id="customerTable">
+    <table class="table sortable" id="customerTable">
         <thead>
             <tr>
                 <th scope="col" class="col-customer-name">Name</th>
                 <th scope="col" class="col-customer-gst">GST Exempt</th>
                 <th scope="col" class="col-customer-pst">PST Exempt</th>
-                <th scope="col" class="col-customer-actions">Actions</th>
+                <th scope="col" class="col-customer-actions" data-sortable="false">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -188,6 +188,9 @@
                             </form>
                         </td>`;
                     tbody.appendChild(row);
+                    if (window.TableSort && typeof window.TableSort.bind === 'function') {
+                        window.TableSort.bind(document.getElementById('customerTable'));
+                    }
                     form.reset();
                     const modalEl = document.getElementById('createCustomerModal');
                     bootstrap.Modal.getInstance(modalEl).hide();
