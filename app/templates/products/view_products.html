@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/filter_modal.html' import filter_modal %}
 
 {% block title %}View Products{% endblock %}
 
@@ -118,93 +119,84 @@
     </div>
 
     <!-- Filter Modal -->
-    <div class="modal fade" id="filterModal" tabindex="-1" aria-labelledby="filterModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="filterModalLabel">Filters</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="filter-form" method="get">
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label for="name_query" class="form-label">Name</label>
-                                <input type="text" id="name_query" name="name_query" class="form-control" placeholder="Search name" value="{{ name_query or '' }}">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="match_mode" class="form-label">Match Mode</label>
-                                <select id="match_mode" name="match_mode" class="form-select">
-                                    <option value="exact" {% if match_mode == 'exact' %}selected{% endif %}>Exact</option>
-                                    <option value="startswith" {% if match_mode == 'startswith' %}selected{% endif %}>Starts with</option>
-                                    <option value="contains" {% if match_mode == 'contains' %}selected{% endif %}>Contains</option>
-                                    <option value="not_contains" {% if match_mode == 'not_contains' %}selected{% endif %}>Does not contain</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label for="sales_gl_code_id" class="form-label">Sales GL Code</label>
-                                <select id="sales_gl_code_id" name="sales_gl_code_id" class="form-select" multiple>
-                                    <option value="" {% if not sales_gl_code_ids %}selected{% endif %}>All Sales GL Codes</option>
-                                    {% for gl in sales_gl_codes %}
-                                    <option value="{{ gl.id }}" {% if gl.id in sales_gl_code_ids %}selected{% endif %}>{{ gl.code }} - {{ gl.description }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="customer_id" class="form-label">Customer</label>
-                                <select id="customer_id" name="customer_id" class="form-select">
-                                    <option value="" {% if not customer_id %}selected{% endif %}>All Customers</option>
-                                    {% for cust in customers %}
-                                    <option value="{{ cust.id }}" {% if cust.id == customer_id %}selected{% endif %}>{{ cust.first_name }} {{ cust.last_name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label for="cost_min" class="form-label">Cost ≥</label>
-                                <input type="number" step="0.01" id="cost_min" name="cost_min" class="form-control" value="{{ cost_min if cost_min is not none else '' }}">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="cost_max" class="form-label">Cost ≤</label>
-                                <input type="number" step="0.01" id="cost_max" name="cost_max" class="form-control" value="{{ cost_max if cost_max is not none else '' }}">
-                            </div>
-                        </div>
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label for="price_min" class="form-label">Price ≥</label>
-                                <input type="number" step="0.01" id="price_min" name="price_min" class="form-control" value="{{ price_min if price_min is not none else '' }}">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="price_max" class="form-label">Price ≤</label>
-                                <input type="number" step="0.01" id="price_max" name="price_max" class="form-control" value="{{ price_max if price_max is not none else '' }}">
-                            </div>
-                        </div>
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label for="last_sold_before" class="form-label">Last Sold Before</label>
-                                <input type="text" id="last_sold_before" name="last_sold_before" class="form-control"
-                                    placeholder="YYYY-MM-DD" value="{{ last_sold_before or '' }}">
-                            </div>
-                            <div class="col-md-6 d-flex align-items-end">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="include_unsold" name="include_unsold" value="1" {% if include_unsold %}checked{% endif %}>
-                                    <label class="form-check-label" for="include_unsold">Include Unsold</label>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <a href="{{ url_for('product.view_products', reset=1) }}" class="btn btn-outline-secondary">Reset</a>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" form="filter-form" class="btn btn-primary">Apply</button>
+    {% call filter_modal(
+        'filterModal',
+        'Filters',
+        form_id='filter-form',
+        form_action=url_for('product.view_products'),
+        method='get',
+        reset_url=url_for('product.view_products', reset=1),
+        dialog_class='modal-lg'
+    ) %}
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="name_query" class="form-label">Name</label>
+                <input type="text" id="name_query" name="name_query" class="form-control" placeholder="Search name" value="{{ name_query or '' }}">
+            </div>
+            <div class="col-md-6">
+                <label for="match_mode" class="form-label">Match Mode</label>
+                <select id="match_mode" name="match_mode" class="form-select">
+                    <option value="exact" {% if match_mode == 'exact' %}selected{% endif %}>Exact</option>
+                    <option value="startswith" {% if match_mode == 'startswith' %}selected{% endif %}>Starts with</option>
+                    <option value="contains" {% if match_mode == 'contains' %}selected{% endif %}>Contains</option>
+                    <option value="not_contains" {% if match_mode == 'not_contains' %}selected{% endif %}>Does not contain</option>
+                </select>
+            </div>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="sales_gl_code_id" class="form-label">Sales GL Code</label>
+                <select id="sales_gl_code_id" name="sales_gl_code_id" class="form-select" multiple>
+                    <option value="" {% if not sales_gl_code_ids %}selected{% endif %}>All Sales GL Codes</option>
+                    {% for gl in sales_gl_codes %}
+                    <option value="{{ gl.id }}" {% if gl.id in sales_gl_code_ids %}selected{% endif %}>{{ gl.code }} - {{ gl.description }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label for="customer_id" class="form-label">Customer</label>
+                <select id="customer_id" name="customer_id" class="form-select">
+                    <option value="" {% if not customer_id %}selected{% endif %}>All Customers</option>
+                    {% for cust in customers %}
+                    <option value="{{ cust.id }}" {% if cust.id == customer_id %}selected{% endif %}>{{ cust.first_name }} {{ cust.last_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="cost_min" class="form-label">Cost ≥</label>
+                <input type="number" step="0.01" id="cost_min" name="cost_min" class="form-control" value="{{ cost_min if cost_min is not none else '' }}">
+            </div>
+            <div class="col-md-6">
+                <label for="cost_max" class="form-label">Cost ≤</label>
+                <input type="number" step="0.01" id="cost_max" name="cost_max" class="form-control" value="{{ cost_max if cost_max is not none else '' }}">
+            </div>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="price_min" class="form-label">Price ≥</label>
+                <input type="number" step="0.01" id="price_min" name="price_min" class="form-control" value="{{ price_min if price_min is not none else '' }}">
+            </div>
+            <div class="col-md-6">
+                <label for="price_max" class="form-label">Price ≤</label>
+                <input type="number" step="0.01" id="price_max" name="price_max" class="form-control" value="{{ price_max if price_max is not none else '' }}">
+            </div>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="last_sold_before" class="form-label">Last Sold Before</label>
+                <input type="text" id="last_sold_before" name="last_sold_before" class="form-control"
+                    placeholder="YYYY-MM-DD" value="{{ last_sold_before or '' }}">
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="include_unsold" name="include_unsold" value="1" {% if include_unsold %}checked{% endif %}>
+                    <label class="form-check-label" for="include_unsold">Include Unsold</label>
                 </div>
             </div>
         </div>
-    </div>
+    {% endcall %}
 
     <!-- Create Product Modal -->
     <div class="modal fade" id="createProductModal" tabindex="-1" aria-labelledby="createProductModalLabel" aria-hidden="true">
@@ -365,7 +357,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     initializeLastSoldBeforePicker(document);
 
-    const filterModalEl = document.getElementById('filterModal');
+    const filterModalEl = document.querySelector('[data-filter-modal]');
     if (filterModalEl) {
         filterModalEl.addEventListener('shown.bs.modal', function() {
             initializeLastSoldBeforePicker(filterModalEl);

@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from 'macros/column_visibility.html' import column_visibility_dropdown %}
+{% from 'macros/filter_modal.html' import filter_modal %}
 
 {% block content %}
 <div class="container mt-5">
@@ -45,63 +46,62 @@
 </div>
 
 <!-- Filter Modal -->
-<div class="modal fade" id="filterModal" tabindex="-1" aria-labelledby="filterModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form id="filterForm">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="filterModalLabel">Filters</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            {{ form.start_date.label }}
-                            {{ form.start_date(class='form-control') }}
-                        </div>
-                        <div class="col-12">
-                            {{ form.end_date.label }}
-                            {{ form.end_date(class='form-control') }}
-                        </div>
-                        <div class="col-12">
-                            {{ form.purchase_gl_code.label }}
-                            {{ form.purchase_gl_code(class='form-select') }}
-                        </div>
-                        <div class="col-12">
-                            {{ form.items.label }}
-                            {{ form.items(class='form-select', multiple=True) }}
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Apply</button>
-                </div>
-            </form>
+{% call filter_modal(
+    'filterModal',
+    'Filters',
+    form_id='filterForm',
+    form_action=url_for('spoilage.view_spoilage'),
+    method='get',
+    reset_url=url_for('spoilage.view_spoilage'),
+    ajax=True
+) %}
+    <div class="row g-3">
+        <div class="col-12">
+            {{ form.start_date.label }}
+            {{ form.start_date(class='form-control') }}
+        </div>
+        <div class="col-12">
+            {{ form.end_date.label }}
+            {{ form.end_date(class='form-control') }}
+        </div>
+        <div class="col-12">
+            {{ form.purchase_gl_code.label }}
+            {{ form.purchase_gl_code(class='form-select') }}
+        </div>
+        <div class="col-12">
+            {{ form.items.label }}
+            {{ form.items(class='form-select', multiple=True) }}
         </div>
     </div>
-</div>
+{% endcall %}
 
 <script nonce="{{ csp_nonce }}">
     $(function () {
-        $('#filterForm').on('submit', function (e) {
-            e.preventDefault();
-            var params = $(this).serialize();
-            $.ajax({
-                url: '{{ url_for('spoilage.view_spoilage') }}',
-                type: 'GET',
-                data: params,
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                success: function (response) {
-                    $('#spoilage-table-body').html(response);
-                    var modalEl = document.getElementById('filterModal');
-                    var modal = bootstrap.Modal.getInstance(modalEl);
-                    modal.hide();
-                    if (window.TableSort && typeof window.TableSort.bind === 'function') {
-                        window.TableSort.bind(document.getElementById('spoilage-table'));
+        const filterModalEl = document.querySelector('[data-filter-modal]');
+        const filterFormEl = filterModalEl ? filterModalEl.querySelector('[data-filter-form]') : null;
+        if (filterFormEl) {
+            const $filterForm = $(filterFormEl);
+            $filterForm.on('submit', function (e) {
+                e.preventDefault();
+                const params = $filterForm.serialize();
+                const action = $filterForm.attr('action') || '{{ url_for('spoilage.view_spoilage') }}';
+                const method = ($filterForm.attr('method') || 'GET').toUpperCase();
+                $.ajax({
+                    url: action,
+                    type: method,
+                    data: params,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    success: function (response) {
+                        $('#spoilage-table-body').html(response);
+                        const modal = bootstrap.Modal.getInstance(filterModalEl);
+                        if (modal) { modal.hide(); }
+                        if (window.TableSort && typeof window.TableSort.bind === 'function') {
+                            window.TableSort.bind(document.getElementById('spoilage-table'));
+                        }
                     }
-                }
+                });
             });
-        });
+        }
     });
 </script>
 {% endblock %}
