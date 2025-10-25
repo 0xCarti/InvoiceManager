@@ -18,6 +18,22 @@
         ) }}
     </div>
     <p>Report Period: {{ session.report_start_datetime }} to {{ session.report_end_datetime }}</p>
+    <p>
+        From Locations:
+        {% if from_locations %}
+            {{ from_locations | join(', ') }}
+        {% else %}
+            All locations
+        {% endif %}
+    </p>
+    <p>
+        To Locations:
+        {% if to_locations %}
+            {{ to_locations | join(', ') }}
+        {% else %}
+            All locations
+        {% endif %}
+    </p>
     <div class="table-responsive">
     <table class="table" id="transfer-report-table">
         <thead>
