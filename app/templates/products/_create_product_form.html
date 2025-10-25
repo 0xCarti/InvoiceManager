@@ -1,5 +1,13 @@
 {% set product_form_id = form_id or 'product-form' %}
+{% set form_action = form_action if form_action is defined else '' %}
+{% set embedded = embedded if embedded is defined else False %}
+{% set show_submit = show_submit if show_submit is defined else True %}
+{% set sales_field = form.sales_gl_code if form.sales_gl_code is defined else form.gl_code_id %}
+{% if not embedded %}
 <form id="{{ product_form_id }}" class="product-form" data-role="product-form" method="POST" action="{{ form_action }}">
+{% else %}
+<div id="{{ product_form_id }}" class="product-form" data-role="product-form" data-embedded="1">
+{% endif %}
     {{ form.hidden_tag() }}
     <div class="row">
         <div class="col-md-6 mb-3">
@@ -17,8 +25,13 @@
             {{ form.cost(class="form-control", id="cost") }}
         </div>
         <div class="col-md-6 mb-3">
-            <label for="{{ form.gl_code_id.id }}" class="form-label">Sales GL Code</label>
-            {{ form.gl_code_id(class="form-control") }}
+            {% if sales_field is defined and sales_field is not none %}
+                <label for="{{ sales_field.id }}" class="form-label">Sales GL Code</label>
+                {{ sales_field(class="form-control") }}
+            {% else %}
+                <label class="form-label">Sales GL Code</label>
+                <input type="text" class="form-control" value="Not configurable" disabled>
+            {% endif %}
             <div class="form-text">Revenue account recorded when this product is sold.</div>
         </div>
     </div>
@@ -70,16 +83,22 @@
     </div>
     <button type="button" class="btn btn-secondary" data-role="add-item">Add Item</button>
     <button type="button" class="btn btn-secondary" data-role="calc-cost" {% if product_id %}data-product-id="{{ product_id }}"{% endif %}>Set Cost From Recipe</button>
-    <button type="submit" class="btn btn-primary">Submit</button>
+    {% if show_submit %}
+        <button type="submit" class="btn btn-primary">Submit</button>
+    {% endif %}
+{% if not embedded %}
 </form>
+{% else %}
+</div>
+{% endif %}
 <script nonce="{{ csp_nonce }}">
 (function() {
     const scriptEl = document.currentScript;
     if (!scriptEl) {
         return;
     }
-    const form = scriptEl.previousElementSibling;
-    if (!form || form.tagName !== 'FORM') {
+    const root = scriptEl.previousElementSibling;
+    if (!root || !root.matches('[data-role="product-form"]')) {
         return;
     }
 
@@ -102,7 +121,7 @@
 
     function collectRecipeData() {
         const items = [];
-        const itemRows = form.querySelectorAll('[data-role="item-list"] .item-row');
+        const itemRows = root.querySelectorAll('[data-role="item-list"] .item-row');
         itemRows.forEach(row => {
             const itemInput = row.querySelector('.item-id');
             const quantityInput = row.querySelector('input[name$="-quantity"]');
@@ -125,8 +144,8 @@
                 quantity: quantity,
             });
         });
-        const yieldInput = form.querySelector('#recipe_yield_quantity');
-        const yieldUnitInput = form.querySelector('#recipe_yield_unit');
+        const yieldInput = root.querySelector('#recipe_yield_quantity');
+        const yieldUnitInput = root.querySelector('#recipe_yield_unit');
         return {
             items: items,
             yield_quantity: parseNumericInput(yieldInput),
@@ -135,13 +154,13 @@
     }
 
     function initializeCostButton() {
-        const btn = form.querySelector('[data-role="calc-cost"]');
+        const btn = root.querySelector('[data-role="calc-cost"]');
         if (!btn) {
             return;
         }
         btn.addEventListener('click', function() {
             const recipeData = collectRecipeData();
-            const costInput = form.querySelector('#cost');
+            const costInput = root.querySelector('#cost');
             if (!recipeData.items.length) {
                 if (costInput) {
                     costInput.value = 0;
@@ -149,7 +168,7 @@
                 return;
             }
             const headers = { 'Content-Type': 'application/json' };
-            const csrfInput = form.querySelector('input[name="csrf_token"]');
+            const csrfInput = root.querySelector('input[name="csrf_token"]');
             if (csrfInput) {
                 headers['X-CSRFToken'] = csrfInput.value;
             }
@@ -168,7 +187,7 @@
                     if (costInput && typeof data.cost !== 'undefined') {
                         costInput.value = data.cost;
                     }
-                    const yieldInput = form.querySelector('#recipe_yield_quantity');
+                    const yieldInput = root.querySelector('#recipe_yield_quantity');
                     if (yieldInput && typeof data.yield_quantity !== 'undefined') {
                         yieldInput.value = data.yield_quantity;
                     }
@@ -204,43 +223,37 @@
     }
 
     function updateItemLink(row, itemId, itemName) {
-        if (!row) {
-            return;
-        }
         const link = row.querySelector('.item-link');
         if (!link) {
             return;
         }
-        const name = (itemName || '').trim();
-        if (itemId && name) {
+        if (itemId && itemName) {
             link.href = `/items/${itemId}`;
-            link.textContent = name;
             link.classList.remove('d-none');
-            const itemInput = row.querySelector('.item-id');
-            if (itemInput) {
-                itemInput.dataset.itemName = name;
-            }
+            link.textContent = itemName;
         } else {
-            link.removeAttribute('href');
-            link.textContent = '';
+            link.href = '#';
             link.classList.add('d-none');
+            link.textContent = '';
         }
     }
 
     function createRow(idx) {
         const row = document.createElement('div');
-        row.classList.add('row', 'mb-2', 'align-items-center', 'item-row');
+        row.className = 'row mb-2 align-items-center item-row';
         row.innerHTML = `
             <div class="col position-relative">
-                <input type="hidden" name="items-${idx}-item" class="item-id" data-item-name="">
+                <input type="hidden" name="items-${idx}-item" value="" class="item-id" data-item-name="">
                 <input type="text" class="form-control item-search" placeholder="Search item..." autocomplete="off">
                 <div class="list-group item-suggestions"></div>
                 <div class="form-text mt-1">
                     <a href="#" class="item-link d-none" target="_blank" rel="noopener"></a>
                 </div>
             </div>
-            <div class="col"><select name="items-${idx}-unit" class="form-control unit-select"></select></div>
-            <div class="col"><input type="number" step="any" name="items-${idx}-quantity" class="form-control"></div>
+            <div class="col">
+                <select name="items-${idx}-unit" class="form-control unit-select"></select>
+            </div>
+            <div class="col"><input type="number" name="items-${idx}-quantity" class="form-control" step="any"></div>
             <div class="col-auto form-check d-flex align-items-center">
                 <input type="checkbox" name="items-${idx}-countable" class="form-check-input" id="items-${idx}-countable">
                 <label class="form-check-label ms-1" for="items-${idx}-countable">${countableLabel}</label>
@@ -251,8 +264,8 @@
     }
 
     function initializeAddItem() {
-        const addItemBtn = form.querySelector('[data-role="add-item"]');
-        const itemList = form.querySelector('[data-role="item-list"]');
+        const addItemBtn = root.querySelector('[data-role="add-item"]');
+        const itemList = root.querySelector('[data-role="item-list"]');
         if (!addItemBtn || !itemList) {
             return;
         }
@@ -265,7 +278,7 @@
     }
 
     function initializeItemListInteractions() {
-        const itemList = form.querySelector('[data-role="item-list"]');
+        const itemList = root.querySelector('[data-role="item-list"]');
         if (!itemList) {
             return;
         }

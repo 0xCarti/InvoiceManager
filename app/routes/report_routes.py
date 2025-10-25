@@ -26,6 +26,7 @@ from app.forms import (
     PurchaseInventorySummaryForm,
     ProductRecipeReportForm,
     ProductSalesReportForm,
+    QuickProductForm,
     ReceivedInvoiceReportForm,
     VendorInvoiceReportForm,
 )
@@ -241,6 +242,46 @@ def _merge_product_mappings(
             resolved[normalized] = {"status": "unmapped", "product_id": None}
 
     return resolved
+
+
+def _create_product_from_quick_form(form: QuickProductForm) -> Product:
+    cost_value = form.cost.data if form.cost.data is not None else 0.0
+    sales_gl_code_id = form.sales_gl_code.data or None
+    if sales_gl_code_id == 0:
+        sales_gl_code_id = None
+
+    yield_quantity = form.recipe_yield_quantity.data
+    if yield_quantity is None or yield_quantity <= 0:
+        yield_quantity = 1
+
+    product_obj = Product(
+        name=form.name.data,
+        price=form.price.data,
+        cost=cost_value,
+        sales_gl_code_id=sales_gl_code_id,
+        recipe_yield_quantity=float(yield_quantity),
+        recipe_yield_unit=form.recipe_yield_unit.data or None,
+    )
+    db.session.add(product_obj)
+    db.session.flush()
+
+    for item_form in form.items:
+        item_id = item_form.item.data
+        quantity = item_form.quantity.data
+        if not item_id or quantity in (None, ""):
+            continue
+        unit_id = item_form.unit.data or None
+        db.session.add(
+            ProductRecipeItem(
+                product_id=product_obj.id,
+                item_id=item_id,
+                unit_id=unit_id,
+                quantity=quantity,
+                countable=item_form.countable.data,
+            )
+        )
+
+    return product_obj
 
 
 def _calculate_department_usage(
@@ -459,6 +500,7 @@ def department_sales_forecast():
     overall_unmapped_products: list[str] = []
     overall_skipped_products: list[str] = []
     only_mapped = False
+    quick_product_forms: list[dict] = []
 
     if request.method == "POST" and request.form.get("state_token"):
         serializer = _department_sales_serializer()
@@ -500,6 +542,10 @@ def department_sales_forecast():
         manual_mappings = payload.get("manual_mappings") or {}
         updated_manual_mappings = dict(manual_mappings)
         pending_alias_updates: list[tuple[str, str, int]] = []
+        pending_creations: list[dict] = []
+        creation_step_requested = request.form.get("creation-step") == "1"
+        creation_errors = False
+        created_products: list[Product] = []
 
         for key in request.form:
             if not key.startswith("product-key-"):
@@ -513,6 +559,25 @@ def department_sales_forecast():
 
             if selection == _SKIP_SELECTION_VALUE:
                 updated_manual_mappings[normalized] = {"status": "skipped"}
+                continue
+
+            if selection == _CREATE_SELECTION_VALUE:
+                entry_totals = totals.get(normalized, {})
+                pending_creations.append(
+                    {
+                        "normalized": normalized,
+                        "display_name": entry_totals.get("display_name")
+                        or entry_totals.get("source_name")
+                        or normalized,
+                        "source_name": entry_totals.get("source_name")
+                        or entry_totals.get("display_name")
+                        or normalized,
+                        "quantity": entry_totals.get("quantity"),
+                        "sample_price": entry_totals.get("sample_price"),
+                        "departments": sorted(entry_totals.get("departments", [])),
+                    }
+                )
+                updated_manual_mappings.pop(normalized, None)
                 continue
 
             if not selection:
@@ -546,7 +611,62 @@ def department_sales_forecast():
             if not normalized.startswith("__unnamed_"):
                 pending_alias_updates.append((normalized, source_name, product.id))
 
-        if mapping_errors:
+        if pending_creations:
+            for index, creation_data in enumerate(pending_creations):
+                prefix = f"create-{index}"
+                formdata = request.form if creation_step_requested else None
+                quick_form = QuickProductForm(formdata=formdata, prefix=prefix)
+                if not creation_step_requested:
+                    quick_form.name.data = creation_data["display_name"]
+                    price_value = creation_data.get("sample_price")
+                    if price_value is not None:
+                        quick_form.price.data = _to_decimal(price_value)
+                    else:
+                        quick_form.price.data = Decimal("0.00")
+                quick_product_forms.append(
+                    {
+                        "form": quick_form,
+                        "index": index,
+                        "normalized": creation_data["normalized"],
+                        "display_name": creation_data["display_name"],
+                        "quantity": creation_data.get("quantity"),
+                        "sample_price": creation_data.get("sample_price"),
+                        "departments": creation_data.get("departments", []),
+                    }
+                )
+
+            if not creation_step_requested:
+                mapping_errors.append(
+                    "Provide details for the new products before continuing."
+                )
+            else:
+                for entry in quick_product_forms:
+                    quick_form = entry["form"]
+                    if not quick_form.validate():
+                        creation_errors = True
+                if creation_errors:
+                    mapping_errors.append(
+                        "Review the new product details and correct any errors before continuing."
+                    )
+                else:
+                    for creation_data, entry in zip(pending_creations, quick_product_forms):
+                        quick_form = entry["form"]
+                        product_obj = _create_product_from_quick_form(quick_form)
+                        source_name = creation_data.get("source_name") or product_obj.name
+                        normalized = creation_data["normalized"]
+                        updated_manual_mappings[normalized] = {
+                            "status": "manual",
+                            "product_id": product_obj.id,
+                            "source_name": source_name,
+                        }
+                        if not normalized.startswith("__unnamed_"):
+                            pending_alias_updates.append(
+                                (normalized, source_name, product_obj.id)
+                            )
+                        created_products.append(product_obj)
+                        posted_selections[normalized] = str(product_obj.id)
+
+        if mapping_errors or (pending_creations and creation_errors):
             db.session.rollback()
         else:
             payload["manual_mappings"] = updated_manual_mappings
@@ -564,8 +684,10 @@ def department_sales_forecast():
                 else:
                     alias.source_name = source_name
                     alias.product_id = product_id
-            if pending_alias_updates:
+            if pending_alias_updates or created_products:
                 db.session.commit()
+                if created_products:
+                    quick_product_forms = []
             flash("Product mappings updated.", "success")
 
     elif request.method == "POST" and form.validate_on_submit():
@@ -767,6 +889,7 @@ def department_sales_forecast():
         overall_unmapped_products=overall_unmapped_products,
         overall_skipped_products=overall_skipped_products,
         only_mapped=only_mapped,
+        quick_product_forms=quick_product_forms,
     )
 
 
