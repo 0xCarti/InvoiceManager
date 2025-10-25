@@ -17,8 +17,9 @@
             {{ form.cost(class="form-control", id="cost") }}
         </div>
         <div class="col-md-6 mb-3">
-            {{ form.gl_code_id.label(class="form-label") }}
+            <label for="{{ form.gl_code_id.id }}" class="form-label">Sales GL Code</label>
             {{ form.gl_code_id(class="form-control") }}
+            <div class="form-text">Revenue account recorded when this product is sold.</div>
         </div>
     </div>
     <div class="row">
