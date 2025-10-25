@@ -220,13 +220,17 @@ def create_product():
         yield_quantity = form.recipe_yield_quantity.data
         if yield_quantity is None or yield_quantity <= 0:
             yield_quantity = 1
+        selected_gl_code_id = form.gl_code_id.data or None
+        if selected_gl_code_id == 0:
+            selected_gl_code_id = None
+
         product = Product(
             name=form.name.data,
             price=form.price.data,
             cost=form.cost.data,  # Save cost
             gl_code=form.gl_code.data,
-            gl_code_id=form.gl_code_id.data,
-            sales_gl_code_id=form.sales_gl_code.data or None,
+            gl_code_id=selected_gl_code_id,
+            sales_gl_code_id=selected_gl_code_id,
             recipe_yield_quantity=float(yield_quantity),
             recipe_yield_unit=form.recipe_yield_unit.data or None,
         )
@@ -272,13 +276,17 @@ def ajax_create_product():
         yield_quantity = form.recipe_yield_quantity.data
         if yield_quantity is None or yield_quantity <= 0:
             yield_quantity = 1
+        selected_gl_code_id = form.gl_code_id.data or None
+        if selected_gl_code_id == 0:
+            selected_gl_code_id = None
+
         product = Product(
             name=form.name.data,
             price=form.price.data,
             cost=form.cost.data,
             gl_code=form.gl_code.data,
-            gl_code_id=form.gl_code_id.data,
-            sales_gl_code_id=form.sales_gl_code.data or None,
+            gl_code_id=selected_gl_code_id,
+            sales_gl_code_id=selected_gl_code_id,
             recipe_yield_quantity=float(yield_quantity),
             recipe_yield_unit=form.recipe_yield_unit.data or None,
         )
@@ -428,9 +436,13 @@ def edit_product(product_id):
         product.name = form.name.data
         product.price = form.price.data
         product.cost = form.cost.data or 0.0  # 👈 Update cost
+        selected_gl_code_id = form.gl_code_id.data or None
+        if selected_gl_code_id == 0:
+            selected_gl_code_id = None
+
         product.gl_code = form.gl_code.data
-        product.gl_code_id = form.gl_code_id.data
-        product.sales_gl_code_id = form.sales_gl_code.data or None
+        product.gl_code_id = selected_gl_code_id
+        product.sales_gl_code_id = selected_gl_code_id
         yield_quantity = form.recipe_yield_quantity.data
         if yield_quantity is None or yield_quantity <= 0:
             yield_quantity = 1
