@@ -18,7 +18,12 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
 
 from app import db
-from app.forms import CSRFOnlyForm, ImportItemsForm, ItemForm
+from app.forms import (
+    BulkItemUpdateForm,
+    CSRFOnlyForm,
+    ImportItemsForm,
+    ItemForm,
+)
 from app.models import (
     GLCode,
     Invoice,
@@ -246,6 +251,225 @@ def view_items():
             per_page, extra_params=extra_pagination
         ),
     )
+
+
+def _parse_selected_ids(raw_value: str) -> list[int]:
+    ids: list[int] = []
+    for chunk in raw_value.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            ids.append(int(chunk))
+        except ValueError:
+            raise ValueError("Invalid selection identifier.") from None
+    return ids
+
+
+def _render_item_bulk_form(form: BulkItemUpdateForm):
+    return render_template("items/bulk_update_form.html", form=form)
+
+
+@item.route("/items/bulk-update", methods=["GET", "POST"])
+@login_required
+def bulk_update_items():
+    """Apply updates to multiple inventory items."""
+
+    form = BulkItemUpdateForm()
+    if request.method == "GET":
+        raw_ids = request.args.getlist("ids") or request.args.getlist("id")
+        try:
+            selected_ids = [int(value) for value in raw_ids if int(value)]
+        except ValueError:
+            abort(400)
+        if not selected_ids:
+            abort(400)
+        form.selected_ids.data = ",".join(str(value) for value in selected_ids)
+        return _render_item_bulk_form(form)
+
+    if form.validate_on_submit():
+        try:
+            selected_ids = _parse_selected_ids(form.selected_ids.data or "")
+        except ValueError:
+            form.selected_ids.errors.append("Unable to determine selected items.")
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(
+                    {"success": False, "form_html": _render_item_bulk_form(form)}
+                )
+            flash("Unable to determine selected items for update.", "error")
+            return redirect(url_for("item.view_items"))
+
+        if not selected_ids:
+            form.selected_ids.errors.append("Select at least one item to update.")
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(
+                    {"success": False, "form_html": _render_item_bulk_form(form)}
+                )
+            flash("Select at least one item to update.", "error")
+            return redirect(url_for("item.view_items"))
+
+        query = (
+            Item.query.options(
+                selectinload(Item.units),
+                selectinload(Item.purchase_gl_code),
+                selectinload(Item.gl_code_rel),
+            )
+            .filter(Item.id.in_(selected_ids))
+            .order_by(Item.id)
+        )
+        items = query.all()
+        if len(items) != len(set(selected_ids)):
+            form.selected_ids.errors.append(
+                "Some selected items are no longer available."
+            )
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(
+                    {"success": False, "form_html": _render_item_bulk_form(form)}
+                )
+            flash("Some selected items are no longer available.", "error")
+            return redirect(url_for("item.view_items"))
+
+        apply_name = form.apply_name.data
+        apply_base_unit = form.apply_base_unit.data
+        apply_gl_code = form.apply_gl_code_id.data
+        apply_purchase_gl = form.apply_purchase_gl_code_id.data
+        apply_archived = form.apply_archived.data
+
+        new_name = form.name.data if apply_name else None
+        new_base_unit = form.base_unit.data if apply_base_unit else None
+        new_gl_code_id = form.gl_code_id.data if apply_gl_code else None
+        new_purchase_gl_code_id = (
+            form.purchase_gl_code_id.data if apply_purchase_gl else None
+        )
+        new_archived = form.archived.data if apply_archived else None
+
+        active_name_targets: dict[str, list[int]] = {}
+        for item_obj in items:
+            final_name = new_name if apply_name else item_obj.name
+            final_archived = new_archived if apply_archived else item_obj.archived
+            if final_name and not final_archived:
+                active_name_targets.setdefault(final_name, []).append(item_obj.id)
+
+        conflicting_names = {
+            name for name, values in active_name_targets.items() if len(values) > 1
+        }
+        if conflicting_names:
+            form.name.errors.append(
+                "Cannot activate multiple items with the same name: "
+                + ", ".join(sorted(conflicting_names))
+            )
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(
+                    {"success": False, "form_html": _render_item_bulk_form(form)}
+                )
+            flash(
+                "Unable to activate multiple items with identical names.",
+                "error",
+            )
+            return redirect(url_for("item.view_items"))
+
+        if active_name_targets:
+            existing_conflicts = (
+                Item.query.filter(
+                    Item.name.in_(active_name_targets.keys()),
+                    Item.archived.is_(False),
+                    ~Item.id.in_(selected_ids),
+                )
+                .with_entities(Item.name)
+                .distinct()
+                .all()
+            )
+            if existing_conflicts:
+                names = ", ".join(sorted(name for (name,) in existing_conflicts))
+                form.name.errors.append(
+                    f"Active item already exists with name(s): {names}."
+                )
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify(
+                        {
+                            "success": False,
+                            "form_html": _render_item_bulk_form(form),
+                        }
+                    )
+                flash(
+                    "Active items already exist with the requested names.",
+                    "error",
+                )
+                return redirect(url_for("item.view_items"))
+
+        if apply_base_unit:
+            allowed_units = {value for value, _ in BASE_UNIT_CHOICES}
+            if new_base_unit not in allowed_units:
+                form.base_unit.errors.append("Select a valid base unit.")
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify(
+                        {
+                            "success": False,
+                            "form_html": _render_item_bulk_form(form),
+                        }
+                    )
+                flash("Select a valid base unit to apply.", "error")
+                return redirect(url_for("item.view_items"))
+
+        with db.session.begin_nested():
+            for item_obj in items:
+                if apply_name:
+                    item_obj.name = new_name
+                if apply_base_unit:
+                    item_obj.base_unit = new_base_unit
+                if apply_gl_code:
+                    if new_gl_code_id:
+                        item_obj.gl_code_id = new_gl_code_id or None
+                        if item_obj.gl_code_id:
+                            code = db.session.get(GLCode, item_obj.gl_code_id)
+                            item_obj.gl_code = code.code if code else None
+                        else:
+                            item_obj.gl_code = None
+                    else:
+                        item_obj.gl_code_id = None
+                        item_obj.gl_code = None
+                if apply_purchase_gl:
+                    item_obj.purchase_gl_code_id = (
+                        new_purchase_gl_code_id or None
+                    )
+                if apply_archived:
+                    item_obj.archived = new_archived
+        db.session.commit()
+
+        refreshed_items = (
+            Item.query.options(
+                selectinload(Item.units),
+                selectinload(Item.purchase_gl_code),
+                selectinload(Item.gl_code_rel),
+            )
+            .filter(Item.id.in_(selected_ids))
+            .order_by(Item.id)
+            .all()
+        )
+
+        log_activity(
+            "Bulk updated items: " + ", ".join(str(item.id) for item in refreshed_items)
+        )
+
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            rows = [
+                {
+                    "id": item_obj.id,
+                    "html": render_template(
+                        "items/_item_row.html", item=item_obj
+                    ),
+                }
+                for item_obj in refreshed_items
+            ]
+            return jsonify({"success": True, "rows": rows})
+
+        flash("Items updated successfully.", "success")
+        return redirect(url_for("item.view_items"))
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"success": False, "form_html": _render_item_bulk_form(form)})
+
+    return _render_item_bulk_form(form)
 
 
 @item.route("/items/recipe-cost-calculator")

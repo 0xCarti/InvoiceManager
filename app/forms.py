@@ -416,6 +416,134 @@ class LocationItemAddForm(FlaskForm):
         self.item_id.choices = load_item_choices()
 
 
+class BulkLocationUpdateForm(FlaskForm):
+    """Form used to apply bulk updates to locations."""
+
+    selected_ids = HiddenField(validators=[DataRequired()])
+    apply_name = BooleanField("Apply")
+    name = StringField(
+        "Location Name", validators=[Optional(), Length(min=2, max=100)]
+    )
+    apply_menu_id = BooleanField("Apply")
+    menu_id = SelectField(
+        "Menu", coerce=int, validators=[Optional()], validate_choice=False
+    )
+    apply_is_spoilage = BooleanField("Apply")
+    is_spoilage = BooleanField("Spoilage Location")
+    apply_archived = BooleanField("Apply")
+    archived = BooleanField("Archived")
+    submit = SubmitField("Apply Updates")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.menu_id.choices = [(0, "No Menu")] + load_menu_choices(
+            include_blank=False
+        )
+
+    def validate(self, **kwargs):
+        valid = super().validate(**kwargs)
+        if not valid:
+            return False
+
+        apply_fields = [
+            self.apply_name.data,
+            self.apply_menu_id.data,
+            self.apply_is_spoilage.data,
+            self.apply_archived.data,
+        ]
+        if not any(apply_fields):
+            self.form_errors.append("Select at least one field to update.")
+            return False
+
+        if self.apply_name.data and not self.name.data:
+            self.name.errors.append("Enter a name to apply.")
+            return False
+
+        if self.apply_menu_id.data and self.menu_id.data is None:
+            self.menu_id.errors.append("Select a menu.")
+            return False
+
+        return True
+
+
+class BulkItemUpdateForm(FlaskForm):
+    """Form used to apply bulk updates to inventory items."""
+
+    selected_ids = HiddenField(validators=[DataRequired()])
+    apply_name = BooleanField("Apply")
+    name = StringField("Name", validators=[Optional(), Length(max=100)])
+    apply_base_unit = BooleanField("Apply")
+    base_unit = SelectField(
+        "Base Unit",
+        choices=BASE_UNIT_CHOICES,
+        validators=[Optional()],
+        validate_choice=False,
+    )
+    apply_gl_code_id = BooleanField("Apply")
+    gl_code_id = SelectField(
+        "Inventory GL Code",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+    )
+    apply_purchase_gl_code_id = BooleanField("Apply")
+    purchase_gl_code_id = SelectField(
+        "Purchase GL Code",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+    )
+    apply_archived = BooleanField("Apply")
+    archived = BooleanField("Archived")
+    submit = SubmitField("Apply Updates")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        purchase_codes = ItemForm._fetch_purchase_gl_codes()
+        formatted = [
+            (
+                code.id,
+                f"{code.code} - {code.description}" if code.description else code.code,
+            )
+            for code in purchase_codes
+        ]
+        self.gl_code_id.choices = [(0, "Unassigned")] + formatted
+        self.purchase_gl_code_id.choices = load_purchase_gl_code_choices()
+
+    def validate(self, **kwargs):
+        valid = super().validate(**kwargs)
+        if not valid:
+            return False
+
+        apply_fields = [
+            self.apply_name.data,
+            self.apply_base_unit.data,
+            self.apply_gl_code_id.data,
+            self.apply_purchase_gl_code_id.data,
+            self.apply_archived.data,
+        ]
+        if not any(apply_fields):
+            self.form_errors.append("Select at least one field to update.")
+            return False
+
+        if self.apply_name.data and not self.name.data:
+            self.name.errors.append("Enter a name to apply.")
+            return False
+
+        if self.apply_gl_code_id.data and self.gl_code_id.data is None:
+            self.gl_code_id.errors.append("Select an inventory GL code.")
+            return False
+
+        if (
+            self.apply_purchase_gl_code_id.data
+            and self.purchase_gl_code_id.data is None
+        ):
+            self.purchase_gl_code_id.errors.append("Select a purchase GL code.")
+            return False
+
+        return True
+
+
 class ItemUnitForm(FlaskForm):
     name = StringField("Unit Name", validators=[DataRequired()])
     factor = DecimalField("Factor", validators=[InputRequired()])
@@ -782,6 +910,92 @@ class ProductForm(FlaskForm):
         self.gl_code.choices = [(g.code, g.code) for g in sales_codes_raw]
         self.gl_code_id.choices = formatted_sales_codes
         self.sales_gl_code.choices = formatted_sales_codes
+
+
+class BulkProductUpdateForm(FlaskForm):
+    """Form used to apply bulk updates to products."""
+
+    selected_ids = HiddenField(validators=[DataRequired()])
+    apply_name = BooleanField("Apply")
+    name = StringField("Name", validators=[Optional(), Length(max=100)])
+    apply_price = BooleanField("Apply")
+    price = DecimalField(
+        "Price", validators=[Optional(), NumberRange(min=0)], places=None
+    )
+    apply_cost = BooleanField("Apply")
+    cost = DecimalField(
+        "Cost", validators=[Optional(), NumberRange(min=0)], places=None
+    )
+    apply_sales_gl_code_id = BooleanField("Apply")
+    sales_gl_code_id = SelectField(
+        "Sales GL Code",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+    )
+    apply_gl_code_id = BooleanField("Apply")
+    gl_code_id = SelectField(
+        "Inventory GL Code",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+    )
+    submit = SubmitField("Apply Updates")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        sales_codes_raw = (
+            GLCode.query.filter(GLCode.code.like("4%"))
+            .order_by(GLCode.code)
+            .all()
+        )
+        formatted_sales_codes = [
+            (
+                code.id,
+                f"{code.code} - {code.description}" if code.description else code.code,
+            )
+            for code in sales_codes_raw
+        ]
+        purchase_codes = ItemForm._fetch_purchase_gl_codes()
+        formatted_inventory = [
+            (
+                code.id,
+                f"{code.code} - {code.description}" if code.description else code.code,
+            )
+            for code in purchase_codes
+        ]
+        self.sales_gl_code_id.choices = [(0, "Unassigned")] + formatted_sales_codes
+        self.gl_code_id.choices = [(0, "Unassigned")] + formatted_inventory
+
+    def validate(self, **kwargs):
+        valid = super().validate(**kwargs)
+        if not valid:
+            return False
+
+        apply_fields = [
+            self.apply_name.data,
+            self.apply_price.data,
+            self.apply_cost.data,
+            self.apply_sales_gl_code_id.data,
+            self.apply_gl_code_id.data,
+        ]
+        if not any(apply_fields):
+            self.form_errors.append("Select at least one field to update.")
+            return False
+
+        if self.apply_name.data and not self.name.data:
+            self.name.errors.append("Enter a name to apply.")
+            return False
+
+        if self.apply_price.data and self.price.data is None:
+            self.price.errors.append("Enter a price value.")
+            return False
+
+        if self.apply_cost.data and self.cost.data is None:
+            self.cost.errors.append("Enter a cost value.")
+            return False
+
+        return True
 
     def validate_gl_code(self, field):
         if field.data and not str(field.data).startswith("4"):

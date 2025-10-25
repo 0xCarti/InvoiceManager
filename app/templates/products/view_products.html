@@ -14,6 +14,7 @@
             <a href="{{ url_for('report.product_stock_usage_report') }}" class="btn btn-secondary mb-3">Stock Usage Report</a>
             <a href="{{ url_for('report.department_sales_forecast') }}" class="btn btn-secondary mb-3">Department Sales Forecast</a>
             <button type="submit" class="btn btn-warning mb-3" form="bulk-cost-form">Set Cost From Recipe</button>
+            <button type="button" class="btn btn-outline-secondary mb-3" id="bulkEditProductsBtn" disabled>Bulk Edit</button>
         </div>
         <div class="col-auto text-end">
             <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="product-table" data-storage-key="productTableColumnVisibility">
@@ -214,6 +215,17 @@
             </div>
         </div>
     </div>
+    <div class="modal fade" id="productBulkModal" tabindex="-1" aria-hidden="true" data-url="{{ url_for('product.bulk_update_products') }}">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Bulk Edit Products</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" data-role="bulk-form"></div>
+            </div>
+        </div>
+    </div>
     {% if selected_sales_gl_codes %}
     <p>Filtering by Sales GL Code: {{ selected_sales_gl_codes | map(attribute='code') | join(', ') }}</p>
     {% endif %}
@@ -364,14 +376,34 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const bulkEditProductsBtn = document.getElementById('bulkEditProductsBtn');
+    function updateBulkProductsButtonState() {
+        if (!bulkEditProductsBtn) {
+            return;
+        }
+        const selectedCount = document.querySelectorAll('#product-table tbody input[name="product_ids"]:checked').length;
+        bulkEditProductsBtn.disabled = selectedCount === 0;
+    }
+
+    window.updateProductBulkButtonState = updateBulkProductsButtonState;
+
     const selectAllProducts = document.getElementById('select-all-products');
     if (selectAllProducts) {
         selectAllProducts.addEventListener('click', function() {
             document.querySelectorAll('#product-table tbody input[type="checkbox"][name="product_ids"]').forEach(cb => {
                 cb.checked = selectAllProducts.checked;
             });
+            updateBulkProductsButtonState();
         });
     }
+
+    document.addEventListener('change', function(event) {
+        if (event.target && event.target.matches('#product-table tbody input[name="product_ids"]')) {
+            updateBulkProductsButtonState();
+        }
+    });
+
+    updateBulkProductsButtonState();
 
     const salesGlSelect = document.getElementById('sales_gl_code_id');
     if (salesGlSelect) {
@@ -417,6 +449,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                     lastRowCheckbox.checked = true;
                                 }
                             }
+                            if (typeof updateBulkProductsButtonState === 'function') {
+                                updateBulkProductsButtonState();
+                            }
                             form.reset();
                             const modalEl = document.getElementById('createProductModal');
                             bootstrap.Modal.getInstance(modalEl).hide();
@@ -428,6 +463,94 @@ document.addEventListener('DOMContentLoaded', function() {
                     alert(JSON.stringify(data.errors));
                 }
             });
+        });
+    }
+
+    const productBulkModalEl = document.getElementById('productBulkModal');
+    const productBulkModalBody = productBulkModalEl ? productBulkModalEl.querySelector('[data-role="bulk-form"]') : null;
+    const productBulkModalUrl = productBulkModalEl ? productBulkModalEl.getAttribute('data-url') : null;
+
+    function getSelectedProductIds() {
+        return Array.from(document.querySelectorAll('#product-table tbody input[name="product_ids"]:checked')).map(cb => cb.value);
+    }
+
+    function bindBulkProductForm() {
+        if (!productBulkModalEl) {
+            return;
+        }
+        const bulkForm = productBulkModalEl.querySelector('form');
+        if (!bulkForm) {
+            return;
+        }
+        bulkForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(bulkForm);
+            fetch(productBulkModalUrl, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (Array.isArray(data.rows)) {
+                            data.rows.forEach((row) => {
+                                if (!row || !row.id || !row.html) {
+                                    return;
+                                }
+                                const existingRow = document.getElementById(`product-row-${row.id}`);
+                                let wasChecked = false;
+                                if (existingRow) {
+                                    const checkbox = existingRow.querySelector('input[name="product_ids"]');
+                                    wasChecked = checkbox ? checkbox.checked : false;
+                                    existingRow.outerHTML = row.html;
+                                }
+                                const updatedRow = document.getElementById(`product-row-${row.id}`);
+                                if (updatedRow) {
+                                    const updatedCheckbox = updatedRow.querySelector('input[name="product_ids"]');
+                                    if (updatedCheckbox) {
+                                        if (selectAllProducts && selectAllProducts.checked) {
+                                            updatedCheckbox.checked = true;
+                                        } else if (wasChecked) {
+                                            updatedCheckbox.checked = true;
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                        if (typeof updateBulkProductsButtonState === 'function') {
+                            updateBulkProductsButtonState();
+                        }
+                        bootstrap.Modal.getOrCreateInstance(productBulkModalEl).hide();
+                    } else if (data.form_html) {
+                        productBulkModalBody.innerHTML = data.form_html;
+                        bindBulkProductForm();
+                    }
+                })
+                .catch(() => {});
+        });
+    }
+
+    if (bulkEditProductsBtn && productBulkModalEl && productBulkModalBody && productBulkModalUrl) {
+        bulkEditProductsBtn.addEventListener('click', function(event) {
+            if (event.defaultPrevented || event.button !== 0) {
+                return;
+            }
+            const ids = getSelectedProductIds();
+            if (!ids.length) {
+                return;
+            }
+            const params = new URLSearchParams();
+            ids.forEach(id => params.append('ids', id));
+            fetch(`${productBulkModalUrl}?${params.toString()}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(response => response.text())
+                .then(html => {
+                    productBulkModalBody.innerHTML = html;
+                    bindBulkProductForm();
+                    bootstrap.Modal.getOrCreateInstance(productBulkModalEl).show();
+                });
         });
     }
 
@@ -513,6 +636,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 updatedCheckbox.checked = wasChecked;
                             }
                         }
+                    }
+                    if (typeof updateBulkProductsButtonState === 'function') {
+                        updateBulkProductsButtonState();
                     }
                     const modalInstance = bootstrap.Modal.getInstance(editProductModalEl);
                     if (modalInstance) {
