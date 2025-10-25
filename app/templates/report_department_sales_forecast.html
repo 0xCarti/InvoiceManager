@@ -56,9 +56,14 @@
                         <option value="{{ option.value }}" data-id="{{ option.id }}" label="{{ option.label }}"></option>
                     {% endfor %}
                 </datalist>
+                {% if creation_prompt_message %}
+                    <div class="alert alert-warning" role="alert">
+                        {{ creation_prompt_message }}
+                    </div>
+                {% endif %}
                 {% if pending_entries %}
                     {% for entry in pending_entries %}
-                        <div class="mb-3 terminal-product-mapping" data-terminal-product-mapping data-skip-value="{{ skip_selection_value }}" data-create-value="">
+                        <div class="mb-3 terminal-product-mapping" data-terminal-product-mapping data-skip-value="{{ skip_selection_value }}" data-create-value="{{ create_selection_value }}">
                             <label class="form-label" for="{{ entry.field }}-search">
                                 {{ entry.name }}
                                 {% if entry.departments %}
@@ -85,13 +90,16 @@
                                     Linked to {{ entry.selected_display }}.
                                 {% elif entry.status == 'skipped' %}
                                     This product will be skipped.
+                                {% elif entry.status == 'create' %}
+                                    A new product will be created for this sale item.
                                 {% endif %}
                             </div>
                             <div class="form-text text-danger {% if not entry.has_error %}d-none{% endif %}" data-role="selection-error">
-                                Select a product from the suggestions or choose Skip.
+                                Select a product from the suggestions, choose Create Product, or choose Skip.
                             </div>
                             <div class="btn-group mt-2" role="group" aria-label="Mapping actions">
                                 <button type="button" class="btn btn-outline-secondary btn-sm" data-action="skip">Skip</button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" data-action="create">Create Product</button>
                             </div>
                             <p class="text-muted small mb-0">
                                 Quantity: {{ '%.2f' | format(entry.quantity) }}
@@ -105,6 +113,119 @@
                     <p class="text-muted mb-0">No further product mappings are required. Review the summaries below for details.</p>
                 {% else %}
                     <p class="text-muted mb-0">No products were detected in the uploaded file.</p>
+                {% endif %}
+                {% if quick_product_forms %}
+                    <input type="hidden" name="create_products" value="1">
+                    <hr class="my-4">
+                    <h5 class="mb-3">New Products to Create</h5>
+                    {% for creation in quick_product_forms %}
+                        {% set form = creation.form %}
+                        <div class="card mb-4" data-quick-product-form>
+                            <div class="card-header">
+                                {{ creation.display_name }}
+                                {% if creation.departments %}
+                                    <small class="text-muted">({{ creation.departments | join(', ') }})</small>
+                                {% endif %}
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted small mb-3">
+                                    Original sale name: {{ creation.source_name or creation.display_name }}.
+                                    {% if creation.sample_price is not none %}
+                                        Sample price: {{ '%.2f' | format(creation.sample_price) }}.
+                                    {% endif %}
+                                </p>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        {{ form.name.label(class="form-label") }}
+                                        {{ form.name(class="form-control") }}
+                                        {% for error in form.name.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="col-md-3">
+                                        {{ form.price.label(class="form-label") }}
+                                        {{ form.price(class="form-control", step="0.01") }}
+                                        {% for error in form.price.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="col-md-3">
+                                        {{ form.cost.label(class="form-label") }}
+                                        {{ form.cost(class="form-control", step="0.01") }}
+                                        {% for error in form.cost.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <div class="row g-3 mt-3">
+                                    <div class="col-md-6">
+                                        {{ form.sales_gl_code.label(class="form-label") }}
+                                        {{ form.sales_gl_code(class="form-select") }}
+                                        {% for error in form.sales_gl_code.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="col-md-3">
+                                        {{ form.recipe_yield_quantity.label(class="form-label") }}
+                                        {{ form.recipe_yield_quantity(class="form-control", step="any") }}
+                                        {% for error in form.recipe_yield_quantity.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="col-md-3">
+                                        {{ form.recipe_yield_unit.label(class="form-label") }}
+                                        {{ form.recipe_yield_unit(class="form-control", placeholder="e.g. servings") }}
+                                        {% for error in form.recipe_yield_unit.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <h6 class="mb-3">Recipe Items (optional)</h6>
+                                    {% for item_form in form.items %}
+                                        <div class="row g-2 align-items-end mb-3">
+                                            <div class="col-md-5">
+                                                {% if loop.first %}
+                                                    {{ item_form.item.label(class="form-label") }}
+                                                {% endif %}
+                                                {{ item_form.item(class="form-select") }}
+                                                {% for error in item_form.item.errors %}
+                                                    <div class="text-danger small">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-md-3">
+                                                {% if loop.first %}
+                                                    {{ item_form.unit.label(class="form-label") }}
+                                                {% endif %}
+                                                {{ item_form.unit(class="form-select") }}
+                                                {% for error in item_form.unit.errors %}
+                                                    <div class="text-danger small">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-md-2">
+                                                {% if loop.first %}
+                                                    {{ item_form.quantity.label(class="form-label") }}
+                                                {% endif %}
+                                                {{ item_form.quantity(class="form-control", step="any") }}
+                                                {% for error in item_form.quantity.errors %}
+                                                    <div class="text-danger small">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="form-check mt-2">
+                                                    {{ item_form.countable(class="form-check-input", id=item_form.countable.id) }}
+                                                    {{ item_form.countable.label(class="form-check-label") }}
+                                                </div>
+                                                {% for error in item_form.countable.errors %}
+                                                    <div class="text-danger small">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
                 {% endif %}
                 <div class="d-flex justify-content-between align-items-center mt-4">
                     <button type="submit" class="btn btn-primary">Update Mappings</button>

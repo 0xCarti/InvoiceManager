@@ -26,8 +26,11 @@ from app.forms import (
     PurchaseInventorySummaryForm,
     ProductRecipeReportForm,
     ProductSalesReportForm,
+    QuickProductForm,
     ReceivedInvoiceReportForm,
     VendorInvoiceReportForm,
+    load_item_choices,
+    load_unit_choices,
 )
 from app.models import (
     Customer,
@@ -135,6 +138,7 @@ def _coerce_float(value):
 
 _DEPARTMENT_SALES_STATE_KEY = "department_sales_forecast_state"
 _SKIP_SELECTION_VALUE = "__skip__"
+_CREATE_SELECTION_VALUE = "__create__"
 
 
 def _department_sales_serializer() -> URLSafeSerializer:
@@ -451,6 +455,7 @@ def department_sales_forecast():
     product_entries: list[dict] = []
     pending_entries: list[dict] = []
     resolved_entries: list[dict] = []
+    quick_product_forms: list[dict] = []
     product_search_options: list[dict[str, str]] = []
     report_departments: list[dict] = []
     report_overall = None
@@ -458,6 +463,7 @@ def department_sales_forecast():
     overall_unmapped_products: list[str] = []
     overall_skipped_products: list[str] = []
     only_mapped = False
+    creation_prompt_message: str | None = None
 
     if request.method == "POST" and request.form.get("state_token"):
         serializer = _department_sales_serializer()
@@ -499,6 +505,8 @@ def department_sales_forecast():
         manual_mappings = payload.get("manual_mappings") or {}
         updated_manual_mappings = dict(manual_mappings)
         pending_alias_updates: list[tuple[str, str, int]] = []
+        pending_creations: list[str] = []
+        creation_requested = request.form.get("create_products") == "1"
 
         for key in request.form:
             if not key.startswith("product-key-"):
@@ -512,6 +520,10 @@ def department_sales_forecast():
 
             if selection == _SKIP_SELECTION_VALUE:
                 updated_manual_mappings[normalized] = {"status": "skipped"}
+                continue
+
+            if selection == _CREATE_SELECTION_VALUE:
+                pending_creations.append(normalized)
                 continue
 
             if not selection:
@@ -545,7 +557,129 @@ def department_sales_forecast():
             if not normalized.startswith("__unnamed_"):
                 pending_alias_updates.append((normalized, source_name, product.id))
 
-        if mapping_errors:
+        creation_errors = False
+        created_products: dict[str, Product] = {}
+        if pending_creations:
+            item_choices = load_item_choices()
+            unit_choices = load_unit_choices()
+            for index, normalized in enumerate(pending_creations):
+                entry_totals = totals.get(normalized, {})
+                prefix = f"create-{index}"
+                if creation_requested:
+                    quick_form = QuickProductForm(
+                        formdata=request.form,
+                        meta={"csrf": False},
+                        prefix=prefix,
+                    )
+                else:
+                    quick_form = QuickProductForm(meta={"csrf": False}, prefix=prefix)
+                if not creation_requested and len(quick_form.items) == 0:
+                    for _ in range(3):
+                        item_form = quick_form.items.append_entry()
+                        item_form.item.choices = item_choices
+                        item_form.unit.choices = unit_choices
+                for item_form in quick_form.items:
+                    item_form.item.choices = item_choices
+                    item_form.unit.choices = unit_choices
+                if not creation_requested:
+                    default_name = (
+                        entry_totals.get("display_name")
+                        or entry_totals.get("source_name")
+                        or normalized
+                    )
+                    quick_form.name.data = default_name
+                    sample_price = entry_totals.get("sample_price")
+                    if sample_price is None:
+                        sample_price = 0.0
+                    quick_form.price.data = sample_price
+                    if quick_form.cost.data in (None, ""):
+                        quick_form.cost.data = 0.0
+                    if quick_form.sales_gl_code.data is None:
+                        quick_form.sales_gl_code.data = 0
+                elif not quick_form.validate():
+                    creation_errors = True
+                quick_product_forms.append(
+                    {
+                        "form": quick_form,
+                        "normalized": normalized,
+                        "display_name": entry_totals.get("display_name")
+                        or normalized,
+                        "source_name": entry_totals.get("source_name") or "",
+                        "sample_price": entry_totals.get("sample_price"),
+                        "departments": sorted(entry_totals.get("departments") or []),
+                    }
+                )
+
+            if not creation_requested:
+                creation_prompt_message = (
+                    "Provide details for each new product before continuing."
+                )
+
+        creation_block = bool(pending_creations) and not creation_requested
+
+        if creation_requested and not creation_errors and quick_product_forms:
+            for entry in quick_product_forms:
+                form = entry["form"]
+                normalized = entry["normalized"]
+                cost = form.cost.data if form.cost.data is not None else 0.0
+                sales_gl_code_id = form.sales_gl_code.data or None
+                if sales_gl_code_id == 0:
+                    sales_gl_code_id = None
+                yield_quantity = form.recipe_yield_quantity.data
+                if yield_quantity is None or yield_quantity <= 0:
+                    yield_quantity = 1
+                product_obj = Product(
+                    name=form.name.data,
+                    price=form.price.data,
+                    cost=cost,
+                    sales_gl_code_id=sales_gl_code_id,
+                    recipe_yield_quantity=float(yield_quantity),
+                    recipe_yield_unit=form.recipe_yield_unit.data or None,
+                )
+                db.session.add(product_obj)
+                db.session.flush()
+                for item_form in form.items:
+                    item_id = item_form.item.data
+                    quantity = item_form.quantity.data
+                    if not item_id or quantity in (None, ""):
+                        continue
+                    unit_id = item_form.unit.data or None
+                    db.session.add(
+                        ProductRecipeItem(
+                            product_id=product_obj.id,
+                            item_id=item_id,
+                            unit_id=unit_id,
+                            quantity=quantity,
+                            countable=item_form.countable.data,
+                        )
+                    )
+                source_name = (
+                    entry["source_name"]
+                    or totals.get(normalized, {}).get("source_name")
+                    or form.name.data
+                )
+                updated_manual_mappings[normalized] = {
+                    "status": "manual",
+                    "product_id": product_obj.id,
+                    "source_name": source_name,
+                }
+                if not normalized.startswith("__unnamed_"):
+                    pending_alias_updates.append(
+                        (normalized, source_name, product_obj.id)
+                    )
+                created_products[normalized] = product_obj
+            quick_product_forms = []
+            pending_creations = []
+
+        if creation_errors:
+            mapping_errors.append(
+                "Fix the errors in the new product details before continuing."
+            )
+            creation_prompt_message = (
+                "Fix the errors in the new product details before continuing."
+            )
+
+        if mapping_errors or creation_errors or creation_block:
             db.session.rollback()
         else:
             payload["manual_mappings"] = updated_manual_mappings
@@ -563,7 +697,7 @@ def department_sales_forecast():
                 else:
                     alias.source_name = source_name
                     alias.product_id = product_id
-            if pending_alias_updates:
+            if pending_alias_updates or created_products:
                 db.session.commit()
             flash("Product mappings updated.", "success")
 
@@ -646,6 +780,12 @@ def department_sales_forecast():
             for product in product_choices
         ]
 
+        creation_error_targets = {
+            entry["normalized"]
+            for entry in quick_product_forms
+            if entry.get("form") and entry["form"].errors
+        }
+
         manual_mappings = payload.get("manual_mappings") or {}
         sorted_keys = sorted(
             totals.keys(), key=lambda key: totals[key]["display_name"].lower()
@@ -672,6 +812,9 @@ def department_sales_forecast():
             effective_product_id = None
             if selected_value == _SKIP_SELECTION_VALUE:
                 status = "skipped"
+            elif selected_value == _CREATE_SELECTION_VALUE:
+                status = "create"
+                selected_display = "A new product will be created."
             elif selected_value:
                 try:
                     effective_product_id = int(selected_value)
@@ -706,7 +849,10 @@ def department_sales_forecast():
                     "selected_display": selected_display,
                     "status": status,
                     "product_id": effective_product_id or product_id,
-                    "has_error": normalized in error_targets,
+                    "has_error": (
+                        normalized in error_targets
+                        or normalized in creation_error_targets
+                    ),
                 }
             )
 
@@ -758,7 +904,10 @@ def department_sales_forecast():
         resolved_entries=resolved_entries,
         product_search_options=product_search_options,
         skip_selection_value=_SKIP_SELECTION_VALUE,
+        create_selection_value=_CREATE_SELECTION_VALUE,
         mapping_errors=mapping_errors,
+        quick_product_forms=quick_product_forms,
+        creation_prompt_message=creation_prompt_message,
         report_departments=report_departments,
         report_overall=report_overall,
         overall_warnings=overall_warnings,
