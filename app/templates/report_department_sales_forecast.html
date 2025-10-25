@@ -110,6 +110,32 @@
                 {% else %}
                     <p class="text-muted mb-0">No products were detected in the uploaded file.</p>
                 {% endif %}
+                {% if quick_product_forms %}
+                    <hr class="my-4">
+                    <input type="hidden" name="creation-step" value="1">
+                    <h5 class="mb-3">Create new products</h5>
+                    <p class="text-muted small">Fill out the details for each new product so recipe usage can be calculated.</p>
+                    {% for creation in quick_product_forms %}
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                {{ creation.display_name }}
+                                {% if creation.departments %}
+                                    <small class="text-muted">({{ creation.departments | join(', ') }})</small>
+                                {% endif %}
+                            </div>
+                            <div class="card-body">
+                                {% if creation.quantity %}
+                                    <p class="text-muted small mb-3">Quantity sold: {{ '%.2f' | format(creation.quantity) }}{% if creation.sample_price is not none %} &middot; Sample price: {{ '%.2f' | format(creation.sample_price) }}{% endif %}</p>
+                                {% elif creation.sample_price is not none %}
+                                    <p class="text-muted small mb-3">Sample price: {{ '%.2f' | format(creation.sample_price) }}</p>
+                                {% endif %}
+                                {% with form=creation.form, form_id='quick-product-' ~ creation.index, embedded=True, show_submit=False %}
+                                    {% include 'products/_create_product_form.html' %}
+                                {% endwith %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endif %}
                 <div class="d-flex justify-content-between align-items-center mt-4">
                     <button type="submit" class="btn btn-primary">Update Mappings</button>
                     <a class="btn btn-outline-secondary" href="{{ url_for('report.department_sales_forecast', reset=1) }}">Start Over</a>

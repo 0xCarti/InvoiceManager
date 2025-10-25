@@ -30,6 +30,7 @@ from app.routes.report_routes import (
     _calculate_department_usage,
     _collect_department_product_totals,
     _department_sales_serializer,
+    _CREATE_SELECTION_VALUE,
     _SKIP_SELECTION_VALUE,
     _merge_product_mappings,
 )
@@ -1048,3 +1049,134 @@ def test_department_sales_forecast_workflow(client, app):
         assert alias.product_id == product_ids["candy"]
         assert alias.source_name == "Sample Candy"
 
+
+def test_department_sales_forecast_creates_products(client, app):
+    setup_department_sales_forecast_data(app)
+
+    with app.app_context():
+        user = User.query.filter_by(email="forecast-create@example.com").first()
+        if not user:
+            user = User(
+                email="forecast-create@example.com",
+                password=generate_password_hash("pass"),
+                active=True,
+            )
+            db.session.add(user)
+            db.session.commit()
+        user_id = user.id
+
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(user_id)
+        sess["_fresh"] = True
+
+    upload_file = build_department_sales_workbook()
+    upload_response = client.post(
+        "/reports/department-sales-forecast",
+        data={"upload": (upload_file, "department_sales_sample.xlsx")},
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    assert upload_response.status_code == 200
+    upload_page = upload_response.get_data(as_text=True)
+    state_match = re.search(r'name="state_token" value="([^"]+)"', upload_page)
+    assert state_match is not None
+    state_token = state_match.group(1)
+
+    with app.app_context():
+        serializer = _department_sales_serializer()
+        state_data = serializer.loads(state_token)
+        payload = state_data["payload"]
+        totals = _collect_department_product_totals(payload)
+        auto_map = _auto_resolve_department_products(totals)
+        resolved_map_initial = _merge_product_mappings(
+            totals,
+            auto_map,
+            payload.get("manual_mappings"),
+        )
+
+    sorted_keys = sorted(
+        totals.keys(), key=lambda key: totals[key]["display_name"].lower()
+    )
+    mapping_form = {"state_token": state_token}
+    donut_key = normalize_pos_alias("Glazed Donut")
+    for index, normalized in enumerate(sorted_keys):
+        mapping_form[f"product-key-{index}"] = normalized
+        if resolved_map_initial.get(normalized, {}).get("product_id"):
+            mapping_form[f"mapping-{index}"] = ""
+        elif normalized == donut_key:
+            mapping_form[f"mapping-{index}"] = _CREATE_SELECTION_VALUE
+        else:
+            mapping_form[f"mapping-{index}"] = ""
+
+    create_prompt_response = client.post(
+        "/reports/department-sales-forecast",
+        data=mapping_form,
+        follow_redirects=True,
+    )
+
+    assert create_prompt_response.status_code == 200
+    prompt_page = create_prompt_response.get_data(as_text=True)
+    assert "Create new products" in prompt_page
+    assert "Provide details for the new products before continuing." in prompt_page
+
+    quick_form_match = re.search(
+        r'name="create-0-csrf_token" value="([^"]+)"', prompt_page
+    )
+    quick_csrf = quick_form_match.group(1) if quick_form_match else None
+
+    state_match_updated = re.search(
+        r'name="state_token" value="([^"]+)"', prompt_page
+    )
+    assert state_match_updated is not None
+    state_token = state_match_updated.group(1)
+
+    creation_form = dict(mapping_form)
+    creation_form.update(
+        {
+            "state_token": state_token,
+            "creation-step": "1",
+            "create-0-name": "Glazed Donut",
+            "create-0-price": "4.00",
+            "create-0-cost": "0.00",
+            "create-0-sales_gl_code": "0",
+            "create-0-recipe_yield_quantity": "1",
+            "create-0-recipe_yield_unit": "",
+        }
+    )
+    if quick_csrf:
+        creation_form["create-0-csrf_token"] = quick_csrf
+
+    creation_response = client.post(
+        "/reports/department-sales-forecast",
+        data=creation_form,
+        follow_redirects=True,
+    )
+
+    assert creation_response.status_code == 200
+    creation_page = creation_response.get_data(as_text=True)
+    assert "Product mappings updated." in creation_page
+    assert "Create new products" not in creation_page
+
+    state_match_final = re.search(
+        r'name="state_token" value="([^"]+)"', creation_page
+    )
+    assert state_match_final is not None
+    final_state_token = state_match_final.group(1)
+
+    with app.app_context():
+        serializer = _department_sales_serializer()
+        final_state = serializer.loads(final_state_token)
+        manual_mappings = final_state["payload"].get("manual_mappings") or {}
+        assert donut_key in manual_mappings
+        new_product_id = manual_mappings[donut_key]["product_id"]
+        new_product = db.session.get(Product, new_product_id)
+        assert new_product is not None
+        assert new_product.name == "Glazed Donut"
+        assert float(new_product.price) == pytest.approx(4.0)
+        alias = TerminalSaleProductAlias.query.filter_by(
+            normalized_name=donut_key
+        ).first()
+        assert alias is not None
+        assert alias.product_id == new_product.id
+        assert alias.source_name == "Glazed Donut"
