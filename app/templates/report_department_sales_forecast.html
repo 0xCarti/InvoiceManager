@@ -56,9 +56,12 @@
                         <option value="{{ option.value }}" data-id="{{ option.id }}" label="{{ option.label }}"></option>
                     {% endfor %}
                 </datalist>
+                <p class="text-muted small mb-3">
+                    Start typing to search for a matching product, or use the buttons to skip the entry or create a new product.
+                </p>
                 {% if pending_entries %}
                     {% for entry in pending_entries %}
-                        <div class="mb-3 terminal-product-mapping" data-terminal-product-mapping data-skip-value="{{ skip_selection_value }}" data-create-value="">
+                        <div class="mb-3 terminal-product-mapping" data-terminal-product-mapping data-skip-value="{{ skip_selection_value }}" data-create-value="{{ create_selection_value }}">
                             <label class="form-label" for="{{ entry.field }}-search">
                                 {{ entry.name }}
                                 {% if entry.departments %}
@@ -88,10 +91,11 @@
                                 {% endif %}
                             </div>
                             <div class="form-text text-danger {% if not entry.has_error %}d-none{% endif %}" data-role="selection-error">
-                                Select a product from the suggestions or choose Skip.
+                                Select a product from the suggestions, choose Skip, or Create a new product.
                             </div>
                             <div class="btn-group mt-2" role="group" aria-label="Mapping actions">
                                 <button type="button" class="btn btn-outline-secondary btn-sm" data-action="skip">Skip</button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" data-action="create">Create new product</button>
                             </div>
                             <p class="text-muted small mb-0">
                                 Quantity: {{ '%.2f' | format(entry.quantity) }}

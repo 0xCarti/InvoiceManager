@@ -135,6 +135,7 @@ def _coerce_float(value):
 
 _DEPARTMENT_SALES_STATE_KEY = "department_sales_forecast_state"
 _SKIP_SELECTION_VALUE = "__skip__"
+_CREATE_SELECTION_VALUE = "__create__"
 
 
 def _department_sales_serializer() -> URLSafeSerializer:
@@ -758,6 +759,7 @@ def department_sales_forecast():
         resolved_entries=resolved_entries,
         product_search_options=product_search_options,
         skip_selection_value=_SKIP_SELECTION_VALUE,
+        create_selection_value=_CREATE_SELECTION_VALUE,
         mapping_errors=mapping_errors,
         report_departments=report_departments,
         report_overall=report_overall,
