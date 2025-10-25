@@ -688,6 +688,29 @@ class DateRangeForm(FlaskForm):
         validators=[DataRequired()],
         id="end_datetime",
     )
+    from_location_ids = SelectMultipleField(
+        "From Locations",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+    )
+    to_location_ids = SelectMultipleField(
+        "To Locations",
+        coerce=int,
+        validators=[Optional()],
+        validate_choice=False,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        locations = (
+            Location.query.filter(Location.archived.is_(False))
+            .order_by(Location.name)
+            .all()
+        )
+        choices = [(location.id, location.name) for location in locations]
+        self.from_location_ids.choices = choices
+        self.to_location_ids.choices = choices
 
 
 class SpoilageFilterForm(FlaskForm):

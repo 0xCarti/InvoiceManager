@@ -663,6 +663,12 @@ def generate_report():
     if form.validate_on_submit():
         start_datetime = form.start_datetime.data
         end_datetime = form.end_datetime.data
+        from_location_ids = list(form.from_location_ids.data or [])
+        to_location_ids = list(form.to_location_ids.data or [])
+
+        location_lookup = {
+            choice_id: label for choice_id, label in form.from_location_ids.choices
+        }
 
         # Alias for "from" and "to" locations
         from_location = db.aliased(Location)
@@ -685,7 +691,20 @@ def generate_report():
                 Transfer.date_created >= start_datetime,
                 Transfer.date_created <= end_datetime,
             )
-            .group_by(
+        )
+
+        if from_location_ids:
+            aggregated_transfers = aggregated_transfers.filter(
+                Transfer.from_location_id.in_(from_location_ids)
+            )
+
+        if to_location_ids:
+            aggregated_transfers = aggregated_transfers.filter(
+                Transfer.to_location_id.in_(to_location_ids)
+            )
+
+        aggregated_transfers = (
+            aggregated_transfers.group_by(
                 from_location.id,
                 to_location.id,
                 Item.id,
@@ -716,6 +735,17 @@ def generate_report():
             "%Y-%m-%d %H:%M"
         )
 
+        session["report_from_locations"] = [
+            location_lookup.get(location_id)
+            for location_id in from_location_ids
+            if location_lookup.get(location_id)
+        ]
+        session["report_to_locations"] = [
+            location_lookup.get(location_id)
+            for location_id in to_location_ids
+            if location_lookup.get(location_id)
+        ]
+
         flash("Transfer report generated successfully.", "success")
         return redirect(url_for("transfer.view_report"))
 
@@ -728,5 +758,8 @@ def view_report():
     """Display the previously generated transfer report."""
     aggregated_transfers = session.get("aggregated_transfers", [])
     return render_template(
-        "transfers/view_report.html", aggregated_transfers=aggregated_transfers
+        "transfers/view_report.html",
+        aggregated_transfers=aggregated_transfers,
+        from_locations=session.get("report_from_locations", []),
+        to_locations=session.get("report_to_locations", []),
     )

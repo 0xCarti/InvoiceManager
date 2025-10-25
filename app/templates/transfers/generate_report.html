@@ -23,6 +23,26 @@
                 {% endfor %}
             {% endif %}
         </div>
+        <div class="form-group">
+            {{ form.from_location_ids.label(class="form-label") }}
+            {{ form.from_location_ids(class="form-select", multiple=true, size=6) }}
+            <small class="form-text text-muted">Leave empty to include all origin locations.</small>
+            {% if form.from_location_ids.errors %}
+                {% for error in form.from_location_ids.errors %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        <div class="form-group">
+            {{ form.to_location_ids.label(class="form-label") }}
+            {{ form.to_location_ids(class="form-select", multiple=true, size=6) }}
+            <small class="form-text text-muted">Leave empty to include all destination locations.</small>
+            {% if form.to_location_ids.errors %}
+                {% for error in form.to_location_ids.errors %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
         <button type="submit" class="btn btn-primary mt-2">Generate Report</button>
     </form>
 </div>
