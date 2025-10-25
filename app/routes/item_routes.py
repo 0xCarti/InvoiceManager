@@ -166,7 +166,7 @@ def view_items():
             )
             .join(
                 PurchaseInvoice,
-                PurchaseInvoiceItem.purchase_invoice_id == PurchaseInvoice.id,
+                PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id,
             )
             .filter(PurchaseInvoiceItem.item_id.in_(page_item_ids))
             .group_by(PurchaseInvoiceItem.item_id)
