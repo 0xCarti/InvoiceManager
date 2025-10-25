@@ -5,6 +5,10 @@
     <td class="col-base-unit">{{ item.base_unit or '—' }}</td>
     <td class="col-cost" data-sort-value="{{ '%.6f'|format(item.cost or 0) }}">{{ '%.6f'|format(item.cost or 0) }} / {{ item.base_unit or '—' }}</td>
     <td class="col-quantity" data-sort-value="{{ '%.6f'|format(item.quantity or 0) }}">{{ '%.6f'|format(item.quantity or 0) }}</td>
+    {% set last_received = item.last_purchase_received_date %}
+    <td class="col-last-received" data-sort-value="{{ last_received.strftime('%Y%m%d') if last_received else '' }}">
+        {{ last_received.strftime('%Y-%m-%d') if last_received else '—' }}
+    </td>
     <td class="col-gl-code">{{ item.gl_code_rel.code if item.gl_code_rel else item.gl_code or '—' }}</td>
     <td class="col-gl-desc">{{ item.gl_code_rel.description if item.gl_code_rel and item.gl_code_rel.description else '—' }}</td>
     <td class="col-purchase-gl-code">{{ item.purchase_gl_code.code if item.purchase_gl_code else '—' }}</td>

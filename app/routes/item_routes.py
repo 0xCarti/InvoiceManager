@@ -14,7 +14,7 @@ from flask import (
 from flask_login import login_required
 from werkzeug.utils import secure_filename
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
 
 from app import db
@@ -153,6 +153,31 @@ def view_items():
         items = query.order_by(Item.name).paginate(
             page=page, per_page=per_page, error_out=False
         )
+
+    item_last_received_map = {}
+    page_item_ids = [item.id for item in items.items]
+    if page_item_ids:
+        results = (
+            db.session.query(
+                PurchaseInvoiceItem.item_id,
+                func.max(PurchaseInvoice.received_date).label(
+                    "last_purchase_received_date"
+                ),
+            )
+            .join(
+                PurchaseInvoice,
+                PurchaseInvoiceItem.purchase_invoice_id == PurchaseInvoice.id,
+            )
+            .filter(PurchaseInvoiceItem.item_id.in_(page_item_ids))
+            .group_by(PurchaseInvoiceItem.item_id)
+            .all()
+        )
+        item_last_received_map = {
+            item_id: last_received for item_id, last_received in results
+        }
+
+    for item in items.items:
+        item.last_purchase_received_date = item_last_received_map.get(item.id)
     extra_pagination = {}
     if "archived" not in request.args:
         extra_pagination["archived"] = archived

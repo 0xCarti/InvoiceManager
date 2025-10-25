@@ -43,6 +43,11 @@
                         <label class="form-check-label" for="toggle-column-quantity">Quantity</label>
                     </div>
                     <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-last-received"
+                            data-column-target="col-last-received" checked>
+                        <label class="form-check-label" for="toggle-column-last-received">Last Received</label>
+                    </div>
+                    <div class="form-check">
                         <input class="form-check-input column-toggle" type="checkbox" id="toggle-column-gl-code"
                             data-column-target="col-gl-code" checked>
                         <label class="form-check-label" for="toggle-column-gl-code">Inventory GL Code</label>
@@ -198,6 +203,7 @@
                     <th scope="col" class="col-base-unit">Base Unit</th>
                     <th scope="col" class="col-cost" data-type="number">Cost / Base Unit</th>
                     <th scope="col" class="col-quantity" data-type="number">Quantity</th>
+                    <th scope="col" class="col-last-received" data-type="text">Last Received</th>
                     <th scope="col" class="col-gl-code">Inventory GL Code</th>
                     <th scope="col" class="col-gl-desc">Inventory GL Description</th>
                     <th scope="col" class="col-purchase-gl-code">Purchase GL Code</th>
