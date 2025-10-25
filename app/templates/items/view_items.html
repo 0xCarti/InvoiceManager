@@ -9,6 +9,7 @@
             <a href="{{ url_for('item.add_item') }}" class="btn btn-primary mb-3" id="createItemBtn">Add New Item</a>
             <a href="{{ url_for('item.recipe_cost_calculator') }}" class="btn btn-outline-primary mb-3" id="recipeCostCalculatorBtn">Recipe Cost Calculator</a>
             <a href="{{ url_for('report.purchase_cost_forecast') }}" class="btn btn-outline-primary mb-3" id="forecastedStockItemSalesBtn">Forecasted Stock Item Sales</a>
+            <button type="button" class="btn btn-outline-secondary mb-3" id="bulkEditItemsBtn" disabled>Bulk Edit</button>
         </div>
         <div class="col-auto">
             <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="itemsTable" data-storage-key="itemsTableColumnVisibility">
@@ -258,15 +259,34 @@
 <script src="{{ url_for('static', filename='js/item_form.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
-    var selectAll = document.getElementById('select-all');
+    const selectAll = document.getElementById('select-all');
+    function updateBulkButtonState() {
+        const bulkButton = document.getElementById('bulkEditItemsBtn');
+        if (!bulkButton) {
+            return;
+        }
+        const selectedCount = document.querySelectorAll('input[name="item_ids"]:checked').length;
+        bulkButton.disabled = selectedCount === 0;
+    }
+
+    window.updateItemBulkButtonState = updateBulkButtonState;
+
     if (selectAll) {
         selectAll.addEventListener('click', function() {
-            var checkboxes = document.querySelectorAll('input[type="checkbox"][name="item_ids"]');
-            checkboxes.forEach(function(checkbox) {
+            document.querySelectorAll('input[type="checkbox"][name="item_ids"]').forEach(function(checkbox) {
                 checkbox.checked = selectAll.checked;
             });
+            updateBulkButtonState();
         });
     }
+
+    document.addEventListener('change', function(event) {
+        if (event.target && event.target.matches('input[name="item_ids"]')) {
+            updateBulkButtonState();
+        }
+    });
+
+    updateBulkButtonState();
 });
 </script>
 <!-- Item Modal -->
@@ -282,6 +302,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     {% include 'items/item_form.html' %}
                 {% endwith %}
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Item Update Modal -->
+<div class="modal fade" id="itemBulkModal" tabindex="-1" aria-hidden="true" data-url="{{ url_for('item.bulk_update_items') }}">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Bulk Edit Items</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" data-role="bulk-form"></div>
         </div>
     </div>
 </div>
@@ -433,6 +466,84 @@ if (itemsTableEl) {
                     bindItemForm(actionUrl);
                 });
         }
+    });
+}
+
+const itemBulkModalEl = document.getElementById('itemBulkModal');
+const itemBulkModalBody = itemBulkModalEl ? itemBulkModalEl.querySelector('[data-role="bulk-form"]') : null;
+const itemBulkModalUrl = itemBulkModalEl ? itemBulkModalEl.getAttribute('data-url') : null;
+const bulkEditItemsBtn = document.getElementById('bulkEditItemsBtn');
+
+function getSelectedItemIds() {
+    return Array.from(document.querySelectorAll('input[name="item_ids"]:checked')).map((cb) => cb.value);
+}
+
+function bindBulkItemForm() {
+    if (!itemBulkModalEl) {
+        return;
+    }
+    const form = itemBulkModalEl.querySelector('form');
+    if (!form) {
+        return;
+    }
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        const formData = new FormData(form);
+        fetch(itemBulkModalUrl, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success) {
+                    if (Array.isArray(data.rows)) {
+                        data.rows.forEach((row) => {
+                            if (!row || !row.id || !row.html) {
+                                return;
+                            }
+                            const targetRow = document.getElementById(`item-row-${row.id}`);
+                            if (targetRow) {
+                                targetRow.outerHTML = row.html;
+                            }
+                        });
+                    }
+                    if (typeof window.updateItemBulkButtonState === 'function') {
+                        window.updateItemBulkButtonState();
+                    }
+                    bootstrap.Modal.getOrCreateInstance(itemBulkModalEl).hide();
+                } else if (data.form_html) {
+                    itemBulkModalBody.innerHTML = data.form_html;
+                    bindBulkItemForm();
+                }
+            })
+            .catch(() => {});
+    });
+}
+
+if (bulkEditItemsBtn && itemBulkModalEl && itemBulkModalBody && itemBulkModalUrl) {
+    bulkEditItemsBtn.addEventListener('click', function(event) {
+        if (event.defaultPrevented || event.button !== 0) {
+            return;
+        }
+        const ids = getSelectedItemIds();
+        if (!ids.length) {
+            return;
+        }
+        const params = new URLSearchParams();
+        ids.forEach((id) => params.append('ids', id));
+        fetch(`${itemBulkModalUrl}?${params.toString()}`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then((response) => response.text())
+            .then((html) => {
+                itemBulkModalBody.innerHTML = html;
+                bindBulkItemForm();
+                const modalInstance = bootstrap.Modal.getOrCreateInstance(itemBulkModalEl);
+                modalInstance.show();
+            });
     });
 }
 

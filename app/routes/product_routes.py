@@ -18,6 +18,7 @@ from sqlalchemy.orm import aliased, selectinload
 from app import db
 from app.forms import (
     BulkProductCostForm,
+    BulkProductUpdateForm,
     DeleteForm,
     QuickProductForm,
     ProductRecipeForm,
@@ -209,6 +210,216 @@ def view_products():
         per_page=per_page,
         pagination_args=build_pagination_args(per_page),
     )
+
+
+def _parse_product_ids(raw_value: str) -> list[int]:
+    ids: list[int] = []
+    for chunk in raw_value.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            ids.append(int(chunk))
+        except ValueError:
+            raise ValueError("Invalid product identifier.") from None
+    return ids
+
+
+def _render_product_bulk_form(form: BulkProductUpdateForm):
+    return render_template("products/bulk_update_form.html", form=form)
+
+
+@product.route("/products/bulk-update", methods=["GET", "POST"])
+@login_required
+def bulk_update_products():
+    """Apply updates to multiple products."""
+
+    form = BulkProductUpdateForm()
+    if request.method == "GET":
+        raw_ids = request.args.getlist("ids") or request.args.getlist("id")
+        try:
+            selected_ids = [int(value) for value in raw_ids if int(value)]
+        except ValueError:
+            abort(400)
+        if not selected_ids:
+            abort(400)
+        form.selected_ids.data = ",".join(str(value) for value in selected_ids)
+        return _render_product_bulk_form(form)
+
+    if form.validate_on_submit():
+        try:
+            selected_ids = _parse_product_ids(form.selected_ids.data or "")
+        except ValueError:
+            form.selected_ids.errors.append("Unable to determine selected products.")
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(
+                    {
+                        "success": False,
+                        "form_html": _render_product_bulk_form(form),
+                    }
+                )
+            flash("Unable to determine selected products for update.", "error")
+            return redirect(url_for("product.view_products"))
+
+        if not selected_ids:
+            form.selected_ids.errors.append(
+                "Select at least one product to update."
+            )
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(
+                    {
+                        "success": False,
+                        "form_html": _render_product_bulk_form(form),
+                    }
+                )
+            flash("Select at least one product to update.", "error")
+            return redirect(url_for("product.view_products"))
+
+        query = (
+            Product.query.options(
+                selectinload(Product.sales_gl_code),
+                selectinload(Product.gl_code_rel),
+                selectinload(Product.locations),
+                selectinload(Product.menus),
+                selectinload(Product.recipe_items).selectinload(
+                    ProductRecipeItem.item
+                ),
+                selectinload(Product.recipe_items).selectinload(
+                    ProductRecipeItem.unit
+                ),
+            )
+            .filter(Product.id.in_(selected_ids))
+            .order_by(Product.id)
+        )
+        products = query.all()
+        if len(products) != len(set(selected_ids)):
+            form.selected_ids.errors.append(
+                "Some selected products are no longer available."
+            )
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(
+                    {
+                        "success": False,
+                        "form_html": _render_product_bulk_form(form),
+                    }
+                )
+            flash("Some selected products are no longer available.", "error")
+            return redirect(url_for("product.view_products"))
+
+        apply_name = form.apply_name.data
+        apply_price = form.apply_price.data
+        apply_cost = form.apply_cost.data
+        apply_sales_gl = form.apply_sales_gl_code_id.data
+        apply_inventory_gl = form.apply_gl_code_id.data
+
+        new_name = form.name.data if apply_name else None
+        new_price = float(form.price.data) if apply_price else None
+        new_cost = float(form.cost.data) if apply_cost else None
+        new_sales_gl = form.sales_gl_code_id.data if apply_sales_gl else None
+        new_inventory_gl = form.gl_code_id.data if apply_inventory_gl else None
+
+        if apply_name and new_name:
+            if len(selected_ids) > 1:
+                form.name.errors.append(
+                    "Cannot assign the same name to multiple products."
+                )
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify(
+                        {
+                            "success": False,
+                            "form_html": _render_product_bulk_form(form),
+                        }
+                    )
+                flash(
+                    "Cannot assign the same name to multiple products.",
+                    "error",
+                )
+                return redirect(url_for("product.view_products"))
+            conflict = (
+                Product.query.filter(Product.name == new_name)
+                .filter(~Product.id.in_(selected_ids))
+                .first()
+            )
+            if conflict:
+                form.name.errors.append(
+                    "A product with that name already exists."
+                )
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify(
+                        {
+                            "success": False,
+                            "form_html": _render_product_bulk_form(form),
+                        }
+                    )
+                flash("A product with that name already exists.", "error")
+                return redirect(url_for("product.view_products"))
+
+        with db.session.begin_nested():
+            for product_obj in products:
+                if apply_name:
+                    product_obj.name = new_name
+                if apply_price:
+                    product_obj.price = new_price
+                if apply_cost:
+                    product_obj.cost = new_cost if new_cost is not None else 0.0
+                if apply_sales_gl:
+                    product_obj.sales_gl_code_id = new_sales_gl or None
+                if apply_inventory_gl:
+                    product_obj.gl_code_id = new_inventory_gl or None
+                    if product_obj.gl_code_id:
+                        gl = db.session.get(GLCode, product_obj.gl_code_id)
+                        product_obj.gl_code = gl.code if gl else None
+                    else:
+                        product_obj.gl_code = None
+        db.session.commit()
+
+        refreshed_products = (
+            Product.query.options(
+                selectinload(Product.sales_gl_code),
+                selectinload(Product.gl_code_rel),
+                selectinload(Product.locations),
+                selectinload(Product.menus),
+                selectinload(Product.recipe_items).selectinload(
+                    ProductRecipeItem.item
+                ),
+                selectinload(Product.recipe_items).selectinload(
+                    ProductRecipeItem.unit
+                ),
+            )
+            .filter(Product.id.in_(selected_ids))
+            .order_by(Product.id)
+            .all()
+        )
+
+        log_activity(
+            "Bulk updated products: "
+            + ", ".join(str(prod.id) for prod in refreshed_products)
+        )
+
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            delete_form = DeleteForm()
+            rows = [
+                {
+                    "id": product_obj.id,
+                    "html": render_template(
+                        "products/_product_row.html",
+                        product=product_obj,
+                        delete_form=delete_form,
+                    ),
+                }
+                for product_obj in refreshed_products
+            ]
+            return jsonify({"success": True, "rows": rows})
+
+        flash("Products updated successfully.", "success")
+        return redirect(url_for("product.view_products"))
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify(
+            {"success": False, "form_html": _render_product_bulk_form(form)}
+        )
+
+    return _render_product_bulk_form(form)
 
 
 @product.route("/products/create", methods=["GET", "POST"])

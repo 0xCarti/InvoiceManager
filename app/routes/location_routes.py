@@ -17,6 +17,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import selectinload
 
 from app.forms import (
+    BulkLocationUpdateForm,
     CSRFOnlyForm,
     DeleteForm,
     ItemForm,
@@ -653,6 +654,201 @@ def view_locations():
         per_page=per_page,
         pagination_args=build_pagination_args(per_page),
     )
+
+
+def _parse_location_ids(raw_value: str) -> list[int]:
+    ids: list[int] = []
+    for chunk in raw_value.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            ids.append(int(chunk))
+        except ValueError:
+            raise ValueError("Invalid location identifier.") from None
+    return ids
+
+
+def _render_location_bulk_form(form: BulkLocationUpdateForm):
+    return render_template("locations/bulk_update_form.html", form=form)
+
+
+@location.route("/locations/bulk-update", methods=["GET", "POST"])
+@login_required
+def bulk_update_locations():
+    """Apply updates to multiple locations."""
+
+    form = BulkLocationUpdateForm()
+    if request.method == "GET":
+        raw_ids = request.args.getlist("ids") or request.args.getlist("id")
+        try:
+            selected_ids = [int(value) for value in raw_ids if int(value)]
+        except ValueError:
+            abort(400)
+        if not selected_ids:
+            abort(400)
+        form.selected_ids.data = ",".join(str(value) for value in selected_ids)
+        return _render_location_bulk_form(form)
+
+    if form.validate_on_submit():
+        try:
+            selected_ids = _parse_location_ids(form.selected_ids.data or "")
+        except ValueError:
+            form.selected_ids.errors.append("Unable to determine selected locations.")
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(
+                    {
+                        "success": False,
+                        "form_html": _render_location_bulk_form(form),
+                    }
+                )
+            flash("Unable to determine selected locations for update.", "error")
+            return redirect(url_for("locations.view_locations"))
+
+        if not selected_ids:
+            form.selected_ids.errors.append(
+                "Select at least one location to update."
+            )
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(
+                    {
+                        "success": False,
+                        "form_html": _render_location_bulk_form(form),
+                    }
+                )
+            flash("Select at least one location to update.", "error")
+            return redirect(url_for("locations.view_locations"))
+
+        locations = (
+            Location.query.options(selectinload(Location.current_menu))
+            .filter(Location.id.in_(selected_ids))
+            .order_by(Location.id)
+            .all()
+        )
+        if len(locations) != len(set(selected_ids)):
+            form.selected_ids.errors.append(
+                "Some selected locations are no longer available."
+            )
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(
+                    {
+                        "success": False,
+                        "form_html": _render_location_bulk_form(form),
+                    }
+                )
+            flash("Some selected locations are no longer available.", "error")
+            return redirect(url_for("locations.view_locations"))
+
+        apply_name = form.apply_name.data
+        apply_menu = form.apply_menu_id.data
+        apply_spoilage = form.apply_is_spoilage.data
+        apply_archived = form.apply_archived.data
+
+        new_name = form.name.data if apply_name else None
+        new_menu_id = form.menu_id.data if apply_menu else None
+        new_is_spoilage = form.is_spoilage.data if apply_spoilage else None
+        new_archived = form.archived.data if apply_archived else None
+
+        if apply_name:
+            if len(selected_ids) > 1:
+                form.name.errors.append(
+                    "Cannot assign the same name to multiple locations."
+                )
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify(
+                        {
+                            "success": False,
+                            "form_html": _render_location_bulk_form(form),
+                        }
+                    )
+                flash(
+                    "Cannot assign the same name to multiple locations.",
+                    "error",
+                )
+                return redirect(url_for("locations.view_locations"))
+            conflict = (
+                Location.query.filter(Location.name == new_name)
+                .filter(~Location.id.in_(selected_ids))
+                .first()
+            )
+            if conflict:
+                form.name.errors.append("A location with that name already exists.")
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify(
+                        {
+                            "success": False,
+                            "form_html": _render_location_bulk_form(form),
+                        }
+                    )
+                flash("A location with that name already exists.", "error")
+                return redirect(url_for("locations.view_locations"))
+
+        menu_obj = None
+        if apply_menu and new_menu_id:
+            menu_obj = db.session.get(Menu, new_menu_id)
+            if menu_obj is None:
+                form.menu_id.errors.append("Selected menu is no longer available.")
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify(
+                        {
+                            "success": False,
+                            "form_html": _render_location_bulk_form(form),
+                        }
+                    )
+                flash("Selected menu is no longer available.", "error")
+                return redirect(url_for("locations.view_locations"))
+
+        with db.session.begin_nested():
+            for location_obj in locations:
+                if apply_name:
+                    location_obj.name = new_name
+                if apply_spoilage:
+                    location_obj.is_spoilage = new_is_spoilage
+                if apply_archived:
+                    location_obj.archived = new_archived
+                if apply_menu:
+                    if new_menu_id and menu_obj is not None:
+                        set_location_menu(location_obj, menu_obj)
+                    else:
+                        set_location_menu(location_obj, None)
+        db.session.commit()
+
+        refreshed_locations = (
+            Location.query.options(selectinload(Location.current_menu))
+            .filter(Location.id.in_(selected_ids))
+            .order_by(Location.id)
+            .all()
+        )
+
+        log_activity(
+            "Bulk updated locations: "
+            + ", ".join(str(loc.id) for loc in refreshed_locations)
+        )
+
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            delete_form = DeleteForm()
+            rows = [
+                {
+                    "id": location_obj.id,
+                    "html": render_template(
+                        "locations/_location_row.html",
+                        location=location_obj,
+                        delete_form=delete_form,
+                    ),
+                }
+                for location_obj in refreshed_locations
+            ]
+            return jsonify({"success": True, "rows": rows})
+
+        flash("Locations updated successfully.", "success")
+        return redirect(url_for("locations.view_locations"))
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify(
+            {"success": False, "form_html": _render_location_bulk_form(form)}
+        )
+
+    return _render_location_bulk_form(form)
 
 
 @location.route("/locations/delete/<int:location_id>", methods=["POST"])
