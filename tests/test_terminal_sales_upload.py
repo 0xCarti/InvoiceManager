@@ -171,6 +171,9 @@ def test_terminal_sales_stays_on_products_until_finish(app, client):
             "All products in the uploaded file have been matched automatically."
             in body
         )
+        assert 'data-role="toggle-product-preview"' in body
+        assert 'data-role="product-mapping-preview"' in body
+        assert f"(ID: {product_id})" in body
 
         with app.app_context():
             assert TerminalSale.query.count() == 0

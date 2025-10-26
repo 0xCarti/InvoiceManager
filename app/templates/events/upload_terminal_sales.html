@@ -14,6 +14,7 @@
 {% set countable_products = countable_products if countable_products is defined else [] %}
 {% set countable_item_options = countable_item_options if countable_item_options is defined else [] %}
 {% set countable_selection_errors = countable_selection_errors if countable_selection_errors is defined else [] %}
+{% set product_mapping_preview = product_mapping_preview | default([]) %}
 
 {% if mapping_payload %}
     <div class="mb-4" aria-label="Terminal sales upload steps">
@@ -412,6 +413,98 @@
                 <div class="alert alert-success">
                     <p class="mb-0">All products in the uploaded file have been matched automatically.</p>
                 </div>
+                {% if product_mapping_preview %}
+                    <div class="mb-3">
+                        <button type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                data-role="toggle-product-preview"
+                                data-show-text="Show matched products"
+                                data-hide-text="Hide matched products"
+                                aria-controls="product-mapping-preview"
+                                aria-expanded="false">
+                            Show matched products
+                        </button>
+                    </div>
+                    <div class="card mb-3 d-none"
+                         id="product-mapping-preview"
+                         data-role="product-mapping-preview">
+                        <div class="card-body">
+                            <p class="text-muted small mb-3">
+                                Review the automatically matched products before finishing the
+                                import.
+                            </p>
+                            {% for group in product_mapping_preview %}
+                                <div class="{% if not loop.last %}mb-4{% endif %}">
+                                    <h6 class="mb-2">
+                                        {{ group.event_location_name }}
+                                        {% if group.sales_location_name %}
+                                            <span class="ms-2 text-muted">
+                                                Source: {{ group.sales_location_name }}
+                                            </span>
+                                        {% endif %}
+                                    </h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Uploaded product</th>
+                                                    <th scope="col">Matched product</th>
+                                                    <th scope="col" class="text-end">Quantity</th>
+                                                    <th scope="col" class="text-end">File price(s)</th>
+                                                    <th scope="col" class="text-end">App price</th>
+                                                    <th scope="col" class="text-end">File total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for entry in group.products %}
+                                                    <tr>
+                                                        <td>{{ entry.source_name }}</td>
+                                                        <td>
+                                                            {{ entry.matched_product_name }}
+                                                            <span class="text-muted">
+                                                                (ID: {{ entry.matched_product_id }})
+                                                            </span>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            {% if entry.quantity is not none %}
+                                                                {{ '%.2f'|format(entry.quantity) }}
+                                                            {% else %}
+                                                                &mdash;
+                                                            {% endif %}
+                                                        </td>
+                                                        <td class="text-end">
+                                                            {% if entry.file_prices %}
+                                                                {% for price in entry.file_prices %}
+                                                                    ${{ '%.2f'|format(price) }}{% if not loop.last %}<br>{% endif %}
+                                                                {% endfor %}
+                                                            {% else %}
+                                                                &mdash;
+                                                            {% endif %}
+                                                        </td>
+                                                        <td class="text-end">
+                                                            {% if entry.app_price is not none %}
+                                                                ${{ '%.2f'|format(entry.app_price) }}
+                                                            {% else %}
+                                                                &mdash;
+                                                            {% endif %}
+                                                        </td>
+                                                        <td class="text-end">
+                                                            {% if entry.file_amount is not none %}
+                                                                ${{ '%.2f'|format(entry.file_amount) }}
+                                                            {% else %}
+                                                                &mdash;
+                                                            {% endif %}
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
             {% endif %}
             {% if sales_location_names %}
                 <div class="card mb-3 {% if active_stage != 'locations' %}d-none{% endif %}">
@@ -620,6 +713,9 @@
             <p class="mb-0 text-muted">Totals rows and the trailing cost/margin columns that IdealPOS adds after the net sales figures can remain in the spreadsheet—the importer ignores them.</p>
         </div>
     </div>
+{% endif %}
+{% if mapping_payload and product_mapping_preview %}
+<script src="{{ url_for('static', filename='js/terminal_product_preview_toggle.js') }}" defer></script>
 {% endif %}
 {% if mapping_payload %}
 <script src="{{ url_for('static', filename='js/terminal_sales_summary_toggle.js') }}" defer></script>

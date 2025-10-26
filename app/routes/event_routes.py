@@ -1605,6 +1605,7 @@ def upload_terminal_sales(event_id):
         request.form.get("countable-selection-step") == "1"
     )
     purchase_gl_codes: list[GLCode] = []
+    product_mapping_preview: list[dict] = []
 
     def _get_purchase_gl_codes() -> list[GLCode]:
         nonlocal purchase_gl_codes
@@ -1904,6 +1905,7 @@ def upload_terminal_sales(event_id):
                     assigned_sales_locations=sorted(assigned_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
+                    product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
                 )
 
@@ -2094,6 +2096,7 @@ def upload_terminal_sales(event_id):
                     assigned_sales_locations=sorted(assigned_sales_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
+                    product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
                 )
 
@@ -2280,6 +2283,7 @@ def upload_terminal_sales(event_id):
                     assigned_sales_locations=sorted(assigned_sales_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
+                    product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
                 )
 
@@ -2376,6 +2380,7 @@ def upload_terminal_sales(event_id):
                         assigned_sales_locations=sorted(assigned_sales_locations),
                         unassigned_sales_locations=unassigned_sales_locations,
                         assignment_errors=assignment_errors,
+                        product_mapping_preview=product_mapping_preview,
                         active_stage=active_stage,
                     )
 
@@ -2416,6 +2421,7 @@ def upload_terminal_sales(event_id):
                         assigned_sales_locations=sorted(assigned_sales_locations),
                         unassigned_sales_locations=unassigned_sales_locations,
                         assignment_errors=assignment_errors,
+                        product_mapping_preview=product_mapping_preview,
                         active_stage=active_stage,
                     )
 
@@ -2544,6 +2550,7 @@ def upload_terminal_sales(event_id):
                                 assigned_sales_locations=sorted(assigned_sales_locations),
                                 unassigned_sales_locations=unassigned_sales_locations,
                                 assignment_errors=assignment_errors,
+                                product_mapping_preview=product_mapping_preview,
                                 active_stage=active_stage,
                                 countable_products=countable_products,
                                 countable_item_options=countable_item_options,
@@ -2602,6 +2609,7 @@ def upload_terminal_sales(event_id):
             pending_totals: list[dict] = []
             selected_locations: list[str] = []
             issue_queue: list[dict] = []
+            preview_lookup: dict[int, dict] = {}
             location_allowed_products: dict[int, set[int]] = {}
             for el in open_locations:
                 selected_loc = request.form.get(f"mapping-{el.id}")
@@ -2663,20 +2671,47 @@ def upload_terminal_sales(event_id):
                         ):
                             if product not in el.location.products:
                                 el.location.products.append(product)
+                    app_price_value = coerce_float(product.price)
                     pending_sales.append(
                         {
                             "event_location_id": el.id,
                             "product_id": product.id,
                             "product_name": product.name,
                             "source_name": prod_name,
-                            "product_price": coerce_float(product.price),
+                            "product_price": app_price_value,
                             "normalized_name": normalized_lookup.get(prod_name, ""),
                             "quantity": quantity_value,
                         }
                     )
                     location_updated = True
 
-                    app_price_value = coerce_float(product.price)
+                    preview_entry = preview_lookup.setdefault(
+                        el.id,
+                        {
+                            "event_location_id": el.id,
+                            "event_location_name": (
+                                el.location.name
+                                if el.location and el.location.name
+                                else f"Event location #{el.id}"
+                            ),
+                            "sales_location_name": selected_loc,
+                            "products": [],
+                        },
+                    )
+                    preview_entry["products"].append(
+                        {
+                            "source_name": prod_name,
+                            "matched_product_id": product.id,
+                            "matched_product_name": product.name,
+                            "quantity": quantity_value,
+                            "file_prices": [
+                                price for price in file_prices if price is not None
+                            ],
+                            "file_amount": file_amount,
+                            "app_price": app_price_value,
+                        }
+                    )
+
                     if file_prices and not all(
                         _prices_match(price, product.price) for price in file_prices
                     ):
@@ -2777,6 +2812,15 @@ def upload_terminal_sales(event_id):
                         }
                     )
 
+            if preview_lookup:
+                product_mapping_preview = [
+                    preview_lookup[el.id]
+                    for el in open_locations
+                    if el.id in preview_lookup
+                ]
+            else:
+                product_mapping_preview = []
+
             if issue_queue:
                 serializer = _terminal_sales_serializer()
                 token_id = token_urlsafe(16)
@@ -2826,6 +2870,7 @@ def upload_terminal_sales(event_id):
                     assigned_sales_locations=sorted(assigned_sales_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
+                    product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
                 )
 
@@ -2856,6 +2901,7 @@ def upload_terminal_sales(event_id):
                     assigned_sales_locations=sorted(assigned_sales_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
+                    product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
                     countable_products=countable_products,
                     countable_item_options=countable_item_options,
@@ -3156,6 +3202,7 @@ def upload_terminal_sales(event_id):
         assigned_sales_locations=sorted(assigned_sales_locations),
         unassigned_sales_locations=unassigned_sales_locations,
         assignment_errors=assignment_errors,
+        product_mapping_preview=product_mapping_preview,
         active_stage=active_stage,
         countable_products=countable_products,
         countable_item_options=countable_item_options,
