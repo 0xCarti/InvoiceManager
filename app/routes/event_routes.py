@@ -726,14 +726,12 @@ def _apply_pending_sales(
                 db.session.add(summary)
             summary.source_location = data.get("source_location")
             summary.total_quantity = coerce_float(data.get("total_quantity"))
-            total_amount_value = coerce_float(data.get("total_amount"))
-            if total_amount_value is None:
-                net_total_value = coerce_float(
-                    data.get("net_including_tax_total")
-                )
-                if net_total_value is not None:
-                    discount_value = coerce_float(data.get("discount_total")) or 0.0
-                    total_amount_value = net_total_value + discount_value
+            net_total_value = coerce_float(data.get("net_including_tax_total"))
+            discount_value = coerce_float(data.get("discount_total"))
+            if net_total_value is not None:
+                total_amount_value = net_total_value + (discount_value or 0.0)
+            else:
+                total_amount_value = coerce_float(data.get("total_amount"))
             summary.total_amount = total_amount_value
             summary.variance_details = _sanitize_variance_details(
                 data.get("variance_details")

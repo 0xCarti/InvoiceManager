@@ -137,21 +137,13 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
         if not data["_has_discount_total"]:
             data["discount_total"] = None
 
-        raw_amount_total = data.get("_raw_amount_total", 0.0) or 0.0
-        if raw_amount_total:
-            data["total_amount"] = raw_amount_total
+        net_total = data.get("net_including_tax_total")
+        if net_total is not None:
+            discount_total = data.get("discount_total") or 0.0
+            data["total_amount"] = net_total + discount_total
         else:
-            fallback_total = None
-            net_total = data.get("net_including_tax_total")
-            if net_total is not None:
-                fallback_total = net_total
-                discount_total = data.get("discount_total")
-                if discount_total is not None:
-                    fallback_total += discount_total
-            if fallback_total is not None:
-                data["total_amount"] = fallback_total
-            else:
-                data["total_amount"] = raw_amount_total
+            raw_amount_total = data.get("_raw_amount_total", 0.0) or 0.0
+            data["total_amount"] = raw_amount_total
     return grouped
 
 
