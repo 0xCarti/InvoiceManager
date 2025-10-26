@@ -185,6 +185,31 @@ def test_apply_pending_sales_uses_net_total_when_amount_missing(
         assert summary.total_amount == pytest.approx(expected_total)
 
 
+def test_group_terminal_sales_rows_prefers_net_plus_discount_over_raw_amount():
+    rows = [
+        {
+            "location": "Main Stand",
+            "product": "Popcorn",
+            "quantity": 5.0,
+            "amount": 125.0,
+            "net_including_tax_total": 100.0,
+            "discount_total": 10.0,
+        },
+        {
+            "location": "Main Stand",
+            "product": "Soda",
+            "quantity": 3.0,
+            "amount": 45.0,
+        },
+    ]
+
+    grouped = group_terminal_sales_rows(rows)
+    summary = grouped["Main Stand"]
+
+    # Even though raw totals are available, prefer the net total plus any discounts.
+    assert summary["total_amount"] == pytest.approx(110.0)
+
+
 def test_terminal_sales_stays_on_products_until_finish(app, client):
     with app.app_context():
         event = Event(
