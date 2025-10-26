@@ -14,6 +14,7 @@ from app.models import (
     TerminalSale,
 )
 from app.routes.event_routes import _apply_pending_sales
+from app.utils.pos_import import group_terminal_sales_rows
 from tests.utils import login
 
 
@@ -110,6 +111,78 @@ def test_apply_pending_sales_replaces_previous_entries(app):
         ).one()
         assert summary.total_quantity == pytest.approx(7.0)
         assert summary.total_amount == pytest.approx(49.0)
+
+
+@pytest.fixture
+def terminal_sales_net_only_rows():
+    return [
+        {
+            "location": "Main Stand",
+            "product": "Popcorn",
+            "quantity": 10.0,
+            "net_including_tax_total": 95.0,
+            "discount_total": 5.0,
+        }
+    ]
+
+
+def test_apply_pending_sales_uses_net_total_when_amount_missing(
+    app, terminal_sales_net_only_rows
+):
+    with app.app_context():
+        event = Event(
+            name="Net Total Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Main Stand")
+        event_location = EventLocation(event=event, location=location)
+        product = Product(name="Popcorn", price=10.0, cost=4.0)
+
+        db.session.add_all([event, location, event_location, product])
+        db.session.commit()
+
+        grouped = group_terminal_sales_rows(terminal_sales_net_only_rows)
+        location_summary = grouped["Main Stand"]
+        net_total = sum(
+            row.get("net_including_tax_total", 0.0)
+            for row in terminal_sales_net_only_rows
+        )
+        discount_total = sum(
+            row.get("discount_total") or 0.0
+            for row in terminal_sales_net_only_rows
+        )
+        expected_total = net_total + discount_total
+
+        pending_sales = [
+            {
+                "event_location_id": event_location.id,
+                "product_id": product.id,
+                "product_name": product.name,
+                "quantity": terminal_sales_net_only_rows[0]["quantity"],
+            }
+        ]
+        pending_totals = [
+            {
+                "event_location_id": event_location.id,
+                "source_location": "Main Stand",
+                "total_quantity": location_summary.get("total"),
+                "total_amount": location_summary.get("total_amount"),
+                "net_including_tax_total": location_summary.get(
+                    "net_including_tax_total"
+                ),
+                "discount_total": location_summary.get("discount_total"),
+                "variance_details": None,
+            }
+        ]
+
+        _apply_pending_sales(pending_sales, pending_totals)
+        db.session.commit()
+
+        summary = EventLocationTerminalSalesSummary.query.filter_by(
+            event_location_id=event_location.id
+        ).one()
+        assert summary.total_amount == pytest.approx(expected_total)
 
 
 def test_terminal_sales_stays_on_products_until_finish(app, client):
