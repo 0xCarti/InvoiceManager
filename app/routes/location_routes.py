@@ -329,6 +329,8 @@ def view_stand_sheet(location_id):
                     }
                 )
 
+    stand_items.sort(key=lambda entry: entry["item"].name or "", reverse=True)
+
     return render_template(
         "locations/stand_sheet.html",
         location=location,
