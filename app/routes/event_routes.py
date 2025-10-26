@@ -3707,7 +3707,6 @@ def _get_stand_items(location_id, event_id=None):
 
     stand_items.sort(
         key=lambda entry: entry["item"].name.casefold(),
-        reverse=True,
     )
 
     return location, stand_items

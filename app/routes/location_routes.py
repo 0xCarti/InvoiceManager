@@ -329,7 +329,9 @@ def view_stand_sheet(location_id):
                     }
                 )
 
-    stand_items.sort(key=lambda entry: entry["item"].name or "", reverse=True)
+    stand_items.sort(
+        key=lambda entry: (entry["item"].name or "").casefold()
+    )
 
     return render_template(
         "locations/stand_sheet.html",
