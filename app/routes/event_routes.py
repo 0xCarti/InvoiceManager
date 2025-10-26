@@ -1555,6 +1555,7 @@ def scan_counts(event_id, location_id):
     )
 
 
+@event.route("/events/<int:event_id>/terminal-sales", methods=["GET", "POST"])
 @event.route("/events/<int:event_id>/sales/upload", methods=["GET", "POST"])
 @login_required
 def upload_terminal_sales(event_id):
@@ -2815,6 +2816,40 @@ def upload_terminal_sales(event_id):
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
                     active_stage=active_stage,
+                )
+
+            if navigate != "finish":
+                active_stage = "locations" if navigate == "back" else "products"
+                return render_template(
+                    "events/upload_terminal_sales.html",
+                    form=form,
+                    event=ev,
+                    open_locations=open_locations,
+                    mapping_payload=payload,
+                    mapping_filename=mapping_filename,
+                    sales_summary=sales_summary,
+                    sales_location_names=list(sales_summary.keys()),
+                    default_mapping=selected_mapping,
+                    unresolved_products=[],
+                    product_choices=product_choices,
+                    product_search_options=product_search_options,
+                    skip_selection_value=SKIP_SELECTION_VALUE,
+                    create_selection_value=CREATE_SELECTION_VALUE,
+                    resolution_errors=resolution_errors,
+                    product_resolution_required=False,
+                    price_discrepancies=price_discrepancies,
+                    menu_mismatches=menu_mismatches,
+                    warnings_required=warnings_required,
+                    warnings_acknowledged=warnings_acknowledged,
+                    ignored_sales_locations=sorted(ignored_sales_locations),
+                    assigned_sales_locations=sorted(assigned_sales_locations),
+                    unassigned_sales_locations=unassigned_sales_locations,
+                    assignment_errors=assignment_errors,
+                    active_stage=active_stage,
+                    countable_products=countable_products,
+                    countable_item_options=countable_item_options,
+                    countable_selection_errors=countable_selection_errors,
+                    gl_codes=_get_purchase_gl_codes() if countable_products else [],
                 )
 
             updated_locations = _apply_pending_sales(pending_sales, pending_totals)
