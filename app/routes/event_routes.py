@@ -527,6 +527,219 @@ def _derive_summary_totals_from_details(
     )
 
 
+def _apply_pending_sales(
+    pending_sales: list[dict] | None,
+    pending_totals: list[dict] | None = None,
+) -> set[str]:
+    """Persist uploaded terminal sales for the provided event locations."""
+
+    updated_locations: set[str] = set()
+    totals_map: dict[int, dict] = {}
+    event_location_ids: set[int] = set()
+
+    sanitized_sales: list[dict] = []
+    for entry in pending_sales or []:
+        if not isinstance(entry, dict):
+            continue
+        sanitized_entry = dict(entry)
+        try:
+            el_id = int(sanitized_entry.get("event_location_id"))
+        except (TypeError, ValueError):
+            sanitized_sales.append(sanitized_entry)
+            continue
+        sanitized_entry["event_location_id"] = el_id
+        sanitized_sales.append(sanitized_entry)
+        event_location_ids.add(el_id)
+
+    if pending_totals:
+        for entry in pending_totals:
+            try:
+                el_id = int(entry.get("event_location_id"))
+            except (TypeError, ValueError):
+                continue
+            totals_map[el_id] = entry
+            event_location_ids.add(el_id)
+
+    if event_location_ids:
+        (
+            TerminalSale.query.filter(
+                TerminalSale.event_location_id.in_(event_location_ids)
+            ).delete(synchronize_session=False)
+        )
+        (
+            EventLocationTerminalSalesSummary.query.filter(
+                EventLocationTerminalSalesSummary.event_location_id.in_(
+                    event_location_ids
+                )
+            ).delete(synchronize_session=False)
+        )
+        db.session.flush()
+
+    def _sanitize_variance_details(value):
+        if not value:
+            return None
+
+        def _sanitize_prices(values):
+            return [
+                coerce_float(price)
+                for price in (values or [])
+                if price is not None
+            ]
+
+        sanitized_products: list[dict] = []
+        for entry in value.get("products", []):
+            sanitized_products.append(
+                {
+                    "product_id": entry.get("product_id"),
+                    "product_name": entry.get("product_name"),
+                    "quantity": coerce_float(entry.get("quantity")),
+                    "file_amount": coerce_float(entry.get("file_amount")),
+                    "file_prices": _sanitize_prices(entry.get("file_prices")),
+                    "app_price": coerce_float(entry.get("app_price")),
+                    "sales_location": entry.get("sales_location"),
+                }
+            )
+
+        sanitized_price_mismatches: list[dict] = []
+        for entry in value.get("price_mismatches", []):
+            sanitized_price_mismatches.append(
+                {
+                    "product_id": entry.get("product_id"),
+                    "product_name": entry.get("product_name"),
+                    "file_prices": _sanitize_prices(entry.get("file_prices")),
+                    "app_price": coerce_float(entry.get("app_price")),
+                    "sales_location": entry.get("sales_location"),
+                }
+            )
+
+        sanitized_menu_issues: list[dict] = []
+        for entry in value.get("menu_issues", []):
+            sanitized_menu_issues.append(
+                {
+                    "product_id": entry.get("product_id"),
+                    "product_name": entry.get("product_name"),
+                    "menu_name": entry.get("menu_name"),
+                    "sales_location": entry.get("sales_location"),
+                }
+            )
+
+        sanitized_unmapped: list[dict] = []
+        for entry in value.get("unmapped_products", []):
+            sanitized_unmapped.append(
+                {
+                    "product_name": entry.get("product_name"),
+                    "quantity": coerce_float(entry.get("quantity")),
+                    "file_amount": coerce_float(entry.get("file_amount")),
+                    "file_prices": _sanitize_prices(entry.get("file_prices")),
+                    "sales_location": entry.get("sales_location"),
+                }
+            )
+
+        sanitized = {
+            "products": sanitized_products,
+            "price_mismatches": sanitized_price_mismatches,
+            "menu_issues": sanitized_menu_issues,
+            "unmapped_products": sanitized_unmapped,
+        }
+
+        if not any(sanitized.values()):
+            return None
+        return sanitized
+
+    for entry in sanitized_sales:
+        event_location_id = entry.get("event_location_id")
+        product_id = entry.get("product_id")
+        quantity_value = entry.get("quantity", 0.0)
+        if not event_location_id:
+            continue
+        event_location = db.session.get(EventLocation, event_location_id)
+        if event_location is None:
+            continue
+        product = None
+        if product_id:
+            product = db.session.get(Product, product_id)
+        source_name = entry.get("source_name")
+        product_name = entry.get("product_name") or source_name
+        if product is None and product_name:
+            product = Product.query.filter(Product.name == product_name).first()
+        if product is None and source_name and source_name != product_name:
+            product = Product.query.filter(Product.name == source_name).first()
+        if product is None:
+            if not product_name:
+                continue
+            price_value = coerce_float(entry.get("product_price")) or 0.0
+            product = Product(
+                name=product_name,
+                price=price_value,
+                cost=0.0,
+            )
+            db.session.add(product)
+            db.session.flush()
+        normalized_name = (entry.get("normalized_name") or "").strip()
+        if normalized_name:
+            alias = TerminalSaleProductAlias.query.filter_by(
+                normalized_name=normalized_name
+            ).first()
+            if alias is None:
+                alias = TerminalSaleProductAlias(
+                    source_name=source_name or product_name,
+                    normalized_name=normalized_name,
+                    product=product,
+                )
+                db.session.add(alias)
+            else:
+                alias.source_name = source_name or product_name
+                alias.product = product
+        entry["product_id"] = product.id
+        entry.setdefault("product_name", product.name)
+        location_obj = event_location.location
+        if location_obj is not None:
+            if product not in location_obj.products:
+                location_obj.products.append(product)
+            _ensure_location_items(location_obj, product)
+        sale = TerminalSale.query.filter_by(
+            event_location_id=event_location.id, product_id=product.id
+        ).first()
+        if sale:
+            sale.quantity = quantity_value
+        else:
+            db.session.add(
+                TerminalSale(
+                    event_location_id=event_location.id,
+                    product_id=product.id,
+                    quantity=quantity_value,
+                    sold_at=datetime.utcnow(),
+                )
+            )
+        if event_location.location is not None:
+            updated_locations.add(event_location.location.name)
+
+    if totals_map:
+        for el_id, data in totals_map.items():
+            summary = EventLocationTerminalSalesSummary.query.filter_by(
+                event_location_id=el_id
+            ).first()
+            if summary is None:
+                summary = EventLocationTerminalSalesSummary(
+                    event_location_id=el_id
+                )
+                db.session.add(summary)
+            summary.source_location = data.get("source_location")
+            summary.total_quantity = data.get("total_quantity")
+            summary.total_amount = data.get("total_amount")
+            summary.variance_details = _sanitize_variance_details(
+                data.get("variance_details")
+            )
+            fallback_quantity, fallback_amount = _derive_summary_totals_from_details(
+                summary.variance_details
+            )
+            if summary.total_quantity is None and fallback_quantity is not None:
+                summary.total_quantity = fallback_quantity
+            if summary.total_amount is None and fallback_amount is not None:
+                summary.total_amount = fallback_amount
+    return updated_locations
+
+
 def _should_store_terminal_summary(
     loc_sales: dict | None,
     location_updated: bool,
@@ -1478,186 +1691,6 @@ def upload_terminal_sales(event_id):
             return math.isclose(float(file_price), float(app_price), abs_tol=0.01)
         except (TypeError, ValueError):
             return False
-
-    def _apply_pending_sales(
-        pending_sales: list[dict],
-        pending_totals: list[dict] | None = None,
-    ) -> set[str]:
-        updated_locations: set[str] = set()
-        totals_map: dict[int, dict] = {}
-        if pending_totals:
-            for entry in pending_totals:
-                try:
-                    el_id = int(entry.get("event_location_id"))
-                except (TypeError, ValueError):
-                    continue
-                totals_map[el_id] = entry
-
-        def _sanitize_variance_details(value):
-            if not value:
-                return None
-
-            def _sanitize_prices(values):
-                return [
-                    coerce_float(price)
-                    for price in (values or [])
-                    if price is not None
-                ]
-
-            sanitized_products: list[dict] = []
-            for entry in value.get("products", []):
-                sanitized_products.append(
-                    {
-                        "product_id": entry.get("product_id"),
-                        "product_name": entry.get("product_name"),
-                        "quantity": coerce_float(entry.get("quantity")),
-                        "file_amount": coerce_float(entry.get("file_amount")),
-                        "file_prices": _sanitize_prices(entry.get("file_prices")),
-                        "app_price": coerce_float(entry.get("app_price")),
-                        "sales_location": entry.get("sales_location"),
-                    }
-                )
-
-            sanitized_price_mismatches: list[dict] = []
-            for entry in value.get("price_mismatches", []):
-                sanitized_price_mismatches.append(
-                    {
-                        "product_id": entry.get("product_id"),
-                        "product_name": entry.get("product_name"),
-                        "file_prices": _sanitize_prices(entry.get("file_prices")),
-                        "app_price": coerce_float(entry.get("app_price")),
-                        "sales_location": entry.get("sales_location"),
-                    }
-                )
-
-            sanitized_menu_issues: list[dict] = []
-            for entry in value.get("menu_issues", []):
-                sanitized_menu_issues.append(
-                    {
-                        "product_id": entry.get("product_id"),
-                        "product_name": entry.get("product_name"),
-                        "menu_name": entry.get("menu_name"),
-                        "sales_location": entry.get("sales_location"),
-                    }
-                )
-
-            sanitized_unmapped: list[dict] = []
-            for entry in value.get("unmapped_products", []):
-                sanitized_unmapped.append(
-                    {
-                        "product_name": entry.get("product_name"),
-                        "quantity": coerce_float(entry.get("quantity")),
-                        "file_amount": coerce_float(entry.get("file_amount")),
-                        "file_prices": _sanitize_prices(entry.get("file_prices")),
-                        "sales_location": entry.get("sales_location"),
-                    }
-                )
-
-            sanitized = {
-                "products": sanitized_products,
-                "price_mismatches": sanitized_price_mismatches,
-                "menu_issues": sanitized_menu_issues,
-                "unmapped_products": sanitized_unmapped,
-            }
-
-            if not any(sanitized.values()):
-                return None
-            return sanitized
-
-        for entry in pending_sales:
-            event_location_id = entry.get("event_location_id")
-            product_id = entry.get("product_id")
-            quantity_value = entry.get("quantity", 0.0)
-            if not event_location_id:
-                continue
-            event_location = db.session.get(EventLocation, event_location_id)
-            if event_location is None:
-                continue
-            product = None
-            if product_id:
-                product = db.session.get(Product, product_id)
-            source_name = entry.get("source_name")
-            product_name = entry.get("product_name") or source_name
-            if product is None and product_name:
-                product = (
-                    Product.query.filter(Product.name == product_name).first()
-                )
-            if product is None and source_name and source_name != product_name:
-                product = (
-                    Product.query.filter(Product.name == source_name).first()
-                )
-            if product is None:
-                if not product_name:
-                    continue
-                price_value = coerce_float(entry.get("product_price")) or 0.0
-                product = Product(
-                    name=product_name,
-                    price=price_value,
-                    cost=0.0,
-                )
-                db.session.add(product)
-                db.session.flush()
-            normalized_name = (entry.get("normalized_name") or "").strip()
-            if normalized_name:
-                alias = TerminalSaleProductAlias.query.filter_by(
-                    normalized_name=normalized_name
-                ).first()
-                if alias is None:
-                    alias = TerminalSaleProductAlias(
-                        source_name=source_name or product_name,
-                        normalized_name=normalized_name,
-                        product=product,
-                    )
-                    db.session.add(alias)
-                else:
-                    alias.source_name = source_name or product_name
-                    alias.product = product
-            entry["product_id"] = product.id
-            entry.setdefault("product_name", product.name)
-            location_obj = event_location.location
-            if location_obj is not None:
-                if product not in location_obj.products:
-                    location_obj.products.append(product)
-                _ensure_location_items(location_obj, product)
-            sale = TerminalSale.query.filter_by(
-                event_location_id=event_location.id, product_id=product.id
-            ).first()
-            if sale:
-                sale.quantity = quantity_value
-            else:
-                db.session.add(
-                    TerminalSale(
-                        event_location_id=event_location.id,
-                        product_id=product.id,
-                        quantity=quantity_value,
-                        sold_at=datetime.utcnow(),
-                    )
-                )
-            updated_locations.add(event_location.location.name)
-        if totals_map:
-            for el_id, data in totals_map.items():
-                summary = EventLocationTerminalSalesSummary.query.filter_by(
-                    event_location_id=el_id
-                ).first()
-                if summary is None:
-                    summary = EventLocationTerminalSalesSummary(
-                        event_location_id=el_id
-                    )
-                    db.session.add(summary)
-                summary.source_location = data.get("source_location")
-                summary.total_quantity = data.get("total_quantity")
-                summary.total_amount = data.get("total_amount")
-                summary.variance_details = _sanitize_variance_details(
-                    data.get("variance_details")
-                )
-                fallback_quantity, fallback_amount = _derive_summary_totals_from_details(
-                    summary.variance_details
-                )
-                if summary.total_quantity is None and fallback_quantity is not None:
-                    summary.total_quantity = fallback_quantity
-                if summary.total_amount is None and fallback_amount is not None:
-                    summary.total_amount = fallback_amount
-        return updated_locations
 
     def _apply_resolution_actions(issue_state: dict) -> tuple[list[str], list[str]]:
         price_updates: list[str] = []
