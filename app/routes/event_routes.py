@@ -2643,8 +2643,25 @@ def upload_terminal_sales(event_id):
                             }
                         )
                         continue
-                    if el.location and product not in el.location.products:
-                        el.location.products.append(product)
+                    allowed_products = location_allowed_products.get(el.id)
+                    if allowed_products is None:
+                        allowed_products = set()
+                        if el.location:
+                            allowed_products.update(p.id for p in el.location.products)
+                            if el.location.current_menu is not None:
+                                allowed_products.update(
+                                    p.id for p in el.location.current_menu.products
+                                )
+                        location_allowed_products[el.id] = allowed_products
+
+                    if el.location:
+                        location_has_restrictions = bool(allowed_products)
+                        if (
+                            not location_has_restrictions
+                            or product.id in allowed_products
+                        ):
+                            if product not in el.location.products:
+                                el.location.products.append(product)
                     pending_sales.append(
                         {
                             "event_location_id": el.id,
@@ -2684,17 +2701,11 @@ def upload_terminal_sales(event_id):
                             }
                         )
 
-                    allowed_products = location_allowed_products.get(el.id)
-                    if allowed_products is None:
-                        allowed_products = {
-                            p.id for p in el.location.products
-                        }
-                        if el.location.current_menu is not None:
-                            allowed_products.update(
-                                p.id for p in el.location.current_menu.products
-                            )
-                        location_allowed_products[el.id] = allowed_products
-                    if allowed_products and product.id not in allowed_products:
+                    if (
+                        allowed_products
+                        and el.location
+                        and product.id not in allowed_products
+                    ):
                         menu_issues.append(
                             {
                                 "product": product.name,

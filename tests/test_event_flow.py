@@ -22,6 +22,7 @@ from app.models import (
     ItemUnit,
     Location,
     LocationStandItem,
+    Menu,
     Product,
     ProductRecipeItem,
     TerminalSale,
@@ -926,6 +927,127 @@ def test_upload_sales_manual_product_match(client, app):
         assert sale.product_id == product_id
         assert sale.quantity == 4
 
+
+def test_terminal_sales_menu_issue_requires_resolution(client, app):
+    payload_rows = [
+        {
+            "location": "Stadium Stand",
+            "product": "Nachos",
+            "quantity": 5,
+        }
+    ]
+
+    with app.app_context():
+        user = User(
+            email="menu-issue@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        location = Location(name="Stadium Stand")
+        allowed_product = Product(name="Soft Pretzel", price=4.0, cost=1.5)
+        new_product = Product(name="Nachos", price=6.0, cost=2.5)
+        menu = Menu(name="Stadium Menu")
+        menu.products.append(allowed_product)
+        location.products.append(allowed_product)
+        location.current_menu = menu
+        event = Event(
+            name="Menu Issue Event",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 1),
+            event_type="inventory",
+        )
+        db.session.add_all(
+            [user, location, allowed_product, new_product, menu, event]
+        )
+        event_location = EventLocation(event=event, location=location)
+        db.session.add(event_location)
+        db.session.commit()
+
+        event_id = event.id
+        event_location_id = event_location.id
+        location_id = location.id
+        menu_id = menu.id
+        new_product_id = new_product.id
+        user_email = user.email
+
+    payload = json.dumps({"rows": payload_rows, "filename": "terminal_sales.xlsx"})
+
+    with client:
+        login(client, user_email, "pass")
+        map_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "payload": payload,
+                f"mapping-{event_location_id}": "Stadium Stand",
+            },
+            follow_redirects=True,
+        )
+        assert map_response.status_code == 200
+        map_body = map_response.data.decode()
+        assert "Add to menu" in map_body
+        assert "This product is not on the menu" in map_body
+        match = re.search(r'name="state_token" value="([^"]+)"', map_body)
+        assert match
+        state_token = unescape(match.group(1))
+
+        with app.app_context():
+            location_snapshot = db.session.get(Location, location_id)
+            menu_snapshot = db.session.get(Menu, menu_id)
+            assert location_snapshot is not None
+            assert menu_snapshot is not None
+            assert new_product_id not in {p.id for p in location_snapshot.products}
+            assert new_product_id not in {p.id for p in menu_snapshot.products}
+
+        add_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "resolve",
+                "state_token": state_token,
+                "payload": payload,
+                "mapping_filename": "terminal_sales.xlsx",
+                "action": f"menu:{new_product_id}:add",
+            },
+            follow_redirects=True,
+        )
+        assert add_response.status_code == 200
+        add_body = add_response.data.decode()
+        assert "Will add product to the menu" in add_body
+        match = re.search(r'name="state_token" value="([^"]+)"', add_body)
+        assert match
+        state_token = unescape(match.group(1))
+
+        finish_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "resolve",
+                "state_token": state_token,
+                "payload": payload,
+                "mapping_filename": "terminal_sales.xlsx",
+                "action": "finish",
+            },
+            follow_redirects=True,
+        )
+        assert finish_response.status_code == 200
+
+    with app.app_context():
+        refreshed_location = db.session.get(Location, location_id)
+        refreshed_menu = db.session.get(Menu, menu_id)
+        new_product_obj = db.session.get(Product, new_product_id)
+        assert refreshed_location is not None
+        assert refreshed_menu is not None
+        assert new_product_obj is not None
+
+        location_product_ids = {p.id for p in refreshed_location.products}
+        assert new_product_id in location_product_ids
+
+        menu_product_ids = {p.id for p in refreshed_menu.products}
+        assert new_product_id in menu_product_ids
+
+        sale = TerminalSale.query.filter_by(
+            event_location_id=event_location_id, product_id=new_product_id
+        ).one()
+        assert sale.quantity == pytest.approx(5)
 
 def test_upload_sales_prompts_for_stale_alias(client, app):
     payload_rows = [
