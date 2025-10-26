@@ -1,3 +1,5 @@
+import json
+import os
 from datetime import date
 
 import pytest
@@ -12,6 +14,7 @@ from app.models import (
     TerminalSale,
 )
 from app.routes.event_routes import _apply_pending_sales
+from tests.utils import login
 
 
 def test_apply_pending_sales_replaces_previous_entries(app):
@@ -107,3 +110,89 @@ def test_apply_pending_sales_replaces_previous_entries(app):
         ).one()
         assert summary.total_quantity == pytest.approx(7.0)
         assert summary.total_amount == pytest.approx(49.0)
+
+
+def test_terminal_sales_stays_on_products_until_finish(app, client):
+    with app.app_context():
+        event = Event(
+            name="Terminal Test Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Main Stand")
+        event_location = EventLocation(event=event, location=location)
+        product = Product(name="Bottled Water", price=3.5, cost=1.0)
+        db.session.add_all([event, location, event_location, product])
+        db.session.commit()
+
+        payload = json.dumps(
+            {
+                "rows": [
+                    {
+                        "location": location.name,
+                        "product": product.name,
+                        "quantity": 2,
+                        "price": float(product.price),
+                    }
+                ],
+                "filename": "terminal.xlsx",
+            }
+        )
+
+        mapping_field = f"mapping-{event_location.id}"
+        event_id = event.id
+        event_location_id = event_location.id
+        location_name = location.name
+        product_id = product.id
+
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login_response = login(client, admin_email, admin_pass)
+        assert login_response.status_code == 200
+        assert login_response.request.path != "/auth/login"
+
+        response = client.post(
+            f"/events/{event_id}/terminal-sales",
+            data={
+                "step": "map",
+                "payload": payload,
+                "stage": "locations",
+                mapping_field: location_name,
+                "navigate": "next",
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.data.decode()
+        assert 'name="stage" value="products"' in body
+        assert (
+            "All products in the uploaded file have been matched automatically."
+            in body
+        )
+
+        with app.app_context():
+            assert TerminalSale.query.count() == 0
+
+        finish_response = client.post(
+            f"/events/{event_id}/terminal-sales",
+            data={
+                "step": "map",
+                "payload": payload,
+                "stage": "products",
+                mapping_field: location_name,
+                "navigate": "finish",
+            },
+            follow_redirects=False,
+        )
+
+        assert finish_response.status_code == 302
+        assert finish_response.headers["Location"].endswith(f"/events/{event_id}")
+
+    with app.app_context():
+        sales = TerminalSale.query.filter_by(
+            event_location_id=event_location_id
+        ).all()
+        assert len(sales) == 1
+        assert sales[0].product_id == product_id
