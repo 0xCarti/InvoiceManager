@@ -33,6 +33,7 @@ from app.utils.units import (
     convert_quantity_for_reporting,
     get_unit_label,
 )
+from app.utils.text import normalize_name_for_sorting
 
 location = Blueprint("locations", __name__)
 
@@ -330,7 +331,9 @@ def view_stand_sheet(location_id):
                 )
 
     stand_items.sort(
-        key=lambda entry: (entry["item"].name or "").casefold()
+        key=lambda entry: normalize_name_for_sorting(
+            entry["item"].name
+        ).casefold()
     )
 
     return render_template(
