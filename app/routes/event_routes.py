@@ -3,6 +3,7 @@ import io
 import json
 import math
 import os
+import re
 from decimal import Decimal, ROUND_HALF_UP
 from collections import defaultdict
 from datetime import datetime
@@ -1424,6 +1425,10 @@ def upload_terminal_sales(event_id):
             cleaned = str(value).strip().replace("$", "")
             if not cleaned:
                 return None
+            cleaned = cleaned.replace(",", "")
+            match = re.match(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", cleaned)
+            if match:
+                return float(match.group(0))
             return float(cleaned)
         except (TypeError, ValueError):
             return None
@@ -2835,7 +2840,21 @@ def upload_terminal_sales(event_id):
             product_name = name.strip()
             if not product_name:
                 return
+            price_value = _to_float(price)
+            amount_value = _to_float(amount)
+            net_including_value = _to_float(net_including_tax_total)
+            discounts_value = _to_float(discounts_total)
+
             quantity_value = _to_float(qty)
+            if quantity_value is None and price_value not in (None, 0.0):
+                base_amount = amount_value
+                if base_amount is None and net_including_value is not None:
+                    base_amount = net_including_value + (discounts_value or 0.0)
+                if base_amount is not None:
+                    try:
+                        quantity_value = base_amount / float(price_value)
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        quantity_value = None
             if quantity_value is None:
                 return
             entry = {
@@ -2843,16 +2862,12 @@ def upload_terminal_sales(event_id):
                 "product": product_name,
                 "quantity": quantity_value,
             }
-            price_value = _to_float(price)
             if price_value is not None:
                 entry["price"] = price_value
-            amount_value = _to_float(amount)
             if amount_value is not None:
                 entry["amount"] = amount_value
-            net_including_value = _to_float(net_including_tax_total)
             if net_including_value is not None:
                 entry["net_including_tax_total"] = net_including_value
-            discounts_value = _to_float(discounts_total)
             if discounts_value is not None:
                 entry["discount_total"] = discounts_value
             rows.append(entry)
