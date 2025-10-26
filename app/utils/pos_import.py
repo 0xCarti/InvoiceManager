@@ -52,6 +52,71 @@ def normalize_pos_alias(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def parse_terminal_sales_number(value) -> float | None:
+    """Best-effort conversion of spreadsheet values to ``float``."""
+
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        cleaned = str(value).strip().replace("$", "")
+        if not cleaned:
+            return None
+        cleaned = cleaned.replace(",", "")
+        match = re.match(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", cleaned)
+        if match:
+            return float(match.group(0))
+        return float(cleaned)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_effectively_zero(value: float | None) -> bool:
+    if value is None:
+        return True
+    try:
+        return abs(value) < 1e-9
+    except (TypeError, ValueError):
+        return True
+
+
+def derive_terminal_sales_quantity(
+    quantity: float | None,
+    *,
+    price: float | None = None,
+    amount: float | None = None,
+    net_including_tax_total: float | None = None,
+    discounts_total: float | None = None,
+) -> float | None:
+    """Return a usable quantity, inferring it from totals when required."""
+
+    if quantity is not None and not _is_effectively_zero(quantity):
+        return float(quantity)
+
+    if price in (None, 0.0):
+        return quantity
+
+    base_amount = amount
+    if _is_effectively_zero(base_amount) and net_including_tax_total is not None:
+        candidate = net_including_tax_total + (discounts_total or 0.0)
+        if not _is_effectively_zero(candidate):
+            base_amount = candidate
+
+    if _is_effectively_zero(base_amount):
+        return quantity
+
+    try:
+        inferred = float(base_amount) / float(price)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return quantity
+
+    if _is_effectively_zero(inferred):
+        return quantity
+
+    return inferred
+
+
 def terminal_sales_cell_is_blank(value) -> bool:
     """Return ``True`` when an Excel cell should be treated as empty."""
 
