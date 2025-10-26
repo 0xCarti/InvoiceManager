@@ -10,6 +10,7 @@ import pytest
 from openpyxl import Workbook
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+from sqlalchemy import text
 from werkzeug.security import generate_password_hash
 
 from app import db
@@ -32,6 +33,7 @@ from app.routes.event_routes import (
     _calculate_physical_vs_terminal_variance,
     suggest_terminal_sales_location_mapping,
 )
+from app.utils.pos_import import normalize_pos_alias
 from app.utils.units import DEFAULT_BASE_UNIT_CONVERSIONS, convert_quantity
 from tests.utils import login
 
@@ -923,6 +925,111 @@ def test_upload_sales_manual_product_match(client, app):
         assert sale is not None
         assert sale.product_id == product_id
         assert sale.quantity == 4
+
+
+def test_upload_sales_prompts_for_stale_alias(client, app):
+    payload_rows = [
+        {
+            "location": "Main Bar",
+            "product": "Alias Soda",
+            "quantity": 2,
+        }
+    ]
+
+    with app.app_context():
+        user = User(
+            email="stale-alias@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        location = Location(name="Main Bar")
+        original_product = Product(name="Alias Soda Original", price=2.0, cost=1.0)
+        replacement_product = Product(
+            name="Alias Soda Replacement", price=2.5, cost=1.2
+        )
+        event = Event(
+            name="Stale Alias Event",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 1, 2),
+            event_type="inventory",
+        )
+        db.session.add_all(
+            [user, location, original_product, replacement_product, event]
+        )
+        location.products.append(replacement_product)
+        event_location = EventLocation(event=event, location=location)
+        db.session.add(event_location)
+        db.session.commit()
+
+        alias = TerminalSaleProductAlias(
+            source_name="Alias Soda",
+            normalized_name=normalize_pos_alias("Alias Soda"),
+            product=original_product,
+        )
+        db.session.add(alias)
+        db.session.commit()
+
+        db.session.execute(
+            text("DELETE FROM product WHERE id = :pid"),
+            {"pid": original_product.id},
+        )
+        db.session.commit()
+
+        stale_alias = TerminalSaleProductAlias.query.filter_by(
+            normalized_name=normalize_pos_alias("Alias Soda")
+        ).first()
+        assert stale_alias is not None
+        assert stale_alias.product is None
+
+        event_id = event.id
+        event_location_id = event_location.id
+        replacement_product_id = replacement_product.id
+        user_email = user.email
+
+    with client:
+        login(client, user_email, "pass")
+        response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "payload": json.dumps(
+                    {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
+                ),
+                f"mapping-{event_location_id}": "Main Bar",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Match Unknown Products" in response.data
+
+        resolution_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "product-resolution-step": "1",
+                "payload": json.dumps(
+                    {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
+                ),
+                f"mapping-{event_location_id}": "Main Bar",
+                "product-match-0": str(replacement_product_id),
+            },
+            follow_redirects=True,
+        )
+        assert resolution_response.status_code == 200
+
+    with app.app_context():
+        alias = TerminalSaleProductAlias.query.filter_by(
+            normalized_name=normalize_pos_alias("Alias Soda")
+        ).first()
+        assert alias is not None
+        assert alias.product_id == replacement_product_id
+
+        sale = TerminalSale.query.filter_by(
+            event_location_id=event_location_id
+        ).first()
+        assert sale is not None
+        assert sale.product_id == replacement_product_id
+        assert sale.quantity == 2
 
 
 def test_upload_sales_remembers_location_mapping(client, app):
