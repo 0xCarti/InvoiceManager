@@ -539,6 +539,59 @@ def test_terminal_sales_prefill(client, app):
         assert b'value="7"' in resp.data or b'value="7.0"' in resp.data
 
 
+def test_saving_terminal_sales_does_not_confirm_location(client, app):
+    email, loc_id, prod_id, _ = setup_event_env(app)
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/events/create",
+            data={
+                "name": "NoConfirmSalesEvent",
+                "start_date": "2023-04-05",
+                "end_date": "2023-04-06",
+                "event_type": "inventory",
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        event = Event.query.filter_by(name="NoConfirmSalesEvent").first()
+        assert event is not None
+        eid = event.id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/events/{eid}/add_location",
+            data={"location_id": loc_id},
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        el = EventLocation.query.filter_by(event_id=eid, location_id=loc_id).first()
+        assert el is not None
+        elid = el.id
+        assert el.confirmed is False
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/events/{eid}/locations/{elid}/sales/add",
+            data={f"qty_{prod_id}": 5},
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        el = db.session.get(EventLocation, elid)
+        assert el is not None
+        assert el.confirmed is False
+        sale = TerminalSale.query.filter_by(
+            event_location_id=elid, product_id=prod_id
+        ).first()
+        assert sale is not None
+        assert sale.quantity == pytest.approx(5)
+
+
 def test_upload_sales_xls(client, app):
     email, east_id, west_id, prod1_id, prod2_id = setup_upload_env(app)
     with client:

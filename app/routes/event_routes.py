@@ -1298,7 +1298,6 @@ def add_terminal_sale(event_id, el_id):
 
     if request.method == "POST":
         updated = False
-        sales_saved_or_updated = False
         for product in available_products:
             qty = request.form.get(f"qty_{product.id}")
             try:
@@ -1315,7 +1314,6 @@ def add_terminal_sale(event_id, el_id):
                     if sale.quantity != amount:
                         sale.quantity = amount
                         updated = True
-                        sales_saved_or_updated = True
                 else:
                     sale = TerminalSale(
                         event_location_id=el_id,
@@ -1325,13 +1323,9 @@ def add_terminal_sale(event_id, el_id):
                     )
                     db.session.add(sale)
                     updated = True
-                    sales_saved_or_updated = True
             elif sale:
                 db.session.delete(sale)
                 updated = True
-
-        if sales_saved_or_updated:
-            el.confirmed = True
 
         db.session.commit()
         if updated:
