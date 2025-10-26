@@ -210,6 +210,23 @@ def test_group_terminal_sales_rows_prefers_net_plus_discount_over_raw_amount():
     assert summary["total_amount"] == pytest.approx(110.0)
 
 
+def test_group_terminal_sales_rows_handles_comma_decimal_quantities():
+    rows = [
+        {
+            "location": "Main Stand",
+            "product": "Popcorn",
+            "quantity": "1,0000",
+        }
+    ]
+
+    grouped = group_terminal_sales_rows(rows)
+    location_data = grouped["Main Stand"]
+    product_data = location_data["products"]["Popcorn"]
+
+    assert product_data["quantity"] == pytest.approx(1.0)
+    assert location_data["total"] == pytest.approx(1.0)
+
+
 def test_terminal_sales_stays_on_products_until_finish(app, client):
     with app.app_context():
         event = Event(
