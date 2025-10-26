@@ -727,14 +727,12 @@ def _apply_pending_sales(
                 db.session.add(summary)
             summary.source_location = data.get("source_location")
             summary.total_quantity = coerce_float(data.get("total_quantity"))
-            total_amount_value = coerce_float(data.get("total_amount"))
-            if total_amount_value is None:
-                net_total_value = coerce_float(
-                    data.get("net_including_tax_total")
-                )
-                if net_total_value is not None:
-                    discount_value = coerce_float(data.get("discount_total")) or 0.0
-                    total_amount_value = net_total_value + discount_value
+            net_total_value = coerce_float(data.get("net_including_tax_total"))
+            discount_value = coerce_float(data.get("discount_total"))
+            if net_total_value is not None:
+                total_amount_value = net_total_value + (discount_value or 0.0)
+            else:
+                total_amount_value = coerce_float(data.get("total_amount"))
             summary.total_amount = total_amount_value
             summary.variance_details = _sanitize_variance_details(
                 data.get("variance_details")
@@ -1015,8 +1013,11 @@ def closed_event_report(event_id):
         )
         stand_items.sort(
             key=lambda entry: (
-                entry.get("item").name.lower() if entry.get("item") else ""
-            )
+                entry.get("item").name.casefold()
+                if entry.get("item") is not None
+                else ""
+            ),
+            reverse=True,
         )
         price_lookup = _build_item_price_lookup(event_location, stand_items)
 
@@ -1299,7 +1300,6 @@ def add_terminal_sale(event_id, el_id):
 
     if request.method == "POST":
         updated = False
-        sales_saved_or_updated = False
         for product in available_products:
             qty = request.form.get(f"qty_{product.id}")
             try:
@@ -1316,7 +1316,6 @@ def add_terminal_sale(event_id, el_id):
                     if sale.quantity != amount:
                         sale.quantity = amount
                         updated = True
-                        sales_saved_or_updated = True
                 else:
                     sale = TerminalSale(
                         event_location_id=el_id,
@@ -1326,13 +1325,9 @@ def add_terminal_sale(event_id, el_id):
                     )
                     db.session.add(sale)
                     updated = True
-                    sales_saved_or_updated = True
             elif sale:
                 db.session.delete(sale)
                 updated = True
-
-        if sales_saved_or_updated:
-            el.confirmed = True
 
         db.session.commit()
         if updated:
@@ -3709,6 +3704,11 @@ def _get_stand_items(location_id, event_id=None):
             )
         )
         seen.add(record.item_id)
+
+    stand_items.sort(
+        key=lambda entry: entry["item"].name.casefold(),
+        reverse=True,
+    )
 
     return location, stand_items
 

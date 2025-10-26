@@ -228,7 +228,7 @@
             return;
         }
         if (itemId && itemName) {
-            link.href = `/items/${itemId}`;
+            link.href = `/items/${encodeURIComponent(itemId)}`;
             link.classList.remove('d-none');
             link.textContent = itemName;
         } else {

@@ -105,8 +105,42 @@ def parse_decimal_string(value: str, expression_prefix: str = "=") -> Decimal:
     if looks_like_expression(text):
         raise ExpressionParsingError("To enter a calculation, start the value with '='.")
 
+    def _normalize_number_string(raw: str) -> str:
+        # Remove common whitespace characters used as thousands separators.
+        normalized = raw.replace("\u00A0", " ")
+        sign = ""
+        if normalized and normalized[0] in "+-":
+            sign, normalized = normalized[0], normalized[1:]
+        normalized = normalized.strip().replace(" ", "")
+        if not normalized:
+            return sign + normalized
+
+        last_comma = normalized.rfind(",")
+        last_dot = normalized.rfind(".")
+
+        decimal_sep: str | None = None
+        if last_comma != -1 and last_dot != -1:
+            decimal_sep = "," if last_comma > last_dot else "."
+        elif last_comma != -1:
+            decimal_sep = ","
+        elif last_dot != -1:
+            decimal_sep = "."
+
+        digits = normalized
+        if decimal_sep == ",":
+            digits = digits.replace(".", "")
+            digits = digits.replace(",", ".")
+        elif decimal_sep == ".":
+            digits = digits.replace(",", "")
+        else:
+            digits = digits.replace(",", "").replace(".", "")
+
+        return sign + digits
+
+    normalized_text = _normalize_number_string(text)
+
     try:
-        return Decimal(text)
+        return Decimal(normalized_text)
     except InvalidOperation as exc:
         raise ExpressionParsingError("Enter a valid number.") from exc
 
