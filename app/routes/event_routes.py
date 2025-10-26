@@ -3,7 +3,6 @@ import io
 import json
 import math
 import os
-import re
 from decimal import Decimal, ROUND_HALF_UP
 from collections import defaultdict
 from datetime import datetime
@@ -55,9 +54,11 @@ from app.models import (
 from app.utils.activity import log_activity
 from app.utils.numeric import coerce_float
 from app.utils.pos_import import (
+    derive_terminal_sales_quantity,
     extract_terminal_sales_location,
     group_terminal_sales_rows,
     normalize_pos_alias,
+    parse_terminal_sales_number,
     terminal_sales_cell_is_blank,
 )
 from app.utils.units import (
@@ -1634,23 +1635,6 @@ def upload_terminal_sales(event_id):
         compacted = func.regexp_replace(alphanumeric, r"\s+", " ", "g")
         return func.trim(compacted)
 
-    def _to_float(value):
-        if value is None:
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        try:
-            cleaned = str(value).strip().replace("$", "")
-            if not cleaned:
-                return None
-            cleaned = cleaned.replace(",", "")
-            match = re.match(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", cleaned)
-            if match:
-                return float(match.group(0))
-            return float(cleaned)
-        except (TypeError, ValueError):
-            return None
-
     def _group_rows(row_data):
         return group_terminal_sales_rows(row_data)
 
@@ -2974,21 +2958,21 @@ def upload_terminal_sales(event_id):
             product_name = name.strip()
             if not product_name:
                 return
-            price_value = _to_float(price)
-            amount_value = _to_float(amount)
-            net_including_value = _to_float(net_including_tax_total)
-            discounts_value = _to_float(discounts_total)
+            price_value = parse_terminal_sales_number(price)
+            amount_value = parse_terminal_sales_number(amount)
+            net_including_value = parse_terminal_sales_number(
+                net_including_tax_total
+            )
+            discounts_value = parse_terminal_sales_number(discounts_total)
 
-            quantity_value = _to_float(qty)
-            if quantity_value is None and price_value not in (None, 0.0):
-                base_amount = amount_value
-                if base_amount is None and net_including_value is not None:
-                    base_amount = net_including_value + (discounts_value or 0.0)
-                if base_amount is not None:
-                    try:
-                        quantity_value = base_amount / float(price_value)
-                    except (TypeError, ValueError, ZeroDivisionError):
-                        quantity_value = None
+            quantity_value = parse_terminal_sales_number(qty)
+            quantity_value = derive_terminal_sales_quantity(
+                quantity_value,
+                price=price_value,
+                amount=amount_value,
+                net_including_tax_total=net_including_value,
+                discounts_total=discounts_value,
+            )
             if quantity_value is None:
                 return
             entry = {
@@ -3098,14 +3082,18 @@ def upload_terminal_sales(event_id):
 
                     quantity = row[4] if len(row) > 4 else None
                     price = row[2] if len(row) > 2 else None
-                    quantity_value = _to_float(quantity)
+                    quantity_value = parse_terminal_sales_number(quantity)
                     discounts = None
-                    if quantity_value is not None and quantity_value != 0:
+                    if quantity_value is not None and abs(quantity_value) > 1e-9:
                         net_including = (
-                            _to_float(row[7]) if len(row) > 7 else None
+                            parse_terminal_sales_number(row[7])
+                            if len(row) > 7
+                            else None
                         )
                         discounts = (
-                            _to_float(row[8]) if len(row) > 8 else None
+                            parse_terminal_sales_number(row[8])
+                            if len(row) > 8
+                            else None
                         )
                         if net_including is not None:
                             price = (

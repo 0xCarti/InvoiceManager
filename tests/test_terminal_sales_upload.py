@@ -14,7 +14,10 @@ from app.models import (
     TerminalSale,
 )
 from app.routes.event_routes import _apply_pending_sales
-from app.utils.pos_import import group_terminal_sales_rows
+from app.utils.pos_import import (
+    derive_terminal_sales_quantity,
+    group_terminal_sales_rows,
+)
 from tests.utils import login
 
 
@@ -184,6 +187,29 @@ def test_apply_pending_sales_uses_net_total_when_amount_missing(
         ).one()
         assert summary.total_amount == pytest.approx(expected_total)
 
+
+def test_derive_terminal_sales_quantity_uses_amount_when_quantity_missing():
+    quantity = None
+    derived = derive_terminal_sales_quantity(
+        quantity,
+        price=5.25,
+        amount=5.25,
+        net_including_tax_total=None,
+        discounts_total=None,
+    )
+    assert derived == pytest.approx(1.0)
+
+
+def test_derive_terminal_sales_quantity_handles_zero_quantity_with_net():
+    quantity = 0.0
+    derived = derive_terminal_sales_quantity(
+        quantity,
+        price=4.0,
+        amount=None,
+        net_including_tax_total=9.0,
+        discounts_total=-1.0,
+    )
+    assert derived == pytest.approx(2.0)
 
 def test_group_terminal_sales_rows_prefers_net_plus_discount_over_raw_amount():
     rows = [
