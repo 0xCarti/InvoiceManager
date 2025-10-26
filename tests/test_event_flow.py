@@ -52,6 +52,42 @@ def setup_upload_env(app):
         return user.email, east.id, west.id, prod1.id, prod2.id
 
 
+@pytest.fixture
+def sticky_bun_sales_bytes():
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Bakery Cart"])
+    ws.append(
+        [
+            "",
+            "Sticky Bun",
+            "$3.00",
+            "",
+            "EA",
+            "$18.00",
+            "",
+            "$18.00",
+            "",
+        ]
+    )
+    ws.append(
+        [
+            "",
+            "Muffin",
+            "$2.50 ",
+            "",
+            " 12 EA",
+            "$30.00",
+            "",
+            "$30.00",
+            "",
+        ]
+    )
+    tmp = BytesIO()
+    wb.save(tmp)
+    return tmp.getvalue()
+
+
 def setup_event_env(app, base_unit="each"):
     with app.app_context():
         user = User(
@@ -694,6 +730,85 @@ def test_upload_sales_pdf(client, app):
         ).first()
         assert sale_e and sale_e.quantity == 7 and sale_e.sold_at
         assert sale_w and sale_w.quantity == 2 and sale_w.sold_at
+
+
+def test_upload_sales_with_annotated_quantities(client, app, sticky_bun_sales_bytes):
+    with app.app_context():
+        user = User(
+            email="bakery@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        location = Location(name="Bakery Cart")
+        sticky = Product(name="Sticky Bun", price=3.0, cost=1.5)
+        muffin = Product(name="Muffin", price=2.5, cost=1.0)
+        event = Event(
+            name="Bakery Day",
+            start_date=date(2025, 8, 1),
+            end_date=date(2025, 8, 1),
+            event_type="inventory",
+        )
+        location.products.extend([sticky, muffin])
+        db.session.add_all([user, location, sticky, muffin, event])
+        event_location = EventLocation(event=event, location=location)
+        db.session.add(event_location)
+        db.session.commit()
+        event_id = event.id
+        event_location_id = event_location.id
+        user_email = user.email
+
+    upload_stream = BytesIO(sticky_bun_sales_bytes)
+    upload_stream.seek(0)
+    data = {"file": (upload_stream, "sticky.xls")}
+    with client:
+        login(client, user_email, "pass")
+        response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        match = re.search(r'name="payload" value="([^"]+)"', response.data.decode())
+        assert match
+        payload = unescape(match.group(1))
+
+    payload_data = json.loads(payload)
+    rows = payload_data.get("rows", [])
+    assert len(rows) == 2
+    sticky_row = next(row for row in rows if row["product"] == "Sticky Bun")
+    muffin_row = next(row for row in rows if row["product"] == "Muffin")
+    assert sticky_row["quantity"] == pytest.approx(6.0)
+    assert muffin_row["quantity"] == pytest.approx(12.0)
+    assert sticky_row.get("amount") == pytest.approx(18.0)
+    assert muffin_row.get("amount") == pytest.approx(30.0)
+
+    with client:
+        login(client, user_email, "pass")
+        mapping_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "payload": payload,
+                f"mapping-{event_location_id}": "Bakery Cart",
+            },
+            follow_redirects=True,
+        )
+        assert mapping_response.status_code == 200
+
+    with app.app_context():
+        event_location = db.session.get(EventLocation, event_location_id)
+        sales = TerminalSale.query.filter_by(
+            event_location_id=event_location_id
+        ).all()
+        assert len(sales) == 2
+        quantities = {sale.product.name: sale.quantity for sale in sales}
+        assert quantities["Sticky Bun"] == pytest.approx(6.0)
+        assert quantities["Muffin"] == pytest.approx(12.0)
+        summary = event_location.terminal_sales_summary
+        assert summary is not None
+        assert summary.total_quantity == pytest.approx(18.0)
+        assert summary.total_amount == pytest.approx(48.0)
 
 
 def test_upload_sales_manual_product_match(client, app):
