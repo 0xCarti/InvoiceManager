@@ -4,6 +4,8 @@ from pathlib import Path
 
 from py_mini_racer import py_mini_racer
 
+from app.utils.numeric import coerce_float
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -99,4 +101,8 @@ def test_parse_value_does_not_mutate_inputs_for_date_like_strings():
         )
         assert ctx.eval('isNaN(window.__dateParseResult)')
         assert ctx.eval('window.__dateValueAfterParse') == date_value
+
+
+def test_coerce_float_supports_comma_decimal_separator():
+    assert coerce_float("1,0000") == 1.0
 

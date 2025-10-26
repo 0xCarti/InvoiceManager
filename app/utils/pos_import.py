@@ -92,9 +92,9 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
     for entry in row_data:
         loc = entry["location"]
         prod = entry["product"]
-        qty = float(entry.get("quantity", 0.0))
-        price = entry.get("price")
-        amount = entry.get("amount")
+        qty = coerce_float(entry.get("quantity"), default=0.0) or 0.0
+        price = coerce_float(entry.get("price"))
+        amount = coerce_float(entry.get("amount"))
         loc_entry = grouped.setdefault(
             loc,
             {
@@ -123,11 +123,11 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
             product_entry["amount"] += amount
             loc_entry["_raw_amount_total"] += amount
         loc_entry["total"] += qty
-        net_including_total = entry.get("net_including_tax_total")
+        net_including_total = coerce_float(entry.get("net_including_tax_total"))
         if net_including_total is not None:
             loc_entry["net_including_tax_total"] += net_including_total
             loc_entry["_has_net_including_tax_total"] = True
-        discount_total = entry.get("discount_total")
+        discount_total = coerce_float(entry.get("discount_total"))
         if discount_total is not None:
             loc_entry["discount_total"] += discount_total
             loc_entry["_has_discount_total"] = True
