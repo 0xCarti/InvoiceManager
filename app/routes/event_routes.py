@@ -2164,9 +2164,9 @@ def upload_terminal_sales(event_id):
                             and original_name not in product_lookup
                             and normalized in alias_lookup
                         ):
-                            product_lookup[original_name] = alias_lookup[
-                                normalized
-                            ].product
+                            product = alias_lookup[normalized].product
+                            if product is not None:
+                                product_lookup[original_name] = product
 
                     bind = db.session.get_bind()
                     supports_sql_normalization = (
@@ -2214,7 +2214,9 @@ def upload_terminal_sales(event_id):
                 alias_lookup = {}
 
             unmatched_names = [
-                name for name in product_names if name not in product_lookup
+                name
+                for name in product_names
+                if product_lookup.get(name) is None
             ]
 
             if assignment_errors:
