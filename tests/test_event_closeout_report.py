@@ -48,6 +48,7 @@ def test_closed_event_report_returns_totals_and_stand_sheet_data(app, client):
         location = Location(name="Main Stand")
         product = Product(name="Hot Dog", price=5.0, cost=2.0)
         item = Item(name="591ml Pepsi", base_unit="each")
+        secondary_item = Item(name="Zucchini Chips", base_unit="each")
         event = Event(
             name="Sample Event",
             start_date=date(2024, 1, 1),
@@ -56,7 +57,7 @@ def test_closed_event_report_returns_totals_and_stand_sheet_data(app, client):
             estimated_sales=Decimal("40.00"),
         )
 
-        db.session.add_all([user, location, product, item, event])
+        db.session.add_all([user, location, product, item, secondary_item, event])
         db.session.commit()
 
         unit = ItemUnit(
@@ -73,13 +74,27 @@ def test_closed_event_report_returns_totals_and_stand_sheet_data(app, client):
             quantity=1,
             countable=True,
         )
+        secondary_unit = ItemUnit(
+            item_id=secondary_item.id,
+            name="each",
+            factor=1,
+            receiving_default=True,
+            transfer_default=True,
+        )
         location.products.append(product)
         stand_item = LocationStandItem(
             location_id=location.id,
             item_id=item.id,
             expected_count=0,
         )
-        db.session.add_all([unit, recipe, stand_item])
+        secondary_stand_item = LocationStandItem(
+            location_id=location.id,
+            item_id=secondary_item.id,
+            expected_count=0,
+        )
+        db.session.add_all(
+            [unit, recipe, stand_item, secondary_unit, secondary_stand_item]
+        )
         db.session.commit()
 
         event_location = EventLocation(
@@ -111,10 +126,24 @@ def test_closed_event_report_returns_totals_and_stand_sheet_data(app, client):
             closing_count=0,
         )
         db.session.add(sheet)
+        db.session.add(
+            EventStandSheetItem(
+                event_location_id=event_location.id,
+                item_id=secondary_item.id,
+                opening_count=0,
+                transferred_in=0,
+                transferred_out=0,
+                adjustments=0,
+                eaten=0,
+                spoiled=0,
+                closing_count=0,
+            )
+        )
         db.session.commit()
 
         event_id = event.id
         item_id = item.id
+        secondary_item_id = secondary_item.id
         user_email = user.email
 
     with captured_templates(app) as templates:
@@ -151,6 +180,18 @@ def test_closed_event_report_returns_totals_and_stand_sheet_data(app, client):
     assert stand_entry["sheet_values"].opening_count == pytest.approx(10.0)
     assert stand_entry["physical_units"] == pytest.approx(10.0)
     assert stand_entry["physical_amount"] == Decimal("50.00")
+
+    secondary_entry = next(
+        entry
+        for entry in location_report.stand_items
+        if entry["item"] and entry["item"].id == secondary_item_id
+    )
+    assert secondary_entry["item"].name == "Zucchini Chips"
+
+    stand_item_names = [entry["item"].name for entry in location_report.stand_items]
+    assert stand_item_names == sorted(
+        stand_item_names, key=str.casefold, reverse=True
+    )
 
 
 def test_close_event_preserves_manual_terminal_sales(app, client):

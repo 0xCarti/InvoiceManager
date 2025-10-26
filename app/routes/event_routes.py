@@ -1012,8 +1012,11 @@ def closed_event_report(event_id):
         )
         stand_items.sort(
             key=lambda entry: (
-                entry.get("item").name.lower() if entry.get("item") else ""
-            )
+                entry.get("item").name.casefold()
+                if entry.get("item") is not None
+                else ""
+            ),
+            reverse=True,
         )
         price_lookup = _build_item_price_lookup(event_location, stand_items)
 
@@ -3713,6 +3716,11 @@ def _get_stand_items(location_id, event_id=None):
             )
         )
         seen.add(record.item_id)
+
+    stand_items.sort(
+        key=lambda entry: entry["item"].name.casefold(),
+        reverse=True,
+    )
 
     return location, stand_items
 
