@@ -533,7 +533,12 @@ def ajax_create_product():
         row_html = render_template(
             "products/_product_row.html", product=product, delete_form=DeleteForm()
         )
-        return jsonify(success=True, html=row_html)
+        product_payload = {
+            "id": product.id,
+            "name": product.name,
+            "price": float(product.price) if product.price is not None else None,
+        }
+        return jsonify(success=True, html=row_html, product=product_payload)
     return jsonify(success=False, errors=form.errors), 400
 
 

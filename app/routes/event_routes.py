@@ -32,6 +32,7 @@ from app.forms import (
     EventLocationConfirmForm,
     EventLocationForm,
     EventLocationUndoConfirmForm,
+    ProductWithRecipeForm,
     UpdateOpeningCountsForm,
     ScanCountForm,
     TerminalSalesUploadForm,
@@ -1569,6 +1570,11 @@ def upload_terminal_sales(event_id):
         abort(404)
 
     form = TerminalSalesUploadForm()
+    product_form = ProductWithRecipeForm()
+    if product_form.recipe_yield_quantity.data is None:
+        product_form.recipe_yield_quantity.data = 1
+    if hasattr(product_form, "submit"):
+        product_form.submit.label.text = "Create Product"
     serializer = _terminal_sales_serializer()
     state_store = session.get(_TERMINAL_SALES_STATE_KEY)
     if not isinstance(state_store, dict):
@@ -1653,6 +1659,8 @@ def upload_terminal_sales(event_id):
     remaining_locations = 0
     total_locations = 0
     selected_locations: list[str] = []
+    created_product_ids_state: set[int] = set()
+    product_creations_state: dict[str, int] = {}
 
     def _get_purchase_gl_codes() -> list[GLCode]:
         nonlocal purchase_gl_codes
@@ -1935,6 +1943,8 @@ def upload_terminal_sales(event_id):
                     assignment_errors=assignment_errors,
                     product_mapping_preview=product_mapping_preview,
                     active_stage="locations",
+                    product_form=product_form,
+                    created_product_ids=sorted(created_product_ids_state),
                     wizard_stage="locations",
                 )
 
@@ -2125,6 +2135,8 @@ def upload_terminal_sales(event_id):
                     assignment_errors=assignment_errors,
                     product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
+                    product_form=product_form,
+                    created_product_ids=sorted(created_product_ids_state),
                     wizard_stage="menus",
                 )
 
@@ -2178,6 +2190,22 @@ def upload_terminal_sales(event_id):
             state_data["mapping_filename"] = mapping_filename
             state_data["selected_mapping"] = stored_mapping
             state_data["ignored_sales_locations"] = sorted(ignored_sales_locations)
+            created_product_ids = set(created_product_ids_state)
+            created_product_ids_form: set[int] = set()
+
+            if request.method == "POST":
+                for raw_created in request.form.getlist("created_product_ids"):
+                    try:
+                        created_id = int(raw_created)
+                    except (TypeError, ValueError):
+                        continue
+                    created_product_ids_form.add(created_id)
+                    created_product_ids.add(created_id)
+
+            if state_data is not None:
+                state_data["created_product_ids"] = sorted(created_product_ids)
+
+            created_product_ids_state = set(created_product_ids)
 
             conflicting_selections = sorted(
                 assigned_sales_locations.intersection(ignored_sales_locations)
@@ -2211,6 +2239,7 @@ def upload_terminal_sales(event_id):
             normalized_lookup = {
                 name: _normalize_product_name(name) for name in product_names
             }
+            created_product_ids = set(created_product_ids_state)
 
             if product_names:
                 product_lookup.update(
@@ -2331,6 +2360,8 @@ def upload_terminal_sales(event_id):
                     assignment_errors=assignment_errors,
                     product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
+                    product_form=product_form,
+                    created_product_ids=sorted(created_product_ids_state),
                     wizard_stage="locations",
                 )
 
@@ -2353,23 +2384,30 @@ def upload_terminal_sales(event_id):
                 ]
 
                 manual_mappings: dict[str, Product] = {}
-                pending_creations: list[str] = []
                 skipped_products: list[str] = []
                 product_selections_state: dict[str, str] = {}
+                created_product_map = dict(
+                    (state_data.get("product_creations") or {})
+                )
+                if not created_product_map:
+                    created_product_map = {}
+
                 for idx, original_name in enumerate(unmatched_names):
                     field_name = f"product-match-{idx}"
                     selected_value = request.form.get(field_name)
                     selected_product = None
                     skip_selected = selected_value == SKIP_SELECTION_VALUE
-                    if selected_value:
-                        product_selections_state[original_name] = selected_value
-                    else:
-                        product_selections_state[original_name] = ""
+                    product_selections_state[original_name] = selected_value or ""
+
                     if selected_value:
                         if skip_selected:
                             skipped_products.append(original_name)
+                            created_product_map.pop(original_name, None)
                         elif selected_value == CREATE_SELECTION_VALUE:
-                            pending_creations.append(original_name)
+                            resolution_errors.append(
+                                f"Create the product for '{original_name}' before continuing."
+                            )
+                            created_product_map.pop(original_name, None)
                         else:
                             try:
                                 product_id = int(selected_value)
@@ -2377,6 +2415,7 @@ def upload_terminal_sales(event_id):
                                 resolution_errors.append(
                                     f"Invalid product selection for {original_name}."
                                 )
+                                created_product_map.pop(original_name, None)
                             else:
                                 selected_product = db.session.get(
                                     Product, product_id
@@ -2385,14 +2424,25 @@ def upload_terminal_sales(event_id):
                                     resolution_errors.append(
                                         f"Selected product is no longer available for {original_name}."
                                     )
+                                    created_product_map.pop(original_name, None)
+                                else:
+                                    product_lookup[original_name] = selected_product
+                                    manual_mappings[original_name] = selected_product
+                                    if (
+                                        product_id in created_product_ids_form
+                                        or product_id
+                                        in (state_data.get("created_product_ids") or [])
+                                    ):
+                                        created_product_map[original_name] = product_id
+                                    else:
+                                        created_product_map.pop(original_name, None)
                     elif resolution_requested:
                         resolution_errors.append(
                             f"Select a product or skip '{original_name}' to continue."
                         )
-
-                    if selected_product:
-                        product_lookup[original_name] = selected_product
-                        manual_mappings[original_name] = selected_product
+                        created_product_map.pop(original_name, None)
+                    else:
+                        created_product_map.pop(original_name, None)
 
                     unresolved_products.append(
                         {
@@ -2400,10 +2450,35 @@ def upload_terminal_sales(event_id):
                             "name": original_name,
                             "selected": selected_value or "",
                             "price": product_price_lookup.get(original_name),
+                            "created_product_id": created_product_map.get(
+                                original_name
+                            ),
                         }
                     )
 
                 state_data["product_selections"] = product_selections_state
+                pending_creations = [
+                    name
+                    for name, product_id in created_product_map.items()
+                    if product_id
+                ]
+                created_product_ids = {
+                    product_id
+                    for product_id in created_product_map.values()
+                    if product_id
+                }
+                state_data["created_product_ids"] = sorted(created_product_ids)
+                state_data["product_creations"] = {
+                    name: product_id
+                    for name, product_id in created_product_map.items()
+                    if product_id
+                }
+                created_product_ids_state = set(created_product_ids)
+                product_creations_state = {
+                    name: product_id
+                    for name, product_id in created_product_map.items()
+                    if product_id
+                }
 
                 if not resolution_requested:
                     active_stage = (
@@ -2439,13 +2514,13 @@ def upload_terminal_sales(event_id):
                         assignment_errors=assignment_errors,
                         product_mapping_preview=product_mapping_preview,
                         active_stage=active_stage,
+                        product_form=product_form,
+                        created_product_ids=sorted(created_product_ids),
                         wizard_stage="products",
                     )
 
                 if (
-                    len(manual_mappings)
-                    + len(pending_creations)
-                    + len(skipped_products)
+                    len(manual_mappings) + len(skipped_products)
                     != len(unmatched_names)
                 ):
                     resolution_errors.append(
@@ -2484,36 +2559,10 @@ def upload_terminal_sales(event_id):
                         assignment_errors=assignment_errors,
                         product_mapping_preview=product_mapping_preview,
                         active_stage=active_stage,
+                        product_form=product_form,
+                        created_product_ids=sorted(created_product_ids),
                         wizard_stage="products",
                     )
-
-                created_product_ids = set(
-                    state_data.get("created_product_ids") or []
-                )
-                pending_recipe_links: list[tuple[Product, Item]] = []
-                new_product_created = False
-                for original_name in pending_creations:
-                    existing_product = Product.query.filter_by(
-                        name=original_name
-                    ).first()
-                    if existing_product:
-                        product_lookup[original_name] = existing_product
-                        manual_mappings[original_name] = existing_product
-                        continue
-                    price_value = product_price_lookup.get(original_name)
-                    if price_value is None:
-                        price_value = 0.0
-                    new_product = Product(
-                        name=original_name,
-                        price=price_value,
-                        cost=0.0,
-                    )
-                    db.session.add(new_product)
-                    db.session.flush()
-                    product_lookup[original_name] = new_product
-                    manual_mappings[original_name] = new_product
-                    created_product_ids.add(new_product.id)
-                    new_product_created = True
 
                 if pending_creations:
                     pending_recipe_links: list[tuple[Product, Item]] = []
@@ -2627,6 +2676,8 @@ def upload_terminal_sales(event_id):
                                 countable_item_options=countable_item_options,
                                 countable_selection_errors=countable_selection_errors,
                                 gl_codes=_get_purchase_gl_codes(),
+                                product_form=product_form,
+                                created_product_ids=sorted(created_product_ids),
                                 wizard_stage="products",
                             )
 
@@ -2656,9 +2707,6 @@ def upload_terminal_sales(event_id):
                         countable_products = []
                         countable_item_options = []
                         countable_selection_errors = []
-
-                if new_product_created:
-                    db.session.commit()
                 state_data["created_product_ids"] = sorted(created_product_ids)
 
                 if manual_mappings and normalized_lookup:
@@ -2739,14 +2787,8 @@ def upload_terminal_sales(event_id):
                                 )
                         location_allowed_products[el.id] = allowed_products
 
-                    if el.location:
-                        location_has_restrictions = bool(allowed_products)
-                        if (
-                            not location_has_restrictions
-                            or product.id in allowed_products
-                        ):
-                            if product not in el.location.products:
-                                el.location.products.append(product)
+                    if el.location and product not in el.location.products:
+                        el.location.products.append(product)
                     app_price_value = coerce_float(product.price)
                     pending_sales.append(
                         {
@@ -2949,10 +2991,12 @@ def upload_terminal_sales(event_id):
                     assignment_errors=assignment_errors,
                     product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
+                    product_form=product_form,
+                    created_product_ids=sorted(created_product_ids),
                     wizard_stage="menus",
                 )
 
-            if navigate != "finish":
+            if navigate and navigate != "finish":
                 active_stage = "locations" if navigate == "back" else "products"
                 wizard_stage_value = active_stage
                 return render_template(
@@ -2986,6 +3030,8 @@ def upload_terminal_sales(event_id):
                     countable_item_options=countable_item_options,
                     countable_selection_errors=countable_selection_errors,
                     gl_codes=_get_purchase_gl_codes() if countable_products else [],
+                    product_form=product_form,
+                    created_product_ids=sorted(created_product_ids),
                     wizard_stage=wizard_stage_value,
                 )
 
@@ -3272,6 +3318,7 @@ def upload_terminal_sales(event_id):
                 "ignored_sales_locations": [],
                 "warnings_acknowledged": False,
                 "created_product_ids": [],
+                "product_creations": {},
             }
             state_token, state_data = _save_state(initial_state)
 
@@ -3279,6 +3326,10 @@ def upload_terminal_sales(event_id):
         wizard_stage = state_data.get("stage", wizard_stage)
         issue_index = state_data.get("issue_index", issue_index)
         selected_locations = state_data.get("selected_locations") or selected_locations
+        created_product_ids_state = set(
+            state_data.get("created_product_ids") or []
+        )
+        product_creations_state = dict(state_data.get("product_creations") or {})
 
     if request.method != "POST" and state_data and wizard_stage in {"locations", "products", "menus"}:
         payload_data = state_data.get("payload") or {}
@@ -3330,6 +3381,9 @@ def upload_terminal_sales(event_id):
                         "name": original_name,
                         "selected": product_selections.get(original_name, ""),
                         "price": product_price_lookup.get(original_name),
+                        "created_product_id": product_creations_state.get(
+                            original_name
+                        ),
                     }
                 )
             active_stage = "products"
@@ -3383,6 +3437,8 @@ def upload_terminal_sales(event_id):
         countable_item_options=countable_item_options,
         countable_selection_errors=countable_selection_errors,
         gl_codes=_get_purchase_gl_codes() if countable_products else [],
+        product_form=product_form,
+        created_product_ids=sorted(created_product_ids_state),
     )
 
 

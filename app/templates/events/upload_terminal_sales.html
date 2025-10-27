@@ -274,6 +274,11 @@
                 {% if countable_products %}
                     <input type="hidden" name="countable-selection-step" value="1">
                 {% endif %}
+                <div data-role="created-product-container">
+                    {% for created_id in created_product_ids|default([], true) %}
+                        <input type="hidden" name="created_product_ids" value="{{ created_id }}">
+                    {% endfor %}
+                </div>
                 <div class="alert alert-warning">
                     <p class="mb-2">
                         We couldn't automatically match every product in the terminal
@@ -316,7 +321,11 @@
                             <div class="mb-3 terminal-product-mapping"
                                  data-terminal-product-mapping
                                  data-skip-value="{{ skip_value }}"
-                                 data-create-value="{{ create_value }}">
+                                 data-create-value="{{ create_value }}"
+                                 data-product-field="{{ product.field }}"
+                                 data-product-name="{{ product.name }}"
+                                 data-product-price="{{ '%.2f'|format(product.price) if product.price is not none else '' }}"
+                                 data-created-product-id="{{ product.created_product_id|default('', true) }}">
                                 <label class="form-label" for="{{ product.field }}-search">
                                     {{ product.name }}
                                 </label>
@@ -719,6 +728,23 @@
         </div>
     </div>
 {% endif %}
+<div class="modal fade" id="terminalCreateProductModal" tabindex="-1" aria-labelledby="terminalCreateProductModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="terminalCreateProductModalLabel">Create Product from Terminal Sales</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {% with form=product_form %}
+                    {% set form_action = url_for('product.ajax_create_product') %}
+                    {% set form_id = 'terminal-create-product-form' %}
+                    {% include 'products/_create_product_form.html' %}
+                {% endwith %}
+            </div>
+        </div>
+    </div>
+</div>
 {% if mapping_payload and product_mapping_preview %}
 <script src="{{ url_for('static', filename='js/terminal_product_preview_toggle.js') }}" defer></script>
 {% endif %}

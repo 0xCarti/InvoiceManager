@@ -18,6 +18,7 @@ from app.models import (
     Event,
     EventLocation,
     EventStandSheetItem,
+    GLCode,
     Item,
     ItemUnit,
     Location,
@@ -131,6 +132,26 @@ def setup_event_env(app, base_unit="each"):
         return user.email, loc.id, product.id, item.id
 
 
+def create_modal_product(client, name, price, **fields):
+    form_data = {
+        "name": name,
+        "price": str(price),
+        "cost": str(fields.pop("cost", price)),
+        "recipe_yield_quantity": str(fields.pop("recipe_yield_quantity", 1)),
+        "recipe_yield_unit": str(fields.pop("recipe_yield_unit", "")),
+    }
+
+    sales_gl_code = fields.pop("sales_gl_code", None)
+    if sales_gl_code not in (None, ""):
+        form_data["sales_gl_code"] = str(sales_gl_code)
+    for key, value in fields.items():
+        form_data[key] = str(value)
+    response = client.post("/products/ajax/create", data=form_data)
+    payload = response.get_json()
+    assert payload and payload.get("success"), payload
+    return int(payload["product"]["id"])
+
+
 def test_event_lifecycle(client, app):
     email, loc_id, prod_id, item_id = setup_event_env(app)
     with client:
@@ -173,6 +194,14 @@ def test_event_lifecycle(client, app):
         client.post(
             f"/events/{eid}/locations/{elid}/sales/add",
             data={f"qty_{prod_id}": 3},
+            follow_redirects=True,
+        )
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/events/{eid}/locations/{elid}/confirm",
+            data={"submit": "Confirm"},
             follow_redirects=True,
         )
 
@@ -812,7 +841,6 @@ def test_upload_sales_with_annotated_quantities(client, app, sticky_bun_sales_by
         event_id = event.id
         event_location_id = event_location.id
         location_id = location.id
-        menu_id = menu.id
         user_email = user.email
 
     upload_stream = BytesIO(sticky_bun_sales_bytes)
@@ -1163,6 +1191,12 @@ def test_terminal_sales_wizard_state_resume_and_new_product_menu_flow(client, ap
         assert token_match
         state_token = unescape(token_match.group(1))
 
+        created_product_id = create_modal_product(
+            client,
+            name="Arcade Pretzel",
+            price="6.00",
+        )
+
         resume_response = client.get(f"/events/{event_id}/sales/upload")
         resume_body = resume_response.data.decode()
         assert "Match Unknown Products" in resume_body
@@ -1177,7 +1211,8 @@ def test_terminal_sales_wizard_state_resume_and_new_product_menu_flow(client, ap
                 "navigate": "finish",
                 "state_token": state_token,
                 f"mapping-{event_location_id}": "Wizard Concessions",
-                "product-match-0": "__create__",
+                "product-match-0": str(created_product_id),
+                "created_product_ids": str(created_product_id),
             },
             follow_redirects=True,
         )
@@ -1190,7 +1225,7 @@ def test_terminal_sales_wizard_state_resume_and_new_product_menu_flow(client, ap
 
         with app.app_context():
             created_product = Product.query.filter_by(name="Arcade Pretzel").one()
-            created_product_id = created_product.id
+            assert created_product.id == created_product_id
 
         assert f"menu:{created_product_id}:add" in resolution_body
 
@@ -1538,6 +1573,12 @@ def test_upload_sales_create_product(client, app):
         assert response.status_code == 200
         assert b"Match Unknown Products" in response.data
 
+        created_product_id = create_modal_product(
+            client,
+            name="Frozen Lemonade",
+            price="7.50",
+        )
+
         resolution_response = client.post(
             f"/events/{event_id}/sales/upload",
             data={
@@ -1547,7 +1588,8 @@ def test_upload_sales_create_product(client, app):
                     {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
                 ),
                 f"mapping-{event_location_id}": "Main Bar",
-                "product-match-0": "__create__",
+                "product-match-0": str(created_product_id),
+                "created_product_ids": str(created_product_id),
             },
             follow_redirects=True,
         )
@@ -1628,6 +1670,12 @@ def test_upload_sales_create_product_prefers_price(client, app):
         assert response.status_code == 200
         assert b"Match Unknown Products" in response.data
 
+        created_product_id = create_modal_product(
+            client,
+            name="Frozen Lemonade",
+            price="8.00",
+        )
+
         resolution_response = client.post(
             f"/events/{event_id}/sales/upload",
             data={
@@ -1637,7 +1685,8 @@ def test_upload_sales_create_product_prefers_price(client, app):
                     {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
                 ),
                 f"mapping-{event_location_id}": "Main Bar",
-                "product-match-0": "__create__",
+                "product-match-0": str(created_product_id),
+                "created_product_ids": str(created_product_id),
             },
             follow_redirects=True,
         )
@@ -1705,6 +1754,12 @@ def test_upload_sales_create_product_uses_derived_amount_without_countable_assig
         assert response.status_code == 200
         assert b"Match Unknown Products" in response.data
 
+        created_product_id = create_modal_product(
+            client,
+            name="Frozen Lemonade",
+            price="7.50",
+        )
+
         resolution_response = client.post(
             f"/events/{event_id}/sales/upload",
             data={
@@ -1714,7 +1769,8 @@ def test_upload_sales_create_product_uses_derived_amount_without_countable_assig
                     {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
                 ),
                 f"mapping-{event_location_id}": "Main Bar",
-                "product-match-0": "__create__",
+                "product-match-0": str(created_product_id),
+                "created_product_ids": str(created_product_id),
             },
             follow_redirects=True,
         )
@@ -1730,6 +1786,112 @@ def test_upload_sales_create_product_uses_derived_amount_without_countable_assig
         ).first()
         assert sale is not None
         assert sale.quantity == pytest.approx(4)
+
+
+def test_modal_product_creation_includes_recipe_details(client, app):
+    payload_rows = [
+        {
+            "location": "Main Bar",
+            "product": "Frozen Lemonade Deluxe",
+            "quantity": 5,
+            "price": 9.25,
+        }
+    ]
+
+    with app.app_context():
+        user = User(
+            email="modal-recipe@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        location = Location(name="Main Bar")
+        event = Event(
+            name="Recipe Creation Event",
+            start_date=date(2025, 10, 1),
+            end_date=date(2025, 10, 2),
+            event_type="inventory",
+        )
+        item = Item(name="Lemon Mix", base_unit="bag")
+        db.session.add_all([user, location, event, item])
+        db.session.flush()
+        item_unit = ItemUnit(item_id=item.id, name="Case", factor=6)
+        db.session.add(item_unit)
+        event_location = EventLocation(event=event, location=location)
+        db.session.add(event_location)
+        gl_code = GLCode.query.filter(GLCode.code.like("4%"))
+        sales_gl_code = gl_code.order_by(GLCode.code).first()
+        db.session.commit()
+
+        event_id = event.id
+        event_location_id = event_location.id
+        user_email = user.email
+        item_id = item.id
+        item_unit_id = item_unit.id
+        sales_gl_id = sales_gl_code.id if sales_gl_code else None
+
+    with client:
+        login(client, user_email, "pass")
+        response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "payload": json.dumps(
+                    {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
+                ),
+                f"mapping-{event_location_id}": "Main Bar",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Match Unknown Products" in response.data
+
+        created_product_id = create_modal_product(
+            client,
+            name="Frozen Lemonade Deluxe",
+            price="9.25",
+            sales_gl_code=sales_gl_id if sales_gl_id is not None else "",
+            recipe_yield_quantity="4",
+            recipe_yield_unit="cups",
+            **{
+                "items-0-item": item_id,
+                "items-0-quantity": "3",
+                "items-0-unit": item_unit_id,
+                "items-0-countable": "y",
+            },
+        )
+
+        resolution_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "product-resolution-step": "1",
+                "payload": json.dumps(
+                    {"rows": payload_rows, "filename": "terminal_sales.xlsx"}
+                ),
+                f"mapping-{event_location_id}": "Main Bar",
+                "product-match-0": str(created_product_id),
+                "created_product_ids": str(created_product_id),
+            },
+            follow_redirects=True,
+        )
+        assert resolution_response.status_code == 200
+
+    with app.app_context():
+        product = Product.query.filter_by(name="Frozen Lemonade Deluxe").one()
+        assert product.price == pytest.approx(9.25)
+        if sales_gl_id is not None:
+            assert product.sales_gl_code_id == sales_gl_id
+
+        recipe = ProductRecipeItem.query.filter_by(product_id=product.id).one()
+        assert recipe.item_id == item_id
+        assert recipe.unit_id == item_unit_id
+        assert recipe.countable is True
+        assert recipe.quantity == pytest.approx(3)
+
+        sale = TerminalSale.query.filter_by(
+            event_location_id=event_location_id, product_id=product.id
+        ).one()
+        assert sale.quantity == pytest.approx(5)
 
 
 def test_terminal_sale_last_sale(app):
