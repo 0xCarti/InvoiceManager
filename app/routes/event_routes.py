@@ -696,10 +696,6 @@ def _apply_pending_sales(
         entry["product_id"] = product.id
         entry.setdefault("product_name", product.name)
         location_obj = event_location.location
-        if location_obj is not None:
-            if product not in location_obj.products:
-                location_obj.products.append(product)
-            _ensure_location_items(location_obj, product)
         sale = TerminalSale.query.filter_by(
             event_location_id=event_location.id, product_id=product.id
         ).first()
@@ -714,8 +710,8 @@ def _apply_pending_sales(
                     sold_at=datetime.utcnow(),
                 )
             )
-        if event_location.location is not None:
-            updated_locations.add(event_location.location.name)
+        if location_obj is not None and location_obj.name:
+            updated_locations.add(location_obj.name)
 
     if totals_map:
         for el_id, data in totals_map.items():
@@ -747,6 +743,60 @@ def _apply_pending_sales(
             if summary.total_amount is None and fallback_amount is not None:
                 summary.total_amount = fallback_amount
     return updated_locations
+
+
+def _apply_resolution_actions(issue_state: dict) -> tuple[list[str], list[str]]:
+    """Apply queued price and menu resolutions for terminal sales."""
+
+    price_updates: list[str] = []
+    menu_updates: list[str] = []
+
+    for location_issue in issue_state.get("queue", []):
+        event_location_id = location_issue.get("event_location_id")
+        event_location = None
+        if event_location_id:
+            event_location = db.session.get(EventLocation, event_location_id)
+
+        for issue in location_issue.get("price_issues", []):
+            if issue.get("resolution") != "update":
+                continue
+            product_id = issue.get("product_id")
+            new_price = issue.get("target_price")
+            if product_id is None or new_price is None:
+                continue
+            product = db.session.get(Product, product_id)
+            if product is None:
+                continue
+            product.price = new_price
+            price_updates.append(product.name)
+
+        if event_location is None:
+            continue
+
+        location_obj = event_location.location
+        if location_obj is None:
+            continue
+
+        for issue in location_issue.get("menu_issues", []):
+            if issue.get("resolution") != "add":
+                continue
+            product_id = issue.get("product_id")
+            if product_id is None:
+                continue
+            product = db.session.get(Product, product_id)
+            if product is None:
+                continue
+            if product not in location_obj.products:
+                location_obj.products.append(product)
+            if (
+                location_obj.current_menu
+                and product not in location_obj.current_menu.products
+            ):
+                location_obj.current_menu.products.append(product)
+            _ensure_location_items(location_obj, product)
+            menu_updates.append(f"{product.name} @ {location_obj.name}")
+
+    return price_updates, menu_updates
 
 
 def _should_store_terminal_summary(
@@ -1732,51 +1782,6 @@ def upload_terminal_sales(event_id):
         except (TypeError, ValueError):
             return False
 
-    def _apply_resolution_actions(issue_state: dict) -> tuple[list[str], list[str]]:
-        price_updates: list[str] = []
-        menu_updates: list[str] = []
-        for location_issue in issue_state.get("queue", []):
-            event_location_id = location_issue.get("event_location_id")
-            event_location = None
-            if event_location_id:
-                event_location = db.session.get(EventLocation, event_location_id)
-            for issue in location_issue.get("price_issues", []):
-                if issue.get("resolution") != "update":
-                    continue
-                product_id = issue.get("product_id")
-                new_price = issue.get("target_price")
-                if product_id is None or new_price is None:
-                    continue
-                product = db.session.get(Product, product_id)
-                if product is None:
-                    continue
-                product.price = new_price
-                price_updates.append(product.name)
-            if event_location is None:
-                continue
-            location_obj = event_location.location
-            if location_obj is None:
-                continue
-            for issue in location_issue.get("menu_issues", []):
-                if issue.get("resolution") != "add":
-                    continue
-                product_id = issue.get("product_id")
-                if product_id is None:
-                    continue
-                product = db.session.get(Product, product_id)
-                if product is None:
-                    continue
-                if product not in location_obj.products:
-                    location_obj.products.append(product)
-                if (
-                    location_obj.current_menu
-                    and product not in location_obj.current_menu.products
-                ):
-                    location_obj.current_menu.products.append(product)
-                _ensure_location_items(location_obj, product)
-                menu_updates.append(f"{product.name} @ {location_obj.name}")
-        return price_updates, menu_updates
-
     def _store_location_aliases(pending_totals: list[dict]) -> set[str]:
         if not pending_totals:
             return set()
@@ -1860,6 +1865,12 @@ def upload_terminal_sales(event_id):
             pending_sales: list[dict] = state_data.get("pending_sales") or []
             pending_totals: list[dict] = state_data.get("pending_totals") or []
             selected_locations: list[str] = state_data.get("selected_locations") or []
+            menu_candidates: list[dict] = state_data.get("menu_candidates") or []
+            menu_candidate_selection = (
+                state_data.get("menu_candidate_selection")
+                if isinstance(state_data.get("menu_candidate_selection"), dict)
+                else {}
+            )
             issue_index = state_data.get("issue_index", 0)
             action = request.form.get("action", "")
 
@@ -2040,6 +2051,55 @@ def upload_terminal_sales(event_id):
                 current_issue = None
 
             if issue_index >= len(queue):
+                if menu_candidates:
+                    state_data["queue"] = queue
+                    state_data["pending_sales"] = pending_sales
+                    state_data["pending_totals"] = pending_totals
+                    state_data["selected_locations"] = selected_locations
+                    state_data["issue_index"] = issue_index
+                    state_data["stage"] = "menus"
+                    state_token, state_data = _save_state(state_data)
+                    total_locations = len(queue)
+                    active_stage = "menus"
+                    return render_template(
+                        "events/upload_terminal_sales.html",
+                        form=form,
+                        event=ev,
+                        open_locations=open_locations,
+                        mapping_payload=payload,
+                        mapping_filename=mapping_filename,
+                        sales_summary={},
+                        sales_location_names=[],
+                        default_mapping={},
+                        unresolved_products=[],
+                        product_choices=[],
+                        product_search_options=product_search_options,
+                        skip_selection_value=SKIP_SELECTION_VALUE,
+                        create_selection_value=CREATE_SELECTION_VALUE,
+                        resolution_errors=resolution_errors,
+                        product_resolution_required=False,
+                        price_discrepancies={},
+                        menu_mismatches={},
+                        warnings_required=False,
+                        warnings_acknowledged=False,
+                        state_token=state_token,
+                        issue_index=issue_index,
+                        current_issue=None,
+                        remaining_locations=0,
+                        selected_locations=selected_locations,
+                        issue_total=total_locations,
+                        menu_candidates=menu_candidates,
+                        menu_candidate_selection=menu_candidate_selection,
+                        ignored_sales_locations=sorted(ignored_sales_locations),
+                        assigned_sales_locations=sorted(assigned_sales_locations),
+                        unassigned_sales_locations=unassigned_sales_locations,
+                        assignment_errors=assignment_errors,
+                        product_mapping_preview=product_mapping_preview,
+                        active_stage=active_stage,
+                        product_form=product_form,
+                        created_product_ids=sorted(created_product_ids_state),
+                        wizard_stage="menus",
+                    )
                 updated_locations = _apply_pending_sales(
                     pending_sales, pending_totals
                 )
@@ -2139,6 +2199,152 @@ def upload_terminal_sales(event_id):
                     created_product_ids=sorted(created_product_ids_state),
                     wizard_stage="menus",
                 )
+
+        elif step == "confirm_menus":
+            if not state_token or state_data is None:
+                flash("Unable to continue the resolution process.", "danger")
+                return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
+
+            action = request.form.get("action") or "finish"
+            menu_candidates = state_data.get("menu_candidates") or []
+            existing_selection = (
+                state_data.get("menu_candidate_selection")
+                if isinstance(state_data.get("menu_candidate_selection"), dict)
+                else {}
+            )
+            selected_keys = set(request.form.getlist("menu_additions"))
+            updated_selection: dict[str, bool] = {}
+            for candidate in menu_candidates:
+                location_id = candidate.get("event_location_id")
+                for product in candidate.get("products", []):
+                    key = f"{location_id}:{product.get('product_id')}"
+                    updated_selection[key] = key in selected_keys
+
+            if isinstance(state_data, dict):
+                state_data["menu_candidate_selection"] = updated_selection
+                state_token, state_data = _save_state(state_data)
+
+            if action != "finish":
+                return render_template(
+                    "events/upload_terminal_sales.html",
+                    form=form,
+                    event=ev,
+                    open_locations=open_locations,
+                    mapping_payload=None,
+                    mapping_filename=state_data.get("mapping_filename"),
+                    sales_summary={},
+                    sales_location_names=[],
+                    default_mapping={},
+                    unresolved_products=[],
+                    product_choices=[],
+                    product_search_options=product_search_options,
+                    skip_selection_value=SKIP_SELECTION_VALUE,
+                    create_selection_value=CREATE_SELECTION_VALUE,
+                    resolution_errors=[],
+                    product_resolution_required=False,
+                    price_discrepancies={},
+                    menu_mismatches={},
+                    warnings_required=False,
+                    warnings_acknowledged=False,
+                    state_token=state_token,
+                    issue_index=len(state_data.get("queue") or []),
+                    current_issue=None,
+                    remaining_locations=0,
+                    selected_locations=state_data.get("selected_locations") or [],
+                    issue_total=len(state_data.get("queue") or []),
+                    menu_candidates=menu_candidates,
+                    menu_candidate_selection=updated_selection,
+                    ignored_sales_locations=state_data.get("ignored_sales_locations")
+                    or [],
+                    assigned_sales_locations=[],
+                    unassigned_sales_locations=[],
+                    assignment_errors=[],
+                    product_mapping_preview=[],
+                    active_stage="menus",
+                    product_form=product_form,
+                    created_product_ids=sorted(created_product_ids_state),
+                    wizard_stage="menus",
+                )
+
+            pending_sales = state_data.get("pending_sales") or []
+            pending_totals = state_data.get("pending_totals") or []
+            queue = state_data.get("queue") or []
+
+            combined_queue = list(queue)
+            if menu_candidates:
+                for candidate in menu_candidates:
+                    location_id = candidate.get("event_location_id")
+                    menu_issues: list[dict] = []
+                    sales_location_name = None
+                    for product in candidate.get("products", []):
+                        key = f"{location_id}:{product.get('product_id')}"
+                        should_add = updated_selection.get(key, False)
+                        resolution_value = "add" if should_add else "skip"
+                        menu_issues.append(
+                            {
+                                "product_id": product.get("product_id"),
+                                "product": product.get("product_name"),
+                                "menu_name": candidate.get("menu_name"),
+                                "resolution": resolution_value,
+                            }
+                        )
+                        if sales_location_name is None:
+                            sales_location_name = product.get("sales_location")
+                    combined_queue.append(
+                        {
+                            "event_location_id": location_id,
+                            "location_name": candidate.get("location_name"),
+                            "sales_location": sales_location_name,
+                            "price_issues": [],
+                            "menu_issues": menu_issues,
+                        }
+                    )
+
+            updated_locations = _apply_pending_sales(pending_sales, pending_totals)
+            saved_location_aliases = _store_location_aliases(pending_totals)
+            price_updates, menu_updates = _apply_resolution_actions(
+                {"queue": combined_queue}
+            )
+            if (
+                updated_locations
+                or price_updates
+                or menu_updates
+                or saved_location_aliases
+            ):
+                db.session.commit()
+                log_activity(
+                    "Uploaded terminal sales for event "
+                    f"{event_id} from {state_data.get('mapping_filename') or 'uploaded file'}"
+                )
+                success_parts: list[str] = []
+                if updated_locations:
+                    success_parts.append(
+                        "Terminal sales were imported for: "
+                        + ", ".join(sorted(updated_locations))
+                    )
+                if price_updates:
+                    success_parts.append(
+                        "Updated product prices: "
+                        + ", ".join(sorted(set(price_updates)))
+                    )
+                if menu_updates:
+                    success_parts.append(
+                        "Added products to menus: "
+                        + ", ".join(sorted(set(menu_updates)))
+                    )
+                if saved_location_aliases:
+                    success_parts.append(
+                        "Remembered location mappings for: "
+                        + ", ".join(sorted(saved_location_aliases))
+                    )
+                flash(" ".join(success_parts), "success")
+            else:
+                flash(
+                    "No event locations were linked to the uploaded sales data.",
+                    "warning",
+                )
+            _clear_state()
+            return redirect(url_for("event.view_event", event_id=event_id))
 
         elif step == "map":
             payload = request.form.get("payload")
@@ -2735,6 +2941,7 @@ def upload_terminal_sales(event_id):
             issue_queue: list[dict] = []
             preview_lookup: dict[int, dict] = {}
             location_allowed_products: dict[int, set[int]] = {}
+            menu_candidate_lookup: dict[int, dict] = {}
             for el in open_locations:
                 selected_loc = request.form.get(f"mapping-{el.id}")
                 if not selected_loc:
@@ -2787,8 +2994,32 @@ def upload_terminal_sales(event_id):
                                 )
                         location_allowed_products[el.id] = allowed_products
 
-                    if el.location and product not in el.location.products:
-                        el.location.products.append(product)
+                    location_obj = el.location
+                    if location_obj and not allowed_products:
+                        menu_entry = menu_candidate_lookup.setdefault(
+                            el.id,
+                            {
+                                "event_location_id": el.id,
+                                "location_name": (
+                                    location_obj.name
+                                    if location_obj and location_obj.name
+                                    else f"Event location #{el.id}"
+                                ),
+                                "menu_name": (
+                                    location_obj.current_menu.name
+                                    if location_obj and location_obj.current_menu
+                                    else None
+                                ),
+                                "products": {},
+                            },
+                        )
+                        menu_entry["products"][product.id] = {
+                            "product_id": product.id,
+                            "product_name": product.name,
+                            "sales_location": selected_loc,
+                        }
+                        # Menu additions are reviewed separately after the mapping
+                        # wizard completes, so defer adding products to the menu here.
                     app_price_value = coerce_float(product.price)
                     pending_sales.append(
                         {
@@ -2943,6 +3174,58 @@ def upload_terminal_sales(event_id):
             else:
                 product_mapping_preview = []
 
+            if menu_candidate_lookup:
+                menu_candidates = []
+                for el in open_locations:
+                    candidate = menu_candidate_lookup.get(el.id)
+                    if not candidate:
+                        continue
+                    products = list(candidate.get("products", {}).values())
+                    products.sort(
+                        key=lambda info: normalize_name_for_sorting(
+                            info.get("product_name", "")
+                        )
+                    )
+                    menu_candidates.append(
+                        {
+                            "event_location_id": candidate.get("event_location_id", el.id),
+                            "location_name": candidate.get("location_name")
+                            or (
+                                el.location.name
+                                if el.location and el.location.name
+                                else f"Event location #{el.id}"
+                            ),
+                            "menu_name": candidate.get("menu_name"),
+                            "products": products,
+                        }
+                    )
+            else:
+                menu_candidates = []
+
+            existing_selection = (
+                state_data.get("menu_candidate_selection")
+                if isinstance(state_data, dict)
+                else {}
+            )
+            if not isinstance(existing_selection, dict):
+                existing_selection = {}
+            selection_map: dict[str, bool] = {}
+            for candidate in menu_candidates:
+                for product in candidate.get("products", []):
+                    key = f"{candidate['event_location_id']}:{product['product_id']}"
+                    selection_map[key] = bool(existing_selection.get(key, True))
+
+            if isinstance(state_data, dict):
+                state_data["menu_candidates"] = menu_candidates
+                if selection_map:
+                    state_data["menu_candidate_selection"] = selection_map
+                else:
+                    state_data.pop("menu_candidate_selection", None)
+            elif menu_candidates:
+                state_data = {"menu_candidates": menu_candidates}
+                if selection_map:
+                    state_data["menu_candidate_selection"] = selection_map
+
             if issue_queue:
                 stored_mapping = {
                     str(key): value for key, value in selected_mapping.items()
@@ -2985,6 +3268,8 @@ def upload_terminal_sales(event_id):
                     remaining_locations=len(issue_queue) - 1,
                     selected_locations=selected_locations,
                     issue_total=len(issue_queue),
+                    menu_candidates=menu_candidates,
+                    menu_candidate_selection=selection_map,
                     ignored_sales_locations=sorted(ignored_sales_locations),
                     assigned_sales_locations=sorted(assigned_sales_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
@@ -3033,6 +3318,59 @@ def upload_terminal_sales(event_id):
                     product_form=product_form,
                     created_product_ids=sorted(created_product_ids),
                     wizard_stage=wizard_stage_value,
+                )
+
+            if navigate == "finish" and menu_candidates:
+                state_data = state_data or {}
+                state_data.setdefault("queue", [])
+                state_data["pending_sales"] = pending_sales
+                state_data["pending_totals"] = pending_totals
+                state_data["selected_locations"] = selected_locations
+                state_data["stage"] = "menus"
+                state_token, state_data = _save_state(state_data)
+                active_stage = "menus"
+                return render_template(
+                    "events/upload_terminal_sales.html",
+                    form=form,
+                    event=ev,
+                    open_locations=open_locations,
+                    mapping_payload=payload,
+                    mapping_filename=mapping_filename,
+                    sales_summary=sales_summary,
+                    sales_location_names=list(sales_summary.keys()),
+                    default_mapping=selected_mapping,
+                    unresolved_products=[],
+                    product_choices=product_choices,
+                    product_search_options=product_search_options,
+                    skip_selection_value=SKIP_SELECTION_VALUE,
+                    create_selection_value=CREATE_SELECTION_VALUE,
+                    resolution_errors=resolution_errors,
+                    product_resolution_required=False,
+                    price_discrepancies=price_discrepancies,
+                    menu_mismatches=menu_mismatches,
+                    warnings_required=warnings_required,
+                    warnings_acknowledged=warnings_acknowledged,
+                    state_token=state_token,
+                    issue_index=len(issue_queue),
+                    current_issue=None,
+                    remaining_locations=0,
+                    selected_locations=selected_locations,
+                    issue_total=len(issue_queue),
+                    menu_candidates=menu_candidates,
+                    menu_candidate_selection=selection_map,
+                    ignored_sales_locations=sorted(ignored_sales_locations),
+                    assigned_sales_locations=sorted(assigned_sales_locations),
+                    unassigned_sales_locations=unassigned_sales_locations,
+                    assignment_errors=assignment_errors,
+                    product_mapping_preview=product_mapping_preview,
+                    active_stage=active_stage,
+                    countable_products=countable_products,
+                    countable_item_options=countable_item_options,
+                    countable_selection_errors=countable_selection_errors,
+                    gl_codes=_get_purchase_gl_codes() if countable_products else [],
+                    product_form=product_form,
+                    created_product_ids=sorted(created_product_ids),
+                    wizard_stage="menus",
                 )
 
             updated_locations = _apply_pending_sales(pending_sales, pending_totals)

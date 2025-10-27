@@ -3,12 +3,14 @@
 <h2>Upload Terminal Sales for {{ event.name }}</h2>
 
 {% set wizard_stage = wizard_stage if wizard_stage is defined else 'upload' %}
-{% set resolving_issues = wizard_stage == 'menus' and current_issue is defined %}
+{% set resolving_issues = wizard_stage == 'menus' and current_issue is defined and current_issue %}
 {% set issue_total = issue_total if issue_total is defined else 0 %}
 {% set countable_products = countable_products if countable_products is defined else [] %}
 {% set countable_item_options = countable_item_options if countable_item_options is defined else [] %}
 {% set countable_selection_errors = countable_selection_errors if countable_selection_errors is defined else [] %}
 {% set product_mapping_preview = product_mapping_preview | default([]) %}
+{% set menu_candidates = menu_candidates if menu_candidates is defined else [] %}
+{% set menu_candidate_selection = menu_candidate_selection if menu_candidate_selection is defined else {} %}
 
 {% set stage_order = [
     {'id': 'upload', 'label': 'Upload File'},
@@ -250,6 +252,63 @@
                 {% endif %}
             </div>
             <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}" class="btn btn-link">Start Over</a>
+        </form>
+    {% elif wizard_stage == 'menus' %}
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <input type="hidden" name="step" value="confirm_menus">
+            {% if state_token %}
+                <input type="hidden" name="state_token" value="{{ state_token }}">
+            {% endif %}
+            <div class="card mb-3">
+                <div class="card-header">Review Menu Additions</div>
+                <div class="card-body">
+                    {% if menu_candidates %}
+                        <p class="mb-3">
+                            Select the matched products that should be added to the
+                            event menus. Unchecked products will be skipped.
+                        </p>
+                        {% for candidate in menu_candidates %}
+                            <div class="mb-4">
+                                <h6 class="mb-2">{{ candidate.location_name }}</h6>
+                                {% if candidate.menu_name %}
+                                    <div class="form-text mb-2">Current menu: {{ candidate.menu_name }}</div>
+                                {% endif %}
+                                {% for product in candidate.products %}
+                                    {% set key = candidate.event_location_id ~ ':' ~ product.product_id %}
+                                    {% set checkbox_id = 'menu-add-' ~ key|replace(':', '-') %}
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               id="{{ checkbox_id }}"
+                                               name="menu_additions"
+                                               value="{{ key }}"
+                                               {% if menu_candidate_selection.get(key, True) %}checked{% endif %}>
+                                        <label class="form-check-label" for="{{ checkbox_id }}">
+                                            <span class="fw-semibold">{{ product.product_name }}</span>
+                                            {% if product.sales_location %}
+                                                <span class="text-muted">(from {{ product.sales_location }})</span>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-success mb-0">
+                            All matched products are already available on their menus.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="d-flex align-items-center mb-3">
+                <button type="submit" class="btn btn-primary" name="action" value="finish">
+                    Finish Import
+                </button>
+                <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}" class="btn btn-link ms-2">
+                    Start Over
+                </a>
+            </div>
         </form>
     {% else %}
         <form method="post">

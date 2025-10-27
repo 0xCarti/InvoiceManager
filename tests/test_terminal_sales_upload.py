@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import date
 
 import pytest
@@ -13,7 +14,7 @@ from app.models import (
     Product,
     TerminalSale,
 )
-from app.routes.event_routes import _apply_pending_sales
+from app.routes.event_routes import _apply_pending_sales, _apply_resolution_actions
 from app.utils.pos_import import (
     derive_terminal_sales_quantity,
     parse_terminal_sales_number,
@@ -115,6 +116,115 @@ def test_apply_pending_sales_replaces_previous_entries(app):
         ).one()
         assert summary.total_quantity == pytest.approx(7.0)
         assert summary.total_amount == pytest.approx(49.0)
+
+
+def test_apply_pending_sales_leaves_location_menu_unchanged(app):
+    with app.app_context():
+        event = Event(
+            name="Menu Hold Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Suite Club")
+        event_location = EventLocation(event=event, location=location)
+        product = Product(name="Club Sandwich", price=12.0, cost=5.0)
+
+        db.session.add_all([event, location, event_location, product])
+        db.session.commit()
+
+        pending_sales = [
+            {
+                "event_location_id": event_location.id,
+                "product_id": product.id,
+                "product_name": product.name,
+                "quantity": 8.0,
+            }
+        ]
+
+        _apply_pending_sales(pending_sales, None)
+        db.session.flush()
+
+        assert list(location.products) == []
+        sale = TerminalSale.query.filter_by(
+            event_location_id=event_location.id, product_id=product.id
+        ).one()
+        assert sale.quantity == pytest.approx(8.0)
+
+
+def test_apply_resolution_actions_adds_menu_entries(app):
+    with app.app_context():
+        event = Event(
+            name="Menu Add Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Center Bar")
+        event_location = EventLocation(event=event, location=location)
+        product = Product(name="Craft Beer", price=9.5, cost=3.0)
+
+        db.session.add_all([event, location, event_location, product])
+        db.session.commit()
+
+        queue = [
+            {
+                "event_location_id": event_location.id,
+                "location_name": location.name,
+                "sales_location": "CENTER BAR",
+                "price_issues": [],
+                "menu_issues": [
+                    {
+                        "product_id": product.id,
+                        "product": product.name,
+                        "menu_name": None,
+                        "resolution": "add",
+                    }
+                ],
+            }
+        ]
+
+        price_updates, menu_updates = _apply_resolution_actions({"queue": queue})
+        db.session.flush()
+
+        assert price_updates == []
+        assert menu_updates == [f"{product.name} @ {location.name}"]
+        assert product in location.products
+
+
+def test_apply_resolution_actions_respects_skipped_menu_entries(app):
+    with app.app_context():
+        event = Event(
+            name="Menu Skip Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Party Deck")
+        event_location = EventLocation(event=event, location=location)
+        product = Product(name="Party Platter", price=25.0, cost=10.0)
+
+        db.session.add_all([event, location, event_location, product])
+        db.session.commit()
+
+        queue = [
+            {
+                "event_location_id": event_location.id,
+                "location_name": location.name,
+                "sales_location": "PARTY DECK",
+                "price_issues": [],
+                "menu_issues": [
+                    {
+                        "product_id": product.id,
+                        "product": product.name,
+                        "menu_name": None,
+                        "resolution": "skip",
+                    }
+                ],
+            }
+        ]
+
+        _apply_resolution_actions({"queue": queue})
+        db.session.flush()
+
+        assert product not in location.products
 
 
 @pytest.fixture
@@ -359,8 +469,34 @@ def test_terminal_sales_stays_on_products_until_finish(app, client):
             follow_redirects=False,
         )
 
-        assert finish_response.status_code == 302
-        assert finish_response.headers["Location"].endswith(f"/events/{event_id}")
+        assert finish_response.status_code == 200
+        finish_body = finish_response.data.decode()
+        assert 'name="step" value="confirm_menus"' in finish_body, finish_body
+        assert "Review Menu Additions" in finish_body
+
+        menu_key = f"{event_location_id}:{product_id}"
+        state_token_match = re.search(
+            r'name="state_token" value="([^"]+)"', finish_body
+        )
+        assert state_token_match is not None
+        state_token_value = state_token_match.group(1)
+
+        with app.app_context():
+            assert TerminalSale.query.count() == 0
+
+        confirm_response = client.post(
+            f"/events/{event_id}/terminal-sales",
+            data={
+                "step": "confirm_menus",
+                "state_token": state_token_value,
+                "menu_additions": menu_key,
+                "action": "finish",
+            },
+            follow_redirects=False,
+        )
+
+        assert confirm_response.status_code == 302
+        assert confirm_response.headers["Location"].endswith(f"/events/{event_id}")
 
     with app.app_context():
         sales = TerminalSale.query.filter_by(
@@ -368,6 +504,8 @@ def test_terminal_sales_stays_on_products_until_finish(app, client):
         ).all()
         assert len(sales) == 1
         assert sales[0].product_id == product_id
+        location = EventLocation.query.get(event_location_id).location
+        assert any(p.id == product_id for p in location.products)
 
 
 def test_terminal_sales_upload_saves_locale_currency_totals(app, client):
