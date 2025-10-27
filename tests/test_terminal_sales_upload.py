@@ -16,6 +16,7 @@ from app.models import (
 from app.routes.event_routes import _apply_pending_sales
 from app.utils.pos_import import (
     derive_terminal_sales_quantity,
+    parse_terminal_sales_number,
     group_terminal_sales_rows,
 )
 from tests.utils import login
@@ -188,6 +189,33 @@ def test_apply_pending_sales_uses_net_total_when_amount_missing(
         assert summary.total_amount == pytest.approx(expected_total)
 
 
+def test_parse_terminal_sales_number_strips_locale_prefixes():
+    assert parse_terminal_sales_number("CA\u00A01,234.56") == pytest.approx(1234.56)
+    assert parse_terminal_sales_number("C$\u00A0-98.76") == pytest.approx(-98.76)
+    assert parse_terminal_sales_number("\u00A0ca$\u00A042") == pytest.approx(42.0)
+
+
+def test_group_terminal_sales_rows_handles_locale_currency_totals():
+    net_total = parse_terminal_sales_number("CA\u00A0123.46")
+    discount_total = parse_terminal_sales_number("C$\u00A0-23.45")
+    rows = [
+        {
+            "location": "Main Stand",
+            "product": "Popcorn",
+            "quantity": parse_terminal_sales_number("2"),
+            "net_including_tax_total": net_total,
+            "discount_total": discount_total,
+        }
+    ]
+
+    grouped = group_terminal_sales_rows(rows)
+    summary = grouped["Main Stand"]
+
+    assert summary["net_including_tax_total"] == pytest.approx(net_total)
+    assert summary["discount_total"] == pytest.approx(discount_total)
+    assert summary["total_amount"] == pytest.approx(net_total + discount_total)
+
+
 def test_derive_terminal_sales_quantity_uses_amount_when_quantity_missing():
     quantity = None
     derived = derive_terminal_sales_quantity(
@@ -340,3 +368,90 @@ def test_terminal_sales_stays_on_products_until_finish(app, client):
         ).all()
         assert len(sales) == 1
         assert sales[0].product_id == product_id
+
+
+def test_terminal_sales_upload_saves_locale_currency_totals(app, client):
+    net_total = parse_terminal_sales_number("CA\u00A0123.46")
+    discount_total = parse_terminal_sales_number("CA\u00A0-23.45")
+    with app.app_context():
+        event = Event(
+            name="Locale Currency Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Locale Stand")
+        product = Product(name="Locale Popcorn", price=60.0, cost=20.0)
+        location.products.append(product)
+        event_location = EventLocation(event=event, location=location)
+        db.session.add_all([event, location, product, event_location])
+        db.session.commit()
+
+        event_id = event.id
+        event_location_id = event_location.id
+        mapping_field = f"mapping-{event_location.id}"
+
+    quantity_value = parse_terminal_sales_number("2")
+    price_value = parse_terminal_sales_number("C$\u00A060.00")
+    amount_value = parse_terminal_sales_number("CA\u00A0120.00")
+    payload = json.dumps(
+        {
+            "rows": [
+                {
+                    "location": "Locale Stand",
+                    "product": "Locale Popcorn",
+                    "quantity": quantity_value,
+                    "price": price_value,
+                    "amount": amount_value,
+                    "net_including_tax_total": net_total,
+                    "discount_total": discount_total,
+                }
+            ],
+            "filename": "terminal.xlsx",
+        }
+    )
+
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login_response = login(client, admin_email, admin_pass)
+        assert login_response.status_code == 200
+        assert login_response.request.path != "/auth/login"
+
+        finish_response = client.post(
+            f"/events/{event_id}/terminal-sales",
+            data={
+                "step": "map",
+                "payload": payload,
+                "stage": "locations",
+                mapping_field: "Locale Stand",
+                "navigate": "finish",
+            },
+            follow_redirects=False,
+        )
+
+        assert finish_response.status_code == 302
+
+        confirm_response = client.get(
+            f"/events/{event_id}/locations/{event_location_id}/confirm",
+            follow_redirects=False,
+        )
+        assert confirm_response.status_code == 200
+        assert b"Terminal File Total" in confirm_response.data
+        assert b"$100.01" in confirm_response.data
+
+    with app.app_context():
+        summary = db.session.get(
+            EventLocationTerminalSalesSummary, event_location_id
+        )
+        assert summary is not None
+        assert summary.total_quantity == pytest.approx(2.0)
+        assert summary.total_amount == pytest.approx(net_total + discount_total)
+        assert summary.source_location == "Locale Stand"
+
+        sales = TerminalSale.query.filter_by(
+            event_location_id=event_location_id
+        ).all()
+        assert len(sales) == 1
+        assert sales[0].product.name == "Locale Popcorn"
+        assert sales[0].quantity == pytest.approx(2.0)
