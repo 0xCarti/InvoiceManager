@@ -811,6 +811,8 @@ def test_upload_sales_with_annotated_quantities(client, app, sticky_bun_sales_by
         db.session.commit()
         event_id = event.id
         event_location_id = event_location.id
+        location_id = location.id
+        menu_id = menu.id
         user_email = user.email
 
     upload_stream = BytesIO(sticky_bun_sales_bytes)
@@ -1101,6 +1103,146 @@ def test_terminal_sales_menu_issue_requires_resolution(client, app):
             event_location_id=event_location_id, product_id=new_product_id
         ).one()
         assert sale.quantity == pytest.approx(5)
+
+
+def test_terminal_sales_wizard_state_resume_and_new_product_menu_flow(client, app):
+    payload_rows = [
+        {
+            "location": "Wizard Concessions",
+            "product": "Arcade Pretzel",
+            "quantity": 6,
+        }
+    ]
+
+    with app.app_context():
+        user = User(
+            email="wizard-flow@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        location = Location(name="Wizard Concessions")
+        allowed_product = Product(name="Butter Brew", price=5.0, cost=2.0)
+        menu = Menu(name="Wizard Menu")
+        menu.products.append(allowed_product)
+        location.products.append(allowed_product)
+        location.current_menu = menu
+        event = Event(
+            name="Wizard Flow Event",
+            start_date=date(2026, 7, 15),
+            end_date=date(2026, 7, 15),
+            event_type="inventory",
+        )
+        db.session.add_all([user, location, allowed_product, menu, event])
+        event_location = EventLocation(event=event, location=location)
+        db.session.add(event_location)
+        db.session.commit()
+
+        event_id = event.id
+        event_location_id = event_location.id
+        location_id = location.id
+        menu_id = menu.id
+        user_email = user.email
+
+    payload = json.dumps({"rows": payload_rows, "filename": "terminal_sales.xlsx"})
+
+    with client:
+        login(client, user_email, "pass")
+        map_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "payload": payload,
+                f"mapping-{event_location_id}": "Wizard Concessions",
+            },
+            follow_redirects=True,
+        )
+        assert map_response.status_code == 200
+        map_body = map_response.data.decode()
+        assert "Match Unknown Products" in map_body
+        token_match = re.search(r'name="state_token" value="([^"]+)"', map_body)
+        assert token_match
+        state_token = unescape(token_match.group(1))
+
+        resume_response = client.get(f"/events/{event_id}/sales/upload")
+        resume_body = resume_response.data.decode()
+        assert "Match Unknown Products" in resume_body
+
+        resolution_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "map",
+                "payload": payload,
+                "stage": "products",
+                "product-resolution-step": "1",
+                "navigate": "finish",
+                "state_token": state_token,
+                f"mapping-{event_location_id}": "Wizard Concessions",
+                "product-match-0": "__create__",
+            },
+            follow_redirects=True,
+        )
+        assert resolution_response.status_code == 200
+        resolution_body = resolution_response.data.decode()
+        assert "Menu Availability" in resolution_body
+        token_match = re.search(r'name="state_token" value="([^"]+)"', resolution_body)
+        assert token_match
+        state_token = unescape(token_match.group(1))
+
+        with app.app_context():
+            created_product = Product.query.filter_by(name="Arcade Pretzel").one()
+            created_product_id = created_product.id
+
+        assert f"menu:{created_product_id}:add" in resolution_body
+
+        resume_menu = client.get(f"/events/{event_id}/sales/upload")
+        assert resume_menu.status_code == 200
+        resume_menu_body = resume_menu.data.decode()
+        assert f"menu:{created_product_id}:add" in resume_menu_body
+
+        add_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "resolve",
+                "state_token": state_token,
+                "payload": payload,
+                "mapping_filename": "terminal_sales.xlsx",
+                "action": f"menu:{created_product_id}:add",
+            },
+            follow_redirects=True,
+        )
+        assert add_response.status_code == 200
+        add_body = add_response.data.decode()
+        assert "Will add product to the menu" in add_body
+        token_match = re.search(r'name="state_token" value="([^"]+)"', add_body)
+        assert token_match
+        state_token = unescape(token_match.group(1))
+
+        finish_response = client.post(
+            f"/events/{event_id}/sales/upload",
+            data={
+                "step": "resolve",
+                "state_token": state_token,
+                "payload": payload,
+                "mapping_filename": "terminal_sales.xlsx",
+                "action": "finish",
+            },
+            follow_redirects=True,
+        )
+        assert finish_response.status_code == 200
+
+    with app.app_context():
+        refreshed_location = db.session.get(Location, location_id)
+        refreshed_menu = db.session.get(Menu, menu_id)
+        assert refreshed_location is not None
+        assert refreshed_menu is not None
+        created_product = db.session.get(Product, created_product_id)
+        assert created_product is not None
+        assert created_product in refreshed_location.products
+        assert created_product in refreshed_menu.products
+        sale = TerminalSale.query.filter_by(
+            event_location_id=event_location_id, product_id=created_product_id
+        ).one()
+        assert sale.quantity == pytest.approx(6)
 
 def test_upload_sales_prompts_for_stale_alias(client, app):
     payload_rows = [

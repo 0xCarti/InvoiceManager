@@ -1569,14 +1569,50 @@ def upload_terminal_sales(event_id):
         abort(404)
 
     form = TerminalSalesUploadForm()
+    serializer = _terminal_sales_serializer()
     state_store = session.get(_TERMINAL_SALES_STATE_KEY)
     if not isinstance(state_store, dict):
         state_store = {}
     event_state_key = str(event_id)
-    if request.method != "POST" and event_state_key in state_store:
-        state_store.pop(event_state_key, None)
+
+    def _save_state(data: dict) -> tuple[str, dict]:
+        token_id = data.get("token_id") or token_urlsafe(16)
+        data["token_id"] = token_id
+        token = serializer.dumps(data)
+        state_store[event_state_key] = {"token_id": token_id, "token": token}
         session[_TERMINAL_SALES_STATE_KEY] = state_store
         session.modified = True
+        return token, data
+
+    def _clear_state() -> None:
+        if event_state_key in state_store:
+            state_store.pop(event_state_key, None)
+            session[_TERMINAL_SALES_STATE_KEY] = state_store
+            session.modified = True
+
+    state_entry = state_store.get(event_state_key)
+    if isinstance(state_entry, str):
+        state_entry = {"token_id": state_entry}
+    elif not isinstance(state_entry, dict):
+        state_entry = None
+
+    posted_state_token = request.form.get("state_token") if request.method == "POST" else None
+    state_token = posted_state_token or (state_entry.get("token") if state_entry else None)
+    state_data: dict | None = None
+    if state_token:
+        try:
+            loaded_state = serializer.loads(state_token)
+        except BadSignature:
+            _clear_state()
+            state_token = None
+        else:
+            expected_id = (state_entry or {}).get("token_id")
+            token_id = loaded_state.get("token_id") if isinstance(loaded_state, dict) else None
+            if expected_id and token_id != expected_id:
+                _clear_state()
+                state_token = None
+            else:
+                state_data = loaded_state if isinstance(loaded_state, dict) else None
     open_locations = [
         el
         for el in ev.locations
@@ -1602,7 +1638,7 @@ def upload_terminal_sales(event_id):
     assigned_sales_locations: set[str] = set()
     unassigned_sales_locations: list[str] = []
     assignment_errors: list[str] = []
-    active_stage = "locations"
+    active_stage = "upload"
     countable_products: list[dict] = []
     countable_item_options: list[dict[str, str]] = []
     countable_selection_errors: list[str] = []
@@ -1611,6 +1647,12 @@ def upload_terminal_sales(event_id):
     )
     purchase_gl_codes: list[GLCode] = []
     product_mapping_preview: list[dict] = []
+    wizard_stage = "upload"
+    current_issue = None
+    issue_index = 0
+    remaining_locations = 0
+    total_locations = 0
+    selected_locations: list[str] = []
 
     def _get_purchase_gl_codes() -> list[GLCode]:
         nonlocal purchase_gl_codes
@@ -1780,27 +1822,17 @@ def upload_terminal_sales(event_id):
     if request.method == "POST":
         step = request.form.get("step")
         if step == "resolve":
-            active_stage = "issues"
+            active_stage = "menus"
             payload = request.form.get("payload")
-            state_token = request.form.get("state_token")
             mapping_filename = request.form.get("mapping_filename")
-            if not state_token:
+            if not state_token or state_data is None:
                 flash("Unable to continue the resolution process.", "danger")
-                return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
-            serializer = _terminal_sales_serializer()
-            try:
-                state_data = serializer.loads(state_token)
-            except BadSignature:
-                flash("The resolution data could not be verified.", "danger")
                 return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
 
             token_id = state_data.get("token_id")
-            expected_id = state_store.get(event_state_key)
+            expected_id = (state_entry or {}).get("token_id")
             if not token_id or expected_id != token_id:
-                if event_state_key in state_store:
-                    state_store.pop(event_state_key, None)
-                    session[_TERMINAL_SALES_STATE_KEY] = state_store
-                    session.modified = True
+                _clear_state()
                 flash(
                     "The terminal sales resolution session is no longer valid. "
                     "Upload the sales file again to start over.",
@@ -1824,23 +1856,20 @@ def upload_terminal_sales(event_id):
             action = request.form.get("action", "")
 
             if action == "back_to_mapping":
-                if event_state_key in state_store:
-                    state_store.pop(event_state_key, None)
-                    session[_TERMINAL_SALES_STATE_KEY] = state_store
-                    session.modified = True
-
-                if not payload:
+                payload_data = state_data.get("payload") if state_data else None
+                if payload_data is None and payload:
+                    try:
+                        payload_data = json.loads(payload)
+                    except (TypeError, ValueError):
+                        payload_data = None
+                if not payload_data:
                     flash("Unable to process the uploaded sales data.", "danger")
                     return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
 
-                try:
-                    payload_data = json.loads(payload)
-                except (TypeError, ValueError):
-                    flash("The uploaded sales data is invalid.", "danger")
-                    return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
-
                 rows = payload_data.get("rows", [])
-                mapping_filename = payload_data.get("filename") or mapping_filename
+                mapping_filename = (
+                    payload_data.get("filename") or mapping_filename
+                )
                 if not rows:
                     flash(
                         "No sales records were found in the uploaded file.",
@@ -1868,12 +1897,22 @@ def upload_terminal_sales(event_id):
                     ]
                 )
 
+                state_data["stage"] = "locations"
+                state_data["queue"] = []
+                state_data["pending_sales"] = []
+                state_data["pending_totals"] = []
+                state_data["selected_locations"] = []
+                state_data["issue_index"] = 0
+                state_data["ignored_sales_locations"] = sorted(ignored_sales_locations)
+                state_data["selected_mapping"] = stored_mapping
+                state_token, state_data = _save_state(state_data)
+
                 return render_template(
                     "events/upload_terminal_sales.html",
                     form=form,
                     event=ev,
                     open_locations=open_locations,
-                    mapping_payload=payload,
+                    mapping_payload=json.dumps(payload_data),
                     mapping_filename=mapping_filename,
                     sales_summary=sales_summary,
                     sales_location_names=sales_location_names,
@@ -1889,12 +1928,14 @@ def upload_terminal_sales(event_id):
                     menu_mismatches={},
                     warnings_required=False,
                     warnings_acknowledged=False,
+                    state_token=state_token,
                     ignored_sales_locations=sorted(ignored_sales_locations),
                     assigned_sales_locations=sorted(assigned_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
                     product_mapping_preview=product_mapping_preview,
-                    active_stage=active_stage,
+                    active_stage="locations",
+                    wizard_stage="locations",
                 )
 
             if issue_index < 0:
@@ -2032,10 +2073,7 @@ def upload_terminal_sales(event_id):
                         "No event locations were linked to the uploaded sales data.",
                         "warning",
                     )
-                if event_state_key in state_store:
-                    state_store.pop(event_state_key, None)
-                    session[_TERMINAL_SALES_STATE_KEY] = state_store
-                    session.modified = True
+                _clear_state()
                 return redirect(url_for("event.view_event", event_id=event_id))
 
             if error_messages:
@@ -2050,7 +2088,8 @@ def upload_terminal_sales(event_id):
             state_data["token_id"] = token_id
             state_data["ignored_sales_locations"] = sorted(ignored_sales_locations)
             state_data["selected_mapping"] = stored_mapping
-            state_token = serializer.dumps(state_data)
+            state_data["stage"] = "menus"
+            state_token, state_data = _save_state(state_data)
 
             total_locations = len(queue)
             return render_template(
@@ -2086,17 +2125,23 @@ def upload_terminal_sales(event_id):
                     assignment_errors=assignment_errors,
                     product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
+                    wizard_stage="menus",
                 )
 
         elif step == "map":
             payload = request.form.get("payload")
-            if not payload:
+            payload_data = None
+            if payload:
+                try:
+                    payload_data = json.loads(payload)
+                except (TypeError, ValueError):
+                    payload_data = None
+            if payload_data is None and state_data:
+                payload_data = state_data.get("payload")
+                if payload_data:
+                    payload = json.dumps(payload_data)
+            if not payload_data:
                 flash("Unable to process the uploaded sales data.", "danger")
-                return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
-            try:
-                payload_data = json.loads(payload)
-            except (TypeError, ValueError):
-                flash("The uploaded sales data is invalid.", "danger")
                 return redirect(url_for("event.upload_terminal_sales", event_id=event_id))
 
             rows = payload_data.get("rows", [])
@@ -2123,6 +2168,16 @@ def upload_terminal_sales(event_id):
             assigned_sales_locations = {
                 value for value in selected_mapping.values() if value
             }
+
+            state_data = dict(state_data or {})
+            stored_mapping = {
+                str(el.id): selected_mapping.get(el.id, "")
+                for el in open_locations
+            }
+            state_data["payload"] = payload_data
+            state_data["mapping_filename"] = mapping_filename
+            state_data["selected_mapping"] = stored_mapping
+            state_data["ignored_sales_locations"] = sorted(ignored_sales_locations)
 
             conflicting_selections = sorted(
                 assigned_sales_locations.intersection(ignored_sales_locations)
@@ -2246,6 +2301,8 @@ def upload_terminal_sales(event_id):
 
             if assignment_errors:
                 active_stage = "locations"
+                state_data["stage"] = "locations"
+                state_token, state_data = _save_state(state_data)
                 return render_template(
                     "events/upload_terminal_sales.html",
                     form=form,
@@ -2267,12 +2324,14 @@ def upload_terminal_sales(event_id):
                     menu_mismatches=menu_mismatches,
                     warnings_required=warnings_required,
                     warnings_acknowledged=warnings_acknowledged,
+                    state_token=state_token,
                     ignored_sales_locations=sorted(ignored_sales_locations),
                     assigned_sales_locations=sorted(assigned_sales_locations),
                     unassigned_sales_locations=unassigned_sales_locations,
                     assignment_errors=assignment_errors,
                     product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
+                    wizard_stage="locations",
                 )
 
             if unmatched_names:
@@ -2296,11 +2355,16 @@ def upload_terminal_sales(event_id):
                 manual_mappings: dict[str, Product] = {}
                 pending_creations: list[str] = []
                 skipped_products: list[str] = []
+                product_selections_state: dict[str, str] = {}
                 for idx, original_name in enumerate(unmatched_names):
                     field_name = f"product-match-{idx}"
                     selected_value = request.form.get(field_name)
                     selected_product = None
                     skip_selected = selected_value == SKIP_SELECTION_VALUE
+                    if selected_value:
+                        product_selections_state[original_name] = selected_value
+                    else:
+                        product_selections_state[original_name] = ""
                     if selected_value:
                         if skip_selected:
                             skipped_products.append(original_name)
@@ -2339,10 +2403,14 @@ def upload_terminal_sales(event_id):
                         }
                     )
 
+                state_data["product_selections"] = product_selections_state
+
                 if not resolution_requested:
                     active_stage = (
                         "locations" if navigate == "back" else "products"
                     )
+                    state_data["stage"] = active_stage
+                    state_token, state_data = _save_state(state_data)
                     return render_template(
                         "events/upload_terminal_sales.html",
                         form=form,
@@ -2364,12 +2432,14 @@ def upload_terminal_sales(event_id):
                         menu_mismatches=menu_mismatches,
                         warnings_required=warnings_required,
                         warnings_acknowledged=warnings_acknowledged,
+                        state_token=state_token,
                         ignored_sales_locations=sorted(ignored_sales_locations),
                         assigned_sales_locations=sorted(assigned_sales_locations),
                         unassigned_sales_locations=unassigned_sales_locations,
                         assignment_errors=assignment_errors,
                         product_mapping_preview=product_mapping_preview,
                         active_stage=active_stage,
+                        wizard_stage="products",
                     )
 
                 if (
@@ -2384,6 +2454,8 @@ def upload_terminal_sales(event_id):
 
                 if resolution_errors:
                     active_stage = "products"
+                    state_data["stage"] = "products"
+                    state_token, state_data = _save_state(state_data)
                     return render_template(
                         "events/upload_terminal_sales.html",
                         form=form,
@@ -2405,15 +2477,21 @@ def upload_terminal_sales(event_id):
                         menu_mismatches=menu_mismatches,
                         warnings_required=warnings_required,
                         warnings_acknowledged=warnings_acknowledged,
+                        state_token=state_token,
                         ignored_sales_locations=sorted(ignored_sales_locations),
                         assigned_sales_locations=sorted(assigned_sales_locations),
                         unassigned_sales_locations=unassigned_sales_locations,
                         assignment_errors=assignment_errors,
                         product_mapping_preview=product_mapping_preview,
                         active_stage=active_stage,
+                        wizard_stage="products",
                     )
 
+                created_product_ids = set(
+                    state_data.get("created_product_ids") or []
+                )
                 pending_recipe_links: list[tuple[Product, Item]] = []
+                new_product_created = False
                 for original_name in pending_creations:
                     existing_product = Product.query.filter_by(
                         name=original_name
@@ -2434,6 +2512,8 @@ def upload_terminal_sales(event_id):
                     db.session.flush()
                     product_lookup[original_name] = new_product
                     manual_mappings[original_name] = new_product
+                    created_product_ids.add(new_product.id)
+                    new_product_created = True
 
                 if pending_creations:
                     pending_recipe_links: list[tuple[Product, Item]] = []
@@ -2506,6 +2586,8 @@ def upload_terminal_sales(event_id):
                             or expected_links != required_links
                         ):
                             active_stage = "products"
+                            state_data["stage"] = "products"
+                            state_token, state_data = _save_state(state_data)
                             if (
                                 countable_stage_requested
                                 and not countable_selection_errors
@@ -2534,6 +2616,7 @@ def upload_terminal_sales(event_id):
                                 menu_mismatches=menu_mismatches,
                                 warnings_required=warnings_required,
                                 warnings_acknowledged=warnings_acknowledged,
+                                state_token=state_token,
                                 ignored_sales_locations=sorted(ignored_sales_locations),
                                 assigned_sales_locations=sorted(assigned_sales_locations),
                                 unassigned_sales_locations=unassigned_sales_locations,
@@ -2544,6 +2627,7 @@ def upload_terminal_sales(event_id):
                                 countable_item_options=countable_item_options,
                                 countable_selection_errors=countable_selection_errors,
                                 gl_codes=_get_purchase_gl_codes(),
+                                wizard_stage="products",
                             )
 
                         for product, item_obj in pending_recipe_links:
@@ -2572,6 +2656,10 @@ def upload_terminal_sales(event_id):
                         countable_products = []
                         countable_item_options = []
                         countable_selection_errors = []
+
+                if new_product_created:
+                    db.session.commit()
+                state_data["created_product_ids"] = sorted(created_product_ids)
 
                 if manual_mappings and normalized_lookup:
                     for original_name, product in manual_mappings.items():
@@ -2814,23 +2902,20 @@ def upload_terminal_sales(event_id):
                 product_mapping_preview = []
 
             if issue_queue:
-                serializer = _terminal_sales_serializer()
-                token_id = token_urlsafe(16)
-                state_store[event_state_key] = token_id
-                session[_TERMINAL_SALES_STATE_KEY] = state_store
-                session.modified = True
-                state_data = {
-                    "queue": issue_queue,
-                    "pending_sales": pending_sales,
-                    "selected_locations": selected_locations,
-                    "pending_totals": pending_totals,
-                    "issue_index": 0,
-                    "token_id": token_id,
-                    "ignored_sales_locations": sorted(ignored_sales_locations),
-                    "selected_mapping": selected_mapping,
+                stored_mapping = {
+                    str(key): value for key, value in selected_mapping.items()
                 }
-                state_token = serializer.dumps(state_data)
-                active_stage = "issues"
+                state_data = state_data or {}
+                state_data["queue"] = issue_queue
+                state_data["pending_sales"] = pending_sales
+                state_data["selected_locations"] = selected_locations
+                state_data["pending_totals"] = pending_totals
+                state_data["issue_index"] = 0
+                state_data["ignored_sales_locations"] = sorted(ignored_sales_locations)
+                state_data["selected_mapping"] = stored_mapping
+                state_data["stage"] = "menus"
+                state_token, state_data = _save_state(state_data)
+                active_stage = "menus"
                 return render_template(
                     "events/upload_terminal_sales.html",
                     form=form,
@@ -2864,10 +2949,12 @@ def upload_terminal_sales(event_id):
                     assignment_errors=assignment_errors,
                     product_mapping_preview=product_mapping_preview,
                     active_stage=active_stage,
+                    wizard_stage="menus",
                 )
 
             if navigate != "finish":
                 active_stage = "locations" if navigate == "back" else "products"
+                wizard_stage_value = active_stage
                 return render_template(
                     "events/upload_terminal_sales.html",
                     form=form,
@@ -2899,6 +2986,7 @@ def upload_terminal_sales(event_id):
                     countable_item_options=countable_item_options,
                     countable_selection_errors=countable_selection_errors,
                     gl_codes=_get_purchase_gl_codes() if countable_products else [],
+                    wizard_stage=wizard_stage_value,
                 )
 
             updated_locations = _apply_pending_sales(pending_sales, pending_totals)
@@ -3173,6 +3261,90 @@ def upload_terminal_sales(event_id):
                 if name not in assigned_sales_locations
             ]
 
+            _clear_state()
+            initial_state = {
+                "stage": "locations",
+                "payload": {"rows": rows_data, "filename": filename},
+                "mapping_filename": filename,
+                "selected_mapping": {
+                    str(key): value for key, value in default_mapping.items()
+                },
+                "ignored_sales_locations": [],
+                "warnings_acknowledged": False,
+                "created_product_ids": [],
+            }
+            state_token, state_data = _save_state(initial_state)
+
+    if state_data:
+        wizard_stage = state_data.get("stage", wizard_stage)
+        issue_index = state_data.get("issue_index", issue_index)
+        selected_locations = state_data.get("selected_locations") or selected_locations
+
+    if request.method != "POST" and state_data and wizard_stage in {"locations", "products", "menus"}:
+        payload_data = state_data.get("payload") or {}
+        if payload_data:
+            mapping_payload = json.dumps(payload_data)
+            rows = payload_data.get("rows") or []
+            sales_summary = _group_rows(rows)
+            sales_location_names = list(sales_summary.keys())
+        mapping_filename = state_data.get("mapping_filename") or mapping_filename
+        stored_mapping = state_data.get("selected_mapping") or {}
+        default_mapping = {}
+        for key, value in stored_mapping.items():
+            try:
+                default_mapping[int(key)] = value
+            except (TypeError, ValueError):
+                continue
+        ignored_sales_locations = set(state_data.get("ignored_sales_locations") or [])
+        assigned_sales_locations = {value for value in default_mapping.values() if value}
+        unassigned_sales_locations = [
+            name
+            for name in sales_location_names
+            if name not in assigned_sales_locations
+            and name not in ignored_sales_locations
+        ]
+        if wizard_stage == "products":
+            product_resolution_required = True
+            if not product_choices:
+                product_choices = Product.query.order_by(Product.name).all()
+            product_search_options = [
+                {
+                    "id": str(product.id),
+                    "value": f"{product.name} (ID: {product.id})",
+                    "label": product.name,
+                }
+                for product in product_choices
+            ]
+            active_sales_summary = {
+                name: data
+                for name, data in sales_summary.items()
+                if name not in ignored_sales_locations
+            }
+            product_price_lookup = _derive_price_map(active_sales_summary)
+            product_selections = state_data.get("product_selections") or {}
+            unresolved_products = []
+            for idx, original_name in enumerate(product_selections.keys()):
+                unresolved_products.append(
+                    {
+                        "field": f"product-match-{idx}",
+                        "name": original_name,
+                        "selected": product_selections.get(original_name, ""),
+                        "price": product_price_lookup.get(original_name),
+                    }
+                )
+            active_stage = "products"
+        elif wizard_stage == "menus":
+            queue = state_data.get("queue") or []
+            total_locations = len(queue)
+            if queue and 0 <= issue_index < len(queue):
+                current_issue = queue[issue_index]
+                remaining_locations = len(queue) - issue_index - 1
+            selected_locations = state_data.get("selected_locations") or []
+            warnings_acknowledged = state_data.get("warnings_acknowledged", False)
+            active_stage = "menus"
+        else:
+            active_stage = "locations"
+
     return render_template(
         "events/upload_terminal_sales.html",
         form=form,
@@ -3194,12 +3366,19 @@ def upload_terminal_sales(event_id):
         menu_mismatches=menu_mismatches,
         warnings_required=warnings_required,
         warnings_acknowledged=warnings_acknowledged,
+        state_token=state_token,
+        current_issue=current_issue,
+        issue_index=issue_index,
+        remaining_locations=remaining_locations,
+        selected_locations=selected_locations,
+        issue_total=total_locations,
         ignored_sales_locations=sorted(ignored_sales_locations),
         assigned_sales_locations=sorted(assigned_sales_locations),
         unassigned_sales_locations=unassigned_sales_locations,
         assignment_errors=assignment_errors,
         product_mapping_preview=product_mapping_preview,
         active_stage=active_stage,
+        wizard_stage=wizard_stage,
         countable_products=countable_products,
         countable_item_options=countable_item_options,
         countable_selection_errors=countable_selection_errors,

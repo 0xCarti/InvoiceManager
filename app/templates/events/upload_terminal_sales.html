@@ -2,31 +2,33 @@
 {% block content %}
 <h2>Upload Terminal Sales for {{ event.name }}</h2>
 
-{% set resolving_issues = current_issue is defined %}
+{% set wizard_stage = wizard_stage if wizard_stage is defined else 'upload' %}
+{% set resolving_issues = wizard_stage == 'menus' and current_issue is defined %}
 {% set issue_total = issue_total if issue_total is defined else 0 %}
-{% set active_stage = active_stage if active_stage is defined else 'locations' %}
-{% set stage_index = 1 %}
-{% if active_stage == 'products' %}
-    {% set stage_index = 2 %}
-{% elif active_stage == 'issues' %}
-    {% set stage_index = 3 %}
-{% endif %}
 {% set countable_products = countable_products if countable_products is defined else [] %}
 {% set countable_item_options = countable_item_options if countable_item_options is defined else [] %}
 {% set countable_selection_errors = countable_selection_errors if countable_selection_errors is defined else [] %}
 {% set product_mapping_preview = product_mapping_preview | default([]) %}
 
-{% if mapping_payload %}
+{% set stage_order = [
+    {'id': 'upload', 'label': 'Upload File'},
+    {'id': 'locations', 'label': 'Map Locations'},
+    {'id': 'products', 'label': 'Match Products'},
+    {'id': 'menus', 'label': 'Assign Menus'}
+] %}
+{% set stage_index = 1 %}
+{% for step in stage_order %}
+    {% if step.id == wizard_stage %}
+        {% set stage_index = loop.index %}
+    {% endif %}
+{% endfor %}
+
+{% if wizard_stage != 'upload' %}
     <div class="mb-4" aria-label="Terminal sales upload steps">
-        {% set steps = [
-            {'number': 1, 'label': 'Map Locations'},
-            {'number': 2, 'label': 'Resolve Products'},
-            {'number': 3, 'label': 'Finalize Issues'}
-        ] %}
         <div class="d-flex flex-wrap align-items-center gap-3">
-            {% for step in steps %}
-                {% set is_active = step.number == stage_index %}
-                {% set is_complete = step.number < stage_index %}
+            {% for step in stage_order %}
+                {% set is_active = loop.index == stage_index %}
+                {% set is_complete = loop.index < stage_index %}
                 {% set badge_classes = 'badge rounded-pill me-2' %}
                 {% if is_active %}
                     {% set badge_classes = badge_classes ~ ' bg-primary' %}
@@ -44,7 +46,7 @@
                     {% set label_classes = label_classes ~ ' text-muted' %}
                 {% endif %}
                 <div class="d-flex align-items-center">
-                    <span class="{{ badge_classes }}">{{ step.number }}</span>
+                    <span class="{{ badge_classes }}">{{ loop.index }}</span>
                     <span class="{{ label_classes }}">{{ step.label }}</span>
                 </div>
             {% endfor %}
@@ -56,7 +58,7 @@
                 Resolve the discrepancies detected in the uploaded terminal sales
                 before importing them. Each location must be handled separately.
             </p>
-        {% elif active_stage == 'products' %}
+        {% elif wizard_stage == 'products' %}
             <p class="mb-0">
                 Match any unknown products from the uploaded file to products in
                 the app or choose to skip them. Use the buttons below to update
@@ -74,7 +76,7 @@
         <p><strong>Source file:</strong> {{ mapping_filename }}</p>
     {% endif %}
     {% if sales_location_names %}
-        {% if not resolving_issues and active_stage == 'locations' %}
+        {% if not resolving_issues and wizard_stage == 'locations' %}
             <div class="mb-3">
                 <button type="button"
                         class="btn btn-outline-secondary btn-sm"
@@ -254,7 +256,10 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="step" value="map">
             <input type="hidden" name="payload" value="{{ mapping_payload }}">
-            <input type="hidden" name="stage" value="{{ active_stage }}">
+            <input type="hidden" name="stage" value="{{ wizard_stage }}">
+            {% if state_token %}
+                <input type="hidden" name="state_token" value="{{ state_token }}">
+            {% endif %}
             {% if assignment_errors %}
                 <div class="alert alert-danger">
                     <ul class="mb-0 ps-3">
@@ -264,7 +269,7 @@
                     </ul>
                 </div>
             {% endif %}
-            {% if product_resolution_required and active_stage == 'products' %}
+            {% if product_resolution_required and wizard_stage == 'products' %}
                 <input type="hidden" name="product-resolution-step" value="1">
                 {% if countable_products %}
                     <input type="hidden" name="countable-selection-step" value="1">
@@ -409,7 +414,7 @@
                         </div>
                     </div>
                 {% endif %}
-            {% elif active_stage == 'products' %}
+        {% elif wizard_stage == 'products' %}
                 <div class="alert alert-success">
                     <p class="mb-0">All products in the uploaded file have been matched automatically.</p>
                 </div>
@@ -507,7 +512,7 @@
                 {% endif %}
             {% endif %}
             {% if sales_location_names %}
-                <div class="card mb-3 {% if active_stage != 'locations' %}d-none{% endif %}">
+                <div class="card mb-3 {% if wizard_stage != 'locations' %}d-none{% endif %}">
                     <div class="card-header">Manage Terminal Sales Locations</div>
                     <div class="card-body">
                         <p class="mb-3">
@@ -544,7 +549,7 @@
                     </div>
                 </div>
             {% endif %}
-            {% if active_stage == 'products' %}
+            {% if wizard_stage == 'products' %}
                 <div class="card mb-3">
                     <div class="card-header">Location Mapping Summary</div>
                     <div class="card-body">
@@ -575,7 +580,7 @@
                 </div>
             {% endif %}
             {% if open_locations %}
-                <div class="card mb-3 {% if active_stage != 'locations' %}d-none{% endif %}">
+                <div class="card mb-3 {% if wizard_stage != 'locations' %}d-none{% endif %}">
                     <div class="card-header">Link Event Locations</div>
                     <div class="card-body">
                         {% for el in open_locations %}
@@ -596,9 +601,9 @@
                     </div>
                 </div>
                 <div class="d-flex flex-wrap align-items-center">
-                    {% if active_stage == 'locations' %}
+                    {% if wizard_stage == 'locations' %}
                         <button type="submit" class="btn btn-primary" name="navigate" value="next">
-                            Next: Resolve Products
+                            Next: Match Products
                         </button>
                         <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}"
                            class="btn btn-outline-secondary ms-2">
@@ -615,7 +620,7 @@
                                 class="btn btn-primary ms-2"
                                 name="navigate"
                                 value="finish">
-                            Finish
+                            Next: Assign Menus
                         </button>
                         <a href="{{ url_for('event.upload_terminal_sales', event_id=event.id) }}"
                            class="btn btn-link ms-2">
@@ -720,7 +725,7 @@
 {% if mapping_payload %}
 <script src="{{ url_for('static', filename='js/terminal_sales_summary_toggle.js') }}" defer></script>
 {% endif %}
-{% if mapping_payload and product_resolution_required and active_stage == 'products' %}
+{% if mapping_payload and product_resolution_required and wizard_stage == 'products' %}
 <script src="{{ url_for('static', filename='js/terminal_sales_mapping.js') }}" defer></script>
 {% endif %}
 {% if countable_products %}
