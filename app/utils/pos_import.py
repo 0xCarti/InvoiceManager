@@ -52,6 +52,14 @@ def normalize_pos_alias(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+_CURRENCY_PREFIX_RE = re.compile(
+    r"^(?:[A-Za-z]{1,3}\s*\$?|[$€£¥₩₽])\s*",
+    re.IGNORECASE,
+)
+
+_CURRENCY_SYMBOLS_RE = re.compile(r"[$€£¥₩₽]")
+
+
 def parse_terminal_sales_number(value) -> float | None:
     """Best-effort conversion of spreadsheet values to ``float``."""
 
@@ -60,9 +68,23 @@ def parse_terminal_sales_number(value) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     try:
-        cleaned = str(value).strip().replace("$", "")
+        text = str(value).replace("\u00A0", " ")
+        cleaned = text.strip()
         if not cleaned:
             return None
+        sign = ""
+        if cleaned[0] in "+-":
+            sign = cleaned[0]
+            cleaned = cleaned[1:].lstrip()
+        while True:
+            stripped = _CURRENCY_PREFIX_RE.sub("", cleaned, count=1)
+            if stripped == cleaned:
+                break
+            cleaned = stripped.lstrip()
+        cleaned = (sign + cleaned).strip()
+        if not cleaned:
+            return None
+        cleaned = _CURRENCY_SYMBOLS_RE.sub("", cleaned)
         cleaned = cleaned.replace(",", "")
         match = re.match(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", cleaned)
         if match:
