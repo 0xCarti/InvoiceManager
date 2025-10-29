@@ -25,6 +25,7 @@ from app.forms import (
     LocationItemAddForm,
 )
 from app.models import GLCode, Item, Location, LocationStandItem, Menu
+from app.services.pdf import render_stand_sheet_pdf
 from app.utils.activity import log_activity
 from app.utils.menu_assignments import apply_menu_products, set_location_menu
 from app.utils.pagination import build_pagination_args, get_per_page
@@ -34,8 +35,50 @@ from app.utils.units import (
     get_unit_label,
 )
 from app.utils.text import normalize_name_for_sorting
+from app.utils.email import send_email
 
 location = Blueprint("locations", __name__)
+
+
+def _build_location_stand_sheet_items(location: Location):
+    configured = current_app.config.get("BASE_UNIT_CONVERSIONS") or {}
+    conversions = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
+    conversions.update(configured)
+
+    stand_records = LocationStandItem.query.filter_by(
+        location_id=location.id
+    ).all()
+    stand_by_item_id = {record.item_id: record for record in stand_records}
+
+    stand_items = []
+    seen = set()
+    for product_obj in location.products:
+        for recipe_item in product_obj.recipe_items:
+            if recipe_item.countable and recipe_item.item_id not in seen:
+                seen.add(recipe_item.item_id)
+                record = stand_by_item_id.get(recipe_item.item_id)
+                expected = record.expected_count if record else 0
+                item_obj = recipe_item.item
+                if item_obj.base_unit:
+                    display_expected, report_unit = convert_quantity_for_reporting(
+                        float(expected), item_obj.base_unit, conversions
+                    )
+                else:
+                    display_expected, report_unit = expected, item_obj.base_unit
+                stand_items.append(
+                    {
+                        "item": item_obj,
+                        "expected": display_expected,
+                        "report_unit_label": get_unit_label(report_unit),
+                    }
+                )
+
+    stand_items.sort(
+        key=lambda entry: normalize_name_for_sorting(
+            entry["item"].name
+        ).casefold()
+    )
+    return stand_items
 
 
 def _protected_location_item_ids(location_obj: Location) -> set[int]:
@@ -294,52 +337,86 @@ def view_stand_sheet(location_id):
     location = db.session.get(Location, location_id)
     if location is None:
         abort(404)
-    configured = current_app.config.get("BASE_UNIT_CONVERSIONS") or {}
-    conversions = dict(DEFAULT_BASE_UNIT_CONVERSIONS)
-    conversions.update(configured)
-
-    # Preload all stand sheet records for the location to avoid querying for
-    # each individual item when building the stand sheet. Mapping the records by
-    # ``item_id`` lets us perform fast dictionary lookups inside the loop
-    # below.
-    stand_records = LocationStandItem.query.filter_by(
-        location_id=location_id
-    ).all()
-    stand_by_item_id = {record.item_id: record for record in stand_records}
-
-    stand_items = []
-    seen = set()
-    for product_obj in location.products:
-        for recipe_item in product_obj.recipe_items:
-            if recipe_item.countable and recipe_item.item_id not in seen:
-                seen.add(recipe_item.item_id)
-                record = stand_by_item_id.get(recipe_item.item_id)
-                expected = record.expected_count if record else 0
-                item_obj = recipe_item.item
-                if item_obj.base_unit:
-                    display_expected, report_unit = convert_quantity_for_reporting(
-                        float(expected), item_obj.base_unit, conversions
-                    )
-                else:
-                    display_expected, report_unit = expected, item_obj.base_unit
-                stand_items.append(
-                    {
-                        "item": item_obj,
-                        "expected": display_expected,
-                        "report_unit_label": get_unit_label(report_unit),
-                    }
-                )
-
-    stand_items.sort(
-        key=lambda entry: normalize_name_for_sorting(
-            entry["item"].name
-        ).casefold()
-    )
+    stand_items = _build_location_stand_sheet_items(location)
 
     return render_template(
         "locations/stand_sheet.html",
         location=location,
         stand_items=stand_items,
+    )
+
+
+@location.route(
+    "/locations/<int:location_id>/stand_sheet/email",
+    methods=["POST"],
+)
+@login_required
+def email_stand_sheet(location_id):
+    location = db.session.get(Location, location_id)
+    if location is None:
+        abort(404)
+
+    email_address = (request.form.get("email") or "").strip()
+    if not email_address:
+        flash("Please provide an email address.", "danger")
+        return redirect(
+            url_for("locations.view_stand_sheet", location_id=location_id)
+        )
+
+    stand_items = _build_location_stand_sheet_items(location)
+
+    try:
+        pdf_bytes = render_stand_sheet_pdf(
+            [
+                (
+                    "locations/stand_sheet.html",
+                    {
+                        "location": location,
+                        "stand_items": stand_items,
+                        "pdf_export": True,
+                    },
+                )
+            ]
+        )
+    except Exception:
+        current_app.logger.exception(
+            "Failed to render stand sheet PDF for location %s", location_id
+        )
+        flash("Unable to generate the stand sheet PDF.", "danger")
+        return redirect(
+            url_for("locations.view_stand_sheet", location_id=location_id)
+        )
+
+    try:
+        send_email(
+            to_address=email_address,
+            subject=f"{location.name} stand sheet",
+            body=(
+                "Attached is the stand sheet for the requested location."
+            ),
+            attachments=[
+                (
+                    f"location-{location_id}-stand-sheet.pdf",
+                    pdf_bytes,
+                    "application/pdf",
+                )
+            ],
+        )
+    except Exception:
+        current_app.logger.exception(
+            "Failed to send stand sheet email for location %s", location_id
+        )
+        flash("Unable to send the stand sheet email.", "danger")
+        return redirect(
+            url_for("locations.view_stand_sheet", location_id=location_id)
+        )
+
+    log_activity(
+        f"Emailed stand sheet for location {location_id} to {email_address}"
+    )
+    flash(f"Stand sheet sent to {email_address}.", "success")
+    return redirect(
+        url_for("locations.view_stand_sheet", location_id=location_id)
     )
 
 

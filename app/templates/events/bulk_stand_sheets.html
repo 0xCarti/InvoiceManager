@@ -1,5 +1,31 @@
 {% extends 'base.html' %}
 {% block content %}
+{% if not pdf_export %}
+<div class="container my-4 no-print">
+  <form
+    method="post"
+    action="{{ url_for('event.email_bulk_stand_sheets', event_id=event.id) }}"
+    class="row g-2 align-items-end"
+  >
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <div class="col-md-6">
+      <label for="bulk-stand-sheet-email" class="form-label">Email stand sheets</label>
+      <input
+        type="email"
+        class="form-control"
+        id="bulk-stand-sheet-email"
+        name="email"
+        value="{{ request.form.get('email', '') }}"
+        placeholder="events@example.com"
+        required
+      />
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-primary">Send PDF</button>
+    </div>
+  </form>
+</div>
+{% endif %}
 <style>
 @page {
   margin: 0.5in;

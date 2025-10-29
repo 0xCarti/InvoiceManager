@@ -52,6 +52,7 @@ from app.models import (
     TerminalSaleProductAlias,
     TerminalSaleLocationAlias,
 )
+from app.services.pdf import render_stand_sheet_pdf
 from app.utils.activity import log_activity
 from app.utils.numeric import coerce_float
 from app.utils.pos_import import (
@@ -69,6 +70,7 @@ from app.utils.units import (
     get_unit_label,
 )
 from app.utils.text import normalize_name_for_sorting
+from app.utils.email import send_email
 from itsdangerous import BadSignature, URLSafeSerializer
 from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
@@ -710,6 +712,10 @@ def _apply_pending_sales(
                     sold_at=datetime.utcnow(),
                 )
             )
+        if location_obj is not None:
+            if product not in location_obj.products:
+                location_obj.products.append(product)
+                _ensure_location_items(location_obj, product)
         if location_obj is not None and location_obj.name:
             updated_locations.add(location_obj.name)
 
@@ -4675,6 +4681,79 @@ def bulk_stand_sheets(event_id):
         data=data,
         generated_at_local=generated_at_local,
     )
+
+
+@event.route(
+    "/events/<int:event_id>/stand_sheets/email",
+    methods=["POST"],
+)
+@login_required
+def email_bulk_stand_sheets(event_id):
+    ev = db.session.get(Event, event_id)
+    if ev is None:
+        abort(404)
+
+    email_address = (request.form.get("email") or "").strip()
+    if not email_address:
+        flash("Please provide an email address.", "danger")
+        return redirect(url_for("event.bulk_stand_sheets", event_id=event_id))
+
+    data = []
+    for el in ev.locations:
+        loc, items = _get_stand_items(el.location_id, event_id)
+        data.append({"location": loc, "stand_items": items})
+
+    dt = datetime.now()
+    generated_at_local = (
+        f"{dt.month}/{dt.day}/{dt.year} {dt.strftime('%I:%M %p').lstrip('0')}"
+    )
+
+    try:
+        pdf_bytes = render_stand_sheet_pdf(
+            [
+                (
+                    "events/bulk_stand_sheets.html",
+                    {
+                        "event": ev,
+                        "data": data,
+                        "generated_at_local": generated_at_local,
+                        "pdf_export": True,
+                    },
+                )
+            ]
+        )
+    except Exception:
+        current_app.logger.exception(
+            "Failed to render stand sheet PDF for event %s", event_id
+        )
+        flash("Unable to generate the stand sheet PDF.", "danger")
+        return redirect(url_for("event.bulk_stand_sheets", event_id=event_id))
+
+    try:
+        send_email(
+            to_address=email_address,
+            subject=f"{ev.name} stand sheets",
+            body="Attached are the stand sheets for the requested event.",
+            attachments=[
+                (
+                    f"event-{event_id}-stand-sheets.pdf",
+                    pdf_bytes,
+                    "application/pdf",
+                )
+            ],
+        )
+    except Exception:
+        current_app.logger.exception(
+            "Failed to send stand sheet email for event %s", event_id
+        )
+        flash("Unable to send the stand sheet email.", "danger")
+        return redirect(url_for("event.bulk_stand_sheets", event_id=event_id))
+
+    log_activity(
+        f"Emailed stand sheets for event {event_id} to {email_address}"
+    )
+    flash(f"Stand sheets sent to {email_address}.", "success")
+    return redirect(url_for("event.bulk_stand_sheets", event_id=event_id))
 
 
 @event.route("/events/<int:event_id>/count_sheets")
