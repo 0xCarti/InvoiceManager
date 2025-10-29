@@ -206,6 +206,7 @@
         </div>
     </div>
 </div>
+{% include 'shared/email_stand_sheet_modal.html' %}
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const csrfToken = document.getElementById('csrf_token').value;
@@ -381,9 +382,19 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     });
 
+    function escapeAttribute(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
     function addRow(loc) {
         const menuLabel = loc.menu_name ? loc.menu_name : '<span class="text-muted">No Menu</span>';
         const notesUrl = `/notes/location/${loc.id}`;
+        const locationLabel = escapeAttribute(loc.name || 'this location');
         const row = `<tr id="location-row-${loc.id}" data-id="${loc.id}">
             <td class=\"col-select\"><input type=\"checkbox\" name=\"location_ids\" value=\"${loc.id}\" style=\"transform: scale(1.5);\"></td>
             <td class=\"col-location-name\">${loc.name}</td>
@@ -391,6 +402,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <td class=\"col-location-actions\">
                 <button type=\"button\" class=\"btn btn-info edit-location-btn\" data-id=\"${loc.id}\">Edit</button>
                 <a href=\"/locations/${loc.id}/stand_sheet\" class=\"btn btn-secondary\">Stand Sheet</a>
+                <button type=\"button\" class=\"btn btn-outline-secondary ms-1\" data-email-stand-sheet data-email-action=\"/locations/${loc.id}/stand_sheet/email\" data-email-label=\"${locationLabel}\">Email Stand Sheet</button>
                 <a href=\"/locations/${loc.id}/items\" class=\"btn btn-outline-secondary\">Manage Items</a>
                 <a href=\"${notesUrl}\" class=\"btn btn-outline-secondary\">Notes</a>
                 <button type=\"button\" class=\"btn btn-warning copy-location-btn\" data-id=\"${loc.id}\">Copy Stand Sheet</button>
@@ -542,4 +554,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+{% endblock %}
+{% block scripts %}
+    {{ super() }}
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/stand_sheet_email.js') }}"></script>
 {% endblock %}

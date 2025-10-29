@@ -11,6 +11,15 @@
     <td class="col-location-actions">
         <button type="button" class="btn btn-info edit-location-btn" data-id="{{ location.id }}">Edit</button>
         <a href="{{ url_for('locations.view_stand_sheet', location_id=location.id) }}" class="btn btn-secondary">Stand Sheet</a>
+        <button
+            type="button"
+            class="btn btn-outline-secondary ms-1"
+            data-email-stand-sheet
+            data-email-action="/locations/{{ location.id }}/stand_sheet/email"
+            data-email-label="{{ location.name }}"
+        >
+            Email Stand Sheet
+        </button>
         <a href="{{ url_for('locations.location_items', location_id=location.id) }}" class="btn btn-outline-secondary">Manage Items</a>
         <a href="{{ url_for('notes.entity_notes', entity_type='location', entity_id=location.id) }}" class="btn btn-outline-secondary">Notes</a>
         <button type="button" class="btn btn-warning copy-location-btn" data-id="{{ location.id }}">Copy Stand Sheet</button>

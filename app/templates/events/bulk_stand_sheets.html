@@ -30,6 +30,12 @@
 @page {
   margin: 0.5in;
 }
+.navbar {
+  display: none;
+}
+.container {
+  max-width: 100%;
+}
 .standsheet-content {
   font-family: system-ui, sans-serif;
   font-size: 12px;
@@ -136,6 +142,21 @@
   .signoffs { display: none; }
 }
 </style>
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 no-print mb-3">
+  <h2 class="mb-0">Opening Stand Sheets - {{ event.name }}</h2>
+  <div class="text-md-end">
+    <button
+      type="button"
+      class="btn btn-primary"
+      data-email-stand-sheet
+      data-email-action="/events/{{ event.id }}/stand_sheets/email"
+      data-email-label="all stand sheets for {{ event.name }}"
+      data-email-success="Stand sheets emailed successfully."
+    >
+      Email Stand Sheets
+    </button>
+  </div>
+</div>
 <div class="standsheet-content">
 {% for entry in data %}
 <section class="report standsheet-page">
@@ -258,4 +279,9 @@
 </section>
 {% endfor %}
 </div>
+{% include 'shared/email_stand_sheet_modal.html' %}
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/stand_sheet_email.js') }}"></script>
 {% endblock %}
