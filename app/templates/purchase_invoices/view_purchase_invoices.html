@@ -166,6 +166,21 @@
                 <input type="text" id="end_date" name="end_date" class="form-control" data-flatpickr autocomplete="off" value="{{ end_date or '' }}">
             </div>
         </div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="amount_filter" class="form-label">Amount Filter</label>
+                <select id="amount_filter" name="amount_filter" class="form-select">
+                    <option value="">Any Amount</option>
+                    <option value="gt" {% if amount_filter == 'gt' %}selected{% endif %}>Greater than</option>
+                    <option value="lt" {% if amount_filter == 'lt' %}selected{% endif %}>Less than</option>
+                    <option value="eq" {% if amount_filter == 'eq' %}selected{% endif %}>Equal to</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label for="amount_value" class="form-label">Amount</label>
+                <input type="number" id="amount_value" name="amount_value" class="form-control" step="0.01" min="0" value="{{ amount_value if amount_value is not none else '' }}">
+            </div>
+        </div>
     {% endcall %}
     {% if invoice_number %}
     <div class="mb-3"><strong>Filtering by Invoice #:</strong> {{ invoice_number }}</div>
@@ -186,6 +201,12 @@
     <div class="mb-3"><strong>Filtering by Date:</strong>
         {% if start_date %}From {{ start_date }}{% endif %}
         {% if end_date %} to {{ end_date }}{% endif %}
+    </div>
+    {% endif %}
+    {% if amount_filter and amount_value is not none %}
+    {% set comparator_labels = {'gt': 'Greater than', 'lt': 'Less than', 'eq': 'Equal to'} %}
+    <div class="mb-3">
+        <span class="badge bg-info text-dark">Filtering by Amount: {{ comparator_labels[amount_filter] }} {{ amount_value }}</span>
     </div>
     {% endif %}
     <div class="table-responsive">

@@ -1692,3 +1692,159 @@ def test_view_purchase_invoices_item_filters(client, app):
         assert "INV-C" not in page
         selected = extract_selected_options(page, "item_id")
         assert selected == [str(beta_id)]
+
+def test_view_purchase_invoices_amount_filters(client, app):
+    with app.app_context():
+        password = generate_password_hash("pass")
+        user = User(email="filterbuyer@example.com", password=password, active=True)
+        vendor = Vendor(first_name="Filter", last_name="Vendor")
+        location = Location(name="Filter Location")
+        item = Item(name="Filter Item", base_unit="each")
+        db.session.add_all([user, vendor, location, item])
+        db.session.commit()
+
+        def make_invoice(
+            invoice_number: str,
+            quantity: float,
+            cost: float,
+            *,
+            gst: float = 0.0,
+            pst: float = 0.0,
+            delivery: float = 0.0,
+            received_date: datetime.date = datetime.date(2024, 1, 1),
+        ) -> PurchaseInvoice:
+            po = PurchaseOrder(
+                vendor_id=vendor.id,
+                user_id=user.id,
+                vendor_name=f"{vendor.first_name} {vendor.last_name}",
+                order_date=received_date,
+                expected_date=received_date,
+                delivery_charge=0,
+                received=True,
+            )
+            db.session.add(po)
+            db.session.flush()
+
+            invoice = PurchaseInvoice(
+                purchase_order_id=po.id,
+                user_id=user.id,
+                location_id=location.id,
+                vendor_name=f"{vendor.first_name} {vendor.last_name}",
+                location_name=location.name,
+                received_date=received_date,
+                invoice_number=invoice_number,
+                gst=gst,
+                pst=pst,
+                delivery_charge=delivery,
+            )
+            db.session.add(invoice)
+            db.session.flush()
+
+            item_line = PurchaseInvoiceItem(
+                invoice_id=invoice.id,
+                position=0,
+                item_id=item.id,
+                item_name=item.name,
+                unit_name="each",
+                quantity=quantity,
+                cost=cost,
+            )
+            db.session.add(item_line)
+            return invoice
+
+        invoice_low = make_invoice(
+            "INV-LOW",
+            2,
+            3.0,
+            gst=1.0,
+            pst=0.0,
+            delivery=1.0,
+            received_date=datetime.date(2024, 1, 2),
+        )
+        invoice_mid = make_invoice(
+            "INV-MID",
+            2,
+            5.0,
+            gst=0.0,
+            pst=0.0,
+            delivery=0.0,
+            received_date=datetime.date(2024, 1, 3),
+        )
+        invoice_high = make_invoice(
+            "INV-HIGH",
+            4,
+            5.0,
+            gst=2.0,
+            pst=1.0,
+            delivery=1.0,
+            received_date=datetime.date(2024, 1, 4),
+        )
+        db.session.commit()
+
+        totals = {
+            invoice_low.invoice_number: 8.0,
+            invoice_mid.invoice_number: 10.0,
+            invoice_high.invoice_number: 24.0,
+        }
+
+    with client:
+        login(client, "filterbuyer@example.com", "pass")
+
+        resp_all = client.get("/purchase_invoices")
+        assert resp_all.status_code == 200
+        page_all = resp_all.get_data(as_text=True)
+        for number in totals:
+            assert number in page_all
+
+        resp_gt = client.get(
+            "/purchase_invoices",
+            query_string={"amount_filter": "gt", "amount_value": 9},
+        )
+        assert resp_gt.status_code == 200
+        page_gt = resp_gt.get_data(as_text=True)
+        assert "INV-LOW" not in page_gt
+        assert "INV-MID" in page_gt
+        assert "INV-HIGH" in page_gt
+        assert "Filtering by Amount: Greater than" in page_gt
+
+        resp_lt = client.get(
+            "/purchase_invoices",
+            query_string={"amount_filter": "lt", "amount_value": 9},
+        )
+        assert resp_lt.status_code == 200
+        page_lt = resp_lt.get_data(as_text=True)
+        assert "INV-LOW" in page_lt
+        assert "INV-MID" not in page_lt
+        assert "INV-HIGH" not in page_lt
+
+        resp_eq = client.get(
+            "/purchase_invoices",
+            query_string={"amount_filter": "eq", "amount_value": 10},
+        )
+        assert resp_eq.status_code == 200
+        page_eq = resp_eq.get_data(as_text=True)
+        assert "INV-LOW" not in page_eq
+        assert "INV-MID" in page_eq
+        assert "INV-HIGH" not in page_eq
+        assert "Filtering by Amount: Equal to" in page_eq
+
+        resp_bad_filter = client.get(
+            "/purchase_invoices",
+            query_string={"amount_filter": "between", "amount_value": 9},
+        )
+        assert resp_bad_filter.status_code == 200
+        page_bad_filter = resp_bad_filter.get_data(as_text=True)
+        for number in totals:
+            assert number in page_bad_filter
+        assert "Filtering by Amount" not in page_bad_filter
+
+        resp_bad_value = client.get(
+            "/purchase_invoices",
+            query_string={"amount_filter": "gt", "amount_value": "abc"},
+        )
+        assert resp_bad_value.status_code == 200
+        page_bad_value = resp_bad_value.get_data(as_text=True)
+        for number in totals:
+            assert number in page_bad_value
+        assert "Filtering by Amount" not in page_bad_value
+
