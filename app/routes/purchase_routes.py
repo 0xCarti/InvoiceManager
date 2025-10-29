@@ -46,7 +46,7 @@ from app.utils.pagination import build_pagination_args, get_per_page
 import datetime
 import json
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
 
 purchase = Blueprint("purchase", __name__)
@@ -929,6 +929,18 @@ def view_purchase_invoices():
     location_id = request.args.get("location_id", type=int)
     start_date_str = request.args.get("start_date")
     end_date_str = request.args.get("end_date")
+    amount_filter_raw = request.args.get("amount_filter")
+    amount_value_raw = request.args.get("amount_value")
+
+    allowed_amount_filters = {"gt", "lt", "eq"}
+    amount_filter = (
+        amount_filter_raw if amount_filter_raw in allowed_amount_filters else None
+    )
+    amount_value = (
+        coerce_float(amount_value_raw, default=None)
+        if amount_value_raw not in (None, "")
+        else None
+    )
 
     start_date = None
     end_date = None
@@ -1003,6 +1015,36 @@ def view_purchase_invoices():
             )
         )
 
+    if amount_filter and amount_value is not None:
+        item_totals_subq = (
+            db.session.query(
+                PurchaseInvoiceItem.invoice_id.label("invoice_id"),
+                func.sum(
+                    PurchaseInvoiceItem.quantity * PurchaseInvoiceItem.cost
+                ).label("item_sum"),
+            )
+            .group_by(PurchaseInvoiceItem.invoice_id)
+            .subquery()
+        )
+
+        query = query.outerjoin(
+            item_totals_subq, item_totals_subq.c.invoice_id == PurchaseInvoice.id
+        )
+
+        total_expression = (
+            func.coalesce(item_totals_subq.c.item_sum, 0)
+            + func.coalesce(PurchaseInvoice.delivery_charge, 0)
+            + func.coalesce(PurchaseInvoice.gst, 0)
+            + func.coalesce(PurchaseInvoice.pst, 0)
+        )
+
+        if amount_filter == "gt":
+            query = query.filter(total_expression > amount_value)
+        elif amount_filter == "lt":
+            query = query.filter(total_expression < amount_value)
+        elif amount_filter == "eq":
+            query = query.filter(total_expression == amount_value)
+
     invoices = query.order_by(
         PurchaseInvoice.received_date.desc(), PurchaseInvoice.id.desc()
     ).paginate(page=page, per_page=per_page)
@@ -1029,6 +1071,8 @@ def view_purchase_invoices():
         selected_items=selected_items,
         selected_item_ids=selected_item_ids,
         selected_item_names=selected_item_names,
+        amount_filter=amount_filter,
+        amount_value=amount_value,
         per_page=per_page,
         pagination_args=build_pagination_args(per_page),
     )
