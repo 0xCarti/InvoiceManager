@@ -837,6 +837,166 @@ def test_purchase_inventory_summary_report(client, app):
     assert b"$15.00" in resp.data
 
 
+def test_inventory_variance_report(client, app):
+    with app.app_context():
+        password = "variance"
+        user = User.query.filter_by(email="variance@example.com").first()
+        if not user:
+            user = User(
+                email="variance@example.com",
+                password=generate_password_hash(password),
+                active=True,
+                is_admin=True,
+            )
+            db.session.add(user)
+        else:
+            user.password = generate_password_hash(password)
+
+        vendor = Vendor.query.filter_by(first_name="Variance", last_name="Vendor").first()
+        if not vendor:
+            vendor = Vendor(first_name="Variance", last_name="Vendor")
+            db.session.add(vendor)
+
+        location = Location.query.filter_by(name="Variance Location").first()
+        if not location:
+            location = Location(name="Variance Location")
+            db.session.add(location)
+
+        customer = Customer.query.filter_by(first_name="Variance", last_name="Customer").first()
+        if not customer:
+            customer = Customer(first_name="Variance", last_name="Customer")
+            db.session.add(customer)
+
+        gl_code = GLCode.query.filter_by(code="5000").first()
+        if not gl_code:
+            gl_code = GLCode(code="5000", description="Food Supplies")
+            db.session.add(gl_code)
+
+        item = Item.query.filter_by(name="Variance Ingredient").first()
+        if not item:
+            item = Item(name="Variance Ingredient", base_unit="each", cost=3.0)
+            db.session.add(item)
+
+        product = Product.query.filter_by(name="Variance Meal").first()
+        if not product:
+            product = Product(name="Variance Meal", price=12.0, cost=6.0)
+            db.session.add(product)
+
+        db.session.commit()
+
+        if not ProductRecipeItem.query.filter_by(product_id=product.id, item_id=item.id).first():
+            db.session.add(
+                ProductRecipeItem(
+                    product_id=product.id,
+                    item_id=item.id,
+                    quantity=2.0,
+                )
+            )
+            db.session.commit()
+
+        purchase_order = PurchaseOrder.query.filter_by(vendor_id=vendor.id).first()
+        if not purchase_order:
+            purchase_order = PurchaseOrder(
+                vendor_id=vendor.id,
+                user_id=user.id,
+                vendor_name=f"{vendor.first_name} {vendor.last_name}",
+                order_date=date(2024, 2, 1),
+                expected_date=date(2024, 2, 2),
+            )
+            db.session.add(purchase_order)
+            db.session.commit()
+
+        invoice = (
+            PurchaseInvoice.query.filter_by(purchase_order_id=purchase_order.id)
+            .filter_by(invoice_number="VAR-001")
+            .first()
+        )
+        if not invoice:
+            invoice = PurchaseInvoice(
+                purchase_order_id=purchase_order.id,
+                user_id=user.id,
+                location_id=location.id,
+                location_name=location.name,
+                vendor_name=f"{vendor.first_name} {vendor.last_name}",
+                received_date=date(2024, 2, 3),
+                invoice_number="VAR-001",
+                gst=0.0,
+                pst=0.0,
+                delivery_charge=0.0,
+            )
+            db.session.add(invoice)
+            db.session.commit()
+
+        if (
+            PurchaseInvoiceItem.query.filter_by(
+                invoice_id=invoice.id, item_id=item.id
+            ).first()
+            is None
+        ):
+            db.session.add(
+                PurchaseInvoiceItem(
+                    invoice_id=invoice.id,
+                    item_id=item.id,
+                    item_name=item.name,
+                    quantity=10,
+                    cost=3.0,
+                    purchase_gl_code=gl_code,
+                )
+            )
+            db.session.commit()
+
+        invoice_record = Invoice.query.get("VARINV001")
+        if not invoice_record:
+            invoice_record = Invoice(
+                id="VARINV001",
+                user_id=user.id,
+                customer_id=customer.id,
+                date_created=date(2024, 2, 5),
+            )
+            db.session.add(invoice_record)
+            db.session.commit()
+
+        if (
+            InvoiceProduct.query.filter_by(
+                invoice_id=invoice_record.id, product_id=product.id
+            ).first()
+            is None
+        ):
+            db.session.add(
+                InvoiceProduct(
+                    invoice_id=invoice_record.id,
+                    quantity=3,
+                    product_id=product.id,
+                    product_name=product.name,
+                    unit_price=product.price,
+                    line_subtotal=product.price * 3,
+                    line_gst=0.0,
+                    line_pst=0.0,
+                )
+            )
+            db.session.commit()
+
+    login(client, "variance@example.com", password)
+
+    resp = client.get("/reports/inventory-variance")
+    assert resp.status_code == 200
+
+    resp = client.post(
+        "/reports/inventory-variance",
+        data={
+            "start_date": "2024-02-01",
+            "end_date": "2024-02-29",
+        },
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert b"Inventory Variance Report" in resp.data
+    assert b"Variance Ingredient" in resp.data
+    assert b"$30.00" in resp.data
+    assert b"$18.00" in resp.data
+    assert b"$12.00" in resp.data
+
 def test_invoice_gl_code_report(client, app):
     email, invoice_id = setup_purchase_invoice_with_gl_allocations(app)
     login(client, email, "pass")

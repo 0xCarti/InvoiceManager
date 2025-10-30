@@ -1178,6 +1178,32 @@ class PurchaseInventorySummaryForm(FlaskForm):
 
 
 # forms.py
+class InventoryVarianceReportForm(FlaskForm):
+    start_date = DateField("Start Date", validators=[DataRequired()])
+    end_date = DateField("End Date", validators=[DataRequired()])
+    items = SelectMultipleField(
+        "Items",
+        coerce=int,
+        validators=[Optional()],
+        render_kw={"size": 10},
+    )
+    gl_codes = SelectMultipleField(
+        "GL Codes",
+        coerce=int,
+        validators=[Optional()],
+        render_kw={"size": 10},
+    )
+    submit = SubmitField("Generate Report")
+
+    def __init__(self, *args, **kwargs):
+        super(InventoryVarianceReportForm, self).__init__(*args, **kwargs)
+        self.items.choices = load_item_choices()
+        self.gl_codes.choices = load_expense_gl_code_choices(
+            include_unassigned=True
+        )
+
+
+# forms.py
 class ProductSalesReportForm(FlaskForm):
     start_date = DateField("Start Date", validators=[DataRequired()])
     end_date = DateField("End Date", validators=[DataRequired()])
