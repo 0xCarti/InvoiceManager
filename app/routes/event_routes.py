@@ -721,6 +721,10 @@ def _apply_pending_sales(
         ):
             location_obj.products.append(product)
             _ensure_location_items(location_obj, product)
+        if location_obj is not None and event_location_id in totals_map:
+            if product not in location_obj.products:
+                location_obj.products.append(product)
+                _ensure_location_items(location_obj, product)
         if location_obj is not None and location_obj.name:
             updated_locations.add(location_obj.name)
 
@@ -3445,17 +3449,23 @@ def upload_terminal_sales(event_id):
             amount=None,
             net_including_tax_total=None,
             discounts_total=None,
+            *,
+            is_location_total: bool = False,
         ):
             if not loc or not isinstance(loc, str):
                 return
             loc = loc.strip()
             if not loc:
                 return
-            if not name or not isinstance(name, str):
-                return
-            product_name = name.strip()
-            if not product_name:
-                return
+            product_name = None
+            if not is_location_total:
+                if not name or not isinstance(name, str):
+                    return
+                product_name = name.strip()
+                if not product_name:
+                    return
+            elif isinstance(name, str):
+                product_name = name.strip() or None
             price_value = parse_terminal_sales_number(price)
             amount_value = parse_terminal_sales_number(amount)
             net_including_value = parse_terminal_sales_number(
@@ -3471,13 +3481,17 @@ def upload_terminal_sales(event_id):
                 net_including_tax_total=net_including_value,
                 discounts_total=discounts_value,
             )
-            if quantity_value is None:
+            if quantity_value is None and not is_location_total:
                 return
             entry = {
                 "location": loc,
-                "product": product_name,
-                "quantity": quantity_value,
             }
+            if is_location_total:
+                entry["is_location_total"] = True
+            if product_name:
+                entry["product"] = product_name
+            if quantity_value is not None:
+                entry["quantity"] = quantity_value
             if price_value is not None:
                 entry["price"] = price_value
             if amount_value is not None:
@@ -3575,32 +3589,59 @@ def upload_terminal_sales(event_id):
                         continue
 
                     second = row[1] if len(row) > 1 else None
+                    first_cell = row[0] if row else None
+                    quantity_cell = row[4] if len(row) > 4 else None
+                    amount_cell = row[5] if len(row) > 5 else None
+                    net_cell = row[7] if len(row) > 7 else None
+                    discount_cell = row[8] if len(row) > 8 else None
+
+                    summary_quantity = parse_terminal_sales_number(quantity_cell)
+                    summary_amount = parse_terminal_sales_number(amount_cell)
+                    summary_net = parse_terminal_sales_number(net_cell)
+                    summary_discount = parse_terminal_sales_number(discount_cell)
+
+                    if (
+                        terminal_sales_cell_is_blank(first_cell)
+                        and not isinstance(second, str)
+                        and (
+                            summary_quantity is not None
+                            or summary_amount is not None
+                            or summary_net is not None
+                            or summary_discount is not None
+                        )
+                    ):
+                        add_row(
+                            current_loc,
+                            None,
+                            quantity_cell,
+                            price=None,
+                            amount=amount_cell,
+                            net_including_tax_total=net_cell,
+                            discounts_total=discount_cell,
+                            is_location_total=True,
+                        )
+                        continue
+
                     if not isinstance(second, str):
                         continue
 
-                    quantity = row[4] if len(row) > 4 else None
+                    quantity = quantity_cell
                     price = row[2] if len(row) > 2 else None
-                    quantity_value = parse_terminal_sales_number(quantity)
+                    quantity_value = summary_quantity
                     discounts = None
                     if quantity_value is not None and abs(quantity_value) > 1e-9:
                         net_including = (
-                            parse_terminal_sales_number(row[7])
-                            if len(row) > 7
-                            else None
+                            summary_net
                         )
                         discounts = (
-                            parse_terminal_sales_number(row[8])
-                            if len(row) > 8
-                            else None
+                            summary_discount
                         )
                         if net_including is not None:
                             price = (
                                 net_including + (discounts or 0.0)
                             ) / quantity_value
-                    amount = row[5] if len(row) > 5 else None
-                    net_including_total = (
-                        row[7] if len(row) > 7 else None
-                    )
+                    amount = amount_cell
+                    net_including_total = net_cell
                     add_row(
                         current_loc,
                         second,
