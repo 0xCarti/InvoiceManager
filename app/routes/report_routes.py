@@ -41,6 +41,7 @@ from app.models import (
     Item,
     ItemUnit,
     Location,
+    LocationStandItem,
     Product,
     ProductRecipeItem,
     PurchaseInvoice,
@@ -48,6 +49,8 @@ from app.models import (
     PurchaseOrder,
     TerminalSale,
     TerminalSaleProductAlias,
+    Transfer,
+    TransferItem,
     User,
 )
 from app.utils.forecasting import DemandForecastingHelper
@@ -59,7 +62,7 @@ from app.utils.units import (
     get_unit_label,
 )
 from itsdangerous import BadSignature, URLSafeSerializer
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import selectinload
 from werkzeug.utils import secure_filename
 
@@ -1345,12 +1348,142 @@ def inventory_variance_report():
                     "unit_label": get_unit_label(report_unit),
                 }
 
+            spoilage_by_key: dict[tuple[object, int], dict] = {}
+            to_location = db.aliased(Location)
+            transfer_start = datetime.combine(start, datetime.min.time())
+            transfer_end = datetime.combine(end, datetime.max.time())
+
+            spoilage_rows = (
+                db.session.query(
+                    TransferItem.item_id.label("item_id"),
+                    Item.name.label("item_name"),
+                    Item.base_unit.label("base_unit"),
+                    Item.cost.label("item_cost"),
+                    func.sum(TransferItem.quantity).label("total_quantity"),
+                    LocationStandItem.purchase_gl_code_id.label("stand_gl_id"),
+                    Item.purchase_gl_code_id.label("item_gl_id"),
+                )
+                .join(Transfer, TransferItem.transfer_id == Transfer.id)
+                .join(Item, TransferItem.item_id == Item.id)
+                .join(to_location, Transfer.to_location_id == to_location.id)
+                .outerjoin(
+                    LocationStandItem,
+                    and_(
+                        LocationStandItem.location_id == Transfer.from_location_id,
+                        LocationStandItem.item_id == TransferItem.item_id,
+                    ),
+                )
+                .filter(
+                    Transfer.completed.is_(True),
+                    to_location.is_spoilage.is_(True),
+                    Transfer.date_created >= transfer_start,
+                    Transfer.date_created <= transfer_end,
+                )
+                .group_by(
+                    TransferItem.item_id,
+                    Item.name,
+                    Item.base_unit,
+                    Item.cost,
+                    LocationStandItem.purchase_gl_code_id,
+                    Item.purchase_gl_code_id,
+                )
+                .all()
+            )
+
+            for spoilage_row in spoilage_rows:
+                item_id = spoilage_row.item_id
+                if item_id is None:
+                    continue
+                if selected_item_ids and item_id not in selected_item_ids:
+                    continue
+
+                gl_id = spoilage_row.stand_gl_id or spoilage_row.item_gl_id
+                if selected_gl_codes:
+                    if gl_id is None:
+                        if -1 not in selected_gl_codes:
+                            continue
+                    elif gl_id not in selected_gl_codes:
+                        continue
+
+                base_unit = spoilage_row.base_unit or ""
+                total_quantity = float(spoilage_row.total_quantity or 0.0)
+                converted_qty, report_unit = convert_quantity_for_reporting(
+                    total_quantity, base_unit, conversions
+                )
+                converted_qty = float(converted_qty or 0.0)
+                unit_cost = convert_cost_for_reporting(
+                    float(spoilage_row.item_cost or 0.0), base_unit, conversions
+                )
+                spoilage_value = converted_qty * float(unit_cost or 0.0)
+
+                item_key = item_id
+                gl_key = gl_id if gl_id is not None else -1
+                aggregate_key = (item_key, gl_key)
+                entry = spoilage_by_key.setdefault(
+                    aggregate_key,
+                    {
+                        "item_key": item_key,
+                        "item_id": item_id,
+                        "item_name": spoilage_row.item_name,
+                        "gl_id": gl_id,
+                        "gl_code": None,
+                        "gl_description": "",
+                        "report_unit": report_unit,
+                        "unit_label": get_unit_label(report_unit),
+                        "spoilage_quantity": 0.0,
+                        "spoilage_value": 0.0,
+                    },
+                )
+                entry["spoilage_quantity"] += converted_qty
+                entry["spoilage_value"] += spoilage_value
+
+            gl_ids_to_load = {
+                entry["gl_id"]
+                for entry in spoilage_by_key.values()
+                if entry["gl_id"] is not None
+            }
+            gl_lookup = {}
+            if gl_ids_to_load:
+                gl_rows = GLCode.query.filter(GLCode.id.in_(gl_ids_to_load)).all()
+                gl_lookup = {gl.id: gl for gl in gl_rows}
+
+            for entry in spoilage_by_key.values():
+                gl_id = entry["gl_id"]
+                if gl_id is not None:
+                    gl = gl_lookup.get(gl_id)
+                    entry["gl_code"] = gl.code if gl and gl.code else "Unassigned"
+                    entry["gl_description"] = gl.description if gl else ""
+                else:
+                    entry["gl_code"] = "Unassigned"
+                    entry["gl_description"] = ""
+
+            for aggregate_key, spoilage_entry in spoilage_by_key.items():
+                if aggregate_key in purchases:
+                    continue
+                item_key, _ = aggregate_key
+                purchases_by_item.setdefault(item_key, []).append(
+                    {
+                        "item_key": spoilage_entry["item_key"],
+                        "item_id": spoilage_entry["item_id"],
+                        "item_name": spoilage_entry["item_name"],
+                        "gl_code": spoilage_entry["gl_code"],
+                        "gl_description": spoilage_entry["gl_description"],
+                        "gl_id": spoilage_entry["gl_id"],
+                        "purchased_quantity": 0.0,
+                        "purchased_value": 0.0,
+                        "report_unit": spoilage_entry["report_unit"],
+                        "unit_label": spoilage_entry["unit_label"],
+                    }
+                )
+
             results = []
             totals = {
                 "purchased_quantity": 0.0,
                 "purchased_value": 0.0,
                 "used_quantity": 0.0,
                 "used_value": 0.0,
+                "spoilage_quantity": 0.0,
+                "spoilage_value": 0.0,
                 "net_quantity": 0.0,
                 "net_value": 0.0,
             }
@@ -1363,6 +1496,8 @@ def inventory_variance_report():
                 totals["purchased_value"] += row["purchased_value"]
                 totals["used_quantity"] += row["used_quantity"]
                 totals["used_value"] += row["used_value"]
+                totals["spoilage_quantity"] += row["spoilage_quantity"]
+                totals["spoilage_value"] += row["spoilage_value"]
                 totals["net_quantity"] += row["net_quantity"]
                 totals["net_value"] += row["net_value"]
 
@@ -1384,6 +1519,24 @@ def inventory_variance_report():
                     allocated_usage_items.add(item_id)
 
                 for entry in entry_list:
+                    aggregate_key = (
+                        entry.get("item_key"),
+                        entry.get("gl_id") if entry.get("gl_id") is not None else -1,
+                    )
+                    spoilage_entry = spoilage_by_key.pop(aggregate_key, None)
+                    spoilage_quantity = (
+                        float(spoilage_entry["spoilage_quantity"])
+                        if spoilage_entry
+                        else 0.0
+                    )
+                    spoilage_value = (
+                        float(spoilage_entry["spoilage_value"])
+                        if spoilage_entry
+                        else 0.0
+                    )
+                    if spoilage_entry and not entry.get("unit_label"):
+                        entry["unit_label"] = spoilage_entry.get("unit_label", "")
+
                     if total_usage_quantity > 0 and total_purchase_quantity > 0:
                         weight = (
                             entry.get("purchased_quantity", 0.0) / total_purchase_quantity
@@ -1412,9 +1565,14 @@ def inventory_variance_report():
                         "purchased_value": entry.get("purchased_value", 0.0),
                         "used_quantity": used_quantity,
                         "used_value": used_value,
+                        "spoilage_quantity": spoilage_quantity,
+                        "spoilage_value": spoilage_value,
                         "net_quantity": entry.get("purchased_quantity", 0.0)
-                        - used_quantity,
-                        "net_value": entry.get("purchased_value", 0.0) - used_value,
+                        - used_quantity
+                        - spoilage_quantity,
+                        "net_value": entry.get("purchased_value", 0.0)
+                        - used_value
+                        - spoilage_value,
                     }
 
                     _add_row(row)
@@ -1437,8 +1595,28 @@ def inventory_variance_report():
                     "purchased_value": 0.0,
                     "used_quantity": usage_entry.get("used_quantity", 0.0),
                     "used_value": usage_entry.get("used_value", 0.0),
+                    "spoilage_quantity": 0.0,
+                    "spoilage_value": 0.0,
                     "net_quantity": -usage_entry.get("used_quantity", 0.0),
                     "net_value": -usage_entry.get("used_value", 0.0),
+                }
+
+                _add_row(row)
+
+            for spoilage_entry in spoilage_by_key.values():
+                row = {
+                    "item_name": spoilage_entry.get("item_name") or "",
+                    "gl_code": spoilage_entry.get("gl_code") or "Unassigned",
+                    "gl_description": spoilage_entry.get("gl_description") or "",
+                    "unit_name": spoilage_entry.get("unit_label") or "",
+                    "purchased_quantity": 0.0,
+                    "purchased_value": 0.0,
+                    "used_quantity": 0.0,
+                    "used_value": 0.0,
+                    "spoilage_quantity": spoilage_entry.get("spoilage_quantity", 0.0),
+                    "spoilage_value": spoilage_entry.get("spoilage_value", 0.0),
+                    "net_quantity": -spoilage_entry.get("spoilage_quantity", 0.0),
+                    "net_value": -spoilage_entry.get("spoilage_value", 0.0),
                 }
 
                 _add_row(row)

@@ -80,6 +80,7 @@
                         <th scope="col" class="text-end">Purchased Spend</th>
                         <th scope="col" class="text-end">Used Qty</th>
                         <th scope="col" class="text-end">Used Value</th>
+                        <th scope="col" class="text-end">Spoilage</th>
                         <th scope="col" class="text-end">Net Qty</th>
                         <th scope="col" class="text-end">Net Value</th>
                     </tr>
@@ -99,6 +100,10 @@
                         <td class="text-end">${{ '%.2f'|format(row.purchased_value) }}</td>
                         <td class="text-end">{{ '%.2f'|format(row.used_quantity) }}</td>
                         <td class="text-end">${{ '%.2f'|format(row.used_value) }}</td>
+                        <td class="text-end">
+                            <div>{{ '%.2f'|format(row.spoilage_quantity) }}</div>
+                            <div class="text-muted small">${{ '%.2f'|format(row.spoilage_value) }}</div>
+                        </td>
                         <td class="text-end">{{ '%.2f'|format(row.net_quantity) }}</td>
                         <td class="text-end">${{ '%.2f'|format(row.net_value) }}</td>
                     </tr>
@@ -111,6 +116,10 @@
                         <th class="text-end">${{ '%.2f'|format(totals.purchased_value) }}</th>
                         <th class="text-end">{{ '%.2f'|format(totals.used_quantity) }}</th>
                         <th class="text-end">${{ '%.2f'|format(totals.used_value) }}</th>
+                        <th class="text-end">
+                            <div>{{ '%.2f'|format(totals.spoilage_quantity) }}</div>
+                            <div class="text-muted small">${{ '%.2f'|format(totals.spoilage_value) }}</div>
+                        </th>
                         <th class="text-end">{{ '%.2f'|format(totals.net_quantity) }}</th>
                         <th class="text-end">${{ '%.2f'|format(totals.net_value) }}</th>
                     </tr>
