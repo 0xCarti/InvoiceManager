@@ -22,6 +22,7 @@ from flask_login import login_required
 from app import db
 from app.forms import (
     DepartmentSalesForecastForm,
+    InventoryVarianceReportForm,
     PurchaseCostForecastForm,
     PurchaseInventorySummaryForm,
     ProductRecipeReportForm,
@@ -1164,6 +1165,307 @@ def purchase_inventory_summary():
 
     return render_template(
         "report_purchase_inventory_summary.html",
+        form=form,
+        results=results,
+        totals=totals,
+        start=start,
+        end=end,
+        selected_item_names=selected_item_names,
+        selected_gl_labels=selected_gl_labels,
+    )
+
+
+@report.route("/reports/inventory-variance", methods=["GET", "POST"])
+@login_required
+def inventory_variance_report():
+    """Compare purchased inventory against recorded usage to highlight variances."""
+
+    form = InventoryVarianceReportForm()
+    results = None
+    totals = None
+    start = None
+    end = None
+    selected_item_names: list[str] = []
+    selected_gl_labels: list[str] = []
+
+    if form.validate_on_submit():
+        start = form.start_date.data
+        end = form.end_date.data
+
+        if end < start:
+            form.end_date.errors.append(
+                "End date must be on or after the start date."
+            )
+        else:
+            selected_item_ids = set(form.items.data or [])
+            selected_gl_codes = set(form.gl_codes.data or [])
+            conversions = _get_base_unit_conversions()
+
+            purchase_query = (
+                PurchaseInvoiceItem.query.join(PurchaseInvoice)
+                .options(
+                    selectinload(PurchaseInvoiceItem.invoice),
+                    selectinload(PurchaseInvoiceItem.item),
+                    selectinload(PurchaseInvoiceItem.unit),
+                    selectinload(PurchaseInvoiceItem.purchase_gl_code),
+                )
+                .filter(PurchaseInvoice.received_date >= start)
+                .filter(PurchaseInvoice.received_date <= end)
+            )
+
+            if selected_item_ids:
+                purchase_query = purchase_query.filter(
+                    PurchaseInvoiceItem.item_id.in_(selected_item_ids)
+                )
+
+            purchase_items = purchase_query.all()
+            purchases: dict[tuple[object, int], dict] = {}
+            purchases_by_item: dict[object, list[dict]] = {}
+
+            for inv_item in purchase_items:
+                invoice = inv_item.invoice
+                location_id = inv_item.location_id or (invoice.location_id if invoice else None)
+                resolved_gl = inv_item.resolved_purchase_gl_code(location_id)
+                gl_id = resolved_gl.id if resolved_gl else None
+
+                if selected_gl_codes:
+                    if gl_id is None:
+                        if -1 not in selected_gl_codes:
+                            continue
+                    elif gl_id not in selected_gl_codes:
+                        continue
+
+                if inv_item.item and inv_item.unit:
+                    quantity = inv_item.quantity * inv_item.unit.factor
+                    unit_key = inv_item.item.base_unit or inv_item.unit.name
+                elif inv_item.item:
+                    quantity = inv_item.quantity
+                    unit_key = inv_item.item.base_unit or (inv_item.unit_name or "")
+                else:
+                    quantity = inv_item.quantity
+                    unit_key = inv_item.unit_name or ""
+
+                item_name = inv_item.item.name if inv_item.item else inv_item.item_name
+                item_key = (
+                    inv_item.item_id
+                    if inv_item.item_id is not None
+                    else f"missing-{item_name}"
+                )
+                gl_key = gl_id if gl_id is not None else -1
+                aggregate_key = (item_key, gl_key)
+
+                entry = purchases.get(aggregate_key)
+                if entry is None:
+                    gl_code = (
+                        resolved_gl.code
+                        if resolved_gl and resolved_gl.code
+                        else "Unassigned"
+                    )
+                    gl_description = resolved_gl.description if resolved_gl else ""
+                    entry = {
+                        "item_key": item_key,
+                        "item_id": inv_item.item_id,
+                        "item_name": item_name,
+                        "gl_code": gl_code,
+                        "gl_description": gl_description,
+                        "gl_id": gl_id,
+                        "raw_quantity": 0.0,
+                        "unit_key": unit_key,
+                        "purchased_value": 0.0,
+                    }
+                    purchases[aggregate_key] = entry
+                    purchases_by_item.setdefault(item_key, []).append(entry)
+
+                entry["raw_quantity"] += float(quantity or 0.0)
+                entry["purchased_value"] += float(
+                    (inv_item.quantity or 0.0) * abs(inv_item.cost or 0.0)
+                )
+                if not entry.get("unit_key") and unit_key:
+                    entry["unit_key"] = unit_key
+
+            for entry in purchases.values():
+                unit_key = entry.get("unit_key") or ""
+                quantity, report_unit = convert_quantity_for_reporting(
+                    entry["raw_quantity"], unit_key, conversions
+                )
+                entry["purchased_quantity"] = float(quantity or 0.0)
+                entry["report_unit"] = report_unit
+                entry["unit_label"] = get_unit_label(report_unit)
+
+            usage_query = (
+                db.session.query(
+                    Item.id.label("item_id"),
+                    Item.name.label("item_name"),
+                    Item.base_unit.label("base_unit"),
+                    Item.cost.label("item_cost"),
+                    db.func.sum(
+                        InvoiceProduct.quantity
+                        * ProductRecipeItem.quantity
+                        * db.func.coalesce(ItemUnit.factor, 1)
+                    ).label("total_quantity"),
+                )
+                .join(ProductRecipeItem, ProductRecipeItem.item_id == Item.id)
+                .join(Product, Product.id == ProductRecipeItem.product_id)
+                .join(InvoiceProduct, InvoiceProduct.product_id == Product.id)
+                .join(Invoice, Invoice.id == InvoiceProduct.invoice_id)
+                .outerjoin(ItemUnit, ItemUnit.id == ProductRecipeItem.unit_id)
+                .filter(
+                    InvoiceProduct.product_id.isnot(None),
+                    Invoice.date_created >= start,
+                    Invoice.date_created <= end,
+                )
+            )
+
+            if selected_item_ids:
+                usage_query = usage_query.filter(Item.id.in_(selected_item_ids))
+
+            usage_rows = (
+                usage_query.group_by(Item.id)
+                .order_by(Item.name)
+                .all()
+            )
+
+            usage_totals: dict[int, dict] = {}
+            for usage_row in usage_rows:
+                quantity = float(usage_row.total_quantity or 0.0)
+                base_unit = usage_row.base_unit or ""
+                quantity, report_unit = convert_quantity_for_reporting(
+                    quantity, base_unit, conversions
+                )
+                unit_cost = convert_cost_for_reporting(
+                    float(usage_row.item_cost or 0.0), base_unit, conversions
+                )
+                total_cost = float(quantity or 0.0) * float(unit_cost or 0.0)
+
+                usage_totals[usage_row.item_id] = {
+                    "item_name": usage_row.item_name,
+                    "used_quantity": float(quantity or 0.0),
+                    "used_value": float(total_cost or 0.0),
+                    "report_unit": report_unit,
+                    "unit_label": get_unit_label(report_unit),
+                }
+
+            results = []
+            totals = {
+                "purchased_quantity": 0.0,
+                "purchased_value": 0.0,
+                "used_quantity": 0.0,
+                "used_value": 0.0,
+                "net_quantity": 0.0,
+                "net_value": 0.0,
+            }
+
+            allocated_usage_items: set[int] = set()
+
+            def _add_row(row: dict):
+                results.append(row)
+                totals["purchased_quantity"] += row["purchased_quantity"]
+                totals["purchased_value"] += row["purchased_value"]
+                totals["used_quantity"] += row["used_quantity"]
+                totals["used_value"] += row["used_value"]
+                totals["net_quantity"] += row["net_quantity"]
+                totals["net_value"] += row["net_value"]
+
+            for item_key, entry_list in purchases_by_item.items():
+                first_entry = entry_list[0]
+                item_id = first_entry.get("item_id")
+                usage_entry = usage_totals.get(item_id) if item_id is not None else None
+
+                total_usage_quantity = usage_entry["used_quantity"] if usage_entry else 0.0
+                total_usage_value = usage_entry["used_value"] if usage_entry else 0.0
+                total_purchase_quantity = sum(
+                    entry.get("purchased_quantity", 0.0) for entry in entry_list
+                )
+                total_purchase_value = sum(
+                    entry.get("purchased_value", 0.0) for entry in entry_list
+                )
+
+                if usage_entry and item_id is not None:
+                    allocated_usage_items.add(item_id)
+
+                for entry in entry_list:
+                    if total_usage_quantity > 0 and total_purchase_quantity > 0:
+                        weight = (
+                            entry.get("purchased_quantity", 0.0) / total_purchase_quantity
+                        )
+                    elif total_usage_value > 0 and total_purchase_value > 0:
+                        weight = (
+                            entry.get("purchased_value", 0.0) / total_purchase_value
+                        )
+                    elif total_usage_quantity > 0:
+                        weight = 1.0 / len(entry_list)
+                    else:
+                        weight = 0.0
+
+                    used_quantity = total_usage_quantity * weight
+                    used_value = total_usage_value * weight
+                    unit_label = entry.get("unit_label") or (
+                        usage_entry.get("unit_label") if usage_entry else ""
+                    )
+
+                    row = {
+                        "item_name": entry.get("item_name") or "",
+                        "gl_code": entry.get("gl_code") or "Unassigned",
+                        "gl_description": entry.get("gl_description") or "",
+                        "unit_name": unit_label,
+                        "purchased_quantity": entry.get("purchased_quantity", 0.0),
+                        "purchased_value": entry.get("purchased_value", 0.0),
+                        "used_quantity": used_quantity,
+                        "used_value": used_value,
+                        "net_quantity": entry.get("purchased_quantity", 0.0)
+                        - used_quantity,
+                        "net_value": entry.get("purchased_value", 0.0) - used_value,
+                    }
+
+                    _add_row(row)
+
+            if not results:
+                results = []
+
+            for item_id, usage_entry in usage_totals.items():
+                if item_id in allocated_usage_items:
+                    continue
+                if selected_gl_codes and -1 not in selected_gl_codes:
+                    continue
+
+                row = {
+                    "item_name": usage_entry.get("item_name") or "",
+                    "gl_code": "Unassigned",
+                    "gl_description": "",
+                    "unit_name": usage_entry.get("unit_label") or "",
+                    "purchased_quantity": 0.0,
+                    "purchased_value": 0.0,
+                    "used_quantity": usage_entry.get("used_quantity", 0.0),
+                    "used_value": usage_entry.get("used_value", 0.0),
+                    "net_quantity": -usage_entry.get("used_quantity", 0.0),
+                    "net_value": -usage_entry.get("used_value", 0.0),
+                }
+
+                _add_row(row)
+
+            results.sort(
+                key=lambda row: (
+                    (row.get("item_name") or "").lower(),
+                    row.get("gl_code") or "",
+                )
+            )
+
+            if selected_item_ids:
+                selected_item_names = [
+                    label
+                    for value, label in form.items.choices
+                    if value in selected_item_ids
+                ]
+
+            if selected_gl_codes:
+                selected_gl_labels = [
+                    label
+                    for value, label in form.gl_codes.choices
+                    if value in selected_gl_codes
+                ]
+
+    return render_template(
+        "report_inventory_variance.html",
         form=form,
         results=results,
         totals=totals,
