@@ -87,6 +87,11 @@ class User(UserMixin, db.Model):
     items_per_page = db.Column(
         db.Integer, nullable=False, default=20, server_default="20"
     )
+    filter_preferences = relationship(
+        "UserFilterPreference",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     def get_favorites(self):
         """Return the user's favourite endpoint names as a list."""
@@ -100,6 +105,23 @@ class User(UserMixin, db.Model):
         else:
             favs.add(endpoint)
         self.favorites = ",".join(sorted(favs))
+
+
+class UserFilterPreference(db.Model):
+    __tablename__ = "user_filter_preference"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    scope = db.Column(db.String(255), nullable=False)
+    values = db.Column(db.JSON, nullable=False, default=dict)
+
+    user = relationship("User", back_populates="filter_preferences")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id", "scope", name="uq_user_filter_preference_scope"
+        ),
+    )
 
 class Location(db.Model):
     id = db.Column(db.Integer, primary_key=True)

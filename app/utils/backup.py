@@ -176,7 +176,8 @@ def restore_backup(file_path):
             continue
 
         # Columns present in backup
-        backup_cursor.execute(f"PRAGMA table_info({table_name})")
+        quoted_table = f'"{table_name}"'
+        backup_cursor.execute(f"PRAGMA table_info({quoted_table})")
         backup_cols = {row[1] for row in backup_cursor.fetchall()}
 
         current_cols = {c.name for c in table.columns}
@@ -192,8 +193,8 @@ def restore_backup(file_path):
 
         # Only select columns that exist in both schemas
         select_cols = [c for c in table.columns if c.name in backup_cols]
-        col_names = ", ".join(c.name for c in select_cols)
-        backup_cursor.execute(f"SELECT {col_names} FROM {table_name}")
+        col_names = ", ".join(f'"{c.name}"' for c in select_cols)
+        backup_cursor.execute(f"SELECT {col_names} FROM {quoted_table}")
         rows = backup_cursor.fetchall()
 
         insert_rows = []

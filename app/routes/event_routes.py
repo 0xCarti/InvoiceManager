@@ -535,6 +535,8 @@ def _derive_summary_totals_from_details(
 def _apply_pending_sales(
     pending_sales: list[dict] | None,
     pending_totals: list[dict] | None = None,
+    *,
+    link_products_to_locations: bool = False,
 ) -> set[str]:
     """Persist uploaded terminal sales for the provided event locations."""
 
@@ -712,10 +714,13 @@ def _apply_pending_sales(
                     sold_at=datetime.utcnow(),
                 )
             )
-        if location_obj is not None:
-            if product not in location_obj.products:
-                location_obj.products.append(product)
-                _ensure_location_items(location_obj, product)
+        if (
+            link_products_to_locations
+            and location_obj is not None
+            and product not in location_obj.products
+        ):
+            location_obj.products.append(product)
+            _ensure_location_items(location_obj, product)
         if location_obj is not None and location_obj.name:
             updated_locations.add(location_obj.name)
 
@@ -1660,6 +1665,10 @@ def upload_terminal_sales(event_id):
 
     posted_state_token = request.form.get("state_token") if request.method == "POST" else None
     state_token = posted_state_token or (state_entry.get("token") if state_entry else None)
+    if request.method != "POST" and state_entry and not state_token:
+        _clear_state()
+        state_entry = None
+        state_token = None
     state_data: dict | None = None
     if state_token:
         try:
@@ -2107,7 +2116,9 @@ def upload_terminal_sales(event_id):
                         wizard_stage="menus",
                     )
                 updated_locations = _apply_pending_sales(
-                    pending_sales, pending_totals
+                    pending_sales,
+                    pending_totals,
+                    link_products_to_locations=True,
                 )
                 saved_location_aliases = _store_location_aliases(pending_totals)
                 price_updates, menu_updates = _apply_resolution_actions(
@@ -2306,7 +2317,11 @@ def upload_terminal_sales(event_id):
                         }
                     )
 
-            updated_locations = _apply_pending_sales(pending_sales, pending_totals)
+            updated_locations = _apply_pending_sales(
+                pending_sales,
+                pending_totals,
+                link_products_to_locations=True,
+            )
             saved_location_aliases = _store_location_aliases(pending_totals)
             price_updates, menu_updates = _apply_resolution_actions(
                 {"queue": combined_queue}
@@ -3379,7 +3394,11 @@ def upload_terminal_sales(event_id):
                     wizard_stage="menus",
                 )
 
-            updated_locations = _apply_pending_sales(pending_sales, pending_totals)
+            updated_locations = _apply_pending_sales(
+                pending_sales,
+                pending_totals,
+                link_products_to_locations=True,
+            )
             saved_location_aliases = _store_location_aliases(pending_totals)
             if updated_locations or saved_location_aliases:
                 db.session.commit()
