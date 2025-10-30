@@ -31,7 +31,8 @@
         form_id='activity-log-filter-form',
         form_action=url_for('admin.activity_logs'),
         method='get',
-        reset_url=url_for('admin.activity_logs')
+        reset_url=url_for('admin.activity_logs'),
+        scope=request.endpoint
     ) %}
         {{ form.hidden_tag() }}
         <div class="mb-3">

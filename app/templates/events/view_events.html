@@ -51,7 +51,8 @@
     form_action=url_for('event.filter_events_ajax'),
     method='post',
     reset_url=url_for('event.view_events'),
-    ajax=True
+    ajax=True,
+    scope=request.endpoint
 ) %}
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <div class="mb-3">

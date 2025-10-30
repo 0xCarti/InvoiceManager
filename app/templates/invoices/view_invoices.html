@@ -103,7 +103,8 @@
     form_action=url_for('invoice.filter_invoices_api'),
     method='get',
     reset_url=url_for('invoice.view_invoices'),
-    ajax=True
+    ajax=True,
+    scope=request.endpoint
 ) %}
     {{ form.hidden_tag() }}
     <div class="mb-3">
