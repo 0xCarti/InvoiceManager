@@ -127,7 +127,8 @@
         form_action=url_for('product.view_products'),
         method='get',
         reset_url=url_for('product.view_products', reset=1),
-        dialog_class='modal-lg'
+        dialog_class='modal-lg',
+        scope=request.endpoint
     ) %}
         <div class="row g-3 mb-3">
             <div class="col-md-6">

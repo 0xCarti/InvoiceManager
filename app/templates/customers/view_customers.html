@@ -33,7 +33,8 @@
         form_id='filter-form',
         form_action=url_for('customer.view_customers'),
         method='get',
-        reset_url=url_for('customer.view_customers')
+        reset_url=url_for('customer.view_customers'),
+        scope=request.endpoint
     ) %}
         <div class="mb-3">
             <label for="name_query" class="form-label">Name</label>

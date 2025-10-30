@@ -30,7 +30,8 @@
         form_id='filter-form',
         form_action=url_for('glcode.view_gl_codes'),
         method='get',
-        reset_url=url_for('glcode.view_gl_codes')
+        reset_url=url_for('glcode.view_gl_codes'),
+        scope=request.endpoint
     ) %}
         <div class="mb-3">
             <label for="code_query" class="form-label">Code</label>

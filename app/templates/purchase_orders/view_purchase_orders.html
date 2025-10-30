@@ -90,7 +90,8 @@
         form_id='filter-form',
         form_action=url_for('purchase.view_purchase_orders'),
         method='get',
-        reset_url=url_for('purchase.view_purchase_orders')
+        reset_url=url_for('purchase.view_purchase_orders'),
+        scope=request.endpoint
     ) %}
         <div class="mb-3">
             <label for="vendor_id" class="form-label">Vendor</label>
