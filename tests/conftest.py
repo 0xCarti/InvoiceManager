@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 
@@ -11,6 +13,7 @@ from app.utils.units import (
     DEFAULT_BASE_UNIT_CONVERSIONS,
     serialize_conversion_setting,
 )
+from tests.utils import save_filter_defaults as _save_filter_defaults_helper
 
 # Ensure the app package is importable when tests change directories
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -70,6 +73,18 @@ def app(tmp_path):
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture
+def save_filter_defaults(client):
+    """Return a helper that stores filter defaults via the preferences API."""
+
+    def _save(scope: str, values: dict[str, list[str]], *, token_path: str = "/items"):
+        return _save_filter_defaults_helper(
+            client, scope, values, token_path=token_path
+        )
+
+    return _save
 
 
 @pytest.fixture(autouse=True)
