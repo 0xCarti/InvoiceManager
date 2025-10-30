@@ -151,6 +151,75 @@ def test_apply_pending_sales_leaves_location_menu_unchanged(app):
         assert sale.quantity == pytest.approx(8.0)
 
 
+def test_location_total_summary_rows_override_amount(app):
+    with app.app_context():
+        event = Event(
+            name="Summary Override Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Summary Stand")
+        event_location = EventLocation(event=event, location=location)
+        product = Product(name="Pretzel", price=7.5, cost=3.0)
+
+        db.session.add_all([event, location, event_location, product])
+        db.session.commit()
+
+        net_total = 120.0
+        discount_total = -10.0
+        override_total = net_total + discount_total
+        rows = [
+            {
+                "location": location.name,
+                "product": product.name,
+                "quantity": 15.0,
+                "amount": 105.0,
+            },
+            {
+                "location": location.name,
+                "is_location_total": True,
+                "quantity": 15.0,
+                "amount": override_total,
+                "net_including_tax_total": net_total,
+                "discount_total": discount_total,
+            },
+        ]
+
+        grouped = group_terminal_sales_rows(rows)
+        location_summary = grouped[location.name]
+        assert set(location_summary["products"].keys()) == {product.name}
+
+        pending_sales = [
+            {
+                "event_location_id": event_location.id,
+                "product_id": product.id,
+                "product_name": product.name,
+                "quantity": rows[0]["quantity"],
+            }
+        ]
+        pending_totals = [
+            {
+                "event_location_id": event_location.id,
+                "source_location": location.name,
+                "total_quantity": location_summary.get("total"),
+                "total_amount": location_summary.get("total_amount"),
+                "net_including_tax_total": location_summary.get(
+                    "net_including_tax_total"
+                ),
+                "discount_total": location_summary.get("discount_total"),
+            }
+        ]
+
+        _apply_pending_sales(pending_sales, pending_totals)
+        db.session.commit()
+
+        summary = EventLocationTerminalSalesSummary.query.filter_by(
+            event_location_id=event_location.id
+        ).one()
+        assert summary.total_amount == pytest.approx(override_total)
+        assert summary.total_quantity == pytest.approx(location_summary.get("total"))
+
+
 def test_apply_resolution_actions_adds_menu_entries(app):
     with app.app_context():
         event = Event(
