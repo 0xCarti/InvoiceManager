@@ -11,7 +11,7 @@ from flask import (
     session,
     url_for,
 )
-from flask_login import login_required
+from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
 from sqlalchemy import func, or_
@@ -43,6 +43,11 @@ from app.models import (
     Vendor,
 )
 from app.utils.activity import log_activity
+from app.utils.filter_state import (
+    filters_to_query_args,
+    get_filter_defaults,
+    normalize_filters,
+)
 from app.utils.pagination import build_pagination_args, get_per_page
 from app.utils.units import BASE_UNITS
 
@@ -58,12 +63,45 @@ MAX_IMPORT_SIZE = 1 * 1024 * 1024  # 1 MB
 @login_required
 def view_items():
     """Display the inventory item list."""
+    session_key = "item_filters"
+    scope = request.endpoint or "item.view_items"
+    default_filters = get_filter_defaults(current_user, scope)
+
     if request.args.get("reset"):
-        session.pop("item_filters", None)
+        session.pop(session_key, None)
+        if default_filters:
+            session[session_key] = default_filters
+            return redirect(
+                url_for(
+                    "item.view_items", **filters_to_query_args(default_filters)
+                )
+            )
         return redirect(url_for("item.view_items"))
 
-    if not request.args and "item_filters" in session:
-        return redirect(url_for("item.view_items", **session["item_filters"]))
+    if not request.args:
+        if session_key in session:
+            stored_filters = normalize_filters(session[session_key])
+            session[session_key] = stored_filters
+            return redirect(
+                url_for(
+                    "item.view_items", **filters_to_query_args(stored_filters)
+                )
+            )
+        if default_filters:
+            session[session_key] = default_filters
+            return redirect(
+                url_for(
+                    "item.view_items", **filters_to_query_args(default_filters)
+                )
+            )
+    else:
+        filters = normalize_filters(
+            request.args, exclude=("page", "reset")
+        )
+        if filters:
+            session[session_key] = filters
+        else:
+            session.pop(session_key, None)
 
     def _coerce_int_list(values):
         coerced = []
@@ -75,14 +113,14 @@ def view_items():
         return coerced
 
     if request.args:
-        filters = request.args.to_dict(flat=False)
+        filters = normalize_filters(request.args, exclude=("page", "reset"))
         purchase_filter_values = filters.get("purchase_gl_code_id", [])
         if purchase_filter_values:
             coerced_purchase_ids = _coerce_int_list(purchase_filter_values)
             filters["purchase_gl_code_id"] = [
                 str(value) for value in coerced_purchase_ids
             ]
-        session["item_filters"] = filters
+        session[session_key] = filters
 
     page = request.args.get("page", 1, type=int)
     per_page = get_per_page()
@@ -143,7 +181,7 @@ def view_items():
         query = query.filter(Item.base_unit == base_unit)
     if cost_min is not None and cost_max is not None and cost_min > cost_max:
         flash("Invalid cost range: min cannot be greater than max.", "error")
-        session.pop("item_filters", None)
+        session.pop(session_key, None)
         return redirect(url_for("item.view_items"))
     if cost_min is not None:
         query = query.filter(Item.cost >= cost_min)
