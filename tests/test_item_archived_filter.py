@@ -37,6 +37,14 @@ def test_view_items_archived_filter(client, app):
         assert b"A0" not in resp.data
         assert b"X0" in resp.data
 
+        persisted = client.get("/items")
+        assert persisted.status_code == 302
+        assert "archived=archived" in persisted.headers["Location"]
+        persisted_page = client.get(persisted.headers["Location"])
+        assert persisted_page.status_code == 200
+        assert b"X0" in persisted_page.data
+        assert b"A0" not in persisted_page.data
+
         resp = client.get("/items?archived=all&page=2")
         assert resp.status_code == 200
         assert b"A9" in resp.data
