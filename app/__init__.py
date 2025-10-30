@@ -296,6 +296,7 @@ def create_app(args=None):
         from app.routes.main_routes import main
         from app.routes.menu_routes import menu as menu_bp
         from app.routes.note_routes import notes
+        from app.routes.preferences_routes import preferences
         from app.routes.product_routes import product
         from app.routes.purchase_routes import purchase
         from app.routes.report_routes import report
@@ -320,6 +321,7 @@ def create_app(args=None):
         app.register_blueprint(vendor)
         app.register_blueprint(event)
         app.register_blueprint(glcode_bp)
+        app.register_blueprint(preferences)
         from sqlalchemy.exc import OperationalError
 
         from app.models import Setting

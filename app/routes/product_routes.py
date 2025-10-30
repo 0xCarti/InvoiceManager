@@ -11,7 +11,7 @@ from flask import (
     session,
     url_for,
 )
-from flask_login import login_required
+from flask_login import current_user, login_required
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import aliased, selectinload
 
@@ -37,6 +37,11 @@ from app.models import (
     TerminalSaleProductAlias,
 )
 from app.utils.activity import log_activity
+from app.utils.filter_state import (
+    filters_to_query_args,
+    get_filter_defaults,
+    normalize_filters,
+)
 from app.utils.numeric import coerce_float
 from app.utils.pagination import build_pagination_args, get_per_page
 
@@ -47,15 +52,48 @@ product = Blueprint("product", __name__)
 @login_required
 def view_products():
     """List available products."""
+    session_key = "product_filters"
+    scope = request.endpoint or "product.view_products"
+    default_filters = get_filter_defaults(current_user, scope)
+
     if request.args.get("reset"):
-        session.pop("product_filters", None)
+        session.pop(session_key, None)
+        if default_filters:
+            session[session_key] = default_filters
+            return redirect(
+                url_for(
+                    "product.view_products",
+                    **filters_to_query_args(default_filters),
+                )
+            )
         return redirect(url_for("product.view_products"))
 
-    if not request.args and "product_filters" in session:
-        return redirect(url_for("product.view_products", **session["product_filters"]))
-
-    if request.args:
-        session["product_filters"] = request.args.to_dict(flat=False)
+    if not request.args:
+        if session_key in session:
+            stored_filters = normalize_filters(session[session_key])
+            session[session_key] = stored_filters
+            return redirect(
+                url_for(
+                    "product.view_products",
+                    **filters_to_query_args(stored_filters),
+                )
+            )
+        if default_filters:
+            session[session_key] = default_filters
+            return redirect(
+                url_for(
+                    "product.view_products",
+                    **filters_to_query_args(default_filters),
+                )
+            )
+    else:
+        filters = normalize_filters(
+            request.args, exclude=("page", "reset")
+        )
+        if filters:
+            session[session_key] = filters
+        else:
+            session.pop(session_key, None)
 
     delete_form = DeleteForm()
     bulk_cost_form = BulkProductCostForm()
@@ -117,7 +155,7 @@ def view_products():
 
     if cost_min is not None and cost_max is not None and cost_min > cost_max:
         flash("Invalid cost range: min cannot be greater than max.", "error")
-        session.pop("product_filters", None)
+        session.pop(session_key, None)
         return redirect(url_for("product.view_products"))
     if (
         price_min is not None
@@ -125,7 +163,7 @@ def view_products():
         and price_min > price_max
     ):
         flash("Invalid price range: min cannot be greater than max.", "error")
-        session.pop("product_filters", None)
+        session.pop(session_key, None)
         return redirect(url_for("product.view_products"))
     if cost_min is not None:
         query = query.filter(Product.cost >= cost_min)
