@@ -178,8 +178,10 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
     grouped: dict[str, dict] = {}
     for entry in row_data:
         loc = entry["location"]
-        prod = entry["product"]
-        qty = coerce_float(entry.get("quantity"), default=0.0) or 0.0
+        prod = entry.get("product")
+        is_location_total = bool(entry.get("is_location_total"))
+        qty_value = coerce_float(entry.get("quantity"))
+        qty = qty_value if qty_value is not None else 0.0
         price = coerce_float(entry.get("price"))
         amount = coerce_float(entry.get("amount"))
         loc_entry = grouped.setdefault(
@@ -193,23 +195,31 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
                 "_has_net_including_tax_total": False,
                 "_has_discount_total": False,
                 "_raw_amount_total": 0.0,
+                "_quantity_override": None,
+                "_amount_override": None,
             },
         )
-        product_entry = loc_entry["products"].setdefault(
-            prod,
-            {
-                "quantity": 0.0,
-                "prices": [],
-                "amount": 0.0,
-            },
-        )
-        product_entry["quantity"] += qty
-        if price is not None:
-            product_entry["prices"].append(price)
-        if amount is not None:
-            product_entry["amount"] += amount
-            loc_entry["_raw_amount_total"] += amount
-        loc_entry["total"] += qty
+        if not is_location_total and prod:
+            product_entry = loc_entry["products"].setdefault(
+                prod,
+                {
+                    "quantity": 0.0,
+                    "prices": [],
+                    "amount": 0.0,
+                },
+            )
+            product_entry["quantity"] += qty
+            if price is not None:
+                product_entry["prices"].append(price)
+            if amount is not None:
+                product_entry["amount"] += amount
+                loc_entry["_raw_amount_total"] += amount
+            loc_entry["total"] += qty
+        elif is_location_total:
+            if qty_value is not None:
+                loc_entry["_quantity_override"] = qty_value
+            if amount is not None:
+                loc_entry["_amount_override"] = amount
         net_including_total = coerce_float(entry.get("net_including_tax_total"))
         if net_including_total is not None:
             loc_entry["net_including_tax_total"] += net_including_total
@@ -223,6 +233,15 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
             data["net_including_tax_total"] = None
         if not data["_has_discount_total"]:
             data["discount_total"] = None
+
+        quantity_override = data.get("_quantity_override")
+        if quantity_override is not None:
+            data["total"] = quantity_override
+
+        amount_override = data.get("_amount_override")
+        if amount_override is not None:
+            data["total_amount"] = amount_override
+            continue
 
         net_total = data.get("net_including_tax_total")
         if net_total is not None:
