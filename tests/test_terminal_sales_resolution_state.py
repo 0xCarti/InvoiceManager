@@ -2,7 +2,13 @@ from datetime import date
 from secrets import token_urlsafe
 
 from app import db
-from app.models import Event, EventLocation, Location
+from app.models import (
+    Event,
+    EventLocation,
+    Location,
+    Product,
+    TerminalSalesResolutionState,
+)
 from app.routes.event_routes import (
     _TERMINAL_SALES_STATE_KEY,
     _should_store_terminal_summary,
@@ -48,24 +54,7 @@ def test_stale_terminal_sales_state_is_rejected_after_reset(client, app):
     with app.test_request_context():
         serializer = _terminal_sales_serializer()
         token_id = token_urlsafe(16)
-        state_token = serializer.dumps(
-            {
-                "queue": [
-                    {
-                        "event_location_id": None,
-                        "location_name": "Prairie Grill",
-                        "sales_location": "PRAIRIE GRILL",
-                        "price_issues": [],
-                        "menu_issues": [],
-                    }
-                ],
-                "pending_sales": [],
-                "pending_totals": [],
-                "selected_locations": [],
-                "issue_index": 0,
-                "token_id": token_id,
-            }
-        )
+        state_token = serializer.dumps({"event_id": event_id, "token_id": token_id})
 
     with client.session_transaction() as sess:
         store = dict(sess.get(_TERMINAL_SALES_STATE_KEY, {}))
@@ -112,3 +101,105 @@ def test_should_store_summary_when_unmatched_entries_exist():
 
 def test_should_not_store_summary_when_no_data():
     assert _should_store_terminal_summary({}, False, []) is False
+
+
+def test_large_queue_assign_to_menu_preserves_state(client, app):
+    event_id = _create_event(app)
+
+    with app.app_context():
+        from app.models import User
+
+        event_location = EventLocation.query.filter_by(event_id=event_id).first()
+        assert event_location is not None
+        user = User(email="queue@example.com", password="", active=True)
+        product = Product(name="Menu Popcorn", price=5.0)
+        db.session.add_all([user, product])
+        db.session.commit()
+
+        user_id = user.id
+        product_id = product.id
+        event_location_id = event_location.id
+        token_id = token_urlsafe(16)
+
+        queue = [
+            {
+                "event_location_id": event_location_id,
+                "location_name": f"Prairie Grill #{idx}",
+                "sales_location": f"PRAIRIE-{idx}",
+                "price_issues": [],
+                "menu_issues": [
+                    {
+                        "product_id": product_id,
+                        "product_name": product.name,
+                        "menu_name": "Concessions",
+                        "sales_location": f"PRAIRIE-{idx}",
+                        "resolution": None,
+                    }
+                ],
+            }
+            for idx in range(120)
+        ]
+
+        payload = {
+            "stage": "menus",
+            "queue": queue,
+            "pending_sales": [],
+            "pending_totals": [],
+            "selected_locations": [],
+            "issue_index": 0,
+            "ignored_sales_locations": [],
+            "selected_mapping": {},
+            "menu_candidates": [],
+            "menu_candidate_selection": {},
+            "mapping_filename": "terminal.xls",
+            "payload": {"rows": [], "filename": "terminal.xls"},
+            "token_id": token_id,
+        }
+
+        db.session.add(
+            TerminalSalesResolutionState(
+                event_id=event_id,
+                user_id=user_id,
+                token_id=token_id,
+                payload=payload,
+            )
+        )
+        db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(user_id)
+        sess["_fresh"] = True
+        state_store = dict(sess.get(_TERMINAL_SALES_STATE_KEY, {}))
+        state_store[str(event_id)] = {"token_id": token_id}
+        sess[_TERMINAL_SALES_STATE_KEY] = state_store
+
+    with app.test_request_context():
+        serializer = _terminal_sales_serializer()
+        state_token = serializer.dumps({"event_id": event_id, "token_id": token_id})
+
+    response = client.post(
+        f"/events/{event_id}/sales/upload",
+        data={
+            "step": "resolve",
+            "state_token": state_token,
+            "payload": "{}",
+            "mapping_filename": "terminal.xls",
+            "action": f"menu:{product_id}:add",
+        },
+    )
+
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert "session is no longer valid" not in page
+
+    with app.app_context():
+        stored_state = TerminalSalesResolutionState.query.filter_by(
+            event_id=event_id, user_id=user_id, token_id=token_id
+        ).one()
+        assert len(stored_state.payload.get("queue", [])) == 120
+        first_issue = stored_state.payload["queue"][0]["menu_issues"][0]
+        assert first_issue.get("resolution") == "add"
+
+    with client.session_transaction() as sess:
+        persisted = sess.get(_TERMINAL_SALES_STATE_KEY, {})
+        assert persisted[str(event_id)]["token_id"] == token_id

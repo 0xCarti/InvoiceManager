@@ -22,7 +22,7 @@ from flask import (
     session,
     url_for,
 )
-from flask_login import login_required
+from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
 from app import db
@@ -51,6 +51,7 @@ from app.models import (
     TerminalSale,
     TerminalSaleProductAlias,
     TerminalSaleLocationAlias,
+    TerminalSalesResolutionState,
 )
 from app.services.pdf import render_stand_sheet_pdf
 from app.utils.activity import log_activity
@@ -73,7 +74,7 @@ from app.utils.text import normalize_name_for_sorting
 from app.utils.email import send_email
 from itsdangerous import BadSignature, URLSafeSerializer
 from sqlalchemy import func, or_
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
 _STAND_SHEET_FIELDS = (
     "opening_count",
@@ -1646,20 +1647,91 @@ def upload_terminal_sales(event_id):
         state_store = {}
     event_state_key = str(event_id)
 
-    def _save_state(data: dict) -> tuple[str, dict]:
-        token_id = data.get("token_id") or token_urlsafe(16)
-        data["token_id"] = token_id
-        token = serializer.dumps(data)
-        state_store[event_state_key] = {"token_id": token_id, "token": token}
-        session[_TERMINAL_SALES_STATE_KEY] = state_store
-        session.modified = True
-        return token, data
+    def _serialize_token(token_id: str) -> str:
+        return serializer.dumps({"event_id": event_id, "token_id": token_id})
+
+    def _prepare_state_payload(data: dict) -> dict:
+        try:
+            return json.loads(json.dumps(data))
+        except (TypeError, ValueError):
+            return data
+
+    def _load_state_row(token_id: str) -> TerminalSalesResolutionState | None:
+        if not token_id or not current_user.is_authenticated:
+            return None
+        return (
+            TerminalSalesResolutionState.query.filter_by(
+                event_id=event_id,
+                user_id=current_user.id,
+                token_id=token_id,
+            ).one_or_none()
+        )
+
+    def _load_state_payload(token_id: str) -> dict | None:
+        row = _load_state_row(token_id)
+        if row is None or not isinstance(row.payload, dict):
+            return None
+        payload = dict(row.payload)
+        payload.setdefault("token_id", token_id)
+        return payload
+
+    def _store_state_payload(token_id: str, payload: dict) -> None:
+        if not current_user.is_authenticated:
+            return
+        bind = db.session.get_bind()
+        if bind is None:
+            return
+        with Session(bind=bind) as state_session:
+            state_row = (
+                state_session.query(TerminalSalesResolutionState)
+                .filter_by(
+                    event_id=event_id,
+                    user_id=current_user.id,
+                    token_id=token_id,
+                )
+                .one_or_none()
+            )
+            if state_row is None:
+                state_row = TerminalSalesResolutionState(
+                    event_id=event_id,
+                    user_id=current_user.id,
+                    token_id=token_id,
+                )
+            state_row.payload = payload
+            state_session.add(state_row)
+            state_session.query(TerminalSalesResolutionState).filter(
+                TerminalSalesResolutionState.event_id == event_id,
+                TerminalSalesResolutionState.user_id == current_user.id,
+                TerminalSalesResolutionState.token_id != token_id,
+            ).delete(synchronize_session=False)
+            state_session.commit()
+        db.session.expire_all()
 
     def _clear_state() -> None:
-        if event_state_key in state_store:
-            state_store.pop(event_state_key, None)
+        removed = state_store.pop(event_state_key, None)
+        if _TERMINAL_SALES_STATE_KEY in session or removed is not None:
             session[_TERMINAL_SALES_STATE_KEY] = state_store
             session.modified = True
+        if not current_user.is_authenticated:
+            return
+        bind = db.session.get_bind()
+        if bind is None:
+            return
+        with Session(bind=bind) as state_session:
+            query = state_session.query(TerminalSalesResolutionState).filter_by(
+                event_id=event_id,
+                user_id=current_user.id,
+            )
+            token_to_remove = None
+            if isinstance(removed, dict):
+                token_to_remove = removed.get("token_id")
+            elif isinstance(removed, str):
+                token_to_remove = removed
+            if token_to_remove:
+                query = query.filter_by(token_id=token_to_remove)
+            query.delete(synchronize_session=False)
+            state_session.commit()
+        db.session.expire_all()
 
     state_entry = state_store.get(event_state_key)
     if isinstance(state_entry, str):
@@ -1667,27 +1739,86 @@ def upload_terminal_sales(event_id):
     elif not isinstance(state_entry, dict):
         state_entry = None
 
-    posted_state_token = request.form.get("state_token") if request.method == "POST" else None
-    state_token = posted_state_token or (state_entry.get("token") if state_entry else None)
-    if request.method != "POST" and state_entry and not state_token:
+    stored_token_id = state_entry.get("token_id") if state_entry else None
+    state_token: str | None = None
+    state_data: dict | None = None
+
+    def _invalidate_state():
+        nonlocal state_entry, stored_token_id, state_token, state_data
         _clear_state()
         state_entry = None
+        stored_token_id = None
         state_token = None
-    state_data: dict | None = None
-    if state_token:
-        try:
-            loaded_state = serializer.loads(state_token)
-        except BadSignature:
-            _clear_state()
-            state_token = None
-        else:
-            expected_id = (state_entry or {}).get("token_id")
-            token_id = loaded_state.get("token_id") if isinstance(loaded_state, dict) else None
-            if expected_id and token_id != expected_id:
-                _clear_state()
-                state_token = None
+        state_data = None
+
+    def _save_state(data: dict) -> tuple[str, dict]:
+        nonlocal state_entry, stored_token_id
+        token_id = data.get("token_id") or token_urlsafe(16)
+        data["token_id"] = token_id
+        token = _serialize_token(token_id)
+        state_store[event_state_key] = {"token_id": token_id}
+        session[_TERMINAL_SALES_STATE_KEY] = state_store
+        session.modified = True
+        stored_payload = _prepare_state_payload(data)
+        _store_state_payload(token_id, stored_payload)
+        state_entry = {"token_id": token_id}
+        stored_token_id = token_id
+        return token, data
+
+    posted_state_token = (
+        request.form.get("state_token") if request.method == "POST" else None
+    )
+
+    if request.method == "POST":
+        if posted_state_token:
+            try:
+                token_payload = serializer.loads(posted_state_token)
+            except BadSignature:
+                _invalidate_state()
             else:
-                state_data = loaded_state if isinstance(loaded_state, dict) else None
+                token_id = token_payload.get("token_id") if isinstance(token_payload, dict) else None
+                token_event_id = token_payload.get("event_id") if isinstance(token_payload, dict) else None
+                if token_event_id is not None and token_event_id != event_id:
+                    _invalidate_state()
+                elif stored_token_id and token_id != stored_token_id:
+                    _invalidate_state()
+                else:
+                    loaded_state = _load_state_payload(token_id or "")
+                    if loaded_state is None:
+                        if token_id:
+                            _clear_state()
+                            state_entry = None
+                            stored_token_id = None
+                            state_data = {"token_id": token_id}
+                            state_token = _serialize_token(token_id)
+                        else:
+                            _invalidate_state()
+                    else:
+                        state_data = loaded_state
+                        state_token = _serialize_token(token_id)
+                        if not stored_token_id and token_id:
+                            state_store[event_state_key] = {"token_id": token_id}
+                            session[_TERMINAL_SALES_STATE_KEY] = state_store
+                            session.modified = True
+                            state_entry = {"token_id": token_id}
+                            stored_token_id = token_id
+        elif stored_token_id:
+            loaded_state = _load_state_payload(stored_token_id)
+            if loaded_state is None:
+                _invalidate_state()
+            else:
+                state_data = loaded_state
+                state_token = _serialize_token(stored_token_id)
+    else:
+        if stored_token_id:
+            loaded_state = _load_state_payload(stored_token_id)
+            if loaded_state is None:
+                _invalidate_state()
+            else:
+                state_data = loaded_state
+                state_token = _serialize_token(stored_token_id)
+        elif state_entry:
+            _invalidate_state()
     open_locations = [
         el
         for el in ev.locations

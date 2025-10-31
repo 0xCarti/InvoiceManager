@@ -896,6 +896,46 @@ class TerminalSaleLocationAlias(db.Model):
     )
 
 
+class TerminalSalesResolutionState(db.Model):
+    __tablename__ = "terminal_sales_resolution_state"
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey("event.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    token_id = db.Column(db.String(128), nullable=False)
+    payload = db.Column(db.JSON, nullable=False)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=func.now(),
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=func.now(),
+        onupdate=datetime.utcnow,
+    )
+
+    event = relationship("Event")
+    user = relationship("User")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "event_id",
+            "user_id",
+            "token_id",
+            name="uq_terminal_sales_state_event_user_token",
+        ),
+        db.Index(
+            "ix_terminal_sales_state_event_user",
+            "event_id",
+            "user_id",
+        ),
+    )
+
+
 class EventStandSheetItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     event_location_id = db.Column(
