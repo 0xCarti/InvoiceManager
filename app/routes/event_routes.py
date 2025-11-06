@@ -3638,6 +3638,7 @@ def upload_terminal_sales(event_id):
                     "No event locations were linked to the uploaded sales data.",
                     "warning",
                 )
+            _clear_state()
             return redirect(url_for("event.view_event", event_id=event_id))
         elif step:
             flash("Unable to process the uploaded sales data.", "danger")
