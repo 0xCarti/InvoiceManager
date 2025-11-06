@@ -368,6 +368,40 @@ def test_apply_pending_sales_uses_net_total_when_amount_missing(
         assert summary.total_amount == pytest.approx(expected_total)
 
 
+def test_apply_pending_sales_prefers_provided_total_amount(app):
+    with app.app_context():
+        event = Event(
+            name="Provided Amount Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Main Stand")
+        event_location = EventLocation(event=event, location=location)
+
+        db.session.add_all([event, location, event_location])
+        db.session.commit()
+
+        pending_totals = [
+            {
+                "event_location_id": event_location.id,
+                "source_location": "Main Stand",
+                "total_quantity": 10.0,
+                "total_amount": 1053.0,
+                "net_including_tax_total": 1053.0,
+                "discount_total": 50.0,
+                "variance_details": None,
+            }
+        ]
+
+        _apply_pending_sales([], pending_totals)
+        db.session.commit()
+
+        summary = EventLocationTerminalSalesSummary.query.filter_by(
+            event_location_id=event_location.id
+        ).one()
+        assert summary.total_amount == pytest.approx(1053.0)
+
+
 def test_parse_terminal_sales_number_strips_locale_prefixes():
     assert parse_terminal_sales_number("CA\u00A01,234.56") == pytest.approx(1234.56)
     assert parse_terminal_sales_number("C$\u00A0-98.76") == pytest.approx(-98.76)
