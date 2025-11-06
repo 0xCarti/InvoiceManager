@@ -103,6 +103,23 @@ def _is_effectively_zero(value: float | None) -> bool:
         return True
 
 
+def combine_terminal_sales_totals(
+    net_including_tax_total: float | None,
+    discount_total: float | None,
+) -> float | None:
+    """Return the combined total amount including any discounts."""
+
+    net_total_value = coerce_float(net_including_tax_total)
+    if net_total_value is None:
+        return None
+
+    discount_value = coerce_float(discount_total)
+    if discount_value is None:
+        return net_total_value
+
+    return net_total_value + discount_value
+
+
 def derive_terminal_sales_quantity(
     quantity: float | None,
     *,
@@ -121,7 +138,9 @@ def derive_terminal_sales_quantity(
 
     base_amount = amount
     if _is_effectively_zero(base_amount) and net_including_tax_total is not None:
-        candidate = net_including_tax_total + (discounts_total or 0.0)
+        candidate = combine_terminal_sales_totals(
+            net_including_tax_total, discounts_total
+        )
         if not _is_effectively_zero(candidate):
             base_amount = candidate
 
@@ -245,8 +264,9 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
 
         net_total = data.get("net_including_tax_total")
         if net_total is not None:
-            discount_total = data.get("discount_total") or 0.0
-            data["total_amount"] = net_total + discount_total
+            data["total_amount"] = combine_terminal_sales_totals(
+                net_total, data.get("discount_total")
+            )
         else:
             raw_amount_total = data.get("_raw_amount_total", 0.0) or 0.0
             data["total_amount"] = raw_amount_total

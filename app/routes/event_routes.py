@@ -57,6 +57,7 @@ from app.services.pdf import render_stand_sheet_pdf
 from app.utils.activity import log_activity
 from app.utils.numeric import coerce_float
 from app.utils.pos_import import (
+    combine_terminal_sales_totals,
     derive_terminal_sales_quantity,
     extract_terminal_sales_location,
     group_terminal_sales_rows,
@@ -741,12 +742,13 @@ def _apply_pending_sales(
                 db.session.add(summary)
             summary.source_location = data.get("source_location")
             summary.total_quantity = coerce_float(data.get("total_quantity"))
+            total_amount_value = coerce_float(data.get("total_amount"))
             net_total_value = coerce_float(data.get("net_including_tax_total"))
             discount_value = coerce_float(data.get("discount_total"))
-            if net_total_value is not None:
-                total_amount_value = net_total_value + (discount_value or 0.0)
-            else:
-                total_amount_value = coerce_float(data.get("total_amount"))
+            if total_amount_value is None:
+                total_amount_value = combine_terminal_sales_totals(
+                    net_total_value, discount_value
+                )
             summary.total_amount = total_amount_value
             summary.variance_details = _sanitize_variance_details(
                 data.get("variance_details")
