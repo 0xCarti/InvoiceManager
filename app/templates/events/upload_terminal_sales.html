@@ -177,26 +177,69 @@
                         {% for issue in current_issue.price_issues %}
                             <div class="mb-3">
                                 <h6 class="mb-1">{{ issue.product }}</h6>
+                                <p class="mb-1">
+                                    <span class="fw-semibold">Terminal price from POS:</span>
+                                    {% if issue.terminal_price is not none %}
+                                        ${{ '%.2f'|format(issue.terminal_price) }}
+                                    {% elif issue.file_prices %}
+                                        {% for price in issue.file_prices %}
+                                            ${{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted">Not provided</span>
+                                    {% endif %}
+                                </p>
                                 <p class="mb-2">
-                                    Terminal sales price:
-                                    {% for price in issue.file_prices %}
-                                        ${{ '%.2f'|format(price) }}{% if not loop.last %}, {% endif %}
-                                    {% endfor %}
-                                    &mdash; App price: ${{ '%.2f'|format(issue.app_price) }}
+                                    <span class="fw-semibold">Catalog price in app:</span>
+                                    {% if issue.catalog_price is not none %}
+                                        ${{ '%.2f'|format(issue.catalog_price) }}
+                                    {% elif issue.app_price is not none %}
+                                        ${{ '%.2f'|format(issue.app_price) }}
+                                    {% else %}
+                                        <span class="text-muted">Not set</span>
+                                    {% endif %}
                                 </p>
                                 {% if issue.resolution == 'update' %}
-                                    <span class="badge bg-success">Will update app price to ${{ '%.2f'|format(issue.target_price) }}</span>
+                                    <span class="badge bg-success">
+                                        Using terminal price
+                                        {% if issue.selected_price is not none %}
+                                            (${{ '%.2f'|format(issue.selected_price) }})
+                                        {% endif %}
+                                    </span>
                                 {% elif issue.resolution == 'skip' %}
-                                    <span class="badge bg-secondary">Keeping existing app price</span>
+                                    <span class="badge bg-secondary">
+                                        Keeping catalog price
+                                        {% if issue.catalog_price is not none %}
+                                            (${{ '%.2f'|format(issue.catalog_price) }})
+                                        {% endif %}
+                                    </span>
                                 {% else %}
                                     <div class="btn-group" role="group" aria-label="Price resolution">
-                                        <button type="submit" class="btn btn-sm btn-primary" name="action" value="price:{{ issue.product_id }}:update">
+                                        <button type="submit"
+                                                class="btn btn-sm btn-primary"
+                                                name="action"
+                                                value="price:{{ issue.product_id }}:update"
+                                                {% if issue.terminal_price is none %}disabled{% endif %}>
                                             Use terminal price
+                                            {% if issue.terminal_price is not none %}
+                                                (${{ '%.2f'|format(issue.terminal_price) }})
+                                            {% endif %}
                                         </button>
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary" name="action" value="price:{{ issue.product_id }}:skip">
-                                            Keep app price
+                                        <button type="submit"
+                                                class="btn btn-sm btn-outline-secondary"
+                                                name="action"
+                                                value="price:{{ issue.product_id }}:skip">
+                                            Keep catalog price
+                                            {% if issue.catalog_price is not none %}
+                                                (${{ '%.2f'|format(issue.catalog_price) }})
+                                            {% endif %}
                                         </button>
                                     </div>
+                                    {% if issue.terminal_price is none %}
+                                        <div class="form-text text-muted">
+                                            Terminal sales did not include a unit price; keep the catalog price to continue.
+                                        </div>
+                                    {% endif %}
                                 {% endif %}
                             </div>
                         {% endfor %}
