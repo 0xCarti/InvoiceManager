@@ -220,6 +220,98 @@ def test_location_total_summary_rows_override_amount(app):
         assert summary.total_quantity == pytest.approx(location_summary.get("total"))
 
 
+def test_price_mismatch_resolution_updates_catalog_price(app):
+    with app.app_context():
+        event = Event(
+            name="Terminal Price Update Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Concourse Stand")
+        event_location = EventLocation(event=event, location=location)
+        product = Product(name="Hot Dog", price=3.0, cost=1.0)
+
+        db.session.add_all([event, location, event_location, product])
+        db.session.commit()
+
+        pending_sales = [
+            {
+                "event_location_id": event_location.id,
+                "product_id": product.id,
+                "product_name": product.name,
+                "quantity": 5.0,
+                "product_price": product.price,
+            }
+        ]
+
+        pending_totals = [
+            {
+                "event_location_id": event_location.id,
+                "source_location": "Register 1",
+                "total_quantity": 5.0,
+                "total_amount": 20.0,
+                "variance_details": {
+                    "products": [
+                        {
+                            "product_id": product.id,
+                            "product_name": product.name,
+                            "quantity": 5.0,
+                            "file_amount": 20.0,
+                            "file_prices": [4.0],
+                            "app_price": product.price,
+                        }
+                    ]
+                },
+            }
+        ]
+
+        _apply_pending_sales(pending_sales, pending_totals)
+
+        queue = [
+            {
+                "event_location_id": event_location.id,
+                "location_name": location.name,
+                "sales_location": "Register 1",
+                "price_issues": [
+                    {
+                        "product": product.name,
+                        "product_id": product.id,
+                        "file_prices": [4.0],
+                        "app_price": product.price,
+                        "catalog_price": product.price,
+                        "terminal_price": 4.0,
+                        "sales_location": "Register 1",
+                        "resolution": "update",
+                        "selected_price": 4.0,
+                        "selected_option": "terminal",
+                        "target_price": 4.0,
+                        "options": {"catalog": product.price, "terminal": 4.0},
+                    }
+                ],
+                "menu_issues": [],
+            }
+        ]
+
+        price_updates, menu_updates = _apply_resolution_actions({"queue": queue})
+        db.session.commit()
+
+        db.session.refresh(product)
+        assert price_updates == [product.name]
+        assert not menu_updates
+        assert product.price == pytest.approx(4.0)
+
+        sale = TerminalSale.query.filter_by(
+            event_location_id=event_location.id, product_id=product.id
+        ).one()
+        assert sale.quantity == pytest.approx(5.0)
+
+        summary = EventLocationTerminalSalesSummary.query.filter_by(
+            event_location_id=event_location.id
+        ).one()
+        assert summary.total_amount == pytest.approx(20.0)
+        assert product.price * sale.quantity == pytest.approx(20.0)
+
+
 def test_apply_resolution_actions_adds_menu_entries(app):
     with app.app_context():
         event = Event(

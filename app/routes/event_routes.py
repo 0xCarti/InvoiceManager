@@ -779,13 +779,20 @@ def _apply_resolution_actions(issue_state: dict) -> tuple[list[str], list[str]]:
             if issue.get("resolution") != "update":
                 continue
             product_id = issue.get("product_id")
-            new_price = issue.get("target_price")
+            new_price = issue.get("selected_price")
+            if new_price is None:
+                new_price = issue.get("terminal_price")
+            if new_price is None:
+                new_price = issue.get("target_price")
             if product_id is None or new_price is None:
                 continue
             product = db.session.get(Product, product_id)
             if product is None:
                 continue
-            product.price = new_price
+            coerced_price = coerce_float(new_price)
+            if coerced_price is None:
+                continue
+            product.price = coerced_price
             price_updates.append(product.name)
 
         if event_location is None:
@@ -2134,10 +2141,46 @@ def upload_terminal_sales(event_id):
                     else:
                         for issue in current_issue.get("price_issues", []):
                             if issue.get("product_id") == product_id_int:
+                                product = db.session.get(Product, product_id_int)
                                 if resolution_value == "update":
+                                    new_price = issue.get("terminal_price")
+                                    if new_price is None:
+                                        new_price = issue.get("target_price")
+                                    new_price = coerce_float(new_price)
+                                    if new_price is None:
+                                        error_messages.append(
+                                            "Terminal price information is not available for this product."
+                                        )
+                                        break
+                                    if product is None:
+                                        error_messages.append(
+                                            "Unable to load the product for the selected price resolution."
+                                        )
+                                        break
                                     issue["resolution"] = "update"
+                                    issue["selected_option"] = "terminal"
+                                    issue["selected_price"] = new_price
+                                    issue["target_price"] = new_price
+                                    if issue.get("catalog_price") is None:
+                                        issue["catalog_price"] = coerce_float(
+                                            product.price
+                                        )
+                                    product.price = new_price
                                 elif resolution_value == "skip":
+                                    if product is None:
+                                        error_messages.append(
+                                            "Unable to load the product for the selected price resolution."
+                                        )
+                                        break
+                                    catalog_price = issue.get("catalog_price")
+                                    catalog_price = coerce_float(catalog_price)
                                     issue["resolution"] = "skip"
+                                    issue["selected_option"] = "catalog"
+                                    issue["selected_price"] = catalog_price
+                                    if catalog_price is None:
+                                        product.price = None
+                                    else:
+                                        product.price = catalog_price
                                 break
                 else:
                     error_messages.append("Invalid price resolution request.")
@@ -3219,19 +3262,52 @@ def upload_terminal_sales(event_id):
                         }
                     )
 
-                    if file_prices and not all(
-                        _prices_match(price, product.price) for price in file_prices
+                    terminal_price_value = None
+                    if file_prices:
+                        terminal_price_value = next(
+                            (price for price in file_prices if price is not None),
+                            None,
+                        )
+                    if (
+                        terminal_price_value is None
+                        and file_amount is not None
+                        and quantity_value
                     ):
-                        target_price = file_prices[0]
+                        try:
+                            terminal_price_value = float(file_amount) / float(
+                                quantity_value
+                            )
+                        except (TypeError, ValueError, ZeroDivisionError):
+                            terminal_price_value = None
+
+                    price_candidates = list(file_prices)
+                    if not price_candidates and terminal_price_value is not None:
+                        price_candidates = [terminal_price_value]
+
+                    if price_candidates and not all(
+                        _prices_match(price, product.price) for price in price_candidates
+                    ):
+                        catalog_price_value = app_price_value
+                        options: dict[str, float | None] = {}
+                        if catalog_price_value is not None:
+                            options["catalog"] = catalog_price_value
+                        if terminal_price_value is not None:
+                            options["terminal"] = terminal_price_value
+
                         price_issues.append(
                             {
                                 "product": product.name,
                                 "product_id": product.id,
                                 "file_prices": file_prices,
                                 "app_price": product.price,
+                                "catalog_price": catalog_price_value,
+                                "terminal_price": terminal_price_value,
                                 "sales_location": selected_loc,
                                 "resolution": None,
-                                "target_price": target_price,
+                                "selected_price": None,
+                                "selected_option": None,
+                                "target_price": terminal_price_value,
+                                "options": options,
                             }
                         )
                         price_mismatch_details.append(
@@ -3240,6 +3316,8 @@ def upload_terminal_sales(event_id):
                                 "product_name": product.name,
                                 "file_prices": file_prices,
                                 "app_price": app_price_value,
+                                "catalog_price": catalog_price_value,
+                                "terminal_price": terminal_price_value,
                                 "sales_location": selected_loc,
                             }
                         )
