@@ -3180,36 +3180,40 @@ def upload_terminal_sales(event_id):
                     quantity_value = coerce_float(
                         product_data.get("quantity", 0.0)
                     ) or 0.0
-                    file_prices_raw = product_data.get("prices") or []
-                    file_prices = [
-                        coerce_float(price)
-                        for price in file_prices_raw
-                        if price is not None
-                    ]
-                    file_amount = coerce_float(product_data.get("amount"))
-                    if file_amount is None and file_prices:
-                        file_amount = quantity_value * file_prices[0]
-                    if not product:
-                        unmatched_entries.append(
-                            {
-                                "product_name": prod_name,
-                                "quantity": quantity_value,
-                                "file_amount": file_amount,
-                                "file_prices": file_prices,
-                                "sales_location": selected_loc,
-                            }
-                        )
-                        continue
-                    allowed_products = location_allowed_products.get(el.id)
-                    if allowed_products is None:
-                        allowed_products = set()
-                        if el.location:
-                            allowed_products.update(p.id for p in el.location.products)
-                            if el.location.current_menu is not None:
-                                allowed_products.update(
-                                    p.id for p in el.location.current_menu.products
-                                )
-                        location_allowed_products[el.id] = allowed_products
+                file_prices_raw = []
+                file_prices_raw.extend(product_data.get("prices") or [])
+                file_prices_raw.extend(
+                    product_data.get("spreadsheet_prices") or []
+                )
+                file_prices = [
+                    coerce_float(price)
+                    for price in file_prices_raw
+                    if price is not None
+                ]
+                file_amount = coerce_float(product_data.get("amount"))
+                if file_amount is None and file_prices:
+                    file_amount = quantity_value * file_prices[0]
+                if not product:
+                    unmatched_entries.append(
+                        {
+                            "product_name": prod_name,
+                            "quantity": quantity_value,
+                            "file_amount": file_amount,
+                            "file_prices": file_prices,
+                            "sales_location": selected_loc,
+                        }
+                    )
+                    continue
+                allowed_products = location_allowed_products.get(el.id)
+                if allowed_products is None:
+                    allowed_products = set()
+                    if el.location:
+                        allowed_products.update(p.id for p in el.location.products)
+                        if el.location.current_menu is not None:
+                            allowed_products.update(
+                                p.id for p in el.location.current_menu.products
+                            )
+                    location_allowed_products[el.id] = allowed_products
 
                     location_obj = el.location
                     if location_obj and not allowed_products:
@@ -3758,15 +3762,7 @@ def upload_terminal_sales(event_id):
                 entry["quantity"] = quantity_value
             if price_value is not None:
                 entry["price"] = price_value
-            if (
-                raw_price_value is not None
-                and (
-                    price_value is None
-                    or not math.isclose(
-                        float(price_value), float(raw_price_value), abs_tol=0.01
-                    )
-                )
-            ):
+            if raw_price_value is not None:
                 entry["raw_price"] = raw_price_value
             if amount_value is not None:
                 entry["amount"] = amount_value
@@ -3919,9 +3915,7 @@ def upload_terminal_sales(event_id):
                         except (TypeError, ValueError, ZeroDivisionError):
                             computed_price = None
                     price = computed_price if computed_price is not None else price_cell
-                    raw_price_cell = (
-                        price_cell if computed_price is not None else None
-                    )
+                    raw_price_cell = price_cell
                     amount = amount_cell
                     net_including_total = net_cell
                     add_row(
