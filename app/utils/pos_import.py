@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Iterable, List, Sequence
@@ -191,6 +192,27 @@ def extract_terminal_sales_location(row: Sequence[object]) -> str | None:
     return None
 
 
+def _append_unique_price(prices: list[float], candidate: float | None) -> None:
+    """Append ``candidate`` to ``prices`` unless an equivalent value exists."""
+
+    if candidate is None:
+        return
+
+    try:
+        candidate_value = float(candidate)
+    except (TypeError, ValueError):
+        return
+
+    for existing in prices:
+        try:
+            if math.isclose(float(existing), candidate_value, abs_tol=0.01):
+                return
+        except (TypeError, ValueError):
+            continue
+
+    prices.append(candidate_value)
+
+
 def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
     """Group terminal sales rows by location and aggregate totals."""
 
@@ -234,7 +256,10 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
             )
             product_entry["quantity"] += qty
             if price is not None:
-                product_entry["prices"].append(price)
+                _append_unique_price(product_entry["prices"], price)
+            raw_price = coerce_float(entry.get("raw_price"))
+            if raw_price is not None:
+                _append_unique_price(product_entry["prices"], raw_price)
             if amount is not None:
                 product_entry["amount"] += amount
                 loc_entry["_raw_amount_total"] += amount

@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.routes.event_routes import _apply_pending_sales, _apply_resolution_actions
 from app.utils.pos_import import (
+    combine_terminal_sales_totals,
     derive_terminal_sales_quantity,
     parse_terminal_sales_number,
     group_terminal_sales_rows,
@@ -903,3 +904,75 @@ def test_terminal_sales_excel_price_mismatch_detected(app, client, monkeypatch):
         assert not all(
             math.isclose(price, catalog_price, abs_tol=0.01) for price in price_candidates
         ), "The uploaded price should trigger a mismatch against the catalog"
+
+
+def test_terminal_sales_raw_price_triggers_discrepancy_when_totals_match_catalog():
+    location_name = "Main Stand"
+    product_name = "Discrepancy Hot Dog"
+    catalog_price = 10.0
+
+    rows = [
+        {
+            "location": location_name,
+            "product": product_name,
+            "quantity": 2.0,
+            "price": catalog_price,
+            "raw_price": 9.0,
+            "amount": 18.0,
+            "net_including_tax_total": 20.0,
+            "discount_total": 0.0,
+        }
+    ]
+
+    grouped = group_terminal_sales_rows(rows)
+    location_summary = grouped[location_name]
+    product_summary = location_summary["products"][product_name]
+
+    prices = product_summary["prices"]
+    assert len(prices) == 2
+    assert any(math.isclose(price, catalog_price, abs_tol=0.01) for price in prices)
+    assert any(math.isclose(price, 9.0, abs_tol=0.01) for price in prices)
+
+    combined_total_value = combine_terminal_sales_totals(
+        product_summary.get("net_including_tax_total"),
+        product_summary.get("discount_total"),
+    )
+    quantity_value = product_summary.get("quantity")
+
+    derived_unit_price = None
+    if (
+        combined_total_value is not None
+        and quantity_value
+        and abs(quantity_value) > 1e-9
+    ):
+        derived_unit_price = float(combined_total_value) / float(quantity_value)
+
+    file_price_candidates = [price for price in prices if price is not None]
+    price_candidates: list[float] = []
+    if derived_unit_price is not None:
+        price_candidates.append(derived_unit_price)
+    price_candidates.extend(file_price_candidates)
+
+    file_amount = product_summary.get("amount")
+    fallback_amount_price = None
+    if file_amount is not None and quantity_value:
+        try:
+            fallback_amount_price = float(file_amount) / float(quantity_value)
+        except (TypeError, ValueError, ZeroDivisionError):
+            fallback_amount_price = None
+
+    if (
+        derived_unit_price is None
+        and not file_price_candidates
+        and fallback_amount_price is not None
+    ):
+        price_candidates.append(fallback_amount_price)
+
+    if not price_candidates and fallback_amount_price is not None:
+        price_candidates = [fallback_amount_price]
+
+    assert any(math.isclose(price, catalog_price, abs_tol=0.01) for price in price_candidates)
+    assert any(math.isclose(price, 9.0, abs_tol=0.01) for price in price_candidates)
+    assert not all(
+        math.isclose(price, catalog_price, abs_tol=0.01) for price in price_candidates
+    )
