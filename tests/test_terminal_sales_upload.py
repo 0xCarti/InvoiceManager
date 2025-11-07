@@ -903,6 +903,91 @@ def test_terminal_sales_multiple_products_generate_price_issues(app, client):
         } == {product_one_name, product_two_name}
 
 
+def test_terminal_sales_zero_price_comp_does_not_queue_mismatch(app, client):
+    with app.app_context():
+        event = Event(
+            name="Zero Price Comp Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Comp Stand")
+        event_location = EventLocation(event=event, location=location)
+        product = Product(name="Soft Drink", price=6.0, cost=2.0)
+        db.session.add_all([event, location, event_location, product])
+        db.session.commit()
+        event_id = event.id
+        mapping_field = f"mapping-{event_location.id}"
+        location_name = location.name
+        product_name = product.name
+
+    payload = json.dumps(
+        {
+            "rows": [
+                {
+                    "location": location_name,
+                    "product": product_name,
+                    "quantity": 2.0,
+                    "price": 6.0,
+                    "amount": 12.0,
+                },
+                {
+                    "location": location_name,
+                    "product": product_name,
+                    "quantity": 1.0,
+                    "price": 0.0,
+                    "amount": 0.0,
+                },
+            ],
+            "filename": "terminal.xlsx",
+        }
+    )
+
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login_response = login(client, admin_email, admin_pass)
+        assert login_response.status_code == 200
+        assert login_response.request.path != "/auth/login"
+
+        response = client.post(
+            f"/events/{event_id}/terminal-sales",
+            data={
+                "step": "map",
+                "payload": payload,
+                "stage": "locations",
+                mapping_field: location_name,
+                "navigate": "finish",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 200
+
+    with app.app_context():
+        admin_user = User.query.filter_by(email=admin_email).one()
+        state_row = TerminalSalesResolutionState.query.filter_by(
+            event_id=event_id, user_id=admin_user.id
+        ).one()
+        issue_queue = state_row.payload.get("queue") or []
+        if issue_queue:
+            price_issues = issue_queue[0].get("price_issues") or []
+            assert price_issues == []
+        else:
+            assert issue_queue == []
+
+        pending_totals = state_row.payload.get("pending_totals") or []
+        assert len(pending_totals) == 1
+        variance_details = pending_totals[0].get("variance_details") or {}
+        price_mismatches = variance_details.get("price_mismatches") or []
+        assert len(price_mismatches) == 1
+        mismatch_entry = price_mismatches[0]
+        assert mismatch_entry.get("product_name") == product_name
+        file_prices = mismatch_entry.get("file_prices") or []
+        assert any(math.isclose(value, 0.0, abs_tol=0.01) for value in file_prices)
+        assert any(math.isclose(value, product.price, abs_tol=0.01) for value in file_prices)
+
+
 def test_terminal_sales_totals_without_unit_price_queue_price_issue(app, client):
     with app.app_context():
         event = Event(

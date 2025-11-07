@@ -3372,32 +3372,19 @@ def upload_terminal_sales(event_id):
                     if not price_candidates and terminal_price_value is not None:
                         price_candidates = [terminal_price_value]
 
-                    if price_candidates and not all(
-                        _prices_match(price, product.price) for price in price_candidates
-                    ):
-                        catalog_price_value = app_price_value
-                        options: dict[str, float | None] = {}
-                        if catalog_price_value is not None:
-                            options["catalog"] = catalog_price_value
-                        if terminal_price_value is not None:
-                            options["terminal"] = terminal_price_value
+                    matching_candidates = [
+                        price
+                        for price in price_candidates
+                        if _prices_match(price, product.price)
+                    ]
+                    mismatched_candidates = [
+                        price
+                        for price in price_candidates
+                        if not _prices_match(price, product.price)
+                    ]
 
-                        price_issues.append(
-                            {
-                                "product": product.name,
-                                "product_id": product.id,
-                                "file_prices": file_prices,
-                                "app_price": product.price,
-                                "catalog_price": catalog_price_value,
-                                "terminal_price": terminal_price_value,
-                                "sales_location": selected_loc,
-                                "resolution": None,
-                                "selected_price": None,
-                                "selected_option": None,
-                                "target_price": terminal_price_value,
-                                "options": options,
-                            }
-                        )
+                    if mismatched_candidates:
+                        catalog_price_value = app_price_value
                         price_mismatch_details.append(
                             {
                                 "product_id": product.id,
@@ -3409,6 +3396,30 @@ def upload_terminal_sales(event_id):
                                 "sales_location": selected_loc,
                             }
                         )
+
+                        if not matching_candidates:
+                            options: dict[str, float | None] = {}
+                            if catalog_price_value is not None:
+                                options["catalog"] = catalog_price_value
+                            if terminal_price_value is not None:
+                                options["terminal"] = terminal_price_value
+
+                            price_issues.append(
+                                {
+                                    "product": product.name,
+                                    "product_id": product.id,
+                                    "file_prices": file_prices,
+                                    "app_price": product.price,
+                                    "catalog_price": catalog_price_value,
+                                    "terminal_price": terminal_price_value,
+                                    "sales_location": selected_loc,
+                                    "resolution": None,
+                                    "selected_price": None,
+                                    "selected_option": None,
+                                    "target_price": terminal_price_value,
+                                    "options": options,
+                                }
+                            )
 
                     if (
                         allowed_products
