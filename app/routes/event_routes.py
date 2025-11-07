@@ -1777,6 +1777,9 @@ def upload_terminal_sales(event_id):
     posted_state_token = (
         request.form.get("state_token") if request.method == "POST" else None
     )
+    queried_state_token = (
+        request.args.get("state_token") if request.method != "POST" else None
+    )
 
     if request.method == "POST":
         if posted_state_token:
@@ -1819,14 +1822,27 @@ def upload_terminal_sales(event_id):
                 state_data = loaded_state
                 state_token = _serialize_token(stored_token_id)
     else:
-        if stored_token_id:
-            loaded_state = _load_state_payload(stored_token_id)
-            if loaded_state is None:
+        if queried_state_token:
+            try:
+                token_payload = serializer.loads(queried_state_token)
+            except BadSignature:
                 _invalidate_state()
             else:
-                state_data = loaded_state
-                state_token = _serialize_token(stored_token_id)
-        elif state_entry:
+                token_id = (
+                    token_payload.get("token_id") if isinstance(token_payload, dict) else None
+                )
+                token_event_id = (
+                    token_payload.get("event_id") if isinstance(token_payload, dict) else None
+                )
+                if not token_id or (token_event_id is not None and token_event_id != event_id):
+                    _invalidate_state()
+                else:
+                    loaded_state = _load_state_payload(token_id)
+                    if loaded_state is None:
+                        _invalidate_state()
+                    else:
+                        state_token, state_data = _save_state(dict(loaded_state))
+        else:
             _invalidate_state()
     open_locations = [
         el
