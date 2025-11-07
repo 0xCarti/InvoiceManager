@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, date
 from html import unescape
 from io import BytesIO
 from tempfile import NamedTemporaryFile
+from urllib.parse import quote
 
 import pytest
 from openpyxl import Workbook
@@ -1197,9 +1198,16 @@ def test_terminal_sales_wizard_state_resume_and_new_product_menu_flow(client, ap
             price="6.00",
         )
 
-        resume_response = client.get(f"/events/{event_id}/sales/upload")
+        resume_response = client.get(
+            f"/events/{event_id}/sales/upload?state_token={quote(state_token)}"
+        )
         resume_body = resume_response.data.decode()
         assert "Match Unknown Products" in resume_body
+        resume_token_match = re.search(
+            r'name="state_token" value="([^"]+)"', resume_body
+        )
+        assert resume_token_match
+        state_token = unescape(resume_token_match.group(1))
 
         resolution_response = client.post(
             f"/events/{event_id}/sales/upload",
@@ -1229,10 +1237,17 @@ def test_terminal_sales_wizard_state_resume_and_new_product_menu_flow(client, ap
 
         assert f"menu:{created_product_id}:add" in resolution_body
 
-        resume_menu = client.get(f"/events/{event_id}/sales/upload")
+        resume_menu = client.get(
+            f"/events/{event_id}/sales/upload?state_token={quote(state_token)}"
+        )
         assert resume_menu.status_code == 200
         resume_menu_body = resume_menu.data.decode()
         assert f"menu:{created_product_id}:add" in resume_menu_body
+        resume_menu_token = re.search(
+            r'name="state_token" value="([^"]+)"', resume_menu_body
+        )
+        assert resume_menu_token
+        state_token = unescape(resume_menu_token.group(1))
 
         add_response = client.post(
             f"/events/{event_id}/sales/upload",
