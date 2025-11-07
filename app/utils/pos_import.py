@@ -61,6 +61,23 @@ _CURRENCY_PREFIX_RE = re.compile(
 _CURRENCY_SYMBOLS_RE = re.compile(r"[$€£¥₩₽]")
 
 
+_EXCEL_ERROR_VALUES = {
+    "#NULL!",
+    "#DIV/0!",
+    "#VALUE!",
+    "#REF!",
+    "#NAME?",
+    "#NUM!",
+    "#N/A",
+    "#GETTING_DATA",
+    "#SPILL!",
+    "#CALC!",
+    "#FIELD!",
+    "#BLOCKED!",
+    "#UNKNOWN!",
+}
+
+
 def parse_terminal_sales_number(value) -> float | None:
     """Best-effort conversion of spreadsheet values to ``float``."""
 
@@ -165,7 +182,18 @@ def terminal_sales_cell_is_blank(value) -> bool:
     if value is None:
         return True
     if isinstance(value, str):
-        return not value.strip()
+        text = value.strip()
+        if not text:
+            return True
+        upper_text = text.upper()
+        if upper_text in _EXCEL_ERROR_VALUES:
+            return True
+        if upper_text.startswith("#N/A"):
+            return True
+        try:
+            return float(text) == 0.0
+        except (TypeError, ValueError):
+            return False
     try:
         return float(value) == 0.0
     except (TypeError, ValueError):
@@ -247,6 +275,7 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
                 {
                     "quantity": 0.0,
                     "prices": [],
+                    "spreadsheet_prices": [],
                     "amount": 0.0,
                     "net_including_tax_total": 0.0,
                     "discount_total": 0.0,
@@ -260,6 +289,9 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
             raw_price = coerce_float(entry.get("raw_price"))
             if raw_price is not None:
                 _append_unique_price(product_entry["prices"], raw_price)
+                _append_unique_price(
+                    product_entry["spreadsheet_prices"], raw_price
+                )
             if amount is not None:
                 product_entry["amount"] += amount
                 loc_entry["_raw_amount_total"] += amount

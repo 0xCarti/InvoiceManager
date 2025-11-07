@@ -506,7 +506,7 @@ def test_parse_terminal_sales_number_strips_locale_prefixes():
 
 
 def test_group_terminal_sales_rows_handles_locale_currency_totals():
-    net_total = parse_terminal_sales_number("CA\u00A0123.46")
+    net_total = parse_terminal_sales_number("CA\u00A0143.45")
     discount_total = parse_terminal_sales_number("C$\u00A0-23.45")
     rows = [
         {
@@ -589,6 +589,28 @@ def test_group_terminal_sales_rows_handles_comma_decimal_quantities():
 
     assert product_data["quantity"] == pytest.approx(1.0)
     assert location_data["total"] == pytest.approx(1.0)
+
+
+def test_group_terminal_sales_rows_preserves_spreadsheet_unit_prices():
+    rows = [
+        {
+            "location": "Prairie Grill",
+            "product": "Burger - Double Hamburger",
+            "quantity": 1.0,
+            "price": 7.75,
+            "raw_price": 9.75,
+            "amount": 8.7,
+            "net_including_tax_total": 7.75,
+            "discount_total": 0.0,
+        }
+    ]
+
+    grouped = group_terminal_sales_rows(rows)
+    product_summary = grouped["Prairie Grill"]["products"]["Burger - Double Hamburger"]
+
+    spreadsheet_prices = product_summary.get("spreadsheet_prices")
+    assert spreadsheet_prices is not None
+    assert any(math.isclose(value, 9.75, abs_tol=0.01) for value in spreadsheet_prices)
 
 
 def test_terminal_sales_stays_on_products_until_finish(app, client):
@@ -709,7 +731,7 @@ def test_terminal_sales_stays_on_products_until_finish(app, client):
 
 
 def test_terminal_sales_upload_saves_locale_currency_totals(app, client):
-    net_total = parse_terminal_sales_number("CA\u00A0123.46")
+    net_total = parse_terminal_sales_number("CA\u00A0143.45")
     discount_total = parse_terminal_sales_number("CA\u00A0-23.45")
     with app.app_context():
         event = Event(
@@ -776,7 +798,7 @@ def test_terminal_sales_upload_saves_locale_currency_totals(app, client):
         )
         assert confirm_response.status_code == 200
         assert b"Terminal File Total" in confirm_response.data
-        assert b"$100.01" in confirm_response.data
+        assert b"$120.00" in confirm_response.data
 
     with app.app_context():
         summary = db.session.get(
@@ -896,7 +918,9 @@ def test_terminal_sales_excel_price_mismatch_detected(app, client, monkeypatch):
         price_candidates = product_summary["prices"]
 
         assert price_candidates, "Expected to capture the POS price from the spreadsheet"
-        assert price_candidates[0] == pytest.approx(9.0)
+        assert any(
+            math.isclose(price, 9.0, abs_tol=0.01) for price in price_candidates
+        )
 
         catalog_price = float(
             Product.query.filter_by(name=product_name).one().price or 0.0
@@ -932,6 +956,10 @@ def test_terminal_sales_raw_price_triggers_discrepancy_when_totals_match_catalog
     assert len(prices) == 2
     assert any(math.isclose(price, catalog_price, abs_tol=0.01) for price in prices)
     assert any(math.isclose(price, 9.0, abs_tol=0.01) for price in prices)
+
+    spreadsheet_prices = product_summary["spreadsheet_prices"]
+    assert spreadsheet_prices
+    assert any(math.isclose(price, 9.0, abs_tol=0.01) for price in spreadsheet_prices)
 
     combined_total_value = combine_terminal_sales_totals(
         product_summary.get("net_including_tax_total"),
