@@ -3180,67 +3180,67 @@ def upload_terminal_sales(event_id):
                     quantity_value = coerce_float(
                         product_data.get("quantity", 0.0)
                     ) or 0.0
-                file_prices_raw = []
-                file_prices_raw.extend(product_data.get("prices") or [])
-                file_prices_raw.extend(
-                    product_data.get("spreadsheet_prices") or []
-                )
-                file_prices = [
-                    coerce_float(price)
-                    for price in file_prices_raw
-                    if price is not None
-                ]
-                file_amount = coerce_float(product_data.get("amount"))
-                if file_amount is None and file_prices:
-                    file_amount = quantity_value * file_prices[0]
-                if not product:
-                    unmatched_entries.append(
-                        {
-                            "product_name": prod_name,
-                            "quantity": quantity_value,
-                            "file_amount": file_amount,
-                            "file_prices": file_prices,
-                            "sales_location": selected_loc,
-                        }
+                    file_prices_raw = []
+                    file_prices_raw.extend(product_data.get("prices") or [])
+                    file_prices_raw.extend(
+                        product_data.get("spreadsheet_prices") or []
                     )
-                    continue
-                allowed_products = location_allowed_products.get(el.id)
-                if allowed_products is None:
-                    allowed_products = set()
-                    if el.location:
-                        allowed_products.update(p.id for p in el.location.products)
-                        if el.location.current_menu is not None:
-                            allowed_products.update(
-                                p.id for p in el.location.current_menu.products
-                            )
-                    location_allowed_products[el.id] = allowed_products
-
-                    location_obj = el.location
-                    if location_obj and not allowed_products:
-                        menu_entry = menu_candidate_lookup.setdefault(
-                            el.id,
+                    file_prices = [
+                        coerce_float(price)
+                        for price in file_prices_raw
+                        if price is not None
+                    ]
+                    file_amount = coerce_float(product_data.get("amount"))
+                    if file_amount is None and file_prices:
+                        file_amount = quantity_value * file_prices[0]
+                    if not product:
+                        unmatched_entries.append(
                             {
-                                "event_location_id": el.id,
-                                "location_name": (
-                                    location_obj.name
-                                    if location_obj and location_obj.name
-                                    else f"Event location #{el.id}"
-                                ),
-                                "menu_name": (
-                                    location_obj.current_menu.name
-                                    if location_obj and location_obj.current_menu
-                                    else None
-                                ),
-                                "products": {},
-                            },
+                                "product_name": prod_name,
+                                "quantity": quantity_value,
+                                "file_amount": file_amount,
+                                "file_prices": file_prices,
+                                "sales_location": selected_loc,
+                            }
                         )
-                        menu_entry["products"][product.id] = {
-                            "product_id": product.id,
-                            "product_name": product.name,
-                            "sales_location": selected_loc,
-                        }
-                        # Menu additions are reviewed separately after the mapping
-                        # wizard completes, so defer adding products to the menu here.
+                        continue
+                    allowed_products = location_allowed_products.get(el.id)
+                    if allowed_products is None:
+                        allowed_products = set()
+                        if el.location:
+                            allowed_products.update(p.id for p in el.location.products)
+                            if el.location.current_menu is not None:
+                                allowed_products.update(
+                                    p.id for p in el.location.current_menu.products
+                                )
+                        location_allowed_products[el.id] = allowed_products
+
+                        location_obj = el.location
+                        if location_obj and not allowed_products:
+                            menu_entry = menu_candidate_lookup.setdefault(
+                                el.id,
+                                {
+                                    "event_location_id": el.id,
+                                    "location_name": (
+                                        location_obj.name
+                                        if location_obj and location_obj.name
+                                        else f"Event location #{el.id}"
+                                    ),
+                                    "menu_name": (
+                                        location_obj.current_menu.name
+                                        if location_obj and location_obj.current_menu
+                                        else None
+                                    ),
+                                    "products": {},
+                                },
+                            )
+                            menu_entry["products"][product.id] = {
+                                "product_id": product.id,
+                                "product_name": product.name,
+                                "sales_location": selected_loc,
+                            }
+                            # Menu additions are reviewed separately after the mapping
+                            # wizard completes, so defer adding products to the menu here.
                     app_price_value = coerce_float(product.price)
                     pending_sales.append(
                         {
