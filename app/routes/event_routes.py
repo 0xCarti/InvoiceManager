@@ -3703,6 +3703,7 @@ def upload_terminal_sales(event_id):
             name,
             qty,
             price=None,
+            raw_price=None,
             amount=None,
             net_including_tax_total=None,
             discounts_total=None,
@@ -3724,6 +3725,12 @@ def upload_terminal_sales(event_id):
             elif isinstance(name, str):
                 product_name = name.strip() or None
             price_value = parse_terminal_sales_number(price)
+            raw_price_value = parse_terminal_sales_number(raw_price)
+
+            if price_value is None and raw_price_value is not None:
+                price_value = raw_price_value
+                raw_price_value = None
+
             amount_value = parse_terminal_sales_number(amount)
             net_including_value = parse_terminal_sales_number(
                 net_including_tax_total
@@ -3751,6 +3758,16 @@ def upload_terminal_sales(event_id):
                 entry["quantity"] = quantity_value
             if price_value is not None:
                 entry["price"] = price_value
+            if (
+                raw_price_value is not None
+                and (
+                    price_value is None
+                    or not math.isclose(
+                        float(price_value), float(raw_price_value), abs_tol=0.01
+                    )
+                )
+            ):
+                entry["raw_price"] = raw_price_value
             if amount_value is not None:
                 entry["amount"] = amount_value
             if net_including_value is not None:
@@ -3902,6 +3919,9 @@ def upload_terminal_sales(event_id):
                         except (TypeError, ValueError, ZeroDivisionError):
                             computed_price = None
                     price = computed_price if computed_price is not None else price_cell
+                    raw_price_cell = (
+                        price_cell if computed_price is not None else None
+                    )
                     amount = amount_cell
                     net_including_total = net_cell
                     add_row(
@@ -3909,7 +3929,8 @@ def upload_terminal_sales(event_id):
                         second,
                         quantity,
                         price,
-                        amount,
+                        raw_price=raw_price_cell,
+                        amount=amount,
                         net_including_tax_total=net_including_total,
                         discounts_total=discounts,
                     )
