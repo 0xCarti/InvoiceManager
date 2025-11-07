@@ -817,6 +817,92 @@ def test_terminal_sales_upload_saves_locale_currency_totals(app, client):
         assert sales[0].quantity == pytest.approx(2.0)
 
 
+def test_terminal_sales_multiple_products_generate_price_issues(app, client):
+    with app.app_context():
+        event = Event(
+            name="Multiple Products Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Multi Stand")
+        event_location = EventLocation(event=event, location=location)
+        product_one = Product(name="Pretzel", price=5.0, cost=2.0)
+        product_two = Product(name="Nachos", price=7.0, cost=3.0)
+        db.session.add_all(
+            [event, location, event_location, product_one, product_two]
+        )
+        db.session.commit()
+        event_id = event.id
+        mapping_field = f"mapping-{event_location.id}"
+        location_name = location.name
+        product_one_name = product_one.name
+        product_two_name = product_two.name
+
+    payload = json.dumps(
+        {
+            "rows": [
+                {
+                    "location": location_name,
+                    "product": product_one_name,
+                    "quantity": 2.0,
+                    "price": 6.0,
+                    "amount": 12.0,
+                },
+                {
+                    "location": location_name,
+                    "product": product_two_name,
+                    "quantity": 3.0,
+                    "price": 8.0,
+                    "amount": 24.0,
+                },
+            ],
+            "filename": "terminal.xlsx",
+        }
+    )
+
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login_response = login(client, admin_email, admin_pass)
+        assert login_response.status_code == 200
+        assert login_response.request.path != "/auth/login"
+
+        response = client.post(
+            f"/events/{event_id}/terminal-sales",
+            data={
+                "step": "map",
+                "payload": payload,
+                "stage": "locations",
+                mapping_field: location_name,
+                "navigate": "finish",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 200
+
+    with app.app_context():
+        admin_user = User.query.filter_by(email=admin_email).one()
+        state_row = TerminalSalesResolutionState.query.filter_by(
+            event_id=event_id, user_id=admin_user.id
+        ).one()
+        assert isinstance(state_row.payload, dict)
+        pending_sales = state_row.payload.get("pending_sales") or []
+        assert len(pending_sales) == 2
+        assert {
+            entry.get("product_name") for entry in pending_sales
+        } == {product_one_name, product_two_name}
+
+        issue_queue = state_row.payload.get("queue") or []
+        assert len(issue_queue) == 1
+        price_issues = issue_queue[0].get("price_issues") or []
+        assert len(price_issues) == 2
+        assert {
+            issue.get("product") for issue in price_issues
+        } == {product_one_name, product_two_name}
+
+
 def test_terminal_sales_excel_price_mismatch_detected(app, client, monkeypatch):
     class MockSheet:
         def __init__(self, rows):
