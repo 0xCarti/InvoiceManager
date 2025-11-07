@@ -3330,6 +3330,45 @@ def upload_terminal_sales(event_id):
                     ):
                         price_candidates.append(fallback_amount_price)
 
+                    if not price_candidates:
+                        synthesized_price = None
+                        lookup_price = None
+                        if product_price_lookup:
+                            lookup_price = product_price_lookup.get(prod_name)
+                            if lookup_price is None and product is not None:
+                                lookup_price = product_price_lookup.get(product.name)
+                        lookup_price_value = coerce_float(lookup_price)
+                        if lookup_price_value is not None:
+                            synthesized_price = lookup_price_value
+                        else:
+                            location_total_amount = coerce_float(
+                                loc_sales.get("total_amount")
+                            )
+                            location_total_quantity = coerce_float(
+                                loc_sales.get("total")
+                            )
+                            if (
+                                location_total_amount is not None
+                                and location_total_quantity
+                                and abs(location_total_quantity) > 1e-9
+                            ):
+                                try:
+                                    synthesized_price = (
+                                        float(location_total_amount)
+                                        / float(location_total_quantity)
+                                    )
+                                except (
+                                    TypeError,
+                                    ValueError,
+                                    ZeroDivisionError,
+                                ):
+                                    synthesized_price = None
+
+                        if synthesized_price is not None:
+                            synthesized_price = float(synthesized_price)
+                            price_candidates.append(synthesized_price)
+                            terminal_price_value = synthesized_price
+
                     if not price_candidates and terminal_price_value is not None:
                         price_candidates = [terminal_price_value]
 
