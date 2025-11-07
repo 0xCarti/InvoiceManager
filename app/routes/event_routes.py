@@ -3838,7 +3838,8 @@ def upload_terminal_sales(event_id):
                         continue
 
                     quantity = quantity_cell
-                    price = row[2] if len(row) > 2 else None
+                    price_cell = row[2] if len(row) > 2 else None
+                    price = price_cell
                     quantity_value = summary_quantity
                     discounts = None
                     if quantity_value is not None and abs(quantity_value) > 1e-9:
@@ -3848,7 +3849,10 @@ def upload_terminal_sales(event_id):
                         discounts = (
                             summary_discount
                         )
-                        if net_including is not None:
+                        if (
+                            net_including is not None
+                            and terminal_sales_cell_is_blank(price_cell)
+                        ):
                             price = (
                                 net_including + (discounts or 0.0)
                             ) / quantity_value

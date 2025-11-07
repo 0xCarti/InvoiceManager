@@ -1,7 +1,9 @@
 import json
+import math
 import os
 import re
 from datetime import date
+from io import BytesIO
 
 import pytest
 
@@ -13,6 +15,8 @@ from app.models import (
     Location,
     Product,
     TerminalSale,
+    TerminalSalesResolutionState,
+    User,
 )
 from app.routes.event_routes import _apply_pending_sales, _apply_resolution_actions
 from app.utils.pos_import import (
@@ -20,7 +24,7 @@ from app.utils.pos_import import (
     parse_terminal_sales_number,
     group_terminal_sales_rows,
 )
-from tests.utils import login
+from tests.utils import extract_csrf_token, login
 
 
 def test_apply_pending_sales_replaces_previous_entries(app):
@@ -788,3 +792,114 @@ def test_terminal_sales_upload_saves_locale_currency_totals(app, client):
         assert len(sales) == 1
         assert sales[0].product.name == "Locale Popcorn"
         assert sales[0].quantity == pytest.approx(2.0)
+
+
+def test_terminal_sales_excel_price_mismatch_detected(app, client, monkeypatch):
+    class MockSheet:
+        def __init__(self, rows):
+            self._rows = rows
+            self.nrows = len(rows)
+            self.ncols = max((len(row) for row in rows), default=0)
+
+        def cell_value(self, row_idx, col_idx):
+            row = self._rows[row_idx]
+            if col_idx < len(row):
+                return row[col_idx]
+            return None
+
+    class MockBook:
+        def __init__(self, rows):
+            self._sheet = MockSheet(rows)
+
+        def sheet_by_index(self, index):
+            if index != 0:
+                raise IndexError("Only one sheet available")
+            return self._sheet
+
+        def release_resources(self):
+            return None
+
+    excel_rows = [
+        ["Main Stand", None, None, None, None, None, None, None, None],
+        [
+            1,
+            "Hot Dog",
+            9.0,
+            None,
+            1.0,
+            9.0,
+            None,
+            10.0,
+            0.0,
+        ],
+    ]
+
+    import xlrd
+
+    monkeypatch.setattr(xlrd, "open_workbook", lambda path: MockBook(excel_rows))
+
+    with app.app_context():
+        event = Event(
+            name="Excel Price Mismatch Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Main Stand")
+        product = Product(name="Hot Dog", price=10.0, cost=3.0)
+        event_location = EventLocation(event=event, location=location)
+        db.session.add_all([event, location, product, event_location])
+        db.session.commit()
+        event_id = event.id
+        location_name = location.name
+        product_name = product.name
+
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login_response = login(client, admin_email, admin_pass)
+        assert login_response.status_code == 200
+        assert login_response.request.path != "/auth/login"
+
+        upload_page = client.get(f"/events/{event_id}/terminal-sales")
+        csrf_token = extract_csrf_token(upload_page, required=False)
+        form_data = {"program": "idealpos"}
+        if csrf_token:
+            form_data["csrf_token"] = csrf_token
+        form_data["file"] = (BytesIO(b"stub"), "terminal.xls")
+
+        response = client.post(
+            f"/events/{event_id}/terminal-sales",
+            data=form_data,
+            content_type="multipart/form-data",
+        )
+
+        assert response.status_code == 200
+
+    with app.app_context():
+        admin_user = User.query.filter_by(email=admin_email).one()
+        state_row = TerminalSalesResolutionState.query.filter_by(
+            event_id=event_id, user_id=admin_user.id
+        ).one()
+        stored_rows = (
+            (state_row.payload or {})
+            .get("payload", {})
+            .get("rows", [])
+        )
+
+        assert stored_rows, "Expected uploaded rows to be stored in state"
+
+        grouped = group_terminal_sales_rows(stored_rows)
+        location_summary = grouped[location_name]
+        product_summary = location_summary["products"][product_name]
+        price_candidates = product_summary["prices"]
+
+        assert price_candidates, "Expected to capture the POS price from the spreadsheet"
+        assert price_candidates[0] == pytest.approx(9.0)
+
+        catalog_price = float(
+            Product.query.filter_by(name=product_name).one().price or 0.0
+        )
+        assert not all(
+            math.isclose(price, catalog_price, abs_tol=0.01) for price in price_candidates
+        ), "The uploaded price should trigger a mismatch against the catalog"
