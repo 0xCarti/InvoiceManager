@@ -218,6 +218,7 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
                 "_amount_override": None,
             },
         )
+        product_entry = None
         if not is_location_total and prod:
             product_entry = loc_entry["products"].setdefault(
                 prod,
@@ -225,6 +226,10 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
                     "quantity": 0.0,
                     "prices": [],
                     "amount": 0.0,
+                    "net_including_tax_total": 0.0,
+                    "discount_total": 0.0,
+                    "_has_net_including_tax_total": False,
+                    "_has_discount_total": False,
                 },
             )
             product_entry["quantity"] += qty
@@ -243,15 +248,29 @@ def group_terminal_sales_rows(row_data: Iterable[dict]) -> dict[str, dict]:
         if net_including_total is not None:
             loc_entry["net_including_tax_total"] += net_including_total
             loc_entry["_has_net_including_tax_total"] = True
+            if product_entry is not None:
+                product_entry["net_including_tax_total"] += net_including_total
+                product_entry["_has_net_including_tax_total"] = True
         discount_total = coerce_float(entry.get("discount_total"))
         if discount_total is not None:
             loc_entry["discount_total"] += discount_total
             loc_entry["_has_discount_total"] = True
+            if product_entry is not None:
+                product_entry["discount_total"] += discount_total
+                product_entry["_has_discount_total"] = True
     for data in grouped.values():
         if not data["_has_net_including_tax_total"]:
             data["net_including_tax_total"] = None
         if not data["_has_discount_total"]:
             data["discount_total"] = None
+
+        for product_entry in data["products"].values():
+            if not product_entry.get("_has_net_including_tax_total"):
+                product_entry["net_including_tax_total"] = None
+            if not product_entry.get("_has_discount_total"):
+                product_entry["discount_total"] = None
+            product_entry.pop("_has_net_including_tax_total", None)
+            product_entry.pop("_has_discount_total", None)
 
         quantity_override = data.get("_quantity_override")
         if quantity_override is not None:

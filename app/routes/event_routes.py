@@ -3278,25 +3278,54 @@ def upload_terminal_sales(event_id):
                         }
                     )
 
-                    terminal_price_value = None
-                    if file_prices:
-                        terminal_price_value = next(
-                            (price for price in file_prices if price is not None),
-                            None,
-                        )
+                    combined_total_value = combine_terminal_sales_totals(
+                        product_data.get("net_including_tax_total"),
+                        product_data.get("discount_total"),
+                    )
+                    derived_unit_price = None
                     if (
-                        terminal_price_value is None
-                        and file_amount is not None
+                        combined_total_value is not None
                         and quantity_value
+                        and abs(quantity_value) > 1e-9
                     ):
                         try:
-                            terminal_price_value = float(file_amount) / float(
+                            derived_unit_price = float(combined_total_value) / float(
                                 quantity_value
                             )
                         except (TypeError, ValueError, ZeroDivisionError):
-                            terminal_price_value = None
+                            derived_unit_price = None
 
-                    price_candidates = list(file_prices)
+                    file_price_candidates = [
+                        price for price in file_prices if price is not None
+                    ]
+                    price_candidates: list[float] = []
+                    if derived_unit_price is not None:
+                        price_candidates.append(derived_unit_price)
+                    price_candidates.extend(file_price_candidates)
+
+                    fallback_amount_price = None
+                    if file_amount is not None and quantity_value:
+                        try:
+                            fallback_amount_price = float(file_amount) / float(
+                                quantity_value
+                            )
+                        except (TypeError, ValueError, ZeroDivisionError):
+                            fallback_amount_price = None
+
+                    terminal_price_value = derived_unit_price
+                    if terminal_price_value is None:
+                        if file_price_candidates:
+                            terminal_price_value = file_price_candidates[0]
+                        else:
+                            terminal_price_value = fallback_amount_price
+
+                    if (
+                        derived_unit_price is None
+                        and not file_price_candidates
+                        and fallback_amount_price is not None
+                    ):
+                        price_candidates.append(fallback_amount_price)
+
                     if not price_candidates and terminal_price_value is not None:
                         price_candidates = [terminal_price_value]
 
@@ -3855,23 +3884,24 @@ def upload_terminal_sales(event_id):
 
                     quantity = quantity_cell
                     price_cell = row[2] if len(row) > 2 else None
-                    price = price_cell
                     quantity_value = summary_quantity
-                    discounts = None
-                    if quantity_value is not None and abs(quantity_value) > 1e-9:
-                        net_including = (
-                            summary_net
-                        )
-                        discounts = (
-                            summary_discount
-                        )
-                        if (
-                            net_including is not None
-                            and terminal_sales_cell_is_blank(price_cell)
-                        ):
-                            price = (
-                                net_including + (discounts or 0.0)
-                            ) / quantity_value
+                    discounts = summary_discount
+                    combined_total_value = combine_terminal_sales_totals(
+                        summary_net, summary_discount
+                    )
+                    computed_price = None
+                    if (
+                        combined_total_value is not None
+                        and quantity_value is not None
+                        and abs(quantity_value) > 1e-9
+                    ):
+                        try:
+                            computed_price = float(combined_total_value) / float(
+                                quantity_value
+                            )
+                        except (TypeError, ValueError, ZeroDivisionError):
+                            computed_price = None
+                    price = computed_price if computed_price is not None else price_cell
                     amount = amount_cell
                     net_including_total = net_cell
                     add_row(
