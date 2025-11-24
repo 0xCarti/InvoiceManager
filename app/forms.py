@@ -1343,6 +1343,31 @@ class PurchaseOrderForm(FlaskForm):
             item_form.unit.choices = units
 
 
+class VendorItemAliasResolutionRowForm(FlaskForm):
+    vendor_sku = HiddenField("Vendor SKU")
+    vendor_description = HiddenField("Vendor Description")
+    pack_size = HiddenField("Pack/Size")
+    quantity = HiddenField("Quantity")
+    unit_cost = HiddenField("Unit Cost")
+    item_id = SelectField(
+        "Item", coerce=int, validators=[DataRequired()], validate_choice=False
+    )
+    unit_id = SelectField(
+        "Default Unit", coerce=int, validators=[Optional()], validate_choice=False
+    )
+    default_cost = DecimalField("Default Cost", validators=[Optional()])
+
+
+class VendorItemAliasResolutionForm(FlaskForm):
+    vendor_id = HiddenField("Vendor", validators=[DataRequired()])
+    parsed_payload = HiddenField(validators=[DataRequired()])
+    unresolved_payload = HiddenField(validators=[DataRequired()])
+    order_date = HiddenField()
+    expected_date = HiddenField()
+    rows = FieldList(FormField(VendorItemAliasResolutionRowForm), min_entries=0)
+    submit = SubmitField("Save mappings")
+
+
 class InvoiceItemReceiveForm(FlaskForm):
     item = SelectField("Item", coerce=int)
     unit = SelectField(
@@ -1410,6 +1435,29 @@ class ReceiveInvoiceForm(FlaskForm):
             item_form.gl_code.choices = [
                 (value, label) for value, label in gl_codes
             ]
+
+
+class VendorItemAliasForm(FlaskForm):
+    vendor_id = SelectField("Vendor", coerce=int, validators=[DataRequired()])
+    vendor_sku = StringField("Vendor SKU", validators=[Optional()])
+    vendor_description = StringField("Vendor Description", validators=[Optional()])
+    pack_size = StringField("Pack/Size", validators=[Optional()])
+    item_id = SelectField("Item", coerce=int, validators=[DataRequired()])
+    item_unit_id = SelectField(
+        "Default Unit", coerce=int, validators=[Optional()], validate_choice=False
+    )
+    default_cost = DecimalField("Default Cost", validators=[Optional()])
+    submit = SubmitField("Save Alias")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.vendor_id.choices = [
+            (v.id, f"{v.first_name} {v.last_name}")
+            for v in Vendor.query.filter_by(archived=False).order_by(Vendor.first_name)
+        ]
+        self.item_id.choices = load_item_choices()
+        unit_choices = load_unit_choices()
+        self.item_unit_id.choices = [(0, "—")] + unit_choices
 
 
 class DeleteForm(FlaskForm):

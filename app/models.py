@@ -239,6 +239,51 @@ class ItemUnit(db.Model):
 
     item = relationship("Item", back_populates="units")
 
+    vendor_aliases = relationship(
+        "VendorItemAlias",
+        back_populates="item_unit",
+    )
+
+
+class VendorItemAlias(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey("item.id"), nullable=False)
+    item_unit_id = db.Column(
+        db.Integer, db.ForeignKey("item_unit.id"), nullable=True
+    )
+    vendor_sku = db.Column(db.String(100), nullable=True)
+    vendor_description = db.Column(db.String(255), nullable=True)
+    normalized_description = db.Column(db.String(255), nullable=True)
+    pack_size = db.Column(db.String(100), nullable=True)
+    default_cost = db.Column(db.Float, nullable=True)
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, server_default=func.now()
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=func.now(),
+    )
+
+    vendor = relationship("Vendor", back_populates="vendor_item_aliases")
+    item = relationship("Item", backref="vendor_aliases")
+    item_unit = relationship("ItemUnit", back_populates="vendor_aliases")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "vendor_id", "vendor_sku", name="uq_vendor_item_alias_sku"
+        ),
+        db.UniqueConstraint(
+            "vendor_id",
+            "normalized_description",
+            name="uq_vendor_item_alias_description",
+        ),
+        db.Index("ix_vendor_item_alias_vendor", "vendor_id"),
+    )
+
 
 class Transfer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -324,6 +369,12 @@ class Vendor(db.Model):
     )
     archived = db.Column(
         db.Boolean, default=False, nullable=False, server_default="0"
+    )
+
+    vendor_item_aliases = relationship(
+        "VendorItemAlias",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (db.Index("ix_vendor_archived", "archived"),)

@@ -17,6 +17,7 @@ from app.forms import (
     DeleteForm,
     PurchaseOrderForm,
     ReceiveInvoiceForm,
+    VendorItemAliasResolutionForm,
     load_purchase_gl_code_choices,
 )
 from app.models import (
@@ -32,6 +33,7 @@ from app.models import (
     PurchaseOrderItem,
     PurchaseOrderItemArchive,
     Setting,
+    VendorItemAlias,
     Vendor,
 )
 from app.utils.activity import log_activity
@@ -44,7 +46,11 @@ from app.utils.forecasting import DemandForecastingHelper
 from app.utils.pagination import build_pagination_args, get_per_page
 from app.services.purchase_imports import (
     CSVImportError,
+    ParsedPurchaseLine,
     parse_purchase_order_csv,
+    resolve_vendor_purchase_lines,
+    serialize_parsed_line,
+    update_or_create_vendor_alias,
 )
 
 import datetime
@@ -214,6 +220,42 @@ def create_purchase_order():
     parse_errors = []
     prefilled_labels = {}
     parse_requested = request.method == "POST" and request.form.get("parse_csv")
+    resolution_requested = (
+        request.method == "POST" and request.form.get("step") == "resolve_vendor_aliases"
+    )
+
+    def _apply_resolved_lines(resolved_lines):
+        nonlocal prefilled_labels
+        form.items.min_entries = max(len(resolved_lines), 1)
+        while len(form.items) < len(resolved_lines):
+            form.items.append_entry()
+        for idx, resolved in enumerate(resolved_lines):
+            parsed_line = resolved.parsed_line
+            form.items[idx].quantity.data = parsed_line.quantity
+            form.items[idx].cost.data = resolved.cost
+            form.items[idx].position.data = idx
+            if resolved.item_id:
+                form.items[idx].item.data = resolved.item_id
+            if resolved.unit_id:
+                form.items[idx].unit.data = resolved.unit_id
+            prefilled_labels[idx] = parsed_line.vendor_description
+
+    def _prepare_units_map():
+        items = (
+            Item.query.options(selectinload(Item.units))
+            .filter_by(archived=False)
+            .order_by(Item.name)
+            .all()
+        )
+        item_choices = [(itm.id, itm.name) for itm in items]
+        units_map = {
+            itm.id: [
+                {"id": unit.id, "name": unit.name, "receiving_default": unit.receiving_default}
+                for unit in itm.units
+            ]
+            for itm in items
+        }
+        return item_choices, units_map
 
     if request.method == "GET":
         seed = session.pop("po_recommendation_seed", None)
@@ -258,6 +300,117 @@ def create_purchase_order():
     if request.method == "GET" and form.expected_date.data is None:
         form.expected_date.data = datetime.date.today() + datetime.timedelta(days=1)
 
+    if resolution_requested:
+        resolution_form = VendorItemAliasResolutionForm()
+        vendor_id = request.form.get("vendor_id", type=int)
+        vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
+        if not vendor:
+            flash("Select a vendor before resolving uploaded items.", "warning")
+            return redirect(url_for("purchase.create_purchase_order"))
+
+        try:
+            parsed_payload = json.loads(request.form.get("parsed_payload") or "[]")
+            unresolved_payload = json.loads(
+                request.form.get("unresolved_payload") or "[]"
+            )
+        except (TypeError, ValueError):
+            flash("Unable to continue the vendor item resolution.", "danger")
+            return redirect(url_for("purchase.create_purchase_order"))
+
+        parsed_lines = [
+            ParsedPurchaseLine(
+                vendor_sku=item.get("vendor_sku"),
+                vendor_description=item.get("vendor_description") or "",
+                pack_size=item.get("pack_size"),
+                quantity=coerce_float(item.get("quantity")) or 0,
+                unit_cost=coerce_float(item.get("unit_cost")),
+            )
+            for item in parsed_payload
+        ]
+
+        unresolved_lines = [
+            ParsedPurchaseLine(
+                vendor_sku=item.get("vendor_sku"),
+                vendor_description=item.get("vendor_description") or "",
+                pack_size=item.get("pack_size"),
+                quantity=coerce_float(item.get("quantity")) or 0,
+                unit_cost=coerce_float(item.get("unit_cost")),
+            )
+            for item in unresolved_payload
+        ]
+
+        resolution_form.vendor_id.data = str(vendor.id)
+        resolution_form.parsed_payload.data = json.dumps(parsed_payload)
+        resolution_form.unresolved_payload.data = json.dumps(unresolved_payload)
+        resolution_form.order_date.data = request.form.get("order_date")
+        resolution_form.expected_date.data = request.form.get("expected_date")
+
+        resolution_form.rows.min_entries = len(unresolved_lines)
+        while len(resolution_form.rows) < len(unresolved_lines):
+            resolution_form.rows.append_entry()
+
+        item_choices, units_map = _prepare_units_map()
+        for idx, parsed_line in enumerate(unresolved_lines):
+            row = resolution_form.rows[idx]
+            row.vendor_sku.data = parsed_line.vendor_sku or ""
+            row.vendor_description.data = parsed_line.vendor_description or ""
+            row.pack_size.data = parsed_line.pack_size or ""
+            row.quantity.data = str(parsed_line.quantity)
+            if parsed_line.unit_cost is not None:
+                row.unit_cost.data = str(parsed_line.unit_cost)
+                row.default_cost.data = parsed_line.unit_cost
+            row.item_id.choices = item_choices
+            row.unit_id.choices = [(0, "—")] + [
+                (unit["id"], unit["name"]) for unit_list in units_map.values() for unit in unit_list
+            ]
+
+        if resolution_form.validate_on_submit():
+            for idx, parsed_line in enumerate(unresolved_lines):
+                row = resolution_form.rows[idx]
+                item_id = row.item_id.data
+                unit_id = row.unit_id.data if row.unit_id.data else None
+                default_cost = row.default_cost.data
+                if default_cost is None:
+                    default_cost = parsed_line.unit_cost
+                alias = update_or_create_vendor_alias(
+                    vendor=vendor,
+                    item_id=item_id,
+                    item_unit_id=unit_id,
+                    vendor_sku=parsed_line.vendor_sku,
+                    vendor_description=parsed_line.vendor_description,
+                    pack_size=parsed_line.pack_size,
+                    default_cost=float(default_cost) if default_cost is not None else None,
+                )
+                db.session.add(alias)
+            db.session.commit()
+            flash("Saved vendor item mappings for this upload.", "success")
+
+            resolved_lines = resolve_vendor_purchase_lines(vendor, parsed_lines)
+            _apply_resolved_lines(resolved_lines)
+            form.vendor.data = vendor.id
+            if resolution_form.order_date.data:
+                try:
+                    form.order_date.data = datetime.datetime.strptime(
+                        resolution_form.order_date.data, "%Y-%m-%d"
+                    ).date()
+                except ValueError:
+                    pass
+            if resolution_form.expected_date.data:
+                try:
+                    form.expected_date.data = datetime.datetime.strptime(
+                        resolution_form.expected_date.data, "%Y-%m-%d"
+                    ).date()
+                except ValueError:
+                    pass
+        else:
+            return render_template(
+                "purchase_orders/resolve_vendor_items.html",
+                form=resolution_form,
+                vendor=vendor,
+                unresolved_lines=unresolved_lines,
+                units_map=units_map,
+            )
+
     if parse_requested:
         vendor_id = form.vendor.data
         vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
@@ -268,15 +421,67 @@ def create_purchase_order():
         else:
             try:
                 parsed = parse_purchase_order_csv(form.upload.data, vendor)
-                parsed_items = parsed.items
-                form.items.min_entries = max(len(parsed_items), 1)
-                while len(form.items) < len(parsed_items):
-                    form.items.append_entry()
-                for idx, parsed_item in enumerate(parsed_items):
-                    form.items[idx].quantity.data = parsed_item.quantity
-                    form.items[idx].cost.data = parsed_item.unit_cost
-                    form.items[idx].position.data = idx
-                    prefilled_labels[idx] = parsed_item.description
+                resolved_lines = resolve_vendor_purchase_lines(vendor, parsed.items)
+                unresolved_lines = [
+                    line
+                    for line in resolved_lines
+                    if line.alias is None or line.item_id is None
+                ]
+
+                if unresolved_lines:
+                    resolution_form = VendorItemAliasResolutionForm()
+                    item_choices, units_map = _prepare_units_map()
+                    parsed_payload = [
+                        serialize_parsed_line(line) for line in parsed.items
+                    ]
+                    unresolved_payload = [
+                        serialize_parsed_line(line.parsed_line)
+                        for line in unresolved_lines
+                    ]
+                    resolution_form.vendor_id.data = str(vendor.id)
+                    resolution_form.parsed_payload.data = json.dumps(parsed_payload)
+                    resolution_form.unresolved_payload.data = json.dumps(
+                        unresolved_payload
+                    )
+                    if parsed.order_date:
+                        resolution_form.order_date.data = parsed.order_date.isoformat()
+                    if parsed.expected_date:
+                        resolution_form.expected_date.data = (
+                            parsed.expected_date.isoformat()
+                        )
+                    resolution_form.rows.min_entries = len(unresolved_lines)
+                    while len(resolution_form.rows) < len(unresolved_lines):
+                        resolution_form.rows.append_entry()
+
+                    for idx, unresolved in enumerate(unresolved_lines):
+                        row = resolution_form.rows[idx]
+                        parsed_line = unresolved.parsed_line
+                        row.vendor_sku.data = parsed_line.vendor_sku or ""
+                        row.vendor_description.data = (
+                            parsed_line.vendor_description or ""
+                        )
+                        row.pack_size.data = parsed_line.pack_size or ""
+                        row.quantity.data = str(parsed_line.quantity)
+                        if parsed_line.unit_cost is not None:
+                            row.unit_cost.data = str(parsed_line.unit_cost)
+                            row.default_cost.data = parsed_line.unit_cost
+                        row.item_id.choices = item_choices
+                        row.unit_id.choices = [(0, "—")] + [
+                            (unit["id"], unit["name"])
+                            for unit_list in units_map.values()
+                            for unit in unit_list
+                        ]
+
+                    return render_template(
+                        "purchase_orders/resolve_vendor_items.html",
+                        form=resolution_form,
+                        vendor=vendor,
+                        unresolved_lines=[line.parsed_line for line in unresolved_lines],
+                        units_map=units_map,
+                        source_filename=getattr(form.upload.data, "filename", None),
+                    )
+
+                _apply_resolved_lines(resolved_lines)
                 if parsed.order_date:
                     form.order_date.data = parsed.order_date
                 if parsed.expected_date:
@@ -289,7 +494,7 @@ def create_purchase_order():
                     "Unable to parse the CSV file. Confirm the vendor export format and try again."
                 )
 
-    if form.validate_on_submit() and not parse_requested:
+    if form.validate_on_submit() and not (parse_requested or resolution_requested):
         vendor_record = db.session.get(Vendor, form.vendor.data)
         vendor_name = (
             f"{vendor_record.first_name} {vendor_record.last_name}"
