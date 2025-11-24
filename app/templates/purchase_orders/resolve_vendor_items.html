@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4" id="alias-resolution" data-units-map='{{ units_map|tojson }}'>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 class="mb-0">Match Vendor Items{% if vendor %} for {{ vendor.first_name }} {{ vendor.last_name }}{% endif %}</h2>
+        <a class="btn btn-outline-secondary" href="{{ url_for('purchase.create_purchase_order') }}">Start Over</a>
+    </div>
+
+    {% set stages = [
+        {'label': 'Upload CSV', 'active': false},
+        {'label': 'Match Vendor Items', 'active': true},
+        {'label': 'Review Order', 'active': false}
+    ] %}
+    <div class="d-flex flex-wrap gap-3 mb-3">
+        {% for stage in stages %}
+            <div class="d-flex align-items-center">
+                <span class="badge rounded-pill {{ 'bg-primary' if stage.active else 'bg-secondary' }} me-2">{{ loop.index }}</span>
+                <span class="{{ 'fw-semibold text-primary' if stage.active else 'text-muted' }}">{{ stage.label }}</span>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="alert alert-info">
+        <p class="mb-1">We couldn't automatically match some vendor items. Choose the correct stock item and default receiving unit for each line below to continue.</p>
+        <p class="mb-0">These mappings will be saved for future imports, mirroring the terminal sales resolution experience.</p>
+    </div>
+
+    {% if source_filename %}
+    <p class="text-muted">Source file: {{ source_filename }}</p>
+    {% endif %}
+
+    <form method="post">
+        {{ form.hidden_tag() }}
+        <input type="hidden" name="step" value="resolve_vendor_aliases">
+        <div class="table-responsive mb-3">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Vendor SKU</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Pack/Size</th>
+                        <th scope="col">Qty</th>
+                        <th scope="col">Unit Cost</th>
+                        <th scope="col" style="width: 18rem;">Stock Item</th>
+                        <th scope="col" style="width: 12rem;">Default Unit</th>
+                        <th scope="col" style="width: 10rem;">Saved Cost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in form.rows %}
+                        {% set parsed = unresolved_lines[loop.index0] if unresolved_lines|length > loop.index0 else None %}
+                        <tr data-role="alias-row">
+                            <td>
+                                {{ parsed.vendor_sku if parsed else '' }}
+                                {{ row.vendor_sku }}
+                            </td>
+                            <td class="text-wrap">
+                                {{ parsed.vendor_description if parsed else '' }}
+                                {{ row.vendor_description }}
+                            </td>
+                            <td>{{ parsed.pack_size if parsed else '' }}{{ row.pack_size }}</td>
+                            <td>{{ parsed.quantity if parsed else '' }}{{ row.quantity }}</td>
+                            <td>
+                                {% if parsed and parsed.unit_cost is not none %}
+                                    ${{ '%.2f'|format(parsed.unit_cost) }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                                {{ row.unit_cost }}
+                            </td>
+                            <td>
+                                {{ row.item_id(class="form-select", **{'data-role': 'alias-item-select'}) }}
+                            </td>
+                            <td>
+                                {{ row.unit_id(class="form-select", **{'data-role': 'alias-unit-select', 'data-selected': row.unit_id.data or ''}) }}
+                            </td>
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ row.default_cost(class="form-control", placeholder="Optional") }}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('purchase.create_purchase_order') }}" class="btn btn-outline-secondary">Back</a>
+            <button type="submit" class="btn btn-primary">Save mappings and continue</button>
+        </div>
+    </form>
+</div>
+<script src="{{ url_for('static', filename='js/vendor_alias_resolution.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+    document.addEventListener('DOMContentLoaded', function() {
+        initVendorAliasResolution({
+            container: document.getElementById('alias-resolution'),
+            unitsMap: {{ units_map|tojson }}
+        });
+    });
+</script>
+{% endblock %}

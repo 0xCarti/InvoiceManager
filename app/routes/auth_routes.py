@@ -29,6 +29,7 @@ from app.forms import (
     ActivityLogFilterForm,
     ChangePasswordForm,
     CreateBackupForm,
+    DeleteForm,
     ImportForm,
     InviteUserForm,
     LoginForm,
@@ -39,6 +40,7 @@ from app.forms import (
     SettingsForm,
     TerminalSalesMappingDeleteForm,
     TimezoneForm,
+    VendorItemAliasForm,
     UserForm,
     MAX_BACKUP_SIZE,
     PURCHASE_RECEIVE_DEPARTMENT_CONFIG,
@@ -51,6 +53,7 @@ from app.models import (
     Setting,
     TerminalSaleLocationAlias,
     TerminalSaleProductAlias,
+    VendorItemAlias,
     Transfer,
     User,
     Vendor,
@@ -69,6 +72,10 @@ from app.utils.imports import (
     _import_items,
     _import_locations,
     _import_products,
+)
+from app.services.purchase_imports import (
+    normalize_vendor_alias_text,
+    update_or_create_vendor_alias,
 )
 from app.utils.units import (
     DEFAULT_BASE_UNIT_CONVERSIONS,
@@ -974,3 +981,110 @@ def terminal_sales_mappings():
         product_aliases=product_aliases,
         location_aliases=location_aliases,
     )
+
+
+@admin.route("/controlpanel/vendor-item-aliases", methods=["GET", "POST"])
+@admin.route(
+    "/controlpanel/vendor-item-aliases/<int:alias_id>/edit", methods=["GET", "POST"]
+)
+@login_required
+def vendor_item_aliases(alias_id: int | None = None):
+    """Allow admins to manage vendor item alias mappings."""
+
+    if not current_user.is_admin:
+        abort(403)
+
+    alias_obj = db.session.get(VendorItemAlias, alias_id) if alias_id else None
+    form = VendorItemAliasForm(obj=alias_obj)
+    delete_form = DeleteForm()
+
+    aliases = (
+        VendorItemAlias.query.options(
+            selectinload(VendorItemAlias.vendor),
+            selectinload(VendorItemAlias.item),
+            selectinload(VendorItemAlias.item_unit),
+        )
+        .order_by(VendorItemAlias.vendor_id, VendorItemAlias.vendor_sku)
+        .all()
+    )
+
+    if form.validate_on_submit():
+        vendor = db.session.get(Vendor, form.vendor_id.data)
+        if not vendor:
+            flash("Select a valid vendor before saving the alias.", "danger")
+            return redirect(url_for("admin.vendor_item_aliases"))
+
+        unit_id = form.item_unit_id.data or None
+        if unit_id == 0:
+            unit_id = None
+
+        default_cost = (
+            float(form.default_cost.data)
+            if form.default_cost.data is not None
+            else None
+        )
+
+        if alias_obj:
+            alias_obj.vendor_id = vendor.id
+            alias_obj.item_id = form.item_id.data
+            alias_obj.item_unit_id = unit_id
+            alias_obj.vendor_sku = form.vendor_sku.data or None
+            alias_obj.vendor_description = form.vendor_description.data or None
+            alias_obj.normalized_description = normalize_vendor_alias_text(
+                alias_obj.vendor_description or alias_obj.vendor_sku
+            )
+            alias_obj.pack_size = form.pack_size.data or None
+            alias_obj.default_cost = default_cost
+            alias = alias_obj
+        else:
+            alias = update_or_create_vendor_alias(
+                vendor=vendor,
+                item_id=form.item_id.data,
+                item_unit_id=unit_id,
+                vendor_sku=form.vendor_sku.data or None,
+                vendor_description=form.vendor_description.data or None,
+                pack_size=form.pack_size.data or None,
+                default_cost=default_cost,
+            )
+            db.session.add(alias)
+
+        db.session.commit()
+        log_activity(
+            f"Saved vendor alias for vendor {vendor.first_name} {vendor.last_name}"
+        )
+        flash("Vendor alias saved successfully.", "success")
+        return redirect(url_for("admin.vendor_item_aliases"))
+
+    return render_template(
+        "admin/vendor_item_aliases.html",
+        form=form,
+        delete_form=delete_form,
+        aliases=aliases,
+        editing_alias=alias_obj,
+    )
+
+
+@admin.route(
+    "/controlpanel/vendor-item-aliases/<int:alias_id>/delete",
+    methods=["POST"],
+)
+@login_required
+def delete_vendor_item_alias(alias_id: int):
+    if not current_user.is_admin:
+        abort(403)
+
+    form = DeleteForm()
+    if not form.validate_on_submit():
+        flash("Unable to process the delete request.", "danger")
+        return redirect(url_for("admin.vendor_item_aliases"))
+
+    alias = db.session.get(VendorItemAlias, alias_id)
+    if alias is None:
+        flash("Vendor alias not found.", "warning")
+        return redirect(url_for("admin.vendor_item_aliases"))
+
+    db.session.delete(alias)
+    db.session.commit()
+    log_activity("Deleted a vendor item alias via admin panel")
+    flash("Vendor alias deleted.", "success")
+    return redirect(url_for("admin.vendor_item_aliases"))
