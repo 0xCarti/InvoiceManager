@@ -572,6 +572,7 @@ class PurchaseOrderItem(db.Model):
     )
     item_id = db.Column(db.Integer, db.ForeignKey("item.id"), nullable=True)
     quantity = db.Column(db.Float, nullable=False)
+    unit_cost = db.Column(db.Float, nullable=True)
     product = relationship("Product")
     unit = relationship("ItemUnit")
     item = relationship("Item")
@@ -715,6 +716,7 @@ class PurchaseOrderItemArchive(db.Model):
     item_id = db.Column(db.Integer, nullable=False)
     unit_id = db.Column(db.Integer, nullable=True)
     quantity = db.Column(db.Float, nullable=False)
+    unit_cost = db.Column(db.Float, nullable=True)
     archived_at = db.Column(
         db.DateTime, default=datetime.utcnow, nullable=False
     )

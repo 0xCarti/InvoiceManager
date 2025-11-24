@@ -2,11 +2,28 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Create Purchase Order</h2>
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
         <div class="form-group">
             {{ form.vendor.label(class="form-label") }}
             {{ form.vendor(class="form-control narrow-field") }}
+        </div>
+        <div class="form-group">
+            {{ form.upload.label(class="form-label") }}
+            {{ form.upload(class="form-control") }}
+            <small class="form-text text-muted">Upload a vendor CSV to prefill this purchase order.</small>
+            <div class="mt-2 d-flex gap-2">
+                <button class="btn btn-outline-primary" type="submit" name="parse_csv" value="1">Upload CSV</button>
+            </div>
+            {% if parse_errors %}
+            <div class="alert alert-danger mt-2">
+                <ul class="mb-0">
+                    {% for err in parse_errors %}
+                    <li>{{ err }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
         </div>
         <div class="form-group">
             {{ form.order_date.label(class="form-label") }}
@@ -28,7 +45,8 @@
         {% set item_info = item_lookup.get(item_id|int) if item_id else None %}
         {% set selected_name = item_info['name'] if item_info else '' %}
         {% set selected_gl_code = item_info['gl_code'] if item_info else '' %}
-        {% set input_value = request.form.get('items-' ~ loop.index0 ~ '-item-label', selected_name) %}
+        {% set parsed_label = prefilled_labels.get(loop.index0) if prefilled_labels else None %}
+        {% set input_value = request.form.get('items-' ~ loop.index0 ~ '-item-label', parsed_label or selected_name) %}
         <div class="row g-2 mt-2 item-row align-items-center">
             <div class="col position-relative">
                 <input type="text" name="items-{{ loop.index0 }}-item-label" class="form-control item-search" placeholder="Search for an item" autocomplete="off" value="{{ input_value }}">
@@ -46,6 +64,7 @@
                 </div>
             </div>
             <div class="col">{{ item.quantity(class="form-control quantity") }}</div>
+            <div class="col">{{ item.cost(class="form-control cost") }}</div>
             <div class="col-auto">
                 <button type="button" class="btn btn-outline-secondary btn-sm drag-handle" aria-label="Drag to reorder" title="Drag to reorder">=</button>
             </div>
