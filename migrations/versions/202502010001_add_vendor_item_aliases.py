@@ -9,6 +9,12 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if inspector.has_table("vendor_item_alias"):
+        return
+
     op.create_table(
         "vendor_item_alias",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -53,6 +59,12 @@ def upgrade():
 
 
 def downgrade():
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if not inspector.has_table("vendor_item_alias"):
+        return
+
     op.drop_index("ix_vendor_item_alias_vendor", table_name="vendor_item_alias")
     op.drop_constraint(
         "uq_vendor_item_alias_description",
