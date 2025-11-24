@@ -42,6 +42,10 @@ from app.routes.report_routes import (
 )
 from app.utils.forecasting import DemandForecastingHelper
 from app.utils.pagination import build_pagination_args, get_per_page
+from app.services.purchase_imports import (
+    CSVImportError,
+    parse_purchase_order_csv,
+)
 
 import datetime
 import json
@@ -207,6 +211,9 @@ def view_purchase_orders():
 def create_purchase_order():
     """Create a purchase order."""
     form = PurchaseOrderForm()
+    parse_errors = []
+    prefilled_labels = {}
+    parse_requested = request.method == "POST" and request.form.get("parse_csv")
 
     if request.method == "GET":
         seed = session.pop("po_recommendation_seed", None)
@@ -243,17 +250,56 @@ def create_purchase_order():
                 form.items[idx].item.data = entry.get("item_id")
                 form.items[idx].unit.data = entry.get("unit_id")
                 form.items[idx].quantity.data = entry.get("quantity")
+                form.items[idx].cost.data = entry.get("cost")
                 form.items[idx].position.data = idx
 
     if request.method == "GET" and form.order_date.data is None:
         form.order_date.data = datetime.date.today()
     if request.method == "GET" and form.expected_date.data is None:
         form.expected_date.data = datetime.date.today() + datetime.timedelta(days=1)
-    if form.validate_on_submit():
+
+    if parse_requested:
+        vendor_id = form.vendor.data
+        vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
+        if not vendor:
+            parse_errors.append("Select a vendor before uploading a CSV file.")
+        elif not form.upload.data:
+            parse_errors.append("Attach a CSV file to import.")
+        else:
+            try:
+                parsed = parse_purchase_order_csv(form.upload.data, vendor)
+                parsed_items = parsed.items
+                form.items.min_entries = max(len(parsed_items), 1)
+                while len(form.items) < len(parsed_items):
+                    form.items.append_entry()
+                for idx, parsed_item in enumerate(parsed_items):
+                    form.items[idx].quantity.data = parsed_item.quantity
+                    form.items[idx].cost.data = parsed_item.unit_cost
+                    form.items[idx].position.data = idx
+                    prefilled_labels[idx] = parsed_item.description
+                if parsed.order_date:
+                    form.order_date.data = parsed.order_date
+                if parsed.expected_date:
+                    form.expected_date.data = parsed.expected_date
+                flash("CSV imported. Review and confirm the items below.", "success")
+            except CSVImportError as exc:
+                parse_errors.append(str(exc))
+            except Exception:
+                parse_errors.append(
+                    "Unable to parse the CSV file. Confirm the vendor export format and try again."
+                )
+
+    if form.validate_on_submit() and not parse_requested:
+        vendor_record = db.session.get(Vendor, form.vendor.data)
+        vendor_name = (
+            f"{vendor_record.first_name} {vendor_record.last_name}"
+            if vendor_record
+            else ""
+        )
         po = PurchaseOrder(
             vendor_id=form.vendor.data,
             user_id=current_user.id,
-            vendor_name=f"{db.session.get(Vendor, form.vendor.data).first_name} {db.session.get(Vendor, form.vendor.data).last_name}",
+            vendor_name=vendor_name,
             order_date=form.order_date.data,
             expected_date=form.expected_date.data,
             delivery_charge=form.delivery_charge.data or 0.0,
@@ -273,6 +319,7 @@ def create_purchase_order():
             item_id = request.form.get(f"items-{index}-item", type=int)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
+            unit_cost = coerce_float(request.form.get(f"items-{index}-cost"))
             position = request.form.get(f"items-{index}-position", type=int)
             if item_id and quantity is not None:
                 item_entries.append(
@@ -280,6 +327,7 @@ def create_purchase_order():
                         "item_id": item_id,
                         "unit_id": unit_id,
                         "quantity": quantity,
+                        "unit_cost": unit_cost,
                         "position": position,
                         "fallback": fallback_counter,
                     }
@@ -302,6 +350,7 @@ def create_purchase_order():
                     item_id=entry["item_id"],
                     unit_id=entry["unit_id"],
                     quantity=entry["quantity"],
+                    unit_cost=entry["unit_cost"],
                     position=order_index,
                 )
             )
@@ -338,6 +387,8 @@ def create_purchase_order():
         form=form,
         gl_codes=codes,
         item_lookup=item_lookup,
+        parse_errors=parse_errors,
+        prefilled_labels=prefilled_labels,
     )
 
 
@@ -508,7 +559,12 @@ def edit_purchase_order(po_id):
     form = PurchaseOrderForm()
     if form.validate_on_submit():
         po.vendor_id = form.vendor.data
-        po.vendor_name = f"{db.session.get(Vendor, form.vendor.data).first_name} {db.session.get(Vendor, form.vendor.data).last_name}"
+        vendor_record = db.session.get(Vendor, form.vendor.data)
+        po.vendor_name = (
+            f"{vendor_record.first_name} {vendor_record.last_name}"
+            if vendor_record
+            else ""
+        )
         po.order_date = form.order_date.data
         po.expected_date = form.expected_date.data
         po.delivery_charge = form.delivery_charge.data or 0.0
@@ -527,6 +583,7 @@ def edit_purchase_order(po_id):
             item_id = request.form.get(f"items-{index}-item", type=int)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
+            unit_cost = coerce_float(request.form.get(f"items-{index}-cost"))
             position = request.form.get(f"items-{index}-position", type=int)
             if item_id and quantity is not None:
                 item_entries.append(
@@ -534,6 +591,7 @@ def edit_purchase_order(po_id):
                         "item_id": item_id,
                         "unit_id": unit_id,
                         "quantity": quantity,
+                        "unit_cost": unit_cost,
                         "position": position,
                         "fallback": fallback_counter,
                     }
@@ -556,6 +614,7 @@ def edit_purchase_order(po_id):
                     item_id=entry["item_id"],
                     unit_id=entry["unit_id"],
                     quantity=entry["quantity"],
+                    unit_cost=entry["unit_cost"],
                     position=order_index,
                 )
             )
@@ -578,6 +637,7 @@ def edit_purchase_order(po_id):
             form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
+            form.items[i].cost.data = poi.unit_cost
             form.items[i].position.data = poi.position
 
     selected_item_ids = []
@@ -659,7 +719,7 @@ def receive_invoice(po_id):
                     "quantity": poi.quantity,
                     "position": poi.position,
                     "gl_code_id": None,
-                    "cost": None,
+                    "cost": poi.unit_cost,
                     "location_id": None,
                 }
                 for poi in po.items
@@ -750,6 +810,7 @@ def receive_invoice(po_id):
                         item_id=poi.item_id,
                         unit_id=poi.unit_id,
                         quantity=poi.quantity,
+                        unit_cost=poi.unit_cost,
                     )
                 )
             db.session.commit()

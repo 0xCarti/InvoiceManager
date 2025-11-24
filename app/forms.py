@@ -1304,6 +1304,7 @@ class POItemForm(FlaskForm):
         "Unit", coerce=int, validators=[Optional()], validate_choice=False
     )
     quantity = DecimalField("Quantity", validators=[InputRequired()])
+    cost = DecimalField("Estimated Cost", validators=[Optional()])
     position = HiddenField("Position")
 
 
@@ -1318,6 +1319,10 @@ class PurchaseOrderForm(FlaskForm):
         "Expected Delivery Date",
         validators=[DataRequired()],
         render_kw={"data-flatpickr": "1", "autocomplete": "off"},
+    )
+    upload = FileField(
+        "Vendor CSV",
+        validators=[Optional(), FileAllowed({"csv"}, "CSV only!")],
     )
     delivery_charge = DecimalField(
         "Delivery Charge", validators=[Optional()], default=0
