@@ -1,4 +1,4 @@
-"""Ensure unit cost column exists on purchase order items"
+"""Ensure unit cost column exists on purchase order items"""
 
 from alembic import op
 import sqlalchemy as sa
