@@ -5,6 +5,9 @@ function initVendorAliasResolution(config) {
     }
 
     const unitsMap = (config && config.unitsMap) || {};
+    const lineDetails = (config && Array.isArray(config.lineDetails)
+        ? config.lineDetails
+        : []);
     const rows = container.querySelectorAll('[data-role="alias-row"]');
     const csrfTokenInput = document.querySelector('input[name="csrf_token"]');
     const quickAddButtons = container.querySelectorAll('[data-role="quick-add-item"]');
@@ -70,7 +73,7 @@ function initVendorAliasResolution(config) {
         target.innerHTML = '';
     }
 
-    function syncBaseUnitRow() {
+    function syncBaseUnitRow(force = false) {
         if (!newItemUnitsContainer) {
             return;
         }
@@ -81,9 +84,37 @@ function initVendorAliasResolution(config) {
             return;
         }
         const nameInput = baseRow.querySelector('.new-item-unit-name');
-        if (nameInput && baseUnitSelect) {
+        if (nameInput && baseUnitSelect && (force || !nameInput.value)) {
             nameInput.value = baseUnitSelect.value || '';
         }
+    }
+
+    function parsePackSizeText(packSizeText) {
+        if (!packSizeText || typeof packSizeText !== 'string') {
+            return { packCount: null, sizeText: '' };
+        }
+        const normalized = packSizeText.trim();
+        if (!normalized) {
+            return { packCount: null, sizeText: '' };
+        }
+
+        const splitMatch = normalized.match(/^(\d+)\s*[\/x]\s*(.+)$/i);
+        if (splitMatch) {
+            return {
+                packCount: parseInt(splitMatch[1], 10) || null,
+                sizeText: splitMatch[2].trim(),
+            };
+        }
+
+        const leadingNumber = normalized.match(/^(\d+)\s+(.+)$/);
+        if (leadingNumber) {
+            return {
+                packCount: parseInt(leadingNumber[1], 10) || null,
+                sizeText: leadingNumber[2].trim(),
+            };
+        }
+
+        return { packCount: null, sizeText: normalized };
     }
 
     function ensureUnitDefaults() {
@@ -239,13 +270,14 @@ function initVendorAliasResolution(config) {
         return row;
     }
 
-    function resetNewItemUnitRows() {
+    function resetNewItemUnitRows(options = {}) {
         if (!newItemUnitsContainer) {
             return;
         }
         newItemUnitsContainer.innerHTML = '';
         newItemUnitIndex = 0;
-        const baseName = baseUnitSelect ? baseUnitSelect.value || '' : '';
+        const baseName =
+            options.baseName || (baseUnitSelect ? baseUnitSelect.value || '' : 'Each');
         appendNewItemUnitRow({
             name: baseName,
             factor: 1,
@@ -253,11 +285,52 @@ function initVendorAliasResolution(config) {
             transferDefault: true,
             isBase: true,
         });
+
+        if (options.caseFactor && Number(options.caseFactor) > 1) {
+            appendNewItemUnitRow({
+                name: options.caseName || 'Case',
+                factor: Number(options.caseFactor),
+                receivingDefault: false,
+                transferDefault: false,
+            });
+        }
+
         syncBaseUnitRow();
         ensureUnitDefaults();
     }
 
     resetNewItemUnitRows();
+
+    function getRowPackSize(row) {
+        if (!row) {
+            return '';
+        }
+        const dataValue = row.getAttribute('data-pack-size');
+        if (dataValue) {
+            return dataValue;
+        }
+        const lineIndex = row.getAttribute('data-line-index');
+        if (
+            lineIndex !== null &&
+            lineIndex !== undefined &&
+            lineDetails[lineIndex] &&
+            lineDetails[lineIndex].pack_size
+        ) {
+            return lineDetails[lineIndex].pack_size;
+        }
+        return '';
+    }
+
+    function seedUnitsFromPackSize(row) {
+        const packSizeText = getRowPackSize(row);
+        const { packCount, sizeText } = parsePackSizeText(packSizeText);
+        const baseName = sizeText || 'Each';
+        const caseFactor = packCount && packCount > 1 ? packCount : null;
+        resetNewItemUnitRows({
+            baseName,
+            caseFactor,
+        });
+    }
 
     function populateUnits(select, itemId, preferredUnitId) {
         if (!select) {
@@ -436,7 +509,7 @@ function initVendorAliasResolution(config) {
         button.addEventListener('click', (event) => {
             event.preventDefault();
             activeRow = button.closest('[data-role="alias-row"]');
-            resetNewItemUnitRows();
+            seedUnitsFromPackSize(activeRow);
             clearValidationMessage();
             if (newItemNameInput) {
                 newItemNameInput.focus();
@@ -454,7 +527,7 @@ function initVendorAliasResolution(config) {
 
     if (baseUnitSelect) {
         baseUnitSelect.addEventListener('change', () => {
-            syncBaseUnitRow();
+            syncBaseUnitRow(true);
             ensureUnitDefaults();
         });
     }

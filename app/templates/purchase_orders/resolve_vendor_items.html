@@ -49,7 +49,11 @@
                 <tbody>
                     {% for row in form.rows %}
                         {% set parsed = unresolved_lines[loop.index0] if unresolved_lines|length > loop.index0 else None %}
-                        <tr data-role="alias-row">
+                        <tr
+                            data-role="alias-row"
+                            data-line-index="{{ loop.index0 }}"
+                            data-pack-size="{{ parsed.pack_size if parsed else '' }}"
+                        >
                             <td>
                                 {{ parsed.vendor_sku if parsed else '' }}
                                 {{ row.vendor_sku }}
@@ -100,7 +104,8 @@
     document.addEventListener('DOMContentLoaded', function() {
         initVendorAliasResolution({
             container: document.getElementById('alias-resolution'),
-            unitsMap: {{ units_map|tojson }}
+            unitsMap: {{ units_map|tojson }},
+            lineDetails: {{ unresolved_lines|tojson }}
         });
     });
 </script>
