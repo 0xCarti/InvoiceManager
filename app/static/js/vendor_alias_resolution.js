@@ -6,13 +6,219 @@ function initVendorAliasResolution(config) {
 
     const unitsMap = (config && config.unitsMap) || {};
     const rows = container.querySelectorAll('[data-role="alias-row"]');
+    const csrfTokenInput = document.querySelector('input[name="csrf_token"]');
+    const quickAddButtons = container.querySelectorAll('[data-role="quick-add-item"]');
+    const newItemModalEl = document.getElementById('newItemModal');
+    const saveNewItemButton = document.getElementById('save-new-item');
+    const addNewItemUnitButton = document.getElementById('add-new-item-unit');
+    const newItemUnitsContainer = document.getElementById('new-item-units');
+    const baseUnitSelect = document.getElementById('new-item-base-unit');
+    const newItemNameInput = document.getElementById('new-item-name');
+    let activeRow = null;
+    let newItemUnitIndex = 0;
+    let newItemModal = null;
 
-    function populateUnits(select, itemId) {
+    if (newItemModalEl && typeof bootstrap !== 'undefined') {
+        newItemModal =
+            bootstrap.Modal.getInstance(newItemModalEl) ||
+            new bootstrap.Modal(newItemModalEl);
+    }
+
+    function syncBaseUnitRow() {
+        if (!newItemUnitsContainer) {
+            return;
+        }
+        const baseRow = newItemUnitsContainer.querySelector(
+            '.new-item-unit-row[data-base="true"]'
+        );
+        if (!baseRow) {
+            return;
+        }
+        const nameInput = baseRow.querySelector('.new-item-unit-name');
+        if (nameInput && baseUnitSelect) {
+            nameInput.value = baseUnitSelect.value || '';
+        }
+    }
+
+    function ensureUnitDefaults() {
+        if (!newItemUnitsContainer) {
+            return;
+        }
+        const receivingChecked = newItemUnitsContainer.querySelector(
+            '.new-item-unit-receiving:checked'
+        );
+        if (!receivingChecked) {
+            const fallback = newItemUnitsContainer.querySelector(
+                '.new-item-unit-row[data-base="true"] .new-item-unit-receiving'
+            );
+            if (fallback) {
+                fallback.checked = true;
+            }
+        }
+
+        const transferChecked = newItemUnitsContainer.querySelector(
+            '.new-item-unit-transfer:checked'
+        );
+        if (!transferChecked) {
+            const fallback = newItemUnitsContainer.querySelector(
+                '.new-item-unit-row[data-base="true"] .new-item-unit-transfer'
+            );
+            if (fallback) {
+                fallback.checked = true;
+            }
+        }
+    }
+
+    function createNewItemUnitRow(options = {}) {
+        const index = newItemUnitIndex++;
+        const isBase = Boolean(options.isBase);
+        const row = document.createElement('div');
+        row.classList.add('row', 'g-2', 'align-items-end', 'new-item-unit-row');
+        row.dataset.base = isBase ? 'true' : 'false';
+
+        const nameCol = document.createElement('div');
+        nameCol.classList.add('col-12', 'col-md-4');
+        const nameLabel = document.createElement('label');
+        nameLabel.classList.add('form-label');
+        const nameId = `new-item-unit-${index}-name`;
+        nameLabel.setAttribute('for', nameId);
+        nameLabel.textContent = isBase ? 'Base Unit' : 'Unit Name';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.classList.add('form-control', 'new-item-unit-name');
+        nameInput.id = nameId;
+        nameInput.value = options.name || '';
+        if (isBase) {
+            nameInput.readOnly = true;
+        } else {
+            nameInput.placeholder = 'e.g. Case';
+        }
+        nameCol.append(nameLabel, nameInput);
+        row.appendChild(nameCol);
+
+        const factorCol = document.createElement('div');
+        factorCol.classList.add('col-12', 'col-md-3');
+        const factorLabel = document.createElement('label');
+        factorLabel.classList.add('form-label');
+        const factorId = `new-item-unit-${index}-factor`;
+        factorLabel.setAttribute('for', factorId);
+        factorLabel.textContent = 'Ratio to Base Unit';
+        const factorInput = document.createElement('input');
+        factorInput.type = 'number';
+        factorInput.classList.add('form-control', 'new-item-unit-factor');
+        factorInput.id = factorId;
+        factorInput.step = 'any';
+        factorInput.min = '0';
+        factorInput.value =
+            options.factor !== undefined && options.factor !== null
+                ? options.factor
+                : 1;
+        if (isBase) {
+            factorInput.readOnly = true;
+            factorInput.value = 1;
+        }
+        factorCol.append(factorLabel, factorInput);
+        row.appendChild(factorCol);
+
+        const receivingCol = document.createElement('div');
+        receivingCol.classList.add('col-6', 'col-md-2', 'd-flex', 'align-items-center');
+        const receivingWrapper = document.createElement('div');
+        receivingWrapper.classList.add('form-check');
+        const receivingId = `new-item-unit-${index}-receiving`;
+        const receivingInput = document.createElement('input');
+        receivingInput.type = 'radio';
+        receivingInput.classList.add('form-check-input', 'new-item-unit-receiving');
+        receivingInput.name = 'new-item-receiving-default';
+        receivingInput.id = receivingId;
+        if (options.receivingDefault) {
+            receivingInput.checked = true;
+        }
+        const receivingLabel = document.createElement('label');
+        receivingLabel.classList.add('form-check-label');
+        receivingLabel.setAttribute('for', receivingId);
+        receivingLabel.textContent = 'Receiving Default';
+        receivingWrapper.append(receivingInput, receivingLabel);
+        receivingCol.appendChild(receivingWrapper);
+        row.appendChild(receivingCol);
+
+        const transferCol = document.createElement('div');
+        transferCol.classList.add('col-6', 'col-md-2', 'd-flex', 'align-items-center');
+        const transferWrapper = document.createElement('div');
+        transferWrapper.classList.add('form-check');
+        const transferId = `new-item-unit-${index}-transfer`;
+        const transferInput = document.createElement('input');
+        transferInput.type = 'radio';
+        transferInput.classList.add('form-check-input', 'new-item-unit-transfer');
+        transferInput.name = 'new-item-transfer-default';
+        transferInput.id = transferId;
+        if (options.transferDefault) {
+            transferInput.checked = true;
+        }
+        const transferLabel = document.createElement('label');
+        transferLabel.classList.add('form-check-label');
+        transferLabel.setAttribute('for', transferId);
+        transferLabel.textContent = 'Transfer Default';
+        transferWrapper.append(transferInput, transferLabel);
+        transferCol.appendChild(transferWrapper);
+        row.appendChild(transferCol);
+
+        if (!isBase) {
+            const removeCol = document.createElement('div');
+            removeCol.classList.add('col-12', 'col-md-1', 'd-flex', 'align-items-center');
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.classList.add(
+                'btn',
+                'btn-outline-danger',
+                'btn-sm',
+                'w-100',
+                'new-item-unit-remove'
+            );
+            removeButton.textContent = 'Remove';
+            removeButton.setAttribute('aria-label', 'Remove unit');
+            removeCol.appendChild(removeButton);
+            row.appendChild(removeCol);
+        }
+
+        return row;
+    }
+
+    function appendNewItemUnitRow(options = {}) {
+        if (!newItemUnitsContainer) {
+            return null;
+        }
+        const row = createNewItemUnitRow(options);
+        newItemUnitsContainer.appendChild(row);
+        ensureUnitDefaults();
+        return row;
+    }
+
+    function resetNewItemUnitRows() {
+        if (!newItemUnitsContainer) {
+            return;
+        }
+        newItemUnitsContainer.innerHTML = '';
+        newItemUnitIndex = 0;
+        const baseName = baseUnitSelect ? baseUnitSelect.value || '' : '';
+        appendNewItemUnitRow({
+            name: baseName,
+            factor: 1,
+            receivingDefault: true,
+            transferDefault: true,
+            isBase: true,
+        });
+        syncBaseUnitRow();
+        ensureUnitDefaults();
+    }
+
+    resetNewItemUnitRows();
+
+    function populateUnits(select, itemId, preferredUnitId) {
         if (!select) {
             return;
         }
         const units = unitsMap[itemId] || [];
-        const selected = select.getAttribute('data-selected');
+        const selected = preferredUnitId || select.getAttribute('data-selected');
         const currentValue = select.value;
         select.innerHTML = '';
         const placeholder = document.createElement('option');
@@ -23,11 +229,148 @@ function initVendorAliasResolution(config) {
             const opt = document.createElement('option');
             opt.value = unit.id;
             opt.textContent = unit.name;
-            if (String(unit.id) === String(selected) || String(unit.id) === String(currentValue)) {
+            if (
+                String(unit.id) === String(selected) ||
+                String(unit.id) === String(currentValue) ||
+                (!selected && unit.receiving_default)
+            ) {
                 opt.selected = true;
             }
             select.appendChild(opt);
         });
+    }
+
+    function buildUnitsPayload(baseUnit) {
+        if (!newItemUnitsContainer) {
+            return {
+                unitsPayload: [],
+                hasInvalidUnits: true,
+                hasReceivingDefault: false,
+                hasTransferDefault: false,
+            };
+        }
+        const unitRows = Array.from(
+            newItemUnitsContainer.querySelectorAll('.new-item-unit-row')
+        );
+        const unitsPayload = [];
+        let hasInvalidUnits = false;
+        let hasReceivingDefault = false;
+        let hasTransferDefault = false;
+
+        unitRows.forEach((row) => {
+            const nameField = row.querySelector('.new-item-unit-name');
+            const factorField = row.querySelector('.new-item-unit-factor');
+            const receivingField = row.querySelector('.new-item-unit-receiving');
+            const transferField = row.querySelector('.new-item-unit-transfer');
+
+            let unitName = nameField ? nameField.value.trim() : '';
+            const factorValue = factorField ? parseFloat(factorField.value) : NaN;
+
+            if (row.dataset.base === 'true') {
+                if (baseUnit) {
+                    unitName = baseUnit;
+                }
+            }
+
+            const receivingDefault = receivingField ? receivingField.checked : false;
+            const transferDefault = transferField ? transferField.checked : false;
+
+            if (!unitName || !Number.isFinite(factorValue) || factorValue <= 0) {
+                hasInvalidUnits = true;
+                return;
+            }
+
+            if (receivingDefault) {
+                hasReceivingDefault = true;
+            }
+            if (transferDefault) {
+                hasTransferDefault = true;
+            }
+
+            unitsPayload.push({
+                name: unitName,
+                factor: row.dataset.base === 'true' ? 1 : factorValue,
+                receiving_default: receivingDefault,
+                transfer_default: transferDefault,
+            });
+        });
+
+        return {
+            unitsPayload,
+            hasInvalidUnits,
+            hasReceivingDefault,
+            hasTransferDefault,
+        };
+    }
+
+    function upsertItemOption(select, itemId, itemName) {
+        if (!select) {
+            return;
+        }
+        const optionValue = String(itemId);
+        const existingOption = Array.from(select.options).find(
+            (opt) => opt.value === optionValue
+        );
+        if (existingOption) {
+            existingOption.textContent = itemName;
+            return;
+        }
+        const option = document.createElement('option');
+        option.value = optionValue;
+        option.textContent = itemName;
+        select.appendChild(option);
+    }
+
+    function updateUnitsMap(itemId, unitsPayload) {
+        unitsMap[itemId] = Array.isArray(unitsPayload)
+            ? unitsPayload.map((unit) => ({
+                  id: unit.id,
+                  name: unit.name,
+                  receiving_default: unit.receiving_default,
+              }))
+            : [];
+    }
+
+    function handleNewItemSuccess(itemData, unitsData) {
+        if (!itemData || !itemData.id) {
+            return;
+        }
+
+        const unitsList = unitsData && Array.isArray(unitsData.units)
+            ? unitsData.units
+            : [];
+        const preferredUnit = unitsList.find((unit) => unit.receiving_default) || unitsList[0] || null;
+
+        updateUnitsMap(itemData.id, unitsList);
+
+        rows.forEach((row) => {
+            const itemSelect = row.querySelector('[data-role="alias-item-select"]');
+            upsertItemOption(itemSelect, itemData.id, itemData.name);
+        });
+
+        if (activeRow) {
+            const itemSelect = activeRow.querySelector('[data-role="alias-item-select"]');
+            const unitSelect = activeRow.querySelector('[data-role="alias-unit-select"]');
+            if (itemSelect) {
+                itemSelect.value = String(itemData.id);
+            }
+            if (unitSelect) {
+                const preferredId = preferredUnit ? preferredUnit.id : null;
+                if (preferredId) {
+                    unitSelect.setAttribute('data-selected', preferredId);
+                }
+                populateUnits(unitSelect, itemData.id, preferredUnit ? preferredUnit.id : null);
+            }
+        }
+
+        if (newItemNameInput) {
+            newItemNameInput.value = '';
+        }
+        resetNewItemUnitRows();
+        if (newItemModal) {
+            newItemModal.hide();
+        }
+        activeRow = null;
     }
 
     rows.forEach((row) => {
@@ -41,4 +384,137 @@ function initVendorAliasResolution(config) {
         });
         populateUnits(unitSelect, itemSelect.value);
     });
+
+    quickAddButtons.forEach((button) => {
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            activeRow = button.closest('[data-role="alias-row"]');
+            resetNewItemUnitRows();
+            if (newItemNameInput) {
+                newItemNameInput.focus();
+                newItemNameInput.value = '';
+            }
+            if (newItemModal) {
+                newItemModal.show();
+            }
+        });
+    });
+
+    if (baseUnitSelect) {
+        baseUnitSelect.addEventListener('change', () => {
+            syncBaseUnitRow();
+            ensureUnitDefaults();
+        });
+    }
+
+    if (addNewItemUnitButton) {
+        addNewItemUnitButton.addEventListener('click', () => {
+            const row = appendNewItemUnitRow({
+                name: '',
+                factor: 1,
+                receivingDefault: false,
+                transferDefault: false,
+            });
+            if (row) {
+                const nameInput = row.querySelector('.new-item-unit-name');
+                if (nameInput && !nameInput.readOnly) {
+                    nameInput.focus();
+                }
+            }
+        });
+    }
+
+    if (newItemUnitsContainer) {
+        newItemUnitsContainer.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+            const removeButton = target.closest('.new-item-unit-remove');
+            if (!removeButton) {
+                return;
+            }
+            const row = removeButton.closest('.new-item-unit-row');
+            if (row && row.dataset.base !== 'true') {
+                row.remove();
+                ensureUnitDefaults();
+            }
+        });
+    }
+
+    if (saveNewItemButton) {
+        saveNewItemButton.addEventListener('click', () => {
+            const glCodeSelect = document.getElementById('new-item-gl-code');
+            const name = newItemNameInput ? newItemNameInput.value.trim() : '';
+            const glCode = glCodeSelect ? glCodeSelect.value : null;
+            const baseUnit = baseUnitSelect ? baseUnitSelect.value : '';
+            const csrfToken = csrfTokenInput ? csrfTokenInput.value : null;
+
+            const {
+                unitsPayload,
+                hasInvalidUnits,
+                hasReceivingDefault,
+                hasTransferDefault,
+            } = buildUnitsPayload(baseUnit);
+
+            if (!name || !baseUnit || !glCode || !unitsPayload.length || hasInvalidUnits) {
+                return;
+            }
+
+            const baseUnitEntry = unitsPayload.find((unit) => unit.name === baseUnit);
+            if (baseUnitEntry) {
+                if (!hasReceivingDefault) {
+                    baseUnitEntry.receiving_default = true;
+                }
+                if (!hasTransferDefault) {
+                    baseUnitEntry.transfer_default = true;
+                }
+            }
+
+            if (!hasReceivingDefault || !hasTransferDefault) {
+                return;
+            }
+
+            fetch('/items/quick_add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken || '',
+                },
+                body: JSON.stringify({
+                    name,
+                    purchase_gl_code: glCode,
+                    base_unit: baseUnit,
+                    units: unitsPayload,
+                }),
+            })
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error('Unable to create item');
+                    }
+                    return response.json();
+                })
+                .then((data) => {
+                    if (!data || !data.id) {
+                        return;
+                    }
+                    return fetch(`/items/${data.id}/units`)
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error('Failed to load units');
+                            }
+                            return response.json();
+                        })
+                        .then((unitsData) => {
+                            handleNewItemSuccess(data, unitsData);
+                        })
+                        .catch(() => {
+                            handleNewItemSuccess(data, { units: [] });
+                        });
+                })
+                .catch(() => {
+                    /* Silent failure keeps UI responsive */
+                });
+        });
+    }
 }

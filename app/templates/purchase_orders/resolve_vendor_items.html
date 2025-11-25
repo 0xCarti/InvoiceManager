@@ -32,11 +32,11 @@
     <form method="post">
         {{ form.hidden_tag() }}
         <input type="hidden" name="step" value="resolve_vendor_aliases">
-        <div class="table-responsive mb-3">
-            <table class="table table-striped align-middle">
-                <thead>
-                    <tr>
-                        <th scope="col">Vendor SKU</th>
+    <div class="table-responsive mb-3">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Vendor SKU</th>
                         <th scope="col">Description</th>
                         <th scope="col">Pack/Size</th>
                         <th scope="col">Qty</th>
@@ -69,7 +69,10 @@
                                 {{ row.unit_cost }}
                             </td>
                             <td>
-                                {{ row.item_id(class="form-select", **{'data-role': 'alias-item-select'}) }}
+                                <div class="d-flex align-items-start gap-2">
+                                    {{ row.item_id(class="form-select", **{'data-role': 'alias-item-select'}) }}
+                                    <button type="button" class="btn btn-outline-primary btn-sm" data-role="quick-add-item">Create New Item</button>
+                                </div>
                             </td>
                             <td>
                                 {{ row.unit_id(class="form-select", **{'data-role': 'alias-unit-select', 'data-selected': row.unit_id.data or ''}) }}
@@ -91,6 +94,7 @@
         </div>
     </form>
 </div>
+{% include 'purchase_orders/_create_item_modal.html' %}
 <script src="{{ url_for('static', filename='js/vendor_alias_resolution.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
