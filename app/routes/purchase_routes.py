@@ -350,6 +350,7 @@ def create_purchase_order():
             resolution_form.rows.append_entry()
 
         item_choices, units_map = _prepare_units_map()
+        codes = _purchase_gl_code_choices()
         for idx, parsed_line in enumerate(unresolved_lines):
             row = resolution_form.rows[idx]
             row.vendor_sku.data = parsed_line.vendor_sku or ""
@@ -409,6 +410,7 @@ def create_purchase_order():
                 vendor=vendor,
                 unresolved_lines=unresolved_lines,
                 units_map=units_map,
+                gl_codes=codes,
             )
 
     if parse_requested:
@@ -431,6 +433,7 @@ def create_purchase_order():
                 if unresolved_lines:
                     resolution_form = VendorItemAliasResolutionForm()
                     item_choices, units_map = _prepare_units_map()
+                    codes = _purchase_gl_code_choices()
                     parsed_payload = [
                         serialize_parsed_line(line) for line in parsed.items
                     ]
@@ -478,6 +481,7 @@ def create_purchase_order():
                         vendor=vendor,
                         unresolved_lines=[line.parsed_line for line in unresolved_lines],
                         units_map=units_map,
+                        gl_codes=codes,
                         source_filename=getattr(form.upload.data, "filename", None),
                     )
 
