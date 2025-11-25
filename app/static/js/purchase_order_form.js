@@ -792,18 +792,6 @@
             dragButton.textContent = "=";
             reorderCol.appendChild(dragButton);
 
-            const costCol = document.createElement("div");
-            costCol.classList.add("col");
-            const costInput = document.createElement("input");
-            costInput.type = "number";
-            costInput.name = `items-${index}-cost`;
-            costInput.classList.add("form-control", "cost");
-            costInput.step = "any";
-            if (options.cost !== undefined && options.cost !== null) {
-                costInput.value = options.cost;
-            }
-            costCol.appendChild(costInput);
-
             const removeCol = document.createElement("div");
             removeCol.classList.add("col-auto");
             const removeButton = document.createElement("button");
@@ -817,7 +805,6 @@
                 glCodeCol,
                 unitCol,
                 quantityCol,
-                costCol,
                 reorderCol,
                 removeCol
             );

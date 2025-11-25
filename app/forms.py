@@ -1304,7 +1304,6 @@ class POItemForm(FlaskForm):
         "Unit", coerce=int, validators=[Optional()], validate_choice=False
     )
     quantity = DecimalField("Quantity", validators=[InputRequired()])
-    cost = DecimalField("Estimated Cost", validators=[Optional()])
     position = HiddenField("Position")
 
 

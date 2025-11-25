@@ -232,7 +232,6 @@ def create_purchase_order():
         for idx, resolved in enumerate(resolved_lines):
             parsed_line = resolved.parsed_line
             form.items[idx].quantity.data = parsed_line.quantity
-            form.items[idx].cost.data = resolved.cost
             form.items[idx].position.data = idx
             if resolved.item_id:
                 form.items[idx].item.data = resolved.item_id
@@ -292,7 +291,6 @@ def create_purchase_order():
                 form.items[idx].item.data = entry.get("item_id")
                 form.items[idx].unit.data = entry.get("unit_id")
                 form.items[idx].quantity.data = entry.get("quantity")
-                form.items[idx].cost.data = entry.get("cost")
                 form.items[idx].position.data = idx
 
     if request.method == "GET" and form.order_date.data is None:
@@ -528,7 +526,6 @@ def create_purchase_order():
             item_id = request.form.get(f"items-{index}-item", type=int)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
-            unit_cost = coerce_float(request.form.get(f"items-{index}-cost"))
             position = request.form.get(f"items-{index}-position", type=int)
             if item_id and quantity is not None:
                 item_entries.append(
@@ -536,7 +533,6 @@ def create_purchase_order():
                         "item_id": item_id,
                         "unit_id": unit_id,
                         "quantity": quantity,
-                        "unit_cost": unit_cost,
                         "position": position,
                         "fallback": fallback_counter,
                     }
@@ -559,7 +555,7 @@ def create_purchase_order():
                     item_id=entry["item_id"],
                     unit_id=entry["unit_id"],
                     quantity=entry["quantity"],
-                    unit_cost=entry["unit_cost"],
+                    unit_cost=None,
                     position=order_index,
                 )
             )
@@ -767,6 +763,11 @@ def edit_purchase_order(po_id):
         abort(404)
     form = PurchaseOrderForm()
     if form.validate_on_submit():
+        existing_unit_costs = {}
+        for poi in po.items:
+            key = (poi.item_id, poi.unit_id)
+            existing_unit_costs.setdefault(key, []).append(poi.unit_cost)
+
         po.vendor_id = form.vendor.data
         vendor_record = db.session.get(Vendor, form.vendor.data)
         po.vendor_name = (
@@ -792,8 +793,11 @@ def edit_purchase_order(po_id):
             item_id = request.form.get(f"items-{index}-item", type=int)
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
-            unit_cost = coerce_float(request.form.get(f"items-{index}-cost"))
             position = request.form.get(f"items-{index}-position", type=int)
+            unit_cost = None
+            key = (item_id, unit_id)
+            if key in existing_unit_costs and existing_unit_costs[key]:
+                unit_cost = existing_unit_costs[key].pop(0)
             if item_id and quantity is not None:
                 item_entries.append(
                     {
@@ -823,7 +827,7 @@ def edit_purchase_order(po_id):
                     item_id=entry["item_id"],
                     unit_id=entry["unit_id"],
                     quantity=entry["quantity"],
-                    unit_cost=entry["unit_cost"],
+                    unit_cost=entry.get("unit_cost"),
                     position=order_index,
                 )
             )
@@ -846,7 +850,6 @@ def edit_purchase_order(po_id):
             form.items[i].item.data = poi.item_id
             form.items[i].unit.data = poi.unit_id
             form.items[i].quantity.data = poi.quantity
-            form.items[i].cost.data = poi.unit_cost
             form.items[i].position.data = poi.position
 
     selected_item_ids = []
