@@ -19,6 +19,12 @@ function initVendorAliasResolution(config) {
     let newItemUnitIndex = 0;
     let newItemModal = null;
 
+    if (newItemModalEl && typeof bootstrap !== 'undefined') {
+        newItemModal =
+            bootstrap.Modal.getInstance(newItemModalEl) ||
+            new bootstrap.Modal(newItemModalEl);
+    }
+
     function getValidationMessageElement() {
         if (validationMessageEl) {
             return validationMessageEl;
@@ -435,19 +441,6 @@ function initVendorAliasResolution(config) {
             if (newItemNameInput) {
                 newItemNameInput.focus();
                 newItemNameInput.value = '';
-            }
-            if (!newItemModal) {
-                if (
-                    !newItemModalEl ||
-                    typeof bootstrap === 'undefined' ||
-                    typeof bootstrap.Modal === 'undefined'
-                ) {
-                    window.alert(
-                        'Unable to open the new item modal. Please try reloading the page.'
-                    );
-                    return;
-                }
-                newItemModal = bootstrap.Modal.getOrCreateInstance(newItemModalEl);
             }
             if (!newItemModal) {
                 window.alert(
