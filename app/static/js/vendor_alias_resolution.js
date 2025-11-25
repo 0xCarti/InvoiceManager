@@ -14,6 +14,7 @@ function initVendorAliasResolution(config) {
     const newItemUnitsContainer = document.getElementById('new-item-units');
     const baseUnitSelect = document.getElementById('new-item-base-unit');
     const newItemNameInput = document.getElementById('new-item-name');
+    let validationMessageEl = null;
     let activeRow = null;
     let newItemUnitIndex = 0;
     let newItemModal = null;
@@ -22,6 +23,51 @@ function initVendorAliasResolution(config) {
         newItemModal =
             bootstrap.Modal.getInstance(newItemModalEl) ||
             new bootstrap.Modal(newItemModalEl);
+    }
+
+    function getValidationMessageElement() {
+        if (validationMessageEl) {
+            return validationMessageEl;
+        }
+        if (!newItemModalEl) {
+            return null;
+        }
+        const modalBody = newItemModalEl.querySelector('.modal-body');
+        if (!modalBody) {
+            return null;
+        }
+        const alert = document.createElement('div');
+        alert.classList.add('alert', 'alert-danger', 'mt-2');
+        alert.setAttribute('role', 'alert');
+        alert.classList.add('d-none');
+        modalBody.appendChild(alert);
+        validationMessageEl = alert;
+        return validationMessageEl;
+    }
+
+    function showValidationMessage(messages) {
+        const target = getValidationMessageElement();
+        if (!target) {
+            window.alert(Array.isArray(messages) ? messages.join(' ') : messages);
+            return;
+        }
+        const messageList = Array.isArray(messages) ? messages : [messages];
+        target.innerHTML = '';
+        messageList.forEach((message) => {
+            const line = document.createElement('div');
+            line.textContent = message;
+            target.appendChild(line);
+        });
+        target.classList.remove('d-none');
+    }
+
+    function clearValidationMessage() {
+        const target = getValidationMessageElement();
+        if (!target) {
+            return;
+        }
+        target.classList.add('d-none');
+        target.innerHTML = '';
     }
 
     function syncBaseUnitRow() {
@@ -367,6 +413,7 @@ function initVendorAliasResolution(config) {
             newItemNameInput.value = '';
         }
         resetNewItemUnitRows();
+        clearValidationMessage();
         if (newItemModal) {
             newItemModal.hide();
         }
@@ -390,6 +437,7 @@ function initVendorAliasResolution(config) {
             event.preventDefault();
             activeRow = button.closest('[data-role="alias-row"]');
             resetNewItemUnitRows();
+            clearValidationMessage();
             if (newItemNameInput) {
                 newItemNameInput.focus();
                 newItemNameInput.value = '';
@@ -457,23 +505,33 @@ function initVendorAliasResolution(config) {
                 hasTransferDefault,
             } = buildUnitsPayload(baseUnit);
 
-            if (!name || !baseUnit || !glCode || !unitsPayload.length || hasInvalidUnits) {
-                return;
+            const validationErrors = [];
+            if (!name) {
+                validationErrors.push('Item name is required.');
             }
-
-            const baseUnitEntry = unitsPayload.find((unit) => unit.name === baseUnit);
-            if (baseUnitEntry) {
-                if (!hasReceivingDefault) {
-                    baseUnitEntry.receiving_default = true;
-                }
-                if (!hasTransferDefault) {
-                    baseUnitEntry.transfer_default = true;
-                }
+            if (!glCode) {
+                validationErrors.push('Purchase GL Code is required.');
             }
-
+            if (!baseUnit) {
+                validationErrors.push('Base unit selection is required.');
+            }
+            if (!unitsPayload.length || hasInvalidUnits) {
+                validationErrors.push(
+                    'Add at least one valid unit with a ratio greater than zero.'
+                );
+            }
             if (!hasReceivingDefault || !hasTransferDefault) {
+                validationErrors.push(
+                    'Please select both a receiving default and a transfer default.'
+                );
+            }
+
+            if (validationErrors.length) {
+                showValidationMessage(validationErrors);
                 return;
             }
+
+            clearValidationMessage();
 
             fetch('/items/quick_add', {
                 method: 'POST',
@@ -496,7 +554,7 @@ function initVendorAliasResolution(config) {
                 })
                 .then((data) => {
                     if (!data || !data.id) {
-                        return;
+                        throw new Error('Invalid response while creating item');
                     }
                     return fetch(`/items/${data.id}/units`)
                         .then((response) => {
@@ -508,12 +566,17 @@ function initVendorAliasResolution(config) {
                         .then((unitsData) => {
                             handleNewItemSuccess(data, unitsData);
                         })
-                        .catch(() => {
+                        .catch((error) => {
+                            console.error('Error fetching units for new item', error);
                             handleNewItemSuccess(data, { units: [] });
                         });
                 })
-                .catch(() => {
-                    /* Silent failure keeps UI responsive */
+                .catch((error) => {
+                    console.error('Error creating new item from alias mapping', error);
+                    showValidationMessage(
+                        'Unable to create item right now. Please check the form and try again.'
+                    );
+                    window.alert('Unable to create item. Please try again.');
                 });
         });
     }
