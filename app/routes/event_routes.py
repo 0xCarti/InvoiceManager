@@ -3981,9 +3981,22 @@ def upload_terminal_sales(event_id):
             elif ext == ".pdf":
                 import pdfplumber
 
-                with pdfplumber.open(filepath) as pdf:
-                    text = "\n".join(
-                        page.extract_text() or "" for page in pdf.pages
+                try:
+                    with pdfplumber.open(filepath) as pdf:
+                        text = "\n".join(
+                            page.extract_text() or "" for page in pdf.pages
+                        )
+                except Exception:
+                    current_app.logger.exception(
+                        "Failed to parse PDF file during terminal sales upload"
+                    )
+                    flash(
+                        "The uploaded PDF file could not be read. "
+                        "Please upload a valid sales export.",
+                        "danger",
+                    )
+                    return redirect(
+                        url_for("event.upload_terminal_sales", event_id=event_id)
                     )
                 current_loc = None
                 for line in text.splitlines():
