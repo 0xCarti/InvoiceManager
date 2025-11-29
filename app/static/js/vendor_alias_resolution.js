@@ -403,10 +403,11 @@ function initVendorAliasResolution(config) {
             packSizeText
         );
         const resolvedBaseUnit = baseUnit || 'each';
-        const normalizedBaseFactor =
+        const numericBaseQuantity =
             baseUnit && Number.isFinite(Number(baseQuantity)) && Number(baseQuantity) > 0
                 ? Number(baseQuantity)
-                : 1;
+                : null;
+        const normalizedBaseFactor = numericBaseQuantity || 1;
 
         if (baseUnitSelect) {
             const currentValue = baseUnitSelect.value;
@@ -418,7 +419,12 @@ function initVendorAliasResolution(config) {
         }
 
         const baseName = baseUnit ? resolvedBaseUnit : 'Each';
-        const caseFactor = packCount && packCount > 1 ? packCount : null;
+        const caseFactor =
+            packCount && packCount > 1
+                ? numericBaseQuantity
+                    ? packCount * numericBaseQuantity
+                    : packCount
+                : null;
         resetNewItemUnitRows({
             baseName,
             baseFactor: normalizedBaseFactor,
