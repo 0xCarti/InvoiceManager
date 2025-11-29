@@ -357,7 +357,6 @@ def create_purchase_order():
             row.quantity.data = str(parsed_line.quantity)
             if parsed_line.unit_cost is not None:
                 row.unit_cost.data = str(parsed_line.unit_cost)
-                row.default_cost.data = parsed_line.unit_cost
             row.item_id.choices = item_choices
             row.unit_id.choices = [(0, "—")] + [
                 (unit["id"], unit["name"]) for unit_list in units_map.values() for unit in unit_list
@@ -368,9 +367,7 @@ def create_purchase_order():
                 row = resolution_form.rows[idx]
                 item_id = row.item_id.data
                 unit_id = row.unit_id.data if row.unit_id.data else None
-                default_cost = row.default_cost.data
-                if default_cost is None:
-                    default_cost = parsed_line.unit_cost
+                default_cost = parsed_line.unit_cost
                 alias = update_or_create_vendor_alias(
                     vendor=vendor,
                     item_id=item_id,
@@ -465,7 +462,6 @@ def create_purchase_order():
                         row.quantity.data = str(parsed_line.quantity)
                         if parsed_line.unit_cost is not None:
                             row.unit_cost.data = str(parsed_line.unit_cost)
-                            row.default_cost.data = parsed_line.unit_cost
                         row.item_id.choices = item_choices
                         row.unit_id.choices = [(0, "—")] + [
                             (unit["id"], unit["name"])

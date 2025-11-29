@@ -43,7 +43,6 @@
                         <th scope="col">Unit Cost</th>
                         <th scope="col" style="width: 18rem;">Stock Item</th>
                         <th scope="col" style="width: 12rem;">Default Unit</th>
-                        <th scope="col" style="width: 10rem;">Saved Cost</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -80,12 +79,6 @@
                             </td>
                             <td>
                                 {{ row.unit_id(class="form-select", **{'data-role': 'alias-unit-select', 'data-selected': row.unit_id.data or ''}) }}
-                            </td>
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    {{ row.default_cost(class="form-control", placeholder="Optional") }}
-                                </div>
                             </td>
                         </tr>
                     {% endfor %}
