@@ -39,8 +39,8 @@
                     <th scope="col">Vendor SKU</th>
                         <th scope="col">Description</th>
                         <th scope="col">Pack/Size</th>
-                        <th scope="col">Qty</th>
-                        <th scope="col">Unit Cost</th>
+                        <th scope="col" class="text-end">Quantity Ordered</th>
+                        <th scope="col" class="text-end">Unit Cost</th>
                         <th scope="col" style="width: 18rem;">Stock Item</th>
                         <th scope="col" style="width: 12rem;">Default Unit</th>
                     </tr>
@@ -62,8 +62,8 @@
                                 {{ row.vendor_description }}
                             </td>
                             <td>{{ parsed.pack_size if parsed else '' }}{{ row.pack_size }}</td>
-                            <td>{{ parsed.quantity if parsed else '' }}{{ row.quantity }}</td>
-                            <td>
+                            <td class="text-end">{{ parsed.quantity if parsed else '' }}{{ row.quantity }}</td>
+                            <td class="text-end">
                                 {% if parsed and parsed.unit_cost is not none %}
                                     ${{ '%.2f'|format(parsed.unit_cost) }}
                                 {% else %}
