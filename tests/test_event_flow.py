@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import zlib
 from datetime import datetime, timedelta, date
 from html import unescape
 from io import BytesIO
@@ -188,6 +189,21 @@ def _build_malicious_lzw_pdf() -> bytes:
     stream = DecodedStreamObject()
     stream.set_data(b"\x00\x01invalid-lzw-data")
     stream[NameObject("/Filter")] = NameObject("/LZWDecode")
+    content_ref = writer._add_object(stream)
+    page[NameObject("/Contents")] = content_ref
+
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+def _build_malicious_flate_pdf() -> bytes:
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=200, height=200)
+
+    stream = DecodedStreamObject()
+    stream.set_data(b"\xff\xff\xffinvalid-flate")
+    stream[NameObject("/Filter")] = NameObject("/FlateDecode")
     content_ref = writer._add_object(stream)
     page[NameObject("/Contents")] = content_ref
 
@@ -859,6 +875,15 @@ def test_malicious_lzw_pdf_rejected_by_pdf_parser():
             pdf.pages[0].extract_text()
 
 
+def test_malicious_flate_pdf_rejected_by_pdf_parser():
+    import pdfplumber
+
+    malicious_pdf = _build_malicious_flate_pdf()
+
+    with pdfplumber.open(BytesIO(malicious_pdf)) as pdf:
+        assert pdf.pages[0].extract_text() == ""
+
+
 def test_upload_sales_pdf_with_inline_image(client, app):
     email, east_id, west_id, prod1_id, _prod2_id = setup_upload_env(app)
     eid = _prepare_upload_event(
@@ -922,7 +947,7 @@ def test_upload_sales_pdf_with_malicious_lzw_stream(client, app):
         )
         assert resp.status_code == 200
 
-    assert b"The uploaded PDF file could not be read" in resp.data
+    assert b"No sales records were detected" in resp.data
     assert b"name=\"payload\"" not in resp.data
 
     with app.app_context():
@@ -969,7 +994,39 @@ def test_upload_sales_pdf_with_malformed_inline_image(client, app, monkeypatch):
         )
         assert resp.status_code == 200
 
-    assert b"The uploaded PDF file could not be read" in resp.data
+    assert b"No sales records were detected" in resp.data
+    assert b"name=\"payload\"" not in resp.data
+
+    with app.app_context():
+        locations = EventLocation.query.filter_by(event_id=eid).all()
+        location_ids = [loc.id for loc in locations]
+        assert (
+            TerminalSale.query.filter(
+                TerminalSale.event_location_id.in_(location_ids)
+            ).count()
+            == 0
+        )
+
+
+def test_upload_sales_pdf_with_malicious_flate_stream(client, app):
+    email, east_id, west_id, _prod1_id, _prod2_id = setup_upload_env(app)
+    eid = _prepare_upload_event(
+        client, app, email, east_id, west_id, name="UploadFlatePDF"
+    )
+
+    malicious_pdf = _build_malicious_flate_pdf()
+    data = {"file": (BytesIO(malicious_pdf), "malicious-flate.pdf")}
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            f"/events/{eid}/sales/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    assert b"No sales records were detected" in resp.data
     assert b"name=\"payload\"" not in resp.data
 
     with app.app_context():
