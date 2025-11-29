@@ -122,30 +122,72 @@ function initVendorAliasResolution(config) {
 
     function parsePackSizeText(packSizeText) {
         if (!packSizeText || typeof packSizeText !== 'string') {
-            return { packCount: null, sizeText: '' };
+            return { packCount: null, sizeText: '', baseUnit: null, baseQuantity: null };
         }
         const normalized = packSizeText.trim();
         if (!normalized) {
-            return { packCount: null, sizeText: '' };
+            return { packCount: null, sizeText: '', baseUnit: null, baseQuantity: null };
         }
+
+        let packCount = null;
+        let sizeText = normalized;
 
         const splitMatch = normalized.match(/^(\d+)\s*[\/x]\s*(.+)$/i);
         if (splitMatch) {
-            return {
-                packCount: parseInt(splitMatch[1], 10) || null,
-                sizeText: splitMatch[2].trim(),
-            };
+            packCount = parseInt(splitMatch[1], 10) || null;
+            sizeText = splitMatch[2].trim();
         }
 
-        const leadingNumber = normalized.match(/^(\d+)\s+(.+)$/);
-        if (leadingNumber) {
-            return {
-                packCount: parseInt(leadingNumber[1], 10) || null,
-                sizeText: leadingNumber[2].trim(),
-            };
+        if (packCount === null) {
+            const leadingNumber = normalized.match(/^(\d+)\s+(.+)$/);
+            if (leadingNumber) {
+                packCount = parseInt(leadingNumber[1], 10) || null;
+                sizeText = leadingNumber[2].trim();
+            }
         }
 
-        return { packCount: null, sizeText: normalized };
+        const unitDefinitions = [
+            { baseUnit: 'gram', aliases: ['g', 'gr', 'gram', 'grams'], multiplier: 1 },
+            {
+                baseUnit: 'gram',
+                aliases: ['kg', 'kilo', 'kilos', 'kilogram', 'kilograms'],
+                multiplier: 1000,
+            },
+            { baseUnit: 'ounce', aliases: ['oz', 'ounce', 'ounces'], multiplier: 1 },
+            {
+                baseUnit: 'millilitre',
+                aliases: ['ml', 'millilitre', 'milliliter', 'millilitres', 'milliliters'],
+                multiplier: 1,
+            },
+            {
+                baseUnit: 'millilitre',
+                aliases: ['l', 'lt', 'liter', 'litre', 'liters', 'litres'],
+                multiplier: 1000,
+            },
+            { baseUnit: 'each', aliases: ['ea', 'each'], multiplier: 1 },
+        ];
+
+        const unitMatch = sizeText.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)$/i);
+        if (!unitMatch) {
+            return { packCount, sizeText, baseUnit: null, baseQuantity: null };
+        }
+
+        const quantity = parseFloat(unitMatch[1]);
+        const rawUnit = unitMatch[2].replace(/\./g, '').toLowerCase();
+        const matchedUnit = unitDefinitions.find((unit) =>
+            unit.aliases.some((alias) => rawUnit === alias.toLowerCase())
+        );
+
+        if (!matchedUnit || !Number.isFinite(quantity)) {
+            return { packCount, sizeText, baseUnit: null, baseQuantity: null };
+        }
+
+        return {
+            packCount,
+            sizeText,
+            baseUnit: matchedUnit.baseUnit,
+            baseQuantity: quantity * matchedUnit.multiplier,
+        };
     }
 
     function ensureUnitDefaults() {
@@ -223,7 +265,6 @@ function initVendorAliasResolution(config) {
                 : 1;
         if (isBase) {
             factorInput.readOnly = true;
-            factorInput.value = 1;
         }
         factorCol.append(factorLabel, factorInput);
         row.appendChild(factorCol);
@@ -309,9 +350,13 @@ function initVendorAliasResolution(config) {
         newItemUnitIndex = 0;
         const baseName =
             options.baseName || (baseUnitSelect ? baseUnitSelect.value || '' : 'Each');
+        const baseFactor =
+            options.baseFactor !== undefined && options.baseFactor !== null
+                ? options.baseFactor
+                : 1;
         appendNewItemUnitRow({
             name: baseName,
-            factor: 1,
+            factor: baseFactor,
             receivingDefault: true,
             transferDefault: true,
             isBase: true,
@@ -354,11 +399,29 @@ function initVendorAliasResolution(config) {
 
     function seedUnitsFromPackSize(row) {
         const packSizeText = getRowPackSize(row);
-        const { packCount, sizeText } = parsePackSizeText(packSizeText);
-        const baseName = sizeText || 'Each';
+        const { packCount, sizeText, baseUnit, baseQuantity } = parsePackSizeText(
+            packSizeText
+        );
+        const resolvedBaseUnit = baseUnit || 'each';
+        const normalizedBaseFactor =
+            baseUnit && Number.isFinite(Number(baseQuantity)) && Number(baseQuantity) > 0
+                ? Number(baseQuantity)
+                : 1;
+
+        if (baseUnitSelect) {
+            const currentValue = baseUnitSelect.value;
+            if (currentValue !== resolvedBaseUnit) {
+                baseUnitSelect.value = resolvedBaseUnit;
+                const changeEvent = new Event('change', { bubbles: true });
+                baseUnitSelect.dispatchEvent(changeEvent);
+            }
+        }
+
+        const baseName = baseUnit ? resolvedBaseUnit : 'Each';
         const caseFactor = packCount && packCount > 1 ? packCount : null;
         resetNewItemUnitRows({
             baseName,
+            baseFactor: normalizedBaseFactor,
             caseFactor,
         });
     }
