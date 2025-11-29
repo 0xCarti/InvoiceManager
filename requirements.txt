@@ -26,4 +26,4 @@ twilio==9.0.0
 Pillow==10.4.0
 py-mini-racer==0.6.0
 pypdf==4.2.0
-WeasyPrint==61.0
+WeasyPrint==62.3
