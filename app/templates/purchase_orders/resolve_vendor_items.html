@@ -73,7 +73,7 @@
                             </td>
                             <td>
                                 <div class="d-flex align-items-start gap-2">
-                                    {{ row.item_id(class="form-select", **{'data-role': 'alias-item-select'}) }}
+                                    {{ row.item_id(class="form-select w-100", **{'data-role': 'alias-item-select'}) }}
                                     <button type="button" class="btn btn-outline-primary btn-sm" data-role="quick-add-item" data-bs-toggle="modal" data-bs-target="#newItemModal">Create New Item</button>
                                 </div>
                             </td>
@@ -92,6 +92,21 @@
     </form>
 </div>
 {% include 'purchase_orders/_create_item_modal.html' %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet">
+<style>
+    .select2-container { width: 100% !important; }
+    .select2-container--default .select2-selection--single {
+        height: calc(2.25rem + 2px);
+        padding: 0.25rem 0.5rem;
+    }
+    .select2-container .select2-selection--single .select2-selection__rendered {
+        line-height: 1.5rem;
+    }
+    .select2-container .select2-selection--single .select2-selection__arrow {
+        height: calc(2.25rem + 2px);
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
 <script src="{{ url_for('static', filename='js/vendor_alias_resolution.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function() {

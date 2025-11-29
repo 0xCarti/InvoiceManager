@@ -28,6 +28,37 @@ function initVendorAliasResolution(config) {
             new bootstrap.Modal(newItemModalEl);
     }
 
+    function selectEnhancerAvailable() {
+        return typeof $ !== 'undefined' && $.fn && $.fn.select2;
+    }
+
+    function enhanceItemSelect(select) {
+        if (!select || !selectEnhancerAvailable()) {
+            return;
+        }
+        const $select = $(select);
+        if (!$select.data('select2')) {
+            $select.select2({ width: '100%' });
+        }
+    }
+
+    function setItemSelectValue(select, value) {
+        if (!select) {
+            return;
+        }
+        const stringValue = value !== undefined && value !== null ? String(value) : '';
+        select.value = stringValue;
+        if (selectEnhancerAvailable()) {
+            const $select = $(select);
+            if ($select.data('select2')) {
+                $select.val(stringValue).trigger('change');
+                return;
+            }
+        }
+        const changeEvent = new Event('change', { bubbles: true });
+        select.dispatchEvent(changeEvent);
+    }
+
     function getValidationMessageElement() {
         if (validationMessageEl) {
             return validationMessageEl;
@@ -471,7 +502,7 @@ function initVendorAliasResolution(config) {
             const itemSelect = activeRow.querySelector('[data-role="alias-item-select"]');
             const unitSelect = activeRow.querySelector('[data-role="alias-unit-select"]');
             if (itemSelect) {
-                itemSelect.value = String(itemData.id);
+                setItemSelectValue(itemSelect, itemData.id);
             }
             if (unitSelect) {
                 const preferredId = preferredUnit ? preferredUnit.id : null;
@@ -503,6 +534,7 @@ function initVendorAliasResolution(config) {
             populateUnits(unitSelect, event.target.value);
         });
         populateUnits(unitSelect, itemSelect.value);
+        enhanceItemSelect(itemSelect);
     });
 
     quickAddButtons.forEach((button) => {
