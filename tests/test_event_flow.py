@@ -1,8 +1,10 @@
 import json
 import os
 import re
+import tracemalloc
 import zlib
 from datetime import datetime, timedelta, date
+from typing import Callable
 from html import unescape
 from io import BytesIO
 from tempfile import NamedTemporaryFile
@@ -197,6 +199,17 @@ def _build_malicious_lzw_pdf() -> bytes:
     return buffer.getvalue()
 
 
+def _assert_memory_usage_below(limit_bytes: int, func: Callable[[], None]):
+    tracemalloc.start()
+    try:
+        func()
+        current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert peak <= limit_bytes, (
+        f"Memory usage peaked at {peak} bytes while limit was {limit_bytes} bytes"
+    )
 def _build_malicious_flate_pdf() -> bytes:
     writer = PdfWriter()
     page = writer.add_blank_page(width=200, height=200)
@@ -875,6 +888,17 @@ def test_malicious_lzw_pdf_rejected_by_pdf_parser():
             pdf.pages[0].extract_text()
 
 
+def test_malicious_lzw_pdf_memory_usage_remains_bounded():
+    import pdfplumber
+
+    malicious_pdf = _build_malicious_lzw_pdf()
+
+    def _parse_pdf():
+        with pytest.raises((PdfReadError, IndexError)):
+            with pdfplumber.open(BytesIO(malicious_pdf)) as pdf:
+                pdf.pages[0].extract_text()
+
+    _assert_memory_usage_below(8 * 1024 * 1024, _parse_pdf)
 def test_malicious_flate_pdf_rejected_by_pdf_parser():
     import pdfplumber
 
