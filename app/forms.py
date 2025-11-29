@@ -1354,7 +1354,6 @@ class VendorItemAliasResolutionRowForm(FlaskForm):
     unit_id = SelectField(
         "Default Unit", coerce=int, validators=[Optional()], validate_choice=False
     )
-    default_cost = DecimalField("Default Cost", validators=[Optional()])
 
 
 class VendorItemAliasResolutionForm(FlaskForm):
