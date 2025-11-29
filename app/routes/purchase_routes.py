@@ -1000,6 +1000,10 @@ def receive_invoice(po_id):
                 form.items[index].quantity.data = item_data.get("quantity")
             if item_data.get("cost") is not None:
                 form.items[index].cost.data = item_data.get("cost")
+            if item_data.get("container_deposit") is not None:
+                form.items[index].container_deposit.data = item_data.get(
+                    "container_deposit"
+                )
             form.items[index].position.data = item_data.get("position")
             gl_code_value = item_data.get("gl_code_id")
             form.items[index].gl_code.data = gl_code_value or 0
@@ -1054,6 +1058,9 @@ def receive_invoice(po_id):
             unit_id = request.form.get(f"items-{index}-unit", type=int)
             quantity = coerce_float(request.form.get(f"items-{index}-quantity"))
             cost = coerce_float(request.form.get(f"items-{index}-cost"))
+            container_deposit_raw = coerce_float(
+                request.form.get(f"items-{index}-container_deposit")
+            )
             position = request.form.get(f"items-{index}-position", type=int)
             gl_code_id = request.form.get(f"items-{index}-gl_code", type=int)
             gl_code_id = gl_code_id or None
@@ -1062,12 +1069,17 @@ def receive_invoice(po_id):
             )
             line_location_id = line_location_id or None
             if item_id and quantity is not None and cost is not None:
+                container_deposit = (
+                    abs(container_deposit_raw) if container_deposit_raw is not None else 0.0
+                )
                 item_entries.append(
                     {
                         "item_id": item_id,
                         "unit_id": unit_id,
                         "quantity": quantity,
                         "cost": abs(cost),
+                        "container_deposit": container_deposit,
+                        "deposit_provided": container_deposit_raw is not None,
                         "position": position,
                         "fallback": fallback_counter,
                         "gl_code_id": gl_code_id,
@@ -1094,6 +1106,7 @@ def receive_invoice(po_id):
             prev_cost = item_obj.cost if item_obj and item_obj.cost else 0.0
             quantity = entry["quantity"]
             cost = entry["cost"]
+            container_deposit = entry.get("container_deposit", 0.0)
 
             db.session.add(
                 PurchaseInvoiceItem(
@@ -1104,6 +1117,7 @@ def receive_invoice(po_id):
                     unit_name=unit_obj.name if unit_obj else None,
                     quantity=quantity,
                     cost=cost,
+                    container_deposit=container_deposit,
                     prev_cost=prev_cost,
                     position=order_index,
                     purchase_gl_code_id=entry["gl_code_id"],
@@ -1157,6 +1171,13 @@ def receive_invoice(po_id):
                 ):
                     record.purchase_gl_code_id = item_obj.purchase_gl_code_id
                 record.expected_count += quantity * factor
+
+                if entry.get("deposit_provided"):
+                    base_deposit = (
+                        container_deposit / factor if factor else container_deposit
+                    )
+                    item_obj.container_deposit = base_deposit
+                    db.session.add(item_obj)
 
                 # Ensure the in-memory changes are sent to the database so
                 # subsequent iterations or queries within this request see
@@ -1289,7 +1310,11 @@ def view_purchase_invoices():
             db.session.query(
                 PurchaseInvoiceItem.invoice_id.label("invoice_id"),
                 func.sum(
-                    PurchaseInvoiceItem.quantity * PurchaseInvoiceItem.cost
+                    PurchaseInvoiceItem.quantity
+                    * (
+                        PurchaseInvoiceItem.cost
+                        + PurchaseInvoiceItem.container_deposit
+                    )
                 ).label("item_sum"),
             )
             .group_by(PurchaseInvoiceItem.invoice_id)
@@ -1461,6 +1486,7 @@ def reverse_purchase_invoice(invoice_id):
                 "unit_id": inv_item.unit_id,
                 "quantity": inv_item.quantity,
                 "cost": inv_item.cost,
+                "container_deposit": inv_item.container_deposit,
                 "position": inv_item.position,
                 "gl_code_id": inv_item.purchase_gl_code_id,
                 "location_id": inv_item.location_id,

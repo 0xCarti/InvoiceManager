@@ -179,6 +179,9 @@ class Item(db.Model):
     cost = db.Column(
         db.Float, nullable=False, default=0.0, server_default="0.0"
     )
+    container_deposit = db.Column(
+        db.Float, nullable=False, default=0.0, server_default="0.0"
+    )
     purchase_gl_code_id = db.Column(
         db.Integer, db.ForeignKey("gl_code.id"), nullable=True
     )
@@ -659,7 +662,7 @@ class PurchaseInvoice(db.Model):
 
     @property
     def item_total(self):
-        return sum(i.quantity * i.cost for i in self.items)
+        return sum(i.quantity * (i.cost + i.container_deposit) for i in self.items)
 
     @property
     def total(self):
@@ -688,6 +691,9 @@ class PurchaseInvoiceItem(db.Model):
     unit_name = db.Column(db.String(50), nullable=True)
     quantity = db.Column(db.Float, nullable=False)
     cost = db.Column(db.Float, nullable=False)
+    container_deposit = db.Column(
+        db.Float, nullable=False, default=0.0, server_default="0.0"
+    )
     prev_cost = db.Column(db.Float, nullable=False, default=0.0)
     item = relationship("Item")
     unit = relationship("ItemUnit")
@@ -708,7 +714,7 @@ class PurchaseInvoiceItem(db.Model):
 
     @property
     def line_total(self):
-        return self.quantity * abs(self.cost)
+        return self.quantity * (abs(self.cost) + abs(self.container_deposit))
 
     def resolved_purchase_gl_code(self, location_id: Optional[int] = None):
         """Return the effective purchase GL code for this invoice line."""
