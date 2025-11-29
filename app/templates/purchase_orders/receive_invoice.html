@@ -24,16 +24,6 @@
             min-width: 120px;
         }
 
-        .item-row .gl-code-col {
-            flex: 1 1 200px;
-            min-width: 180px;
-        }
-
-        .item-row .location-col {
-            flex: 1 1 200px;
-            min-width: 180px;
-        }
-
         .item-row .line-total-col {
             flex: 0 0 110px;
             min-width: 100px;
@@ -48,8 +38,6 @@
             .item-row .unit-col,
             .item-row .quantity-col,
             .item-row .cost-col,
-            .item-row .location-col,
-            .item-row .gl-code-col,
             .item-row .line-total-col {
                 flex: 0 0 100%;
                 max-width: 100%;
@@ -58,10 +46,18 @@
             .item-row .unit-col .unit-select {
                 width: 100%;
             }
+        }
 
-            .item-row .gl-code-col .gl-code-select {
-                width: 100%;
-            }
+        .item-row .optional-panel {
+            display: none;
+            border-left: 4px solid #e9ecef;
+            background: #f8f9fa;
+            padding: 0.75rem 0.75rem 0.5rem;
+            border-radius: 0.25rem;
+        }
+
+        .item-row .optional-panel.show {
+            display: block;
         }
     </style>
     <form method="POST">
@@ -105,11 +101,6 @@
             <div class="col-auto unit-col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data }}"></select></div>
             <div class="col quantity-col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col cost-col">{{ item.cost(class="form-control cost") }}</div>
-            <div class="col deposit-col {% if not item.container_deposit.data or item.container_deposit.data == 0 %}d-none{% endif %}">
-                {{ item.container_deposit(class="form-control deposit", **({'data-initial-enabled': '1'} if item.container_deposit.data and item.container_deposit.data != 0 else {'data-initial-enabled': '0', 'disabled': True})) }}
-            </div>
-            <div class="col location-col">{{ item.location_id(class="form-select location-select", **{"data-selected": item.location_id.data}) }}</div>
-            <div class="col gl-code-col">{{ item.gl_code(class="form-control gl-code-select") }}</div>
             <div class="col line-total-col"><span class="line-total">0.00</span></div>
             <div class="col-auto">
                 <div class="d-flex flex-column gap-1 move-button-stack">
@@ -121,7 +112,27 @@
                 <button type="button" class="btn btn-danger remove-item">Remove</button>
             </div>
             <div class="col-auto">
-                <button type="button" class="btn btn-outline-secondary btn-sm toggle-deposit" data-active="{% if item.container_deposit.data and item.container_deposit.data != 0 %}1{% else %}0{% endif %}">Add container deposit</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm toggle-optional collapsed" aria-expanded="false">More</button>
+            </div>
+            <div class="col-12 optional-panel">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4 col-sm-6">
+                        <div class="d-flex gap-2 align-items-center">
+                            <button type="button" class="btn btn-outline-secondary btn-sm toggle-deposit" data-active="{% if item.container_deposit.data and item.container_deposit.data != 0 %}1{% else %}0{% endif %}">Add container deposit</button>
+                            <div class="flex-grow-1 deposit-col {% if not item.container_deposit.data or item.container_deposit.data == 0 %}d-none{% endif %}">
+                                {{ item.container_deposit(class="form-control deposit", **({'data-initial-enabled': '1'} if item.container_deposit.data and item.container_deposit.data != 0 else {'data-initial-enabled': '0', 'disabled': True})) }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 col-sm-6">
+                        <label class="form-label mb-1">Location</label>
+                        {{ item.location_id(class="form-select location-select", **{"data-selected": item.location_id.data}) }}
+                    </div>
+                    <div class="col-md-4 col-sm-6">
+                        <label class="form-label mb-1">GL Code</label>
+                        {{ item.gl_code(class="form-control gl-code-select") }}
+                    </div>
+                </div>
             </div>
         </div>
         {% endfor %}
@@ -190,9 +201,6 @@
             <div class="col-auto unit-col"><select name="items-${index}-unit" id="items-${index}-unit" class="form-control unit-select" data-selected=""></select></div>
             <div class="col quantity-col"><input type="text" name="items-${index}-quantity" id="items-${index}-quantity" class="form-control quantity" inputmode="decimal" data-numeric-input="1"></div>
             <div class="col cost-col"><input type="text" name="items-${index}-cost" id="items-${index}-cost" class="form-control cost" inputmode="decimal" data-numeric-input="1"></div>
-            <div class="col deposit-col d-none"><input type="text" name="items-${index}-container_deposit" id="items-${index}-container_deposit" class="form-control deposit" inputmode="decimal" data-numeric-input="1" data-initial-enabled="0" disabled></div>
-            <div class="col location-col"><select name="items-${index}-location_id" id="items-${index}-location_id" class="form-select location-select">${locationOptions}</select></div>
-            <div class="col gl-code-col"><select name="items-${index}-gl_code" id="items-${index}-gl_code" class="form-control gl-code-select">${glCodeOptions}</select></div>
             <div class="col line-total-col"><span class="line-total">0.00</span></div>
             <div class="col-auto">
                 <div class="d-flex flex-column gap-1 move-button-stack">
@@ -201,7 +209,25 @@
                 </div>
             </div>
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
-            <div class="col-auto"><button type="button" class="btn btn-outline-secondary btn-sm toggle-deposit" data-active="0">Add container deposit</button></div>
+            <div class="col-auto"><button type="button" class="btn btn-outline-secondary btn-sm toggle-optional collapsed" aria-expanded="false">More</button></div>
+            <div class="col-12 optional-panel">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4 col-sm-6">
+                        <div class="d-flex gap-2 align-items-center">
+                            <button type="button" class="btn btn-outline-secondary btn-sm toggle-deposit" data-active="0">Add container deposit</button>
+                            <div class="flex-grow-1 deposit-col d-none"><input type="text" name="items-${index}-container_deposit" id="items-${index}-container_deposit" class="form-control deposit" inputmode="decimal" data-numeric-input="1" data-initial-enabled="0" disabled></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 col-sm-6">
+                        <label class="form-label mb-1">Location</label>
+                        <select name="items-${index}-location_id" id="items-${index}-location_id" class="form-select location-select">${locationOptions}</select>
+                    </div>
+                    <div class="col-md-4 col-sm-6">
+                        <label class="form-label mb-1">GL Code</label>
+                        <select name="items-${index}-gl_code" id="items-${index}-gl_code" class="form-control gl-code-select">${glCodeOptions}</select>
+                    </div>
+                </div>
+            </div>
         `;
         return row;
     }
@@ -370,6 +396,7 @@
         if (locationSelect) {
             locationSelect.value = '0';
         }
+        setOptionalPanelState(row, false);
         itemIndex++;
         updatePositions();
     });
@@ -398,7 +425,17 @@
             if (row) {
                 const isActive = e.target.dataset.active === '1';
                 setDepositVisibility(row, !isActive);
+                if (!isActive) {
+                    setOptionalPanelState(row, true);
+                }
                 updateTotals();
+            }
+        } else if (e.target && e.target.classList.contains('toggle-optional')) {
+            const row = e.target.closest('.item-row');
+            if (row) {
+                const optionalPanel = row.querySelector('.optional-panel');
+                const expanded = optionalPanel && optionalPanel.classList.contains('show');
+                setOptionalPanelState(row, !expanded);
             }
         }
     });
@@ -501,6 +538,7 @@
             glSelect.value = '0';
         }
         initDeposit(row);
+        setOptionalPanelState(row, shouldExpandOptional(row));
     });
     document.getElementById('gst').addEventListener('input', updateTotals);
     document.getElementById('pst').addEventListener('input', updateTotals);
