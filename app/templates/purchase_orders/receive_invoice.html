@@ -18,7 +18,8 @@
         }
 
         .item-row .quantity-col,
-        .item-row .cost-col {
+        .item-row .cost-col,
+        .item-row .deposit-col {
             flex: 1 1 140px;
             min-width: 120px;
         }
@@ -104,6 +105,9 @@
             <div class="col-auto unit-col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data }}"></select></div>
             <div class="col quantity-col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col cost-col">{{ item.cost(class="form-control cost") }}</div>
+            <div class="col deposit-col {% if not item.container_deposit.data or item.container_deposit.data == 0 %}d-none{% endif %}">
+                {{ item.container_deposit(class="form-control deposit", **({'data-initial-enabled': '1'} if item.container_deposit.data and item.container_deposit.data != 0 else {'data-initial-enabled': '0', 'disabled': True})) }}
+            </div>
             <div class="col location-col">{{ item.location_id(class="form-select location-select", **{"data-selected": item.location_id.data}) }}</div>
             <div class="col gl-code-col">{{ item.gl_code(class="form-control gl-code-select") }}</div>
             <div class="col line-total-col"><span class="line-total">0.00</span></div>
@@ -115,6 +119,9 @@
             </div>
             <div class="col-auto">
                 <button type="button" class="btn btn-danger remove-item">Remove</button>
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-outline-secondary btn-sm toggle-deposit" data-active="{% if item.container_deposit.data and item.container_deposit.data != 0 %}1{% else %}0{% endif %}">Add container deposit</button>
             </div>
         </div>
         {% endfor %}
@@ -183,6 +190,7 @@
             <div class="col-auto unit-col"><select name="items-${index}-unit" id="items-${index}-unit" class="form-control unit-select" data-selected=""></select></div>
             <div class="col quantity-col"><input type="text" name="items-${index}-quantity" id="items-${index}-quantity" class="form-control quantity" inputmode="decimal" data-numeric-input="1"></div>
             <div class="col cost-col"><input type="text" name="items-${index}-cost" id="items-${index}-cost" class="form-control cost" inputmode="decimal" data-numeric-input="1"></div>
+            <div class="col deposit-col d-none"><input type="text" name="items-${index}-container_deposit" id="items-${index}-container_deposit" class="form-control deposit" inputmode="decimal" data-numeric-input="1" data-initial-enabled="0" disabled></div>
             <div class="col location-col"><select name="items-${index}-location_id" id="items-${index}-location_id" class="form-select location-select">${locationOptions}</select></div>
             <div class="col gl-code-col"><select name="items-${index}-gl_code" id="items-${index}-gl_code" class="form-control gl-code-select">${glCodeOptions}</select></div>
             <div class="col line-total-col"><span class="line-total">0.00</span></div>
@@ -193,6 +201,7 @@
                 </div>
             </div>
             <div class="col-auto"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
+            <div class="col-auto"><button type="button" class="btn btn-outline-secondary btn-sm toggle-deposit" data-active="0">Add container deposit</button></div>
         `;
         return row;
     }
@@ -240,8 +249,44 @@
             if (!input.dataset.touched) {
                 input.value = parseFloat(d.cost).toFixed(2);
             }
+            const depositInput = row.querySelector('.deposit');
+            if (depositInput && !depositInput.dataset.touched) {
+                const depositValue = Number.isFinite(parseFloat(d.deposit)) ? parseFloat(d.deposit) : 0;
+                depositInput.value = depositValue.toFixed(2);
+            }
             updateTotals();
         });
+    }
+
+    function setDepositVisibility(row, enabled) {
+        const depositCol = row.querySelector('.deposit-col');
+        const depositInput = row.querySelector('.deposit');
+        const toggleBtn = row.querySelector('.toggle-deposit');
+        if (enabled) {
+            depositCol?.classList.remove('d-none');
+            if (depositInput) {
+                depositInput.disabled = false;
+            }
+            if (toggleBtn) {
+                toggleBtn.dataset.active = '1';
+                toggleBtn.textContent = 'Remove container deposit';
+            }
+        } else {
+            depositCol?.classList.add('d-none');
+            if (depositInput) {
+                depositInput.disabled = true;
+            }
+            if (toggleBtn) {
+                toggleBtn.dataset.active = '0';
+                toggleBtn.textContent = 'Add container deposit';
+            }
+        }
+    }
+
+    function initDeposit(row) {
+        const depositInput = row.querySelector('.deposit');
+        const initialEnabled = depositInput && depositInput.dataset.initialEnabled === '1';
+        setDepositVisibility(row, initialEnabled);
     }
 
     function fetchUnits(selectEl, selectedUnitId=null) {
@@ -296,7 +341,9 @@
         document.querySelectorAll('#items .item-row').forEach(row => {
             const qty = parseNumber(row.querySelector('.quantity').value, 0);
             const price = parseNumber(row.querySelector('.cost').value, 0);
-            const lineTotal = qty * price;
+            const depositInput = row.querySelector('.deposit');
+            const deposit = depositInput && !depositInput.disabled ? parseNumber(depositInput.value, 0) : 0;
+            const lineTotal = qty * (price + deposit);
             row.querySelector('.line-total').textContent = lineTotal.toFixed(2);
             total += lineTotal;
         });
@@ -314,6 +361,7 @@
         if (window.NumericInput) {
             window.NumericInput.enableWithin(row);
         }
+        initDeposit(row);
         const glSelect = row.querySelector('.gl-code-select');
         if (glSelect) {
             glSelect.value = '0';
@@ -345,6 +393,13 @@
                 row.parentElement.insertBefore(next, row);
                 updatePositions();
             }
+        } else if (e.target && e.target.classList.contains('toggle-deposit')) {
+            const row = e.target.closest('.item-row');
+            if (row) {
+                const isActive = e.target.dataset.active === '1';
+                setDepositVisibility(row, !isActive);
+                updateTotals();
+            }
         }
     });
 
@@ -374,7 +429,7 @@
                 applyDefaultGlCode(row, null);
             }
         }
-        if (e.target && (e.target.classList.contains('quantity') || e.target.classList.contains('cost'))) {
+        if (e.target && (e.target.classList.contains('quantity') || e.target.classList.contains('cost') || e.target.classList.contains('deposit'))) {
             updateTotals();
         }
     });
@@ -396,8 +451,8 @@
     }
 
     document.getElementById('items').addEventListener('input', function(e) {
-        if (e.target && (e.target.classList.contains('quantity') || e.target.classList.contains('cost'))) {
-            if (e.target.classList.contains('cost')) { e.target.dataset.touched = '1'; }
+        if (e.target && (e.target.classList.contains('quantity') || e.target.classList.contains('cost') || e.target.classList.contains('deposit'))) {
+            if (e.target.classList.contains('cost') || e.target.classList.contains('deposit')) { e.target.dataset.touched = '1'; }
             updateTotals();
         }
     });
@@ -445,6 +500,7 @@
         if (glSelect && !glSelect.value) {
             glSelect.value = '0';
         }
+        initDeposit(row);
     });
     document.getElementById('gst').addEventListener('input', updateTotals);
     document.getElementById('pst').addEventListener('input', updateTotals);

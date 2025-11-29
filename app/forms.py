@@ -1373,6 +1373,9 @@ class InvoiceItemReceiveForm(FlaskForm):
     )
     quantity = DecimalField("Quantity", validators=[InputRequired()])
     cost = DecimalField("Cost", validators=[InputRequired()])
+    container_deposit = DecimalField(
+        "Container Deposit", validators=[Optional()], default=0
+    )
     position = HiddenField("Position")
     location_id = SelectField(
         "Location",

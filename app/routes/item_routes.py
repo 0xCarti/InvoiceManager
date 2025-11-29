@@ -1284,7 +1284,9 @@ def item_last_cost(item_id):
         unit = db.session.get(ItemUnit, unit_id)
         if unit:
             factor = unit.factor
-    return jsonify({"cost": (item.cost or 0.0) * factor})
+    cost = (item.cost or 0.0) * factor
+    deposit = (item.container_deposit or 0.0) * factor
+    return jsonify({"cost": cost, "deposit": deposit})
 
 
 @item.route("/import_items", methods=["GET", "POST"])
