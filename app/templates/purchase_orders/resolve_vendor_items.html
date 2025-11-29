@@ -74,7 +74,7 @@
                             <td>
                                 <div class="d-flex align-items-start gap-2">
                                     {{ row.item_id(class="form-select w-100", **{'data-role': 'alias-item-select'}) }}
-                                    <button type="button" class="btn btn-outline-primary btn-sm" data-role="quick-add-item" data-bs-toggle="modal" data-bs-target="#newItemModal">Create New Item</button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm quick-add-item-btn" data-role="quick-add-item" data-bs-toggle="modal" data-bs-target="#newItemModal">Create</button>
                                 </div>
                             </td>
                             <td>
@@ -104,6 +104,11 @@
     }
     .select2-container .select2-selection--single .select2-selection__arrow {
         height: calc(2.25rem + 2px);
+    }
+    .quick-add-item-btn {
+        padding: 0.25rem 0.5rem;
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
