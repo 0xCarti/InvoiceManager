@@ -42,7 +42,7 @@
                         <th scope="col" class="text-end">Quantity Ordered</th>
                         <th scope="col" class="text-end">Unit Cost</th>
                         <th scope="col" style="width: 18rem;">Stock Item</th>
-                        <th scope="col" style="width: 12rem;">Default Unit</th>
+                        <th scope="col" style="width: 9rem;">Default Unit</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -78,7 +78,7 @@
                                 </div>
                             </td>
                             <td>
-                                {{ row.unit_id(class="form-select", **{'data-role': 'alias-unit-select', 'data-selected': row.unit_id.data or ''}) }}
+                                {{ row.unit_id(class="form-select unit-select flex-shrink-0", **{'data-role': 'alias-unit-select', 'data-selected': row.unit_id.data or ''}) }}
                             </td>
                         </tr>
                     {% endfor %}
@@ -109,6 +109,10 @@
         padding: 0.25rem 0.5rem;
         flex: 0 0 auto;
         white-space: nowrap;
+    }
+    .unit-select {
+        width: 8rem;
+        min-width: 7rem;
     }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
