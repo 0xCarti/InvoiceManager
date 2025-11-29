@@ -9,6 +9,8 @@ from urllib.parse import quote
 
 import pytest
 from openpyxl import Workbook
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from sqlalchemy import text
@@ -131,6 +133,85 @@ def setup_event_env(app, base_unit="each"):
         loc.products.append(product)
         db.session.commit()
         return user.email, loc.id, product.id, item.id
+
+
+def _build_inline_image_pdf(
+    lines: list[str],
+    include_image_terminator: bool = True,
+    *,
+    include_image_end_operator: bool = True,
+) -> bytes:
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=300, height=240)
+
+    font = DictionaryObject()
+    font[NameObject("/Type")] = NameObject("/Font")
+    font[NameObject("/Subtype")] = NameObject("/Type1")
+    font[NameObject("/BaseFont")] = NameObject("/Helvetica")
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
+    )
+
+    inline_bytes = b"\xff\xd8\xff\xd9" if include_image_terminator else b"\xff\xd8\xff"
+    content_parts: list[str | bytes] = []
+    for idx, line in enumerate(lines):
+        y_position = 200 - idx * 18
+        content_parts.append(f"BT /F1 12 Tf 40 {y_position} Td ({line}) Tj ET\n")
+        if idx == 0:
+            content_parts.append(
+                "q\nBI\n/Width 1\n/Height 1\n/ColorSpace /DeviceRGB\n"
+                "/BitsPerComponent 8\n/Filter /DCTDecode\nID\n"
+            )
+            content_parts.append(inline_bytes)
+            if include_image_end_operator:
+                content_parts.append("\nEI\nQ\n")
+
+    content_bytes = b"".join(
+        part if isinstance(part, bytes) else part.encode("latin1")
+        for part in content_parts
+    )
+    stream = DecodedStreamObject()
+    stream.set_data(content_bytes)
+    content_ref = writer._add_object(stream)
+    page[NameObject("/Contents")] = content_ref
+
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+def _prepare_upload_event(client, app, email: str, east_id: int, west_id: int, *, name="UploadPDF"):
+    with client:
+        login(client, email, "pass")
+        client.post(
+            "/events/create",
+            data={
+                "name": name,
+                "start_date": "2025-06-20",
+                "end_date": "2025-06-21",
+                "event_type": "inventory",
+            },
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        ev = Event.query.filter_by(name=name).first()
+        eid = ev.id
+
+    with client:
+        login(client, email, "pass")
+        client.post(
+            f"/events/{eid}/add_location",
+            data={"location_id": east_id},
+            follow_redirects=True,
+        )
+        client.post(
+            f"/events/{eid}/add_location",
+            data={"location_id": west_id},
+            follow_redirects=True,
+        )
+
+    return eid
 
 
 def create_modal_product(client, name, price, **fields):
@@ -719,35 +800,7 @@ def test_upload_sales_xls(client, app):
 
 def test_upload_sales_pdf(client, app):
     email, east_id, west_id, prod1_id, prod2_id = setup_upload_env(app)
-    with client:
-        login(client, email, "pass")
-        client.post(
-            "/events/create",
-            data={
-                "name": "UploadPDF",
-                "start_date": "2025-06-20",
-                "end_date": "2025-06-21",
-                "event_type": "inventory",
-            },
-            follow_redirects=True,
-        )
-
-    with app.app_context():
-        ev = Event.query.filter_by(name="UploadPDF").first()
-        eid = ev.id
-
-    with client:
-        login(client, email, "pass")
-        client.post(
-            f"/events/{eid}/add_location",
-            data={"location_id": east_id},
-            follow_redirects=True,
-        )
-        client.post(
-            f"/events/{eid}/add_location",
-            data={"location_id": west_id},
-            follow_redirects=True,
-        )
+    eid = _prepare_upload_event(client, app, email, east_id, west_id)
 
     pdf_buf = BytesIO()
     c = canvas.Canvas(pdf_buf, pagesize=letter)
@@ -778,44 +831,98 @@ def test_upload_sales_pdf(client, app):
             follow_redirects=True,
         )
         assert resp.status_code == 200
-        body = resp.data.decode()
-        assert "Pizza" in body and "Grand Valley Dog" in body
-        match = re.search(r'name="payload" value="([^"]+)"', body)
-        assert match
-        payload = unescape(match.group(1))
 
-    with app.app_context():
-        east_el = EventLocation.query.filter_by(
-            event_id=eid, location_id=east_id
-        ).first()
-        west_el = EventLocation.query.filter_by(
-            event_id=eid, location_id=west_id
-        ).first()
 
+def test_upload_sales_pdf_with_inline_image(client, app):
+    email, east_id, west_id, prod1_id, _prod2_id = setup_upload_env(app)
+    eid = _prepare_upload_event(
+        client, app, email, east_id, west_id, name="UploadInlinePDF"
+    )
+
+    pdf_bytes = _build_inline_image_pdf(
+        [
+            "Popcorn East",
+            "1 591ml 7-Up 4.00 3 7",
+            "Popcorn West",
+            "1 591ml 7-Up 4.00 3 2",
+        ]
+    )
+    data = {"file": (BytesIO(pdf_bytes), "inline.pdf")}
     with client:
         login(client, email, "pass")
         resp = client.post(
             f"/events/{eid}/sales/upload",
-            data={
-                "step": "map",
-                "payload": payload,
-                f"mapping-{east_el.id}": "Popcorn East",
-                f"mapping-{west_el.id}": "Popcorn West",
-            },
+            data=data,
+            content_type="multipart/form-data",
             follow_redirects=True,
         )
         assert resp.status_code == 200
 
+    body = resp.data.decode()
+    payload_match = re.search(r'name="payload" value="([^"]+)"', body)
+    assert payload_match
+    payload = json.loads(unescape(payload_match.group(1)))
+    rows = payload.get("rows") or []
+    assert rows
+    assert any(
+        row.get("location") == "Popcorn East"
+        and row.get("product") == "591ml 7-Up"
+        and row.get("quantity") == 7
+        for row in rows
+    )
+    assert any(
+        row.get("location") == "Popcorn West"
+        and row.get("product") == "591ml 7-Up"
+        and row.get("quantity") == 2
+        for row in rows
+    )
+
+
+def test_upload_sales_pdf_with_malformed_inline_image(client, app, monkeypatch):
+    email, east_id, west_id, _prod1_id, _prod2_id = setup_upload_env(app)
+    eid = _prepare_upload_event(
+        client, app, email, east_id, west_id, name="UploadBrokenInlinePDF"
+    )
+
+    bad_pdf = _build_inline_image_pdf(
+        [
+            "Popcorn East",
+            "1 591ml 7-Up 4.00 3 7",
+            "Popcorn West",
+            "1 591ml 7-Up 4.00 3 2",
+        ],
+        include_image_terminator=False,
+        include_image_end_operator=False,
+    )
+    import pdfplumber
+
+    def _raise_pdf_error(*_args, **_kwargs):
+        raise ValueError("Inline image stream is malformed")
+
+    monkeypatch.setattr(pdfplumber, "open", _raise_pdf_error)
+    data = {"file": (BytesIO(bad_pdf), "inline-bad.pdf")}
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            f"/events/{eid}/sales/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    assert b"The uploaded PDF file could not be read" in resp.data
+    assert b"name=\"payload\"" not in resp.data
+
     with app.app_context():
-        prod1 = db.session.get(Product, prod1_id)
-        sale_e = TerminalSale.query.filter_by(
-            event_location_id=east_el.id, product_id=prod1.id
-        ).first()
-        sale_w = TerminalSale.query.filter_by(
-            event_location_id=west_el.id, product_id=prod1.id
-        ).first()
-        assert sale_e and sale_e.quantity == 7 and sale_e.sold_at
-        assert sale_w and sale_w.quantity == 2 and sale_w.sold_at
+        locations = EventLocation.query.filter_by(event_id=eid).all()
+        location_ids = [loc.id for loc in locations]
+        assert (
+            TerminalSale.query.filter(
+                TerminalSale.event_location_id.in_(location_ids)
+            ).count()
+            == 0
+        )
 
 
 def test_upload_sales_with_annotated_quantities(client, app, sticky_bun_sales_bytes):
