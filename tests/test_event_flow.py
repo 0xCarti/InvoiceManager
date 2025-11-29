@@ -10,6 +10,7 @@ from urllib.parse import quote
 import pytest
 from openpyxl import Workbook
 from pypdf import PdfWriter
+from pypdf.errors import PdfReadError
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -172,6 +173,21 @@ def _build_inline_image_pdf(
     )
     stream = DecodedStreamObject()
     stream.set_data(content_bytes)
+    content_ref = writer._add_object(stream)
+    page[NameObject("/Contents")] = content_ref
+
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+def _build_malicious_lzw_pdf() -> bytes:
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=200, height=200)
+
+    stream = DecodedStreamObject()
+    stream.set_data(b"\x00\x01invalid-lzw-data")
+    stream[NameObject("/Filter")] = NameObject("/LZWDecode")
     content_ref = writer._add_object(stream)
     page[NameObject("/Contents")] = content_ref
 
@@ -833,6 +849,16 @@ def test_upload_sales_pdf(client, app):
         assert resp.status_code == 200
 
 
+def test_malicious_lzw_pdf_rejected_by_pdf_parser():
+    import pdfplumber
+
+    malicious_pdf = _build_malicious_lzw_pdf()
+
+    with pytest.raises((PdfReadError, IndexError)):
+        with pdfplumber.open(BytesIO(malicious_pdf)) as pdf:
+            pdf.pages[0].extract_text()
+
+
 def test_upload_sales_pdf_with_inline_image(client, app):
     email, east_id, west_id, prod1_id, _prod2_id = setup_upload_env(app)
     eid = _prepare_upload_event(
@@ -876,6 +902,38 @@ def test_upload_sales_pdf_with_inline_image(client, app):
         and row.get("quantity") == 2
         for row in rows
     )
+
+
+def test_upload_sales_pdf_with_malicious_lzw_stream(client, app):
+    email, east_id, west_id, _prod1_id, _prod2_id = setup_upload_env(app)
+    eid = _prepare_upload_event(
+        client, app, email, east_id, west_id, name="UploadLZWPDF"
+    )
+
+    malicious_pdf = _build_malicious_lzw_pdf()
+    data = {"file": (BytesIO(malicious_pdf), "malicious-lzw.pdf")}
+    with client:
+        login(client, email, "pass")
+        resp = client.post(
+            f"/events/{eid}/sales/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+    assert b"The uploaded PDF file could not be read" in resp.data
+    assert b"name=\"payload\"" not in resp.data
+
+    with app.app_context():
+        locations = EventLocation.query.filter_by(event_id=eid).all()
+        location_ids = [loc.id for loc in locations]
+        assert (
+            TerminalSale.query.filter(
+                TerminalSale.event_location_id.in_(location_ids)
+            ).count()
+            == 0
+        )
 
 
 def test_upload_sales_pdf_with_malformed_inline_image(client, app, monkeypatch):
