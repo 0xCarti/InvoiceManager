@@ -597,8 +597,10 @@ class PurchaseOrder(db.Model):
     )
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     vendor_name = db.Column(db.String(100), nullable=False, server_default="")
+    order_number = db.Column(db.String(100), nullable=True)
     order_date = db.Column(db.Date, nullable=False)
     expected_date = db.Column(db.Date, nullable=False)
+    expected_total_cost = db.Column(db.Float, nullable=True)
     delivery_charge = db.Column(db.Float, nullable=False, default=0.0)
     received = db.Column(db.Boolean, default=False, nullable=False)
     items = relationship(
