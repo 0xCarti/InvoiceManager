@@ -9,6 +9,10 @@
             {{ form.vendor(class="form-control narrow-field") }}
         </div>
         <div class="form-group">
+            {{ form.order_number.label(class="form-label") }}
+            {{ form.order_number(class="form-control narrow-field") }}
+        </div>
+        <div class="form-group">
             {{ form.upload.label(class="form-label") }}
             {{ form.upload(class="form-control") }}
             <small class="form-text text-muted">Upload a vendor CSV to prefill this purchase order.</small>
@@ -32,6 +36,10 @@
         <div class="form-group">
             {{ form.expected_date.label(class="form-label") }}
             {{ form.expected_date(class="form-control narrow-field") }}
+        </div>
+        <div class="form-group">
+            {{ form.expected_total_cost.label(class="form-label") }}
+            {{ form.expected_total_cost(class="form-control narrow-field") }}
         </div>
         <div class="form-group">
             {{ form.delivery_charge.label(class="form-label") }}

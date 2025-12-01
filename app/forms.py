@@ -1309,6 +1309,7 @@ class POItemForm(FlaskForm):
 
 class PurchaseOrderForm(FlaskForm):
     vendor = SelectField("Vendor", coerce=int, validators=[DataRequired()])
+    order_number = StringField("Order Number", validators=[Optional(), Length(max=100)])
     order_date = FlexibleDateField(
         "Order Date",
         validators=[DataRequired()],
@@ -1319,6 +1320,7 @@ class PurchaseOrderForm(FlaskForm):
         validators=[DataRequired()],
         render_kw={"data-flatpickr": "1", "autocomplete": "off"},
     )
+    expected_total_cost = DecimalField("Expected Total Cost", validators=[Optional()])
     upload = FileField(
         "Vendor CSV",
         validators=[Optional(), FileAllowed({"csv"}, "CSV only!")],
@@ -1375,6 +1377,8 @@ class VendorItemAliasResolutionForm(FlaskForm):
     unresolved_payload = HiddenField(validators=[DataRequired()])
     order_date = HiddenField()
     expected_date = HiddenField()
+    order_number = HiddenField()
+    expected_total_cost = HiddenField()
     rows = FieldList(FormField(VendorItemAliasResolutionRowForm), min_entries=0)
     submit = SubmitField("Save mappings")
 

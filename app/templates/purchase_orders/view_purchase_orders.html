@@ -85,6 +85,11 @@
                         <label class="form-check-label" for="toggle-po-column-vendor-id">Vendor ID</label>
                     </div>
                     <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-order-number"
+                            data-column-target="col-po-order-number">
+                        <label class="form-check-label" for="toggle-po-column-order-number">Order #</label>
+                    </div>
+                    <div class="form-check">
                         <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-order-date"
                             data-column-target="col-po-order-date" checked>
                         <label class="form-check-label" for="toggle-po-column-order-date">Order Date</label>
@@ -93,6 +98,11 @@
                         <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-expected-date"
                             data-column-target="col-po-expected-date" checked>
                         <label class="form-check-label" for="toggle-po-column-expected-date">Expected Date</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-expected-total"
+                            data-column-target="col-po-expected-total">
+                        <label class="form-check-label" for="toggle-po-column-expected-total">Expected Total</label>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input column-toggle" type="checkbox" id="toggle-po-column-delivery"
@@ -213,8 +223,10 @@
                 <th class="col-po-vendor">Vendor</th>
                 <th class="col-po-vendor-name">Vendor (Recorded)</th>
                 <th class="col-po-vendor-id" data-type="number">Vendor ID</th>
+                <th class="col-po-order-number">Order #</th>
                 <th class="col-po-order-date">Order Date</th>
                 <th class="col-po-expected-date">Expected Date</th>
+                <th class="col-po-expected-total" data-type="number">Expected Total</th>
                 <th class="col-po-delivery" data-type="number">Delivery</th>
                 <th class="col-po-received">Received</th>
                 <th class="col-po-item-count" data-type="number">Item Count</th>
@@ -228,7 +240,7 @@
             <tr data-id="{{ order.id }}" data-vendor="{{ order.vendor_id }}" data-order-date="{{ order.order_date }}" data-expected-date="{{ order.expected_date }}" data-delivery="{{ order.delivery_charge }}">
                 <td class="text-center">
                     {% if not order.received %}
-                    <input class="form-check-input po-select" type="checkbox" value="{{ order.id }}" data-vendor="{{ order.vendor_id }}" data-vendor-name="{{ (order.vendor.first_name ~ ' ' ~ order.vendor.last_name) if order.vendor else order.vendor_name or 'Vendor ' ~ order.vendor_id }}" data-expected-date="{{ order.expected_date.strftime('%Y-%m-%d') if order.expected_date else ''}}" data-received="0">
+                    <input class="form-check-input po-select" type="checkbox" value="{{ order.id }}" data-vendor="{{ order.vendor_id }}" data-vendor-name="{{ (order.vendor.first_name ~ ' ' ~ order.vendor.last_name) if order.vendor else order.vendor_name or 'Vendor ' ~ order.vendor_id }}" data-expected-date="{{ order.expected_date.strftime('%Y-%m-%d') if order.expected_date else ''}}" data-order-number="{{ order.order_number or '' }}" data-expected-total="{{ '%.2f'|format(order.expected_total_cost) if order.expected_total_cost is not none else '' }}" data-received="0">
                     {% else %}
                     <span class="text-muted" title="Received purchase orders cannot be merged">—</span>
                     {% endif %}
@@ -243,8 +255,16 @@
                 </td>
                 <td class="col-po-vendor-name">{{ order.vendor_name or '—' }}</td>
                 <td class="col-po-vendor-id" data-sort-value="{{ order.vendor_id }}">{{ order.vendor_id }}</td>
+                <td class="col-po-order-number" data-sort-value="{{ order.order_number or '' }}">{{ order.order_number or '—' }}</td>
                 <td class="col-po-order-date" data-sort-value="{{ order.order_date.strftime('%Y%m%d') if order.order_date else '' }}">{{ order.order_date.strftime('%Y-%m-%d') if order.order_date else '—' }}</td>
                 <td class="col-po-expected-date" data-sort-value="{{ order.expected_date.strftime('%Y%m%d') if order.expected_date else '' }}">{{ order.expected_date.strftime('%Y-%m-%d') if order.expected_date else '—' }}</td>
+                <td class="col-po-expected-total" data-sort-value="{{ '%.6f'|format(order.expected_total_cost or 0) if order.expected_total_cost is not none else '' }}">
+                    {% if order.expected_total_cost is not none %}
+                        {{ '%.2f'|format(order.expected_total_cost) }}
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
                 <td class="col-po-delivery" data-sort-value="{{ '%.6f'|format(order.delivery_charge or 0) }}">{{ '%.2f'|format(order.delivery_charge or 0) }}</td>
                 <td class="col-po-received" data-sort-value="{{ '1' if order.received else '0' }}">{{ 'Yes' if order.received else 'No' }}</td>
                 {% set order_item_count = order.items | length %}
@@ -333,6 +353,8 @@
                     <ul class="mb-3">
                         <li><strong>Vendor:</strong> <span id="merge-vendor-summary">—</span></li>
                         <li><strong>Expected date:</strong> <span id="merge-date-summary">—</span></li>
+                        <li><strong>Order numbers:</strong> <span id="merge-order-number-summary">—</span></li>
+                        <li><strong>Expected totals:</strong> <span id="merge-expected-total-summary">—</span></li>
                         <li><strong>Selected POs:</strong> <span id="merge-selected-list">None</span></li>
                     </ul>
                     <div class="mb-3">
@@ -374,6 +396,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const targetSelect = document.getElementById('merge-target-select');
     const vendorSummary = document.getElementById('merge-vendor-summary');
     const dateSummary = document.getElementById('merge-date-summary');
+    const orderNumberSummary = document.getElementById('merge-order-number-summary');
+    const expectedTotalSummary = document.getElementById('merge-expected-total-summary');
     const selectedList = document.getElementById('merge-selected-list');
     const mergeForm = document.getElementById('merge-modal-form');
     const confirmMergeBtn = document.getElementById('confirm-merge-btn');
@@ -416,6 +440,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!selected.length) {
             vendorSummary.textContent = '—';
             dateSummary.textContent = '—';
+            orderNumberSummary.textContent = '—';
+            expectedTotalSummary.textContent = '—';
             selectedList.textContent = 'None';
             return;
         }
@@ -423,6 +449,16 @@ document.addEventListener('DOMContentLoaded', function() {
         vendorSummary.textContent = selected[0].dataset.vendorName || '—';
         const expectedDates = new Set(selected.map((cb) => cb.dataset.expectedDate || ''));
         dateSummary.textContent = expectedDates.size === 1 ? (selected[0].dataset.expectedDate || '—') : 'Mixed dates';
+        const orderNumbers = selected
+            .map((cb) => cb.dataset.orderNumber || '')
+            .filter((value) => value);
+        orderNumberSummary.textContent = orderNumbers.length ? orderNumbers.join(', ') : '—';
+        const expectedTotals = selected
+            .map((cb) => (cb.dataset.expectedTotal ? Number(cb.dataset.expectedTotal) : null))
+            .filter((value) => value !== null && !Number.isNaN(value));
+        expectedTotalSummary.textContent = expectedTotals.length
+            ? expectedTotals.map((value) => value.toFixed(2)).join(', ')
+            : '—';
         selectedList.textContent = selected.map((cb) => `#${cb.value}`).join(', ');
     };
 

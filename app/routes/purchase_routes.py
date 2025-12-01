@@ -472,6 +472,10 @@ def create_purchase_order():
         resolution_form.unresolved_payload.data = json.dumps(unresolved_payload)
         resolution_form.order_date.data = request.form.get("order_date")
         resolution_form.expected_date.data = request.form.get("expected_date")
+        resolution_form.order_number.data = request.form.get("order_number")
+        resolution_form.expected_total_cost.data = request.form.get(
+            "expected_total_cost"
+        )
 
         resolution_form.rows.min_entries = len(unresolved_lines)
         while len(resolution_form.rows) < len(unresolved_lines):
@@ -528,6 +532,11 @@ def create_purchase_order():
                     ).date()
                 except ValueError:
                     pass
+            form.order_number.data = resolution_form.order_number.data or None
+            if resolution_form.expected_total_cost.data:
+                form.expected_total_cost.data = coerce_float(
+                    resolution_form.expected_total_cost.data
+                )
         else:
             return render_template(
                 "purchase_orders/resolve_vendor_items.html",
@@ -577,6 +586,11 @@ def create_purchase_order():
                         resolution_form.expected_date.data = (
                             parsed.expected_date.isoformat()
                         )
+                    resolution_form.order_number.data = parsed.order_number or ""
+                    if parsed.expected_total is not None:
+                        resolution_form.expected_total_cost.data = str(
+                            parsed.expected_total
+                        )
                     resolution_form.rows.min_entries = len(unresolved_lines)
                     while len(resolution_form.rows) < len(unresolved_lines):
                         resolution_form.rows.append_entry()
@@ -614,6 +628,10 @@ def create_purchase_order():
                     form.order_date.data = parsed.order_date
                 if parsed.expected_date:
                     form.expected_date.data = parsed.expected_date
+                if parsed.order_number:
+                    form.order_number.data = parsed.order_number
+                if parsed.expected_total is not None:
+                    form.expected_total_cost.data = parsed.expected_total
                 flash("CSV imported. Review and confirm the items below.", "success")
             except CSVImportError as exc:
                 parse_errors.append(str(exc))
@@ -629,12 +647,19 @@ def create_purchase_order():
             if vendor_record
             else ""
         )
+        expected_total = (
+            float(form.expected_total_cost.data)
+            if form.expected_total_cost.data is not None
+            else None
+        )
         po = PurchaseOrder(
             vendor_id=form.vendor.data,
             user_id=current_user.id,
             vendor_name=vendor_name,
+            order_number=form.order_number.data or None,
             order_date=form.order_date.data,
             expected_date=form.expected_date.data,
+            expected_total_cost=expected_total,
             delivery_charge=form.delivery_charge.data or 0.0,
         )
         db.session.add(po)
@@ -901,8 +926,14 @@ def edit_purchase_order(po_id):
             if vendor_record
             else ""
         )
+        po.order_number = form.order_number.data or None
         po.order_date = form.order_date.data
         po.expected_date = form.expected_date.data
+        po.expected_total_cost = (
+            float(form.expected_total_cost.data)
+            if form.expected_total_cost.data is not None
+            else None
+        )
         po.delivery_charge = form.delivery_charge.data or 0.0
 
         PurchaseOrderItem.query.filter_by(purchase_order_id=po.id).delete()
@@ -965,8 +996,11 @@ def edit_purchase_order(po_id):
 
     if request.method == "GET":
         form.vendor.data = po.vendor_id
+        form.order_number.data = po.order_number
         form.order_date.data = po.order_date
         form.expected_date.data = po.expected_date
+        if po.expected_total_cost is not None:
+            form.expected_total_cost.data = po.expected_total_cost
         form.delivery_charge.data = po.delivery_charge
         form.items.min_entries = max(1, len(po.items))
         for i, poi in enumerate(po.items):
