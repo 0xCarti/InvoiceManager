@@ -20,13 +20,15 @@ def _make_pratts_vendor() -> Vendor:
 
 
 def test_parse_pratts_csv_success():
-    csv_text = """Item,Pack,Size,Brand,Description,Qty Ship,Price,Ext Price
-1001,1,12 oz,BrandA,First Item,4,2.50,10.00
-1002,2,6 ct,BrandB,,3,1.00,3.00
+    csv_text = """Item,Pack,Size,Brand,Description,Quantity Shipped,Unit Price,Extended Price,PO Number
+1001,1,12 oz,BrandA,First Item,4,2.50,10.00,PO-123
+1002,2,6 ct,BrandB,,3,1.00,3.00,PO-123
 """
     parsed = parse_purchase_order_csv(_make_pratts_file(csv_text), _make_pratts_vendor())
 
     assert len(parsed.items) == 2
+    assert parsed.order_number == "PO-123"
+    assert parsed.expected_total == 13
 
     first: ParsedPurchaseLine = parsed.items[0]
     assert first.vendor_sku == "1001"

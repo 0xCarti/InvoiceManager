@@ -33,6 +33,8 @@ class ParsedPurchaseOrder:
     items: List[ParsedPurchaseLine]
     order_date: Optional[datetime.date] = None
     expected_date: Optional[datetime.date] = None
+    order_number: Optional[str] = None
+    expected_total: Optional[float] = None
 
 
 class CSVImportError(Exception):
@@ -40,21 +42,30 @@ class CSVImportError(Exception):
 
 
 _SYSCO_REQUIRED_HEADERS = {
-    "item",
-    "description",
-    "qty ship",
-    "price",
+    "item": {"item"},
+    "description": {"description", "item description"},
+    "quantity": {"qty ship", "qty shipped", "quantity shipped"},
+    "price": {"price", "unit price"},
+}
+
+_SYSCO_OPTIONAL_HEADERS = {
+    "ext_price": {"ext price", "extended price", "extd price"},
+    "order_number": {"order #", "po number", "order number", "po #"},
 }
 
 _PRATTS_REQUIRED_HEADERS = {
-    "item",
-    "pack",
-    "size",
-    "brand",
-    "description",
-    "qty ship",
-    "price",
-    "ext price",
+    "item": {"item"},
+    "pack": {"pack"},
+    "size": {"size"},
+    "brand": {"brand"},
+    "description": {"description"},
+    "quantity": {"qty ship", "qty shipped", "quantity shipped"},
+    "price": {"price", "unit price"},
+    "ext_price": {"ext price", "extended price", "extd price"},
+}
+
+_PRATTS_OPTIONAL_HEADERS = {
+    "order_number": {"order #", "po number", "order number", "po #"},
 }
 
 
@@ -66,14 +77,43 @@ def _prepare_reader(file_obj: IO) -> csv.DictReader:
     )
 
 
+def _normalize_header_name(header: str) -> str:
+    return " ".join(header.strip().lower().split())
+
+
 def _normalize_headers(headers):
-    return {header.strip().lower(): header for header in headers or []}
+    return {_normalize_header_name(header): header for header in headers or []}
+
+
+def _resolve_headers(header_map: dict, required: dict, optional: dict | None = None):
+    resolved = {}
+    missing = []
+
+    for name, aliases in required.items():
+        normalized_aliases = {_normalize_header_name(alias) for alias in aliases}
+        match = next((header_map[alias] for alias in normalized_aliases if alias in header_map), None)
+        if match:
+            resolved[name] = match
+        else:
+            missing.append(name)
+
+    if optional:
+        for name, aliases in optional.items():
+            normalized_aliases = {_normalize_header_name(alias) for alias in aliases}
+            for alias in normalized_aliases:
+                if alias in header_map:
+                    resolved[name] = header_map[alias]
+                    break
+
+    return resolved, missing
 
 
 def _parse_sysco_csv(file_obj: IO) -> ParsedPurchaseOrder:
     reader = _prepare_reader(file_obj)
     header_map = _normalize_headers(reader.fieldnames)
-    missing_headers = _SYSCO_REQUIRED_HEADERS - set(header_map)
+    header_lookup, missing_headers = _resolve_headers(
+        header_map, _SYSCO_REQUIRED_HEADERS, _SYSCO_OPTIONAL_HEADERS
+    )
     if missing_headers:
         readable = ", ".join(sorted(missing_headers))
         raise CSVImportError(
@@ -81,17 +121,30 @@ def _parse_sysco_csv(file_obj: IO) -> ParsedPurchaseOrder:
         )
 
     items: List[ParsedPurchaseLine] = []
+    order_number = None
+    expected_total = 0.0
+    has_ext_price = False
     for row in reader:
-        raw_description = row.get(header_map["description"], "").strip()
-        raw_qty = row.get(header_map["qty ship"], "")
-        raw_price = row.get(header_map["price"], "")
-        vendor_sku = row.get(header_map["item"], "").strip()
+        raw_description = row.get(header_lookup["description"], "").strip()
+        raw_qty = row.get(header_lookup["quantity"], "")
+        raw_price = row.get(header_lookup["price"], "")
+        vendor_sku = row.get(header_lookup["item"], "").strip()
 
         quantity = coerce_float(raw_qty)
         if quantity is None or quantity <= 0:
             continue
 
+        if not order_number and "order_number" in header_lookup:
+            order_number = row.get(header_lookup["order_number"], "").strip() or None
+
         unit_cost = coerce_float(raw_price)
+        if "ext_price" in header_lookup:
+            raw_ext = row.get(header_lookup["ext_price"], "")
+            ext_cost = coerce_float(raw_ext)
+            if ext_cost is not None:
+                expected_total += ext_cost
+                has_ext_price = True
+
         items.append(
             ParsedPurchaseLine(
                 vendor_sku=vendor_sku or None,
@@ -105,13 +158,19 @@ def _parse_sysco_csv(file_obj: IO) -> ParsedPurchaseOrder:
     if not items:
         raise CSVImportError("No purchasable lines found in the CSV file.")
 
-    return ParsedPurchaseOrder(items=items)
+    return ParsedPurchaseOrder(
+        items=items,
+        order_number=order_number,
+        expected_total=expected_total if has_ext_price else None,
+    )
 
 
 def _parse_pratts_csv(file_obj: IO) -> ParsedPurchaseOrder:
     reader = _prepare_reader(file_obj)
     header_map = _normalize_headers(reader.fieldnames)
-    missing_headers = _PRATTS_REQUIRED_HEADERS - set(header_map)
+    header_lookup, missing_headers = _resolve_headers(
+        header_map, _PRATTS_REQUIRED_HEADERS, _PRATTS_OPTIONAL_HEADERS
+    )
     if missing_headers:
         readable = ", ".join(sorted(missing_headers))
         raise CSVImportError(
@@ -119,20 +178,29 @@ def _parse_pratts_csv(file_obj: IO) -> ParsedPurchaseOrder:
         )
 
     items: List[ParsedPurchaseLine] = []
+    order_number = None
+    expected_total = 0.0
     for row in reader:
-        vendor_sku = row.get(header_map["item"], "").strip()
-        raw_description = row.get(header_map["description"], "").strip()
-        raw_qty = row.get(header_map["qty ship"], "")
-        raw_price = row.get(header_map["price"], "")
-        pack = row.get(header_map["pack"], "").strip()
-        size = row.get(header_map["size"], "").strip()
+        vendor_sku = row.get(header_lookup["item"], "").strip()
+        raw_description = row.get(header_lookup["description"], "").strip()
+        raw_qty = row.get(header_lookup["quantity"], "")
+        raw_price = row.get(header_lookup["price"], "")
+        pack = row.get(header_lookup["pack"], "").strip()
+        size = row.get(header_lookup["size"], "").strip()
 
         quantity = coerce_float(raw_qty)
         if quantity is None or quantity <= 0:
             continue
 
+        if not order_number and "order_number" in header_lookup:
+            order_number = row.get(header_lookup["order_number"], "").strip() or None
+
         pack_size = " ".join(filter(None, [pack, size])) or None
         unit_cost = coerce_float(raw_price)
+        raw_ext = row.get(header_lookup["ext_price"], "")
+        ext_cost = coerce_float(raw_ext)
+        if ext_cost is not None:
+            expected_total += ext_cost
 
         items.append(
             ParsedPurchaseLine(
@@ -147,7 +215,11 @@ def _parse_pratts_csv(file_obj: IO) -> ParsedPurchaseOrder:
     if not items:
         raise CSVImportError("No purchasable lines found in the CSV file.")
 
-    return ParsedPurchaseOrder(items=items)
+    return ParsedPurchaseOrder(
+        items=items,
+        order_number=order_number,
+        expected_total=expected_total,
+    )
 
 
 def parse_purchase_order_csv(file: FileStorage, vendor: Vendor) -> ParsedPurchaseOrder:
