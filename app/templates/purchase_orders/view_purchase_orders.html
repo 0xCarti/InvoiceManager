@@ -6,6 +6,21 @@
     <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">Merge Purchase Orders</h5>
+            <p class="text-muted">Select pending purchase orders from the table below and merge them into a single target order.</p>
+            <div id="merge-selection-alert" class="alert alert-warning d-none" role="alert"></div>
+            <div class="d-flex flex-column flex-md-row align-items-md-center gap-2 mb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-primary" id="merge-selected-btn" data-bs-toggle="modal"
+                        data-bs-target="#mergeConfirmModal" disabled>Merge selected</button>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="merge-require-expected" checked>
+                        <label class="form-check-label" for="merge-require-expected">
+                            Require matching expected date
+                        </label>
+                    </div>
+                </div>
+                <small class="text-muted">All selected purchase orders must share the same vendor. Received orders cannot be merged.</small>
+            </div>
             {% if merge_form.errors %}
             <div class="alert alert-danger">
                 Please correct the errors below before merging.
@@ -193,6 +208,7 @@
     <table class="table sortable" id="purchase-orders-table">
         <thead>
             <tr>
+                <th class="text-center">Select</th>
                 <th class="col-po-id" data-type="number">ID</th>
                 <th class="col-po-vendor">Vendor</th>
                 <th class="col-po-vendor-name">Vendor (Recorded)</th>
@@ -210,6 +226,9 @@
         <tbody id="po-table-body">
         {% for order in orders.items %}
             <tr data-id="{{ order.id }}" data-vendor="{{ order.vendor_id }}" data-order-date="{{ order.order_date }}" data-expected-date="{{ order.expected_date }}" data-delivery="{{ order.delivery_charge }}">
+                <td class="text-center">
+                    <input class="form-check-input po-select" type="checkbox" value="{{ order.id }}" data-vendor="{{ order.vendor_id }}" data-vendor-name="{{ (order.vendor.first_name ~ ' ' ~ order.vendor.last_name) if order.vendor else order.vendor_name or 'Vendor ' ~ order.vendor_id }}" data-expected-date="{{ order.expected_date.strftime('%Y-%m-%d') if order.expected_date else '' }}" data-received="{{ '1' if order.received else '0' }}" {% if order.received %}disabled{% endif %}>
+                </td>
                 <td class="col-po-id" data-sort-value="{{ order.id }}">{{ order.id }}</td>
                 <td class="col-po-vendor">
                     {% if order.vendor %}
@@ -296,6 +315,41 @@
         </form>
     </div>
 </div>
+<div class="modal fade" id="mergeConfirmModal" tabindex="-1" aria-labelledby="mergeConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mergeConfirmModalLabel">Confirm Merge</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{{ url_for('purchase.merge_purchase_orders_route') }}" id="merge-modal-form">
+                {{ merge_form.hidden_tag() }}
+                <div class="modal-body">
+                    <p class="mb-2">Merge the selected purchase orders into a single target. All orders must share the same vendor and, when required, the same expected date.</p>
+                    <ul class="mb-3">
+                        <li><strong>Vendor:</strong> <span id="merge-vendor-summary">—</span></li>
+                        <li><strong>Expected date:</strong> <span id="merge-date-summary">—</span></li>
+                        <li><strong>Selected POs:</strong> <span id="merge-selected-list">None</span></li>
+                    </ul>
+                    <div class="mb-3">
+                        <label for="merge-target-select" class="form-label">Target purchase order</label>
+                        <select class="form-select" id="merge-target-select" name="target_po_id" required></select>
+                        <div class="form-text">Choose which purchase order should receive all line items.</div>
+                    </div>
+                    <input type="hidden" name="source_po_ids" id="merge-source-input" required>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="merge-modal-expected" name="require_expected_date_match" value="y" checked>
+                        <label class="form-check-label" for="merge-modal-expected">Require matching expected date</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="confirm-merge-btn">Merge</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -306,6 +360,174 @@ document.addEventListener('DOMContentLoaded', function() {
     initDatePickers({
         modalSelectors: ['[data-filter-modal]']
     });
+
+    const checkboxes = Array.from(document.querySelectorAll('.po-select'));
+    const mergeButton = document.getElementById('merge-selected-btn');
+    const mergeAlert = document.getElementById('merge-selection-alert');
+    const requireExpectedToggle = document.getElementById('merge-require-expected');
+    const modalRequireExpected = document.getElementById('merge-modal-expected');
+    const sourceInput = document.getElementById('merge-source-input');
+    const targetSelect = document.getElementById('merge-target-select');
+    const vendorSummary = document.getElementById('merge-vendor-summary');
+    const dateSummary = document.getElementById('merge-date-summary');
+    const selectedList = document.getElementById('merge-selected-list');
+    const mergeForm = document.getElementById('merge-modal-form');
+    const confirmMergeBtn = document.getElementById('confirm-merge-btn');
+
+    const showAlert = (message) => {
+        mergeAlert.textContent = message;
+        mergeAlert.classList.remove('d-none');
+    };
+
+    const clearAlert = () => {
+        mergeAlert.textContent = '';
+        mergeAlert.classList.add('d-none');
+    };
+
+    const getSelected = () => checkboxes.filter((cb) => cb.checked);
+
+    const updateSourceInput = (selected) => {
+        const targetId = targetSelect.value;
+        const sources = selected.map((cb) => cb.value).filter((id) => id !== targetId);
+        sourceInput.value = sources.join(', ');
+    };
+
+    const updateTargetOptions = (selected) => {
+        const previousTarget = targetSelect.value;
+        targetSelect.innerHTML = '';
+        selected.forEach((cb) => {
+            const option = document.createElement('option');
+            option.value = cb.value;
+            option.textContent = `PO #${cb.value}`;
+            targetSelect.appendChild(option);
+        });
+        if (selected.length) {
+            const preferred = selected.find((cb) => cb.value === previousTarget) || selected[0];
+            targetSelect.value = preferred.value;
+        }
+        updateSourceInput(selected);
+    };
+
+    const updateSummaries = (selected) => {
+        if (!selected.length) {
+            vendorSummary.textContent = '—';
+            dateSummary.textContent = '—';
+            selectedList.textContent = 'None';
+            return;
+        }
+
+        vendorSummary.textContent = selected[0].dataset.vendorName || '—';
+        const expectedDates = new Set(selected.map((cb) => cb.dataset.expectedDate || ''));
+        dateSummary.textContent = expectedDates.size === 1 ? (selected[0].dataset.expectedDate || '—') : 'Mixed dates';
+        selectedList.textContent = selected.map((cb) => `#${cb.value}`).join(', ');
+    };
+
+    const validateSelection = () => {
+        const selected = getSelected();
+        let invalidMessage = '';
+
+        if (!selected.length) {
+            if (!mergeAlert.textContent) {
+                clearAlert();
+            }
+            mergeButton.disabled = true;
+            confirmMergeBtn.disabled = true;
+            targetSelect.innerHTML = '';
+            updateSummaries([]);
+            sourceInput.value = '';
+            modalRequireExpected.checked = requireExpectedToggle.checked;
+            return;
+        }
+
+        if (selected.length < 2) {
+            invalidMessage = 'Select at least two pending purchase orders to merge.';
+        }
+
+        const vendorIds = new Set(selected.map((cb) => cb.dataset.vendor || ''));
+        if (!invalidMessage && vendorIds.size > 1) {
+            invalidMessage = 'All selected purchase orders must share the same vendor.';
+        }
+
+        const expectedDates = new Set(selected.map((cb) => cb.dataset.expectedDate || ''));
+        if (!invalidMessage && requireExpectedToggle.checked && expectedDates.size > 1) {
+            invalidMessage = 'When matching expected dates, choose orders with the same expected date.';
+        }
+
+        const anyReceived = selected.some((cb) => cb.dataset.received === '1');
+        if (!invalidMessage && anyReceived) {
+            invalidMessage = 'Received purchase orders cannot be merged.';
+        }
+
+        if (invalidMessage) {
+            showAlert(invalidMessage);
+            mergeButton.disabled = true;
+            confirmMergeBtn.disabled = true;
+        } else {
+            clearAlert();
+            mergeButton.disabled = false;
+            confirmMergeBtn.disabled = false;
+        }
+
+        if (selected.length) {
+            updateTargetOptions(selected);
+            updateSummaries(selected);
+        } else {
+            targetSelect.innerHTML = '';
+            updateSummaries([]);
+            sourceInput.value = '';
+        }
+
+        modalRequireExpected.checked = requireExpectedToggle.checked;
+    };
+
+    checkboxes.forEach((cb) => {
+        cb.addEventListener('change', (event) => {
+            const selected = getSelected();
+            const anchorVendor = selected.length ? selected[0].dataset.vendor : null;
+            if (event.target.checked && anchorVendor && event.target.dataset.vendor !== anchorVendor) {
+                event.target.checked = false;
+                showAlert('All selected purchase orders must share the same vendor.');
+                validateSelection();
+                return;
+            }
+
+            const anchorDate = requireExpectedToggle.checked && selected.length
+                ? selected[0].dataset.expectedDate
+                : null;
+            if (event.target.checked && requireExpectedToggle.checked && anchorDate && event.target.dataset.expectedDate !== anchorDate) {
+                event.target.checked = false;
+                showAlert('When matching expected dates, choose orders with the same expected date.');
+                validateSelection();
+                return;
+            }
+
+            validateSelection();
+        });
+    });
+
+    targetSelect.addEventListener('change', () => {
+        updateSourceInput(getSelected());
+    });
+
+    requireExpectedToggle.addEventListener('change', () => {
+        validateSelection();
+    });
+
+    modalRequireExpected.addEventListener('change', () => {
+        requireExpectedToggle.checked = modalRequireExpected.checked;
+        validateSelection();
+    });
+
+    mergeForm.addEventListener('submit', (event) => {
+        if (!sourceInput.value.trim() || !targetSelect.value) {
+            event.preventDefault();
+            showAlert('Select purchase orders to merge and choose a target.');
+            return;
+        }
+        modalRequireExpected.checked = requireExpectedToggle.checked;
+    });
+
+    validateSelection();
 });
 </script>
 {% endblock %}
