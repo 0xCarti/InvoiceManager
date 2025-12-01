@@ -3,6 +3,35 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Purchase Orders</h2>
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Merge Purchase Orders</h5>
+            {% if merge_form.errors %}
+            <div class="alert alert-danger">
+                Please correct the errors below before merging.
+            </div>
+            {% endif %}
+            <form method="post" action="{{ url_for('purchase.merge_purchase_orders_route') }}" class="row g-3 align-items-end">
+                {{ merge_form.hidden_tag() }}
+                <div class="col-md-3">
+                    <label class="form-label" for="target_po_id">{{ merge_form.target_po_id.label.text }}</label>
+                    {{ merge_form.target_po_id(class_='form-control', id='target_po_id', min='1', required=True) }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="source_po_ids">{{ merge_form.source_po_ids.label.text }}</label>
+                    {{ merge_form.source_po_ids(class_='form-control', id='source_po_ids', required=True, placeholder='e.g., 12, 15 18') }}
+                    <div class="form-text">{{ merge_form.source_po_ids.description }}</div>
+                </div>
+                <div class="col-md-2 form-check mt-4">
+                    {{ merge_form.require_expected_date_match(class_='form-check-input', id='require_expected_date_match') }}
+                    <label class="form-check-label" for="require_expected_date_match">{{ merge_form.require_expected_date_match.label.text }}</label>
+                </div>
+                <div class="col-md-1 text-md-end">
+                    {{ merge_form.submit(class_='btn btn-primary w-100') }}
+                </div>
+            </form>
+        </div>
+    </div>
     <div class="row justify-content-between">
         <div class="col-auto">
             <a class="btn btn-primary mb-3" href="{{ url_for('purchase.create_purchase_order') }}">Create Purchase Order</a>

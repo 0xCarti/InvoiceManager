@@ -16,6 +16,7 @@ from app.forms import (
     ConfirmForm,
     DeleteForm,
     PurchaseOrderForm,
+    PurchaseOrderMergeForm,
     ReceiveInvoiceForm,
     VendorItemAliasResolutionForm,
     load_purchase_gl_code_choices,
@@ -52,9 +53,14 @@ from app.services.purchase_imports import (
     serialize_parsed_line,
     update_or_create_vendor_alias,
 )
+from app.services.purchase_merge import (
+    PurchaseMergeError,
+    merge_purchase_orders,
+)
 
 import datetime
 import json
+import re
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
@@ -114,6 +120,7 @@ def check_negative_invoice_reverse(invoice_obj):
 def view_purchase_orders():
     """Show purchase orders with optional filters."""
     delete_form = DeleteForm()
+    merge_form = PurchaseOrderMergeForm()
     page = request.args.get("page", 1, type=int)
     per_page = get_per_page()
     vendor_id = request.args.get("vendor_id", type=int)
@@ -197,6 +204,7 @@ def view_purchase_orders():
         "purchase_orders/view_purchase_orders.html",
         orders=orders,
         delete_form=delete_form,
+        merge_form=merge_form,
         vendors=vendors,
         vendor_id=vendor_id,
         start_date=start_date_str,
@@ -210,6 +218,55 @@ def view_purchase_orders():
         per_page=per_page,
         pagination_args=build_pagination_args(per_page),
     )
+
+
+@purchase.route("/purchase_orders/merge", methods=["POST"])
+@login_required
+def merge_purchase_orders_route():
+    """Merge unreceived purchase orders into a single target order."""
+
+    form = PurchaseOrderMergeForm()
+    if not form.validate_on_submit():
+        flash("Invalid merge request. Please check the form inputs.", "error")
+        return redirect(url_for("purchase.view_purchase_orders"))
+
+    raw_source_ids = form.source_po_ids.data or ""
+    source_ids = []
+    for token in [t.strip() for t in re.split(r"[\s,]+", raw_source_ids) if t.strip()]:
+        try:
+            parsed = int(token)
+        except ValueError:
+            flash(f"Invalid purchase order ID: {token}", "error")
+            return redirect(url_for("purchase.view_purchase_orders"))
+        if parsed <= 0:
+            flash("Purchase order IDs must be positive numbers.", "error")
+            return redirect(url_for("purchase.view_purchase_orders"))
+        if parsed not in source_ids:
+            source_ids.append(parsed)
+
+    if not source_ids:
+        flash("Please provide at least one source purchase order ID.", "error")
+        return redirect(url_for("purchase.view_purchase_orders"))
+
+    try:
+        merge_purchase_orders(
+            target_po_id=form.target_po_id.data,
+            source_po_ids=source_ids,
+            require_expected_date_match=bool(
+                form.require_expected_date_match.data
+            ),
+        )
+    except PurchaseMergeError as exc:
+        flash(str(exc), "error")
+    except Exception:
+        flash("An unexpected error occurred while merging purchase orders.", "error")
+    else:
+        flash(
+            f"Merged purchase orders {', '.join(map(str, source_ids))} into {form.target_po_id.data}.",
+            "success",
+        )
+
+    return redirect(url_for("purchase.view_purchase_orders"))
 
 
 @purchase.route("/purchase_orders/create", methods=["GET", "POST"])
