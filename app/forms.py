@@ -1342,6 +1342,19 @@ class PurchaseOrderForm(FlaskForm):
             item_form.unit.choices = units
 
 
+class PurchaseOrderMergeForm(FlaskForm):
+    target_po_id = IntegerField("Target Purchase Order ID", validators=[DataRequired()])
+    source_po_ids = StringField(
+        "Source Purchase Order IDs",
+        validators=[DataRequired()],
+        description="Comma or space-separated list",
+    )
+    require_expected_date_match = BooleanField(
+        "Require matching expected date", default=True
+    )
+    submit = SubmitField("Merge")
+
+
 class VendorItemAliasResolutionRowForm(FlaskForm):
     vendor_sku = HiddenField("Vendor SKU")
     vendor_description = HiddenField("Vendor Description")
