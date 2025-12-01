@@ -6,7 +6,7 @@ from io import BytesIO
 from typing import Mapping, Sequence, Tuple
 
 from flask import current_app, render_template
-from pypdf import PdfMerger
+from pypdf import PdfWriter
 from weasyprint import HTML
 
 PDFPage = Tuple[str, Mapping[str, object]]
@@ -50,16 +50,16 @@ def render_stand_sheet_pdf(pages: Sequence[PDFPage]) -> bytes:
         finally:
             pdf_streams[0].close()
 
-    merger = PdfMerger()
+    writer = PdfWriter()
     try:
         for stream in pdf_streams:
-            merger.append(stream)
+            writer.append(stream)
         output = BytesIO()
-        merger.write(output)
+        writer.write(output)
         data = output.getvalue()
         output.close()
         return data
     finally:
-        merger.close()
+        writer.close()
         for stream in pdf_streams:
             stream.close()
