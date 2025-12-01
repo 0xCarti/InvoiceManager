@@ -208,7 +208,7 @@
     <table class="table sortable" id="purchase-orders-table">
         <thead>
             <tr>
-                <th class="text-center">Select</th>
+                <th class="text-center">Select (pending)</th>
                 <th class="col-po-id" data-type="number">ID</th>
                 <th class="col-po-vendor">Vendor</th>
                 <th class="col-po-vendor-name">Vendor (Recorded)</th>
@@ -227,7 +227,11 @@
         {% for order in orders.items %}
             <tr data-id="{{ order.id }}" data-vendor="{{ order.vendor_id }}" data-order-date="{{ order.order_date }}" data-expected-date="{{ order.expected_date }}" data-delivery="{{ order.delivery_charge }}">
                 <td class="text-center">
-                    <input class="form-check-input po-select" type="checkbox" value="{{ order.id }}" data-vendor="{{ order.vendor_id }}" data-vendor-name="{{ (order.vendor.first_name ~ ' ' ~ order.vendor.last_name) if order.vendor else order.vendor_name or 'Vendor ' ~ order.vendor_id }}" data-expected-date="{{ order.expected_date.strftime('%Y-%m-%d') if order.expected_date else '' }}" data-received="{{ '1' if order.received else '0' }}" {% if order.received %}disabled{% endif %}>
+                    {% if not order.received %}
+                    <input class="form-check-input po-select" type="checkbox" value="{{ order.id }}" data-vendor="{{ order.vendor_id }}" data-vendor-name="{{ (order.vendor.first_name ~ ' ' ~ order.vendor.last_name) if order.vendor else order.vendor_name or 'Vendor ' ~ order.vendor_id }}" data-expected-date="{{ order.expected_date.strftime('%Y-%m-%d') if order.expected_date else ''}}" data-received="0">
+                    {% else %}
+                    <span class="text-muted" title="Received purchase orders cannot be merged">—</span>
+                    {% endif %}
                 </td>
                 <td class="col-po-id" data-sort-value="{{ order.id }}">{{ order.id }}</td>
                 <td class="col-po-vendor">
