@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import json
-from typing import Dict, List, Sequence
+from typing import Dict, List, Sequence, Tuple
 
+from flask_login import current_user
 from sqlalchemy.orm import selectinload
 
 from app import db
-from app.models import PurchaseInvoiceDraft, PurchaseOrder
-from app.utils.activity import log_activity
+from app.models import (
+    ActivityLog,
+    PurchaseInvoiceDraft,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseOrderItemArchive,
+)
 
 
 class PurchaseMergeError(Exception):
@@ -19,16 +25,12 @@ class PurchaseMergeError(Exception):
 def merge_purchase_orders(
     target_po_id: int,
     source_po_ids: Sequence[int],
-    *,
-    require_expected_date_match: bool = True,
 ) -> PurchaseOrder:
     """Merge purchase orders into a single target order.
 
     Args:
         target_po_id: The ID of the purchase order to merge into.
         source_po_ids: A list of purchase order IDs to be merged into the target.
-        require_expected_date_match: When True, all orders must share the same
-            expected date.
 
     Returns:
         The updated target :class:`PurchaseOrder` instance.
@@ -43,70 +45,170 @@ def merge_purchase_orders(
     if target_po_id in source_po_ids:
         raise PurchaseMergeError("Target purchase order cannot be one of the sources.")
 
-    all_ids = set(source_po_ids) | {target_po_id}
-    orders: List[PurchaseOrder] = (
-        PurchaseOrder.query.options(selectinload(PurchaseOrder.items))
-        .filter(PurchaseOrder.id.in_(all_ids))
-        .all()
-    )
+    unique_source_ids = list(dict.fromkeys(source_po_ids))
+    all_ids = set(unique_source_ids) | {target_po_id}
 
-    if len(orders) != len(all_ids):
-        missing = sorted(all_ids - {order.id for order in orders})
-        raise PurchaseMergeError(
-            f"Purchase order(s) not found: {', '.join(map(str, missing))}"
+    with db.session.begin():
+        orders: List[PurchaseOrder] = (
+            PurchaseOrder.query.options(selectinload(PurchaseOrder.items))
+            .filter(PurchaseOrder.id.in_(all_ids))
+            .all()
         )
 
-    order_lookup = {order.id: order for order in orders}
-    target_order = order_lookup[target_po_id]
-    source_orders = [order_lookup[po_id] for po_id in source_po_ids]
+        if len(orders) != len(all_ids):
+            missing = sorted(all_ids - {order.id for order in orders})
+            raise PurchaseMergeError(
+                f"Purchase order(s) not found: {', '.join(map(str, missing))}"
+            )
 
+        order_lookup = {order.id: order for order in orders}
+        target_order = order_lookup[target_po_id]
+        source_orders = [order_lookup[po_id] for po_id in unique_source_ids]
+
+        _validate_orders(target_order, source_orders)
+
+        position_map, aggregated_items = _aggregate_items(target_order, source_orders)
+
+        target_order.delivery_charge = _combined_delivery(target_order, source_orders)
+
+        for item in list(target_order.items):
+            db.session.delete(item)
+        target_order.items = aggregated_items
+
+        _merge_invoice_drafts(target_order, source_orders, position_map)
+        _archive_source_items(source_orders)
+
+        for source in source_orders:
+            db.session.delete(source)
+
+        _record_activity(target_order.id, unique_source_ids)
+
+    return target_order
+
+
+def _validate_orders(
+    target_order: PurchaseOrder, source_orders: Sequence[PurchaseOrder]
+) -> None:
     if target_order.received:
         raise PurchaseMergeError("Cannot merge into an order that has already been received.")
 
     vendor_id = target_order.vendor_id
+    expected_date = target_order.expected_date
     for source in source_orders:
         if source.received:
             raise PurchaseMergeError("All source purchase orders must be unreceived.")
         if source.vendor_id != vendor_id:
             raise PurchaseMergeError("All purchase orders must share the same vendor.")
-        if require_expected_date_match and source.expected_date != target_order.expected_date:
+        if source.expected_date != expected_date:
             raise PurchaseMergeError("All purchase orders must share the same expected date.")
 
-    next_position = (
-        max((item.position for item in target_order.items), default=-1) + 1
-    )
 
-    draft_position_map: Dict[tuple[int, int], int] = {}
+def _aggregate_items(
+    target_order: PurchaseOrder, source_orders: Sequence[PurchaseOrder]
+) -> Tuple[Dict[tuple[int, int], int], List[PurchaseOrderItem]]:
+    """Aggregate items from the target and sources by identity.
 
-    for source in source_orders:
-        for item in sorted(source.items, key=lambda itm: itm.position):
-            draft_position_map[(source.id, item.position)] = next_position
-            source.items.remove(item)
-            target_order.items.append(item)
-            item.purchase_order_id = target_order.id
-            item.position = next_position
-            next_position += 1
+    Items sharing the same (item_id, unit_id, product_id, unit_cost) tuple are combined
+    into a single :class:`PurchaseOrderItem` with summed quantities. Positions are
+    reassigned sequentially starting at zero.
+    """
 
-    total_delivery = (target_order.delivery_charge or 0.0) + sum(
+    all_orders = [target_order, *source_orders]
+    order_priority = {target_order.id: -1}
+    order_priority.update({order.id: index for index, order in enumerate(source_orders)})
+
+    grouped: Dict[
+        Tuple[int | None, int | None, int | None, float | None],
+        Dict[str, object],
+    ] = {}
+
+    for order in all_orders:
+        for item in order.items:
+            key = (item.item_id, item.unit_id, item.product_id, item.unit_cost)
+            record = grouped.setdefault(key, {"quantity": 0.0, "items": [], "sample": item})
+            record["quantity"] = float(record["quantity"]) + float(item.quantity)
+            record["items"].append((order.id, item.position))
+
+    def _sort_key(entry: Tuple[tuple, Dict[str, object]]):
+        positions: List[Tuple[int, int]] = entry[1]["items"]  # type: ignore[index]
+        anchor_order, anchor_position = min(
+            positions,
+            key=lambda data: (order_priority.get(data[0], data[0]), data[1]),
+        )
+        return (order_priority.get(anchor_order, anchor_order), anchor_position)
+
+    position_map: Dict[tuple[int, int], int] = {}
+    aggregated_items: List[PurchaseOrderItem] = []
+
+    for new_position, (key, info) in enumerate(sorted(grouped.items(), key=_sort_key)):
+        sample_item: PurchaseOrderItem = info["sample"]  # type: ignore[assignment]
+        aggregated_items.append(
+            PurchaseOrderItem(
+                purchase_order_id=target_order.id,
+                position=new_position,
+                product_id=sample_item.product_id,
+                unit_id=sample_item.unit_id,
+                item_id=sample_item.item_id,
+                quantity=info["quantity"],
+                unit_cost=sample_item.unit_cost,
+            )
+        )
+
+        for order_id, previous_position in info["items"]:  # type: ignore[index]
+            position_map[(order_id, previous_position)] = new_position
+
+    return position_map, aggregated_items
+
+
+def _combined_delivery(
+    target_order: PurchaseOrder, source_orders: Sequence[PurchaseOrder]
+) -> float:
+    return (target_order.delivery_charge or 0.0) + sum(
         source.delivery_charge or 0.0 for source in source_orders
     )
-    target_order.delivery_charge = total_delivery
 
-    _merge_invoice_drafts(
-        target_order,
-        source_orders,
-        draft_position_map,
-    )
 
+def _archive_source_items(source_orders: Sequence[PurchaseOrder]) -> None:
+    archives: List[PurchaseOrderItemArchive] = []
     for source in source_orders:
-        db.session.delete(source)
+        for item in source.items:
+            archives.append(
+                PurchaseOrderItemArchive(
+                    purchase_order_id=source.id,
+                    position=item.position,
+                    item_id=item.item_id,
+                    unit_id=item.unit_id,
+                    quantity=item.quantity,
+                    unit_cost=item.unit_cost,
+                )
+            )
+    if archives:
+        db.session.bulk_save_objects(archives)
 
-    db.session.commit()
 
+def _record_activity(target_po_id: int, source_po_ids: Sequence[int]) -> None:
+    user_id = _current_user_id()
     merged_ids = ", ".join(map(str, source_po_ids))
-    log_activity(f"Merged purchase orders {merged_ids} into {target_order.id}")
+    activities = [
+        ActivityLog(
+            user_id=user_id,
+            activity=f"Merged purchase orders {merged_ids} into {target_po_id}",
+        ),
+        ActivityLog(
+            user_id=user_id,
+            activity=(
+                "Combined delivery charges and archived source purchase orders "
+                f"{merged_ids} into {target_po_id}"
+            ),
+        ),
+    ]
+    db.session.add_all(activities)
 
-    return target_order
+
+def _current_user_id() -> int | None:
+    if current_user and not current_user.is_anonymous:
+        return current_user.id
+    return None
 
 
 def _merge_invoice_drafts(
@@ -131,8 +233,15 @@ def _merge_invoice_drafts(
     if not target_draft and not source_drafts:
         return
 
-    base_payload = target_draft.data if target_draft else {}
-    base_items = list(base_payload.get("items", []) or [])
+    base_payload = dict(target_draft.data) if target_draft else {}
+    base_items = []
+
+    for item in (target_draft.data or {}).get("items", []) if target_draft else []:
+        item_copy = dict(item)
+        mapped_position = draft_position_map.get((target_order.id, item.get("position")))
+        if mapped_position is not None:
+            item_copy["position"] = mapped_position
+        base_items.append(item_copy)
 
     draft_sources = []
 
@@ -211,7 +320,13 @@ def _merge_invoice_drafts(
 
     if draft_sources:
         merged_ids = ", ".join(map(str, draft_sources))
-        log_activity(
-            f"Merged purchase invoice drafts from purchase orders {merged_ids} into {target_order.id}"
+        db.session.add(
+            ActivityLog(
+                user_id=_current_user_id(),
+                activity=(
+                    "Merged purchase invoice drafts from purchase orders "
+                    f"{merged_ids} into {target_order.id}"
+                ),
+            )
         )
 

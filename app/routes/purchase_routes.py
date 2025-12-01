@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from flask import (
     Blueprint,
     abort,
@@ -10,6 +12,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
+from flask_wtf.csrf import validate_csrf
 
 from app import db
 from app.forms import (
@@ -64,8 +67,53 @@ import re
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
+from wtforms.validators import ValidationError
 
 purchase = Blueprint("purchase", __name__)
+
+
+def _merge_error_response(message: str, wants_json: bool):
+    if wants_json:
+        return jsonify({"error": message}), 400
+    flash(message, "error")
+    return redirect(url_for("purchase.view_purchase_orders"))
+
+
+def _parse_source_ids(raw_source_ids) -> list[int]:
+    source_ids: list[int] = []
+    if isinstance(raw_source_ids, str):
+        tokens = [t.strip() for t in re.split(r"[\s,]+", raw_source_ids) if t.strip()]
+    else:
+        tokens = raw_source_ids or []
+
+    for token in tokens:
+        try:
+            parsed = int(token)
+        except (TypeError, ValueError):
+            raise PurchaseMergeError(f"Invalid purchase order ID: {token}")
+        if parsed <= 0:
+            raise PurchaseMergeError("Purchase order IDs must be positive numbers.")
+        if parsed not in source_ids:
+            source_ids.append(parsed)
+
+    if not source_ids:
+        raise PurchaseMergeError("Please provide at least one source purchase order ID.")
+
+    return source_ids
+
+
+def _validate_json_csrf(payload: dict | None) -> None:
+    token = request.headers.get("X-CSRFToken")
+    if not token and payload:
+        token = payload.get("csrf_token")
+
+    if not token:
+        raise PurchaseMergeError("Missing CSRF token for merge request.")
+
+    try:
+        validate_csrf(token)
+    except ValidationError as exc:
+        raise PurchaseMergeError(f"CSRF validation failed: {exc}") from exc
 
 
 def _purchase_gl_code_choices():
@@ -225,58 +273,72 @@ def view_purchase_orders():
 def merge_purchase_orders_route():
     """Merge unreceived purchase orders into a single target order."""
 
+    wants_json = request.is_json or request.accept_mimetypes.best == "application/json"
+    payload = request.get_json(silent=True) if request.is_json else None
+    if payload is None and request.is_json:
+        payload = {}
+
     form = PurchaseOrderMergeForm()
-    if not form.validate_on_submit():
+    if not request.is_json and not form.validate_on_submit():
         flash("Invalid merge request. Please check the form inputs.", "error")
         return redirect(url_for("purchase.view_purchase_orders"))
 
-    raw_source_ids = form.source_po_ids.data or ""
-    source_ids = []
-    for token in [t.strip() for t in re.split(r"[\s,]+", raw_source_ids) if t.strip()]:
+    if request.is_json:
         try:
-            parsed = int(token)
-        except ValueError:
-            flash(f"Invalid purchase order ID: {token}", "error")
-            return redirect(url_for("purchase.view_purchase_orders"))
-        if parsed <= 0:
-            flash("Purchase order IDs must be positive numbers.", "error")
-            return redirect(url_for("purchase.view_purchase_orders"))
-        if parsed not in source_ids:
-            source_ids.append(parsed)
+            _validate_json_csrf(payload)
+        except PurchaseMergeError as exc:
+            return jsonify({"error": str(exc)}), 400
+        target_po_id = payload.get("target_po_id")
+        raw_source_ids = payload.get("source_po_ids", [])
+    else:
+        target_po_id = form.target_po_id.data
+        raw_source_ids = form.source_po_ids.data or ""
 
-    if not source_ids:
-        flash("Please provide at least one source purchase order ID.", "error")
-        return redirect(url_for("purchase.view_purchase_orders"))
+    try:
+        target_id = int(target_po_id)
+    except (TypeError, ValueError):
+        return _merge_error_response(
+            "Target purchase order ID is required.", wants_json
+        )
+
+    if target_id <= 0:
+        return _merge_error_response(
+            "Target purchase order ID must be a positive number.", wants_json
+        )
+
+    try:
+        source_ids = _parse_source_ids(raw_source_ids)
+    except PurchaseMergeError as exc:
+        return _merge_error_response(str(exc), wants_json)
 
     try:
         merge_purchase_orders(
-            target_po_id=form.target_po_id.data,
+            target_po_id=target_id,
             source_po_ids=source_ids,
-            require_expected_date_match=bool(
-                form.require_expected_date_match.data
-            ),
         )
     except PurchaseMergeError as exc:
-        flash(
-            (
-                "Merge failed: "
-                f"{exc}. Please select pending purchase orders from the same vendor"
-                " (and expected date if required) and try again."
-            ),
-            "error",
-        )
+        return _merge_error_response(f"Merge failed: {exc}", wants_json)
     except Exception:
-        flash(
-            "An unexpected error occurred while merging purchase orders."
-            " Please adjust your selection and try again.",
-            "error",
-        )
-    else:
-        flash(
-            f"Merged purchase orders {', '.join(map(str, source_ids))} into {form.target_po_id.data}.",
-            "success",
+        return _merge_error_response(
+            "An unexpected error occurred while merging purchase orders.", wants_json
         )
 
+    success_message = (
+        f"Merged purchase orders {', '.join(map(str, source_ids))} into {target_id}."
+    )
+    if wants_json:
+        return (
+            jsonify(
+                {
+                    "message": success_message,
+                    "target_po_id": target_id,
+                    "merged_po_ids": source_ids,
+                }
+            ),
+            200,
+        )
+
+    flash(success_message, "success")
     return redirect(url_for("purchase.view_purchase_orders"))
 
 
