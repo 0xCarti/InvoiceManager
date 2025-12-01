@@ -257,9 +257,20 @@ def merge_purchase_orders_route():
             ),
         )
     except PurchaseMergeError as exc:
-        flash(str(exc), "error")
+        flash(
+            (
+                "Merge failed: "
+                f"{exc}. Please select pending purchase orders from the same vendor"
+                " (and expected date if required) and try again."
+            ),
+            "error",
+        )
     except Exception:
-        flash("An unexpected error occurred while merging purchase orders.", "error")
+        flash(
+            "An unexpected error occurred while merging purchase orders."
+            " Please adjust your selection and try again.",
+            "error",
+        )
     else:
         flash(
             f"Merged purchase orders {', '.join(map(str, source_ids))} into {form.target_po_id.data}.",
