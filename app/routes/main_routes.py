@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template
 from flask_login import current_user, login_required
 
+from app.forms import ConfirmForm
 from app.services.dashboard_metrics import dashboard_context
 
 main = Blueprint("main", __name__)
@@ -17,6 +18,7 @@ def home():
     form = TransferForm()
     add_form = TransferForm(prefix="add")
     edit_form = TransferForm(prefix="edit")
+    confirm_form = ConfirmForm()
 
     return render_template(
         "dashboard.html",
@@ -25,4 +27,5 @@ def home():
         form=form,
         add_form=add_form,
         edit_form=edit_form,
+        confirm_form=confirm_form,
     )
