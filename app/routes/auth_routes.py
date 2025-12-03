@@ -137,7 +137,7 @@ def login():
             flash("Please contact system admin to activate account.")
             return redirect(url_for("auth.login"))
 
-        login_user(user)
+        login_user(user, remember=form.remember.data)
         log_activity("Logged in", user.id)
         return redirect(url_for("transfer.view_transfers"))
 
