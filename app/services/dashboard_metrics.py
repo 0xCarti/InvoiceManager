@@ -9,6 +9,7 @@ from sqlalchemy import func
 
 from app import db
 from app.models import Event, Invoice, PurchaseInvoice, PurchaseOrder, Transfer
+from app.services.event_service import event_schedule
 
 
 def _coalesce_scalar(query) -> float:
@@ -104,10 +105,13 @@ def dashboard_context() -> Dict[str, Any]:
 
     today = date.today()
 
+    events = event_summary(today)
+    events["schedule"] = event_schedule(today)
+
     return {
         "transfers": transfer_summary(),
         "purchase_orders": purchase_order_summary(today),
         "purchase_invoices": purchase_invoice_summary(),
         "invoices": invoice_summary(),
-        "events": event_summary(today),
+        "events": events,
     }

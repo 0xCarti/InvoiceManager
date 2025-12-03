@@ -88,5 +88,136 @@
             </div>
         </div>
     </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-12">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
+                        <div>
+                            <h5 class="card-title mb-1">Event Schedule</h5>
+                            <p class="text-muted mb-0">Browse upcoming and active events; overdue dates are highlighted.</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a class="btn btn-primary" href="{{ url_for('event.create_event') }}">Schedule event</a>
+                            <a class="btn btn-outline-danger" href="{{ url_for('event.view_events') }}">Close event</a>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-3">
+                        <div class="col-lg-4">
+                            <div class="border rounded p-3 h-100">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0">{{ context.events.schedule.calendar.month_label }}</h6>
+                                    <span class="badge bg-light text-body-secondary">Today: {{ context.events.schedule.calendar.today.strftime('%b %d') }}</span>
+                                </div>
+                                <p class="small text-muted mb-2">Click a date badge to filter the event list.</p>
+                                <div class="d-grid gap-2 event-calendar-grid" style="grid-template-columns: repeat(7, minmax(0, 1fr));">
+                                    {% for day in context.events.schedule.calendar.days %}
+                                        {% set has_events = day.count > 0 %}
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-secondary text-start event-calendar-day"
+                                            data-date="{{ day.date.isoformat() }}"
+                                            data-label="{{ day.date.strftime('%b %d') }}"
+                                            {% if day.date == context.events.schedule.calendar.today %}data-today="true"{% endif %}
+                                            {% if not has_events %}data-empty="true"{% endif %}
+                                        >
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="fw-semibold">{{ day.day }}</span>
+                                                {% if has_events %}
+                                                    <span class="badge bg-primary">{{ day.count }}</span>
+                                                {% else %}
+                                                    <span class="text-muted small">–</span>
+                                                {% endif %}
+                                            </div>
+                                        </button>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-8">
+                            <div class="border rounded p-3 h-100 d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0">Upcoming events</h6>
+                                    <span class="small text-muted" data-event-filter-label>Showing all events</span>
+                                </div>
+                                <ul class="list-group list-group-flush flex-grow-1" id="event-schedule-list">
+                                    {% for ev in context.events.schedule.events %}
+                                        <li class="list-group-item" data-event-row data-start-date="{{ ev.start_date.isoformat() }}" data-end-date="{{ ev.end_date.isoformat() }}">
+                                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                                <div>
+                                                    <div class="fw-semibold">{{ ev.name }}</div>
+                                                    <div class="text-muted small">{{ ev.start_date.strftime('%b %d, %Y') }} – {{ ev.end_date.strftime('%b %d, %Y') }}</div>
+                                                </div>
+                                                <div class="text-end">
+                                                    {% if ev.status == 'past_due' %}
+                                                        <span class="badge bg-danger">Past close date</span>
+                                                    {% elif ev.status == 'active' %}
+                                                        <span class="badge bg-success">Active</span>
+                                                    {% else %}
+                                                        <span class="badge bg-primary">Upcoming</span>
+                                                    {% endif %}
+                                                    <div>
+                                                        <a class="small" href="{{ url_for('event.view_event', event_id=ev.id) }}">View</a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </li>
+                                    {% else %}
+                                        <li class="list-group-item text-muted">No upcoming events scheduled.</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script nonce="{{ csp_nonce }}">
+        document.addEventListener('DOMContentLoaded', () => {
+            const calendarButtons = Array.from(document.querySelectorAll('.event-calendar-day'));
+            const eventRows = Array.from(document.querySelectorAll('[data-event-row]'));
+            const filterLabel = document.querySelector('[data-event-filter-label]');
+            let selectedDate = '';
+
+            function updateFilter(dateValue, label) {
+                selectedDate = dateValue;
+                calendarButtons.forEach((btn) => {
+                    btn.classList.toggle('active', btn.dataset.date === selectedDate);
+                    if (btn.dataset.today === 'true') {
+                        btn.classList.toggle('btn-outline-primary', btn.dataset.date === selectedDate);
+                    }
+                });
+
+                eventRows.forEach((row) => {
+                    const start = row.dataset.startDate;
+                    const end = row.dataset.endDate;
+                    const matches = !selectedDate || (start <= selectedDate && selectedDate <= end);
+                    row.classList.toggle('d-none', !matches);
+                });
+
+                if (filterLabel) {
+                    filterLabel.textContent = selectedDate ? `Showing events on ${label}` : 'Showing all events';
+                }
+            }
+
+            calendarButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    if (btn.dataset.empty === 'true') {
+                        return;
+                    }
+                    const isSameSelection = btn.dataset.date === selectedDate;
+                    const newDate = isSameSelection ? '' : btn.dataset.date;
+                    const label = isSameSelection ? '' : btn.dataset.label;
+                    updateFilter(newDate, label || '');
+                });
+            });
+        });
+    </script>
 {% endblock %}
