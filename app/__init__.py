@@ -6,11 +6,11 @@ from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from flask import Flask, Response, g, render_template, request
+from flask import Flask, Response, flash, g, redirect, render_template, request, url_for
 from flask_bootstrap import Bootstrap
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user, logout_user
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import CSRFProtect
@@ -133,6 +133,7 @@ def create_app(args=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
+        REMEMBER_COOKIE_DURATION=timedelta(days=7),
     )
     app.config["START_TIME"] = datetime.utcnow()
     # Use absolute paths so that changing the working directory after app
@@ -263,6 +264,34 @@ def create_app(args=None):
         """Return a 405 for HTTP OPTIONS requests to reduce information leakage."""
         if request.method == "OPTIONS":
             return Response(status=405)
+
+    @app.before_request
+    def enforce_login_activity():
+        """Log users out after inactivity and enforce periodic reauthentication."""
+
+        if not current_user.is_authenticated:
+            return
+
+        now = datetime.utcnow()
+        inactivity_limit = timedelta(days=7)
+        reauth_limit = timedelta(days=30)
+
+        last_active = current_user.last_active_at
+        if last_active and now - last_active > inactivity_limit:
+            logout_user()
+            flash("You have been logged out due to inactivity.", "warning")
+            return redirect(url_for("auth.login"))
+
+        last_forced_login = current_user.last_forced_login_at
+        if last_forced_login and now - last_forced_login > reauth_limit:
+            logout_user()
+            flash("Please sign in again to continue.", "warning")
+            return redirect(url_for("auth.login"))
+
+        current_user.last_active_at = now
+        if current_user.last_forced_login_at is None:
+            current_user.last_forced_login_at = now
+        db.session.commit()
 
     @app.route("/.well-known/security.txt")
     def security_txt():

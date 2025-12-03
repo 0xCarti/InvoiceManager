@@ -87,6 +87,9 @@ class User(UserMixin, db.Model):
     items_per_page = db.Column(
         db.Integer, nullable=False, default=20, server_default="20"
     )
+    last_login_at = db.Column(db.DateTime, nullable=True)
+    last_active_at = db.Column(db.DateTime, nullable=True)
+    last_forced_login_at = db.Column(db.DateTime, nullable=True)
     filter_preferences = relationship(
         "UserFilterPreference",
         back_populates="user",
