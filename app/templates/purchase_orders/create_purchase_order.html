@@ -2,6 +2,19 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Create Purchase Order</h2>
+    {% if upload_state %}
+    <div class="alert alert-info d-flex justify-content-between align-items-start">
+        <div>
+            <p class="mb-1">This form is prefilled from your uploaded purchase order{% if upload_state.source_filename %} <strong>{{ upload_state.source_filename }}</strong>{% endif %}.</p>
+            <ul class="mb-0 small text-muted">
+                {% if upload_state.vendor_name %}<li>Vendor: {{ upload_state.vendor_name }}</li>{% endif %}
+                {% if upload_state.order_number %}<li>Order number: {{ upload_state.order_number }}</li>{% endif %}
+                {% if upload_state.expected_total %}<li>Expected total: ${{ '%.2f'|format(upload_state.expected_total) }}</li>{% endif %}
+            </ul>
+        </div>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('purchase.create_purchase_order', reset_upload=1) }}">Start over</a>
+    </div>
+    {% endif %}
     <form method="POST">
         {{ form.hidden_tag() }}
         <div class="form-group">

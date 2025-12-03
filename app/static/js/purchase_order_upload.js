@@ -6,6 +6,7 @@
         const fileName = document.getElementById('upload-po-file-name');
         const browseButton = document.getElementById('upload-po-browse-btn');
         const errorAlert = document.getElementById('upload-po-error');
+        const vendorSelect = document.getElementById('upload-po-vendor');
 
         if (!uploadForm || !dropzone || !fileInput) {
             return;
@@ -89,6 +90,16 @@
         });
 
         uploadForm.addEventListener('submit', (event) => {
+            if (vendorSelect && !vendorSelect.value) {
+                event.preventDefault();
+                if (errorAlert) {
+                    errorAlert.textContent = 'Select a vendor before uploading.';
+                    errorAlert.classList.remove('d-none');
+                }
+                vendorSelect.focus();
+                return;
+            }
+
             if (!fileInput.files.length) {
                 event.preventDefault();
                 if (errorAlert) {

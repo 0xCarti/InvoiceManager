@@ -3,7 +3,7 @@
 <div class="container mt-4" id="alias-resolution" data-units-map='{{ units_map|tojson }}'>
     <div class="d-flex align-items-center justify-content-between mb-3">
         <h2 class="mb-0">Match Vendor Items{% if vendor %} for {{ vendor.first_name }} {{ vendor.last_name }}{% endif %}</h2>
-        <a class="btn btn-outline-secondary" href="{{ url_for('purchase.create_purchase_order') }}">Start Over</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('purchase.create_purchase_order', reset_upload=1) }}">Start Over</a>
     </div>
 
     {% set stages = [
