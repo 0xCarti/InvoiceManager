@@ -17,6 +17,10 @@
                     <button class="btn btn-outline-secondary" type="button" id="toggle-password">Show</button>
                 </div>
             </div>
+            <div class="form-check mt-2">
+                {{ form.remember(class_="form-check-input") }}
+                {{ form.remember.label(class_="form-check-label") }}
+            </div>
             <button type="submit" class="btn btn-primary mt-2">Login</button>
         </form>
         <p class="mt-2">
