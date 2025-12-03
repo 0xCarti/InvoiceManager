@@ -50,6 +50,13 @@ from app.services.purchase_merge import (
     PurchaseMergeError,
     merge_purchase_orders,
 )
+from app.services.purchase_imports import (
+    CSVImportError,
+    parse_purchase_order_csv,
+    resolve_vendor_purchase_lines,
+    serialize_parsed_line,
+    update_or_create_vendor_alias,
+)
 
 import datetime
 import json
@@ -62,11 +69,25 @@ from wtforms.validators import ValidationError
 purchase = Blueprint("purchase", __name__)
 
 
+_PURCHASE_UPLOAD_SESSION_KEY = "purchase_order_upload"
+
+
 def _merge_error_response(message: str, wants_json: bool):
     if wants_json:
         return jsonify({"error": message}), 400
     flash(message, "error")
     return redirect(url_for("purchase.view_purchase_orders"))
+
+
+def _clear_purchase_upload_state():
+    session.pop(_PURCHASE_UPLOAD_SESSION_KEY, None)
+
+
+def _get_purchase_upload_state() -> dict | None:
+    state = session.get(_PURCHASE_UPLOAD_SESSION_KEY)
+    if not isinstance(state, dict):
+        return None
+    return state
 
 
 def _parse_source_ids(raw_source_ids) -> list[int]:
@@ -332,11 +353,171 @@ def merge_purchase_orders_route():
     return redirect(url_for("purchase.view_purchase_orders"))
 
 
+@purchase.route("/purchase_orders/upload", methods=["POST"])
+@login_required
+def upload_purchase_order():
+    file = request.files.get("purchase_order_file")
+    vendor_id = request.form.get("vendor_id", type=int)
+    vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
+
+    if vendor is None or vendor.archived:
+        flash("Select an active vendor before uploading a purchase order file.", "danger")
+        return redirect(url_for("purchase.view_purchase_orders"))
+
+    try:
+        parsed_order = parse_purchase_order_csv(file, vendor)
+        resolved_lines = resolve_vendor_purchase_lines(vendor, parsed_order.items)
+    except CSVImportError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("purchase.view_purchase_orders"))
+
+    payload = {
+        "vendor_id": vendor.id,
+        "vendor_name": f"{vendor.first_name} {vendor.last_name}",
+        "source_filename": getattr(file, "filename", None),
+        "order_number": parsed_order.order_number,
+        "order_date": parsed_order.order_date.isoformat()
+        if parsed_order.order_date
+        else None,
+        "expected_date": parsed_order.expected_date.isoformat()
+        if parsed_order.expected_date
+        else None,
+        "expected_total": parsed_order.expected_total,
+        "items": [],
+    }
+
+    for idx, resolved in enumerate(resolved_lines):
+        payload["items"].append(
+            {
+                "index": idx,
+                **serialize_parsed_line(resolved.parsed_line),
+                "item_id": resolved.item_id,
+                "unit_id": resolved.unit_id,
+                "cost": resolved.cost,
+            }
+        )
+
+    session[_PURCHASE_UPLOAD_SESSION_KEY] = payload
+    session.modified = True
+
+    unresolved_count = len([line for line in payload["items"] if not line.get("item_id")])
+    if unresolved_count:
+        flash(
+            "We need your help matching a few vendor items before creating the purchase order.",
+            "warning",
+        )
+        return redirect(url_for("purchase.resolve_vendor_items"))
+
+    flash("Purchase order parsed successfully. Review the prefilled form to continue.", "success")
+    return redirect(url_for("purchase.create_purchase_order"))
+
+
+@purchase.route("/purchase_orders/resolve_vendor_items", methods=["GET", "POST"])
+@login_required
+def resolve_vendor_items():
+    payload = _get_purchase_upload_state()
+    if not payload:
+        flash("Upload a purchase order file to start resolving vendor items.", "warning")
+        return redirect(url_for("purchase.create_purchase_order"))
+
+    unresolved_lines = [line for line in payload.get("items", []) if not line.get("item_id")]
+    if not unresolved_lines:
+        return redirect(url_for("purchase.create_purchase_order"))
+
+    vendor = db.session.get(Vendor, payload.get("vendor_id")) if payload.get("vendor_id") else None
+    if vendor is None:
+        flash("The selected vendor could not be found.", "danger")
+        _clear_purchase_upload_state()
+        return redirect(url_for("purchase.create_purchase_order"))
+
+    form = VendorItemAliasResolutionForm()
+    form.vendor_id.data = vendor.id
+    form.order_date.data = payload.get("order_date")
+    form.expected_date.data = payload.get("expected_date")
+    form.order_number.data = payload.get("order_number")
+    form.expected_total_cost.data = payload.get("expected_total")
+    form.parsed_payload.data = json.dumps(payload)
+    form.unresolved_payload.data = json.dumps(unresolved_lines)
+
+    form.rows.min_entries = len(unresolved_lines)
+    while len(form.rows) < len(unresolved_lines):
+        form.rows.append_entry()
+
+    items = (
+        Item.query.options(selectinload(Item.units))
+        .filter_by(archived=False)
+        .order_by(Item.name)
+        .all()
+    )
+    item_choices = [(item.id, item.name) for item in items]
+    units_map = {item.id: [(unit.id, unit.name) for unit in item.units] for item in items}
+
+    for idx, row_form in enumerate(form.rows):
+        parsed = unresolved_lines[idx]
+        if request.method == "GET":
+            row_form.vendor_sku.data = parsed.get("vendor_sku")
+            row_form.vendor_description.data = parsed.get("vendor_description")
+            row_form.pack_size.data = parsed.get("pack_size")
+            row_form.quantity.data = parsed.get("quantity")
+            row_form.unit_cost.data = parsed.get("unit_cost")
+
+        row_form.item_id.choices = item_choices
+        selected_item = row_form.item_id.data or None
+        row_form.unit_id.choices = [(0, "—")] + units_map.get(selected_item, [])
+
+    if form.validate_on_submit():
+        unresolved_targets = [line for line in payload.get("items", []) if not line.get("item_id")]
+
+        for idx, row_form in enumerate(form.rows):
+            parsed = unresolved_targets[idx] if idx < len(unresolved_targets) else None
+            if parsed is None:
+                continue
+
+            unit_id = row_form.unit_id.data or None
+            alias = update_or_create_vendor_alias(
+                vendor=vendor,
+                item_id=row_form.item_id.data,
+                item_unit_id=unit_id,
+                vendor_sku=parsed.get("vendor_sku"),
+                vendor_description=parsed.get("vendor_description"),
+                pack_size=parsed.get("pack_size"),
+                default_cost=coerce_float(parsed.get("unit_cost")),
+            )
+            db.session.add(alias)
+
+            parsed["item_id"] = row_form.item_id.data
+            parsed["unit_id"] = unit_id
+
+        db.session.commit()
+        session[_PURCHASE_UPLOAD_SESSION_KEY] = payload
+        session.modified = True
+
+        flash("Vendor item mappings saved. Review the purchase order details next.", "success")
+        return redirect(url_for("purchase.create_purchase_order"))
+
+    return render_template(
+        "purchase_orders/resolve_vendor_items.html",
+        form=form,
+        vendor=vendor,
+        unresolved_lines=unresolved_lines,
+        units_map=units_map,
+        source_filename=payload.get("source_filename"),
+    )
+
+
 @purchase.route("/purchase_orders/create", methods=["GET", "POST"])
 @login_required
 def create_purchase_order():
     """Create a purchase order."""
     form = PurchaseOrderForm()
+    upload_state = _get_purchase_upload_state()
+
+    if request.args.get("reset_upload"):
+        _clear_purchase_upload_state()
+        return redirect(url_for("purchase.create_purchase_order"))
+
+    if upload_state and any(not line.get("item_id") for line in upload_state.get("items", [])):
+        return redirect(url_for("purchase.resolve_vendor_items"))
 
     if request.method == "GET":
         seed = session.pop("po_recommendation_seed", None)
@@ -373,6 +554,46 @@ def create_purchase_order():
                 form.items[idx].item.data = entry.get("item_id")
                 form.items[idx].unit.data = entry.get("unit_id")
                 form.items[idx].quantity.data = entry.get("quantity")
+                form.items[idx].position.data = idx
+
+        if upload_state:
+            vendor_id = upload_state.get("vendor_id")
+            if vendor_id and vendor_id in [choice[0] for choice in form.vendor.choices]:
+                form.vendor.data = vendor_id
+
+            if upload_state.get("order_number"):
+                form.order_number.data = upload_state.get("order_number")
+            if upload_state.get("expected_total") is not None:
+                form.expected_total_cost.data = upload_state.get("expected_total")
+            if upload_state.get("order_date"):
+                try:
+                    form.order_date.data = datetime.date.fromisoformat(
+                        upload_state.get("order_date")
+                    )
+                except ValueError:
+                    form.order_date.data = datetime.date.today()
+            if upload_state.get("expected_date"):
+                try:
+                    form.expected_date.data = datetime.date.fromisoformat(
+                        upload_state.get("expected_date")
+                    )
+                except ValueError:
+                    form.expected_date.data = datetime.date.today() + datetime.timedelta(
+                        days=1
+                    )
+
+            parsed_items = [
+                line for line in upload_state.get("items", []) if line.get("item_id")
+            ]
+            form.items.min_entries = max(len(parsed_items), form.items.min_entries)
+            while len(form.items) < len(parsed_items):
+                form.items.append_entry()
+            for idx, parsed_item in enumerate(parsed_items):
+                if idx >= len(form.items):
+                    break
+                form.items[idx].item.data = parsed_item.get("item_id")
+                form.items[idx].unit.data = parsed_item.get("unit_id")
+                form.items[idx].quantity.data = parsed_item.get("quantity")
                 form.items[idx].position.data = idx
 
     if request.method == "GET" and form.order_date.data is None:
@@ -451,6 +672,7 @@ def create_purchase_order():
             )
 
         db.session.commit()
+        _clear_purchase_upload_state()
         log_activity(f"Created purchase order {po.id}")
         flash("Purchase order created successfully!", "success")
         return redirect(url_for("purchase.view_purchase_orders"))
@@ -482,6 +704,7 @@ def create_purchase_order():
         form=form,
         gl_codes=codes,
         item_lookup=item_lookup,
+        upload_state=upload_state,
     )
 
 
