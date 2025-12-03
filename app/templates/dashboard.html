@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h1 class="mb-0">Dashboard</h1>
+            <p class="text-muted mb-0">A quick overview of transfer activity, purchases, invoices, and events.</p>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Transfers</h5>
+                    <p class="mb-1"><strong>Total:</strong> {{ context.transfers.total }}</p>
+                    <p class="mb-1"><strong>Completed:</strong> {{ context.transfers.completed }}</p>
+                    <p class="mb-0"><strong>Pending:</strong> {{ context.transfers.pending }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Purchase Orders</h5>
+                    <p class="mb-1"><strong>Open:</strong> {{ context.purchase_orders.open_count }}</p>
+                    <p class="mb-1"><strong>Overdue:</strong> {{ context.purchase_orders.overdue_count }}</p>
+                    <p class="mb-0"><strong>Expected Total:</strong> ${{ '%.2f'|format(context.purchase_orders.expected_total) }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Purchase Invoices</h5>
+                    <p class="mb-1"><strong>Received:</strong> {{ context.purchase_invoices.count }}</p>
+                    <p class="mb-0"><strong>Total Spend:</strong> ${{ '%.2f'|format(context.purchase_invoices.total) }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Invoices</h5>
+                    <p class="mb-1"><strong>Issued:</strong> {{ context.invoices.count }}</p>
+                    <p class="mb-0"><strong>Invoice Total:</strong> ${{ '%.2f'|format(context.invoices.total) }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Events</h5>
+                    <p class="mb-1"><strong>Active:</strong> {{ context.events.active_count }}</p>
+                    <p class="mb-1"><strong>Upcoming:</strong> {{ context.events.upcoming_count }}</p>
+                    {% if context.events.next_event %}
+                        <p class="mb-0"><strong>Next:</strong> {{ context.events.next_event.name }} ({{ context.events.next_event.start_date.strftime('%Y-%m-%d') }} - {{ context.events.next_event.end_date.strftime('%Y-%m-%d') }})</p>
+                    {% else %}
+                        <p class="mb-0 text-muted">No upcoming events scheduled.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Transfer Forms</h5>
+                    <p class="text-muted">Use these forms to prepare transfers without leaving the dashboard.</p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            {{ form.hidden_tag() }}
+                            {{ form.submit(class_="btn btn-primary w-100", value="Start Transfer") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ add_form.hidden_tag() }}
+                            {{ add_form.submit(class_="btn btn-outline-primary w-100", value="Add Transfer") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ edit_form.hidden_tag() }}
+                            {{ edit_form.submit(class_="btn btn-outline-secondary w-100", value="Edit Transfer") }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
