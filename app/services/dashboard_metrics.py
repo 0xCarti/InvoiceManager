@@ -65,6 +65,18 @@ def purchase_invoice_summary() -> Dict[str, Any]:
     }
 
 
+def invoices_pending_posting(limit: int = 5) -> Dict[str, Any]:
+    """Return recently received purchase invoices that need posting/payment."""
+
+    query = PurchaseInvoice.query.order_by(PurchaseInvoice.received_date.desc())
+    total = query.count()
+
+    return {
+        "items": query.limit(limit).all(),
+        "total": total,
+    }
+
+
 def invoice_summary() -> Dict[str, Any]:
     """Return counts and totals for customer invoices."""
 
@@ -74,6 +86,34 @@ def invoice_summary() -> Dict[str, Any]:
     return {
         "count": len(invoices),
         "total": float(total),
+    }
+
+
+def pending_purchase_orders(limit: int = 5) -> Dict[str, Any]:
+    """Return open purchase orders awaiting receipt."""
+
+    query = PurchaseOrder.query.filter(PurchaseOrder.received.is_(False)).order_by(
+        PurchaseOrder.expected_date.asc(), PurchaseOrder.order_date.asc()
+    )
+    total = query.count()
+
+    return {
+        "items": query.limit(limit).all(),
+        "total": total,
+    }
+
+
+def pending_transfers(limit: int = 5) -> Dict[str, Any]:
+    """Return transfers that still need approval/completion."""
+
+    query = Transfer.query.filter(Transfer.completed.is_(False)).order_by(
+        Transfer.date_created.desc()
+    )
+    total = query.count()
+
+    return {
+        "items": query.limit(limit).all(),
+        "total": total,
     }
 
 
@@ -114,4 +154,9 @@ def dashboard_context() -> Dict[str, Any]:
         "purchase_invoices": purchase_invoice_summary(),
         "invoices": invoice_summary(),
         "events": events,
+        "queues": {
+            "purchase_orders": pending_purchase_orders(),
+            "transfers": pending_transfers(),
+            "purchase_invoices": invoices_pending_posting(),
+        },
     }
