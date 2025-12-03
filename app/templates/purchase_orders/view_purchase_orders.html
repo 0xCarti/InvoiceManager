@@ -97,6 +97,9 @@
                     </div>
                 </div>
             </div>
+            <button type="button" class="btn btn-outline-primary mb-3" data-bs-toggle="modal" data-bs-target="#uploadPurchaseOrderModal">
+                Upload Purchase Order
+            </button>
             <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
                 Filters
             </button>
@@ -306,6 +309,36 @@
         </form>
     </div>
 </div>
+<div class="modal fade" id="uploadPurchaseOrderModal" tabindex="-1" aria-labelledby="uploadPurchaseOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadPurchaseOrderModalLabel">Upload Purchase Order</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="upload-po-form" method="post" action="/purchase_orders/upload" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div id="upload-po-error" class="alert alert-danger d-none" role="alert"></div>
+                    <label for="upload-po-file-input" class="form-label">Select a file</label>
+                    <div id="upload-po-dropzone" class="border border-2 border-secondary rounded p-4 text-center bg-light" role="button" tabindex="0" aria-describedby="upload-po-help">
+                        <p class="mb-2">Drag and drop a purchase order file here, or browse to select one.</p>
+                        <p class="text-muted mb-3" id="upload-po-help">Supported formats depend on the upload endpoint.</p>
+                        <button class="btn btn-outline-secondary" type="button" id="upload-po-browse-btn">Choose File</button>
+                        <div class="mt-2">
+                            <span class="text-muted" id="upload-po-file-name">No file chosen</span>
+                        </div>
+                    </div>
+                    <input type="file" name="purchase_order_file" id="upload-po-file-input" class="form-control mt-3 d-none" aria-label="Purchase order file">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="upload-po-submit">Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 <div class="modal fade" id="mergeConfirmModal" tabindex="-1" aria-labelledby="mergeConfirmModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -348,6 +381,7 @@
 {% block scripts %}
 {{ super() }}
 <script src="{{ url_for('static', filename='js/date_pickers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/purchase_order_upload.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     initDatePickers({
