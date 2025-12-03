@@ -1321,10 +1321,6 @@ class PurchaseOrderForm(FlaskForm):
         render_kw={"data-flatpickr": "1", "autocomplete": "off"},
     )
     expected_total_cost = DecimalField("Expected Total Cost", validators=[Optional()])
-    upload = FileField(
-        "Vendor CSV",
-        validators=[Optional(), FileAllowed({"csv"}, "CSV only!")],
-    )
     delivery_charge = DecimalField(
         "Delivery Charge", validators=[Optional()], default=0
     )
