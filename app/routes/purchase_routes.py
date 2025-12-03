@@ -21,6 +21,7 @@ from app.forms import (
     PurchaseOrderForm,
     PurchaseOrderMergeForm,
     ReceiveInvoiceForm,
+    VendorItemAliasResolutionForm,
     load_purchase_gl_code_choices,
 )
 from app.models import (
