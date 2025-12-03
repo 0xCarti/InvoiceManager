@@ -137,6 +137,11 @@ def login():
             flash("Please contact system admin to activate account.")
             return redirect(url_for("auth.login"))
 
+        now = datetime.utcnow()
+        user.last_login_at = now
+        user.last_active_at = now
+        user.last_forced_login_at = now
+        db.session.commit()
         login_user(user, remember=form.remember.data)
         log_activity("Logged in", user.id)
         return redirect(url_for("transfer.view_transfers"))
