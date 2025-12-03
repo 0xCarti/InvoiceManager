@@ -150,6 +150,11 @@
                 data-bs-target="#favoritesNav" aria-controls="favoritesNav" aria-label="Toggle favorites">
                 &#9733;
             </button>
+            <a class="navbar-brand d-flex align-items-center me-3" href="{{ url_for('main.home') }}"
+                aria-label="Dashboard home">
+                <span class="me-1" aria-hidden="true">&#8962;</span>
+                <span class="d-none d-sm-inline">Dashboard</span>
+            </a>
             {% if current_user.is_authenticated %}
             <div class="d-none d-md-block">
             <ul class="navbar-nav flex-row me-auto">

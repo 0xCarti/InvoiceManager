@@ -1519,6 +1519,9 @@ def view_purchase_invoice(invoice_id):
     )
     if invoice is None:
         abort(404)
+    log_activity(
+        f"Opened purchase invoice {invoice.id} for posting/payment review"
+    )
     return render_template(
         "purchase_invoices/view_purchase_invoice.html", invoice=invoice
     )
