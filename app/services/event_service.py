@@ -19,7 +19,7 @@ class CalendarDay:
 
     date: date
     count: int
-    event_names: List[str]
+    events: List[dict]
 
     @property
     def day(self) -> int:
@@ -64,7 +64,9 @@ def _event_status(event: Event, today: date) -> str:
     return "active"
 
 
-def _calendar_days(events: Iterable[Event], today: date) -> List[CalendarDay]:
+def _calendar_days(
+    events: Iterable[Event], today: date, open_location_counts: dict[int, int]
+) -> List[CalendarDay]:
     """Return calendar day data for the month that contains ``today``."""
 
     month_start = date(today.year, today.month, 1)
@@ -73,13 +75,16 @@ def _calendar_days(events: Iterable[Event], today: date) -> List[CalendarDay]:
     calendar_days: List[CalendarDay] = []
     for offset in range(days_in_month):
         current_day = month_start + timedelta(days=offset)
-        event_names = [
-            event.name
+        day_events = [
+            {
+                "name": event.name,
+                "open_location_count": open_location_counts.get(event.id, 0),
+            }
             for event in events
             if event.start_date <= current_day <= event.end_date
         ]
         calendar_days.append(
-            CalendarDay(date=current_day, count=len(event_names), event_names=event_names)
+            CalendarDay(date=current_day, count=len(day_events), events=day_events)
         )
 
     return calendar_days
@@ -96,13 +101,19 @@ def event_schedule(today: date | None = None) -> dict:
         .all()
     )
 
-    calendar_days = _calendar_days(open_events, today)
+    open_location_counts = {
+        event.id: sum(1 for loc in event.locations if not loc.confirmed)
+        for event in open_events
+    }
+
+    calendar_days = _calendar_days(open_events, today, open_location_counts)
 
     return {
         "events": [
             {
                 "id": event.id,
                 "name": event.name,
+                "open_location_count": open_location_counts.get(event.id, 0),
                 "start_date": event.start_date,
                 "end_date": event.end_date,
                 "status": _event_status(event, today),
