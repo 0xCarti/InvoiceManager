@@ -61,7 +61,9 @@ def _event_status(event: Event, today: date) -> str:
         return "past_due"
     if event.start_date > today:
         return "upcoming"
-    return "active"
+    if event.start_date == today:
+        return "active"
+    return "in_progress"
 
 
 def _calendar_days(
