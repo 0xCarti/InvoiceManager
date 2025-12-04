@@ -35,7 +35,7 @@ from app.utils.units import (
     get_unit_label,
 )
 from app.utils.text import normalize_name_for_sorting
-from app.utils.email import send_email
+from app.utils.email import SMTPConfigurationError, send_email
 
 location = Blueprint("locations", __name__)
 
@@ -401,6 +401,17 @@ def email_stand_sheet(location_id):
                     "application/pdf",
                 )
             ],
+        )
+    except SMTPConfigurationError as exc:
+        current_app.logger.warning(
+            "SMTP configuration missing for stand sheet email: %s", exc
+        )
+        flash(
+            "Email settings are not configured. Please update SMTP settings before sending emails.",
+            "danger",
+        )
+        return redirect(
+            url_for("locations.view_stand_sheet", location_id=location_id)
         )
     except Exception:
         current_app.logger.exception(
