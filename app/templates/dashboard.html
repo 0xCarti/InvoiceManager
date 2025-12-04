@@ -265,23 +265,19 @@
         <div class="col-12">
             <div class="card h-100">
                 <div class="card-body">
-                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
-                            <div>
-                                <h5 class="card-title mb-1">Event Schedule</h5>
-                                <p class="text-muted mb-0">Browse upcoming and active events; overdue dates are highlighted.</p>
-                            </div>
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
+                        <div>
+                            <h5 class="card-title mb-1">Event Schedule</h5>
+                            <p class="text-muted mb-0">Browse upcoming and active events; overdue dates are highlighted.</p>
+                        </div>
                         <div class="d-flex gap-2">
                             {% if can_manage_operations %}
                                 <a class="btn btn-primary" href="{{ url_for('event.create_event') }}">Schedule event</a>
-                                <a class="btn btn-outline-danger" href="{{ url_for('event.view_events') }}">Close event</a>
-                            {% else %}
-                                <span class="btn btn-primary disabled" aria-disabled="true" title="{{ action_denied_message }}">Schedule event</span>
-                                <span class="btn btn-outline-danger disabled" aria-disabled="true" title="{{ action_denied_message }}">Close event</span>
                             {% endif %}
                         </div>
-                        </div>
-                        <div class="row g-3 mt-3 align-items-start">
-                            <div class="col-lg-5">
+                    </div>
+                    <div class="row g-3 mt-3 align-items-start">
+                        <div class="col-lg-5">
                             <div class="border rounded p-3 h-100">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="mb-0">{{ context.events.schedule.calendar.month_label }}</h6>
