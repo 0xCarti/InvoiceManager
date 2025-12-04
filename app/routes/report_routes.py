@@ -28,6 +28,7 @@ from app.forms import (
     ProductRecipeReportForm,
     ProductSalesReportForm,
     QuickProductForm,
+    EventTerminalSalesReportForm,
     ReceivedInvoiceReportForm,
     VendorInvoiceReportForm,
 )
@@ -2242,6 +2243,85 @@ def product_location_sales_report():
 
     return render_template(
         "report_product_location_sales.html", form=form, report=report_data
+    )
+
+
+@report.route("/reports/event-terminal-sales", methods=["GET", "POST"])
+@login_required
+def event_terminal_sales_report():
+    form = EventTerminalSalesReportForm()
+    report_data = None
+
+    if form.validate_on_submit():
+        start_date = form.start_date.data
+        end_date = form.end_date.data
+
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt = datetime.combine(end_date, datetime.max.time())
+
+        sale_amount = func.coalesce(TerminalSale.quantity, 0) * func.coalesce(
+            Product.price, 0
+        )
+
+        event_totals = (
+            db.session.query(
+                Event.id.label("event_id"),
+                Event.name.label("event_name"),
+                func.sum(sale_amount).label("total_sales"),
+            )
+            .join(EventLocation, Event.locations)
+            .join(TerminalSale, EventLocation.terminal_sales)
+            .join(Product, TerminalSale.product)
+            .filter(TerminalSale.sold_at >= start_dt)
+            .filter(TerminalSale.sold_at <= end_dt)
+            .group_by(Event.id, Event.name)
+            .order_by(func.sum(sale_amount).desc(), Event.name)
+            .all()
+        )
+
+        location_totals = (
+            db.session.query(
+                Event.id.label("event_id"),
+                Location.id.label("location_id"),
+                Location.name.label("location_name"),
+                func.sum(sale_amount).label("total_sales"),
+            )
+            .join(EventLocation, Event.locations)
+            .join(Location, EventLocation.location)
+            .join(TerminalSale, EventLocation.terminal_sales)
+            .join(Product, TerminalSale.product)
+            .filter(TerminalSale.sold_at >= start_dt)
+            .filter(TerminalSale.sold_at <= end_dt)
+            .group_by(Event.id, Location.id, Location.name)
+            .all()
+        )
+
+        location_map: dict[int, list[dict]] = {}
+        for row in location_totals:
+            location_entries = location_map.setdefault(row.event_id, [])
+            location_entries.append(
+                {
+                    "location_id": row.location_id,
+                    "location_name": row.location_name,
+                    "total_sales": row.total_sales or 0,
+                }
+            )
+
+        for entries in location_map.values():
+            entries.sort(key=lambda entry: entry["total_sales"], reverse=True)
+
+        report_data = [
+            {
+                "event_id": row.event_id,
+                "event_name": row.event_name,
+                "total_sales": row.total_sales or 0,
+                "locations": location_map.get(row.event_id, []),
+            }
+            for row in event_totals
+        ]
+
+    return render_template(
+        "report_event_terminal_sales.html", form=form, report=report_data
     )
 
 

@@ -1228,6 +1228,16 @@ class ProductSalesReportForm(FlaskForm):
         self.gl_codes.choices = load_sales_gl_code_choices(include_unassigned=True)
 
 
+class EventTerminalSalesReportForm(FlaskForm):
+    start_date = DateField("Start Date", validators=[DataRequired()])
+    end_date = DateField("End Date", validators=[DataRequired()])
+    submit = SubmitField("Generate Report")
+
+    def validate_end_date(self, field):
+        if self.start_date.data and field.data and field.data < self.start_date.data:
+            raise ValidationError("End date must be on or after the start date.")
+
+
 class ProductRecipeReportForm(FlaskForm):
     products = SelectMultipleField(
         "Products",

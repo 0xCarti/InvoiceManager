@@ -7,6 +7,9 @@
     <div class="d-flex flex-wrap gap-2">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createEventModal">Create Event</button>
         <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
+        <a class="btn btn-outline-primary" href="{{ url_for('report.event_terminal_sales_report') }}">
+            Event Terminal Sales Report
+        </a>
     </div>
     <div class="text-sm-end">
         {{ column_visibility_dropdown(
