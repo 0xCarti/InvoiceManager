@@ -188,7 +188,7 @@
                         </div>
                     </div>
                     <div class="row g-3 mt-2">
-                        <div class="col-lg-4">
+                        <div class="col-lg-6">
                             <div class="border rounded p-3 h-100">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="mb-0">Pending purchase orders</h6>
@@ -220,7 +220,7 @@
                                 </ul>
                             </div>
                         </div>
-                        <div class="col-lg-4">
+                        <div class="col-lg-6">
                             <div class="border rounded p-3 h-100">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="mb-0">Transfers awaiting approval</h6>
@@ -251,39 +251,6 @@
                                         </li>
                                     {% else %}
                                         <li class="list-group-item px-0 text-muted">No transfers awaiting approval.</li>
-                                    {% endfor %}
-                                </ul>
-                            </div>
-                        </div>
-                        <div class="col-lg-4">
-                            <div class="border rounded p-3 h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="mb-0">Invoices to post/pay</h6>
-                                    {% if context.queues.purchase_invoices.total > context.queues.purchase_invoices['items']|length %}
-                                        <a class="small" href="{{ url_for('purchase.view_purchase_invoices') }}">Show more</a>
-                                    {% endif %}
-                                </div>
-                                <ul class="list-group list-group-flush">
-                                    {% for invoice in context.queues.purchase_invoices['items'] %}
-                                        {% set vendor_label = invoice.vendor_name or (invoice.purchase_order and invoice.purchase_order.vendor and (invoice.purchase_order.vendor.first_name ~ ' ' ~ invoice.purchase_order.vendor.last_name)) or 'Unknown vendor' %}
-                                        {% set location_label = invoice.location_name or (invoice.location and invoice.location.name) or 'Unassigned location' %}
-                                        <li class="list-group-item px-0">
-                                            <div class="d-flex justify-content-between align-items-start gap-3">
-                                                <div>
-                                                    <div class="fw-semibold">{{ vendor_label }}</div>
-                                                    <div class="text-muted small">{{ location_label }} · {{ invoice.received_date.strftime('%b %d, %Y') }} · ${{ '%.2f'|format(invoice.total) }}</div>
-                                                </div>
-                                                <div class="text-end">
-                                                    {% if can_manage_operations %}
-                                                        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('purchase.view_purchase_invoice', invoice_id=invoice.id) }}">Post/Pay</a>
-                                                    {% else %}
-                                                        <span class="btn btn-sm btn-outline-primary disabled" aria-disabled="true" title="{{ action_denied_message }}">Post/Pay</span>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </li>
-                                    {% else %}
-                                        <li class="list-group-item px-0 text-muted">No invoices awaiting posting or payment.</li>
                                     {% endfor %}
                                 </ul>
                             </div>
