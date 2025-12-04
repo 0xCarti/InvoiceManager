@@ -280,15 +280,15 @@
                             {% endif %}
                         </div>
                         </div>
-                        <div class="row g-3 mt-3">
-                            <div class="col-lg-4">
+                        <div class="row g-3 mt-3 align-items-start">
+                            <div class="col-lg-5">
                             <div class="border rounded p-3 h-100">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="mb-0">{{ context.events.schedule.calendar.month_label }}</h6>
                                     <span class="badge bg-light text-body-secondary">Today: {{ context.events.schedule.calendar.today.strftime('%b %d') }}</span>
                                 </div>
-                                <p class="small text-muted mb-2">Click a date badge to filter the event list.</p>
-                                <div class="d-grid gap-2 event-calendar-grid" style="grid-template-columns: repeat(7, minmax(0, 1fr));">
+                                <p class="small text-muted mb-2">Click a date badge to view events filtered by that day.</p>
+                                <div class="d-grid gap-2 event-calendar-grid" style="grid-template-columns: repeat(7, minmax(3.25rem, 1fr));">
                                     {% for day in context.events.schedule.calendar.days %}
                                         {% set has_events = day.count > 0 %}
                                         <button
@@ -298,6 +298,7 @@
                                             data-label="{{ day.date.strftime('%b %d') }}"
                                             {% if day.date == context.events.schedule.calendar.today %}data-today="true"{% endif %}
                                             {% if not has_events %}data-empty="true"{% endif %}
+                                            {% if not has_events %}disabled{% endif %}
                                         >
                                             <div class="d-flex justify-content-between align-items-center">
                                                 <span class="fw-semibold">{{ day.day }}</span>
@@ -312,11 +313,11 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-8">
+                        <div class="col-lg-7">
                             <div class="border rounded p-3 h-100 d-flex flex-column">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="mb-0">Upcoming events</h6>
-                                    <span class="small text-muted" data-event-filter-label>Showing all events</span>
+                                    <span class="small text-muted" data-event-filter-label>Selecting a date opens the filtered events view</span>
                                 </div>
                                 <ul class="list-group list-group-flush flex-grow-1" id="event-schedule-list">
                                     {% for ev in context.events.schedule.events %}
@@ -505,42 +506,24 @@
             }
 
             const calendarButtons = Array.from(document.querySelectorAll('.event-calendar-day'));
-            const eventRows = Array.from(document.querySelectorAll('[data-event-row]'));
             const filterLabel = document.querySelector('[data-event-filter-label]');
-            let selectedDate = '';
-
-            function updateFilter(dateValue, label) {
-                selectedDate = dateValue;
-                calendarButtons.forEach((btn) => {
-                    btn.classList.toggle('active', btn.dataset.date === selectedDate);
-                    if (btn.dataset.today === 'true') {
-                        btn.classList.toggle('btn-outline-primary', btn.dataset.date === selectedDate);
-                    }
-                });
-
-                eventRows.forEach((row) => {
-                    const start = row.dataset.startDate;
-                    const end = row.dataset.endDate;
-                    const matches = !selectedDate || (start <= selectedDate && selectedDate <= end);
-                    row.classList.toggle('d-none', !matches);
-                });
-
-                if (filterLabel) {
-                    filterLabel.textContent = selectedDate ? `Showing events on ${label}` : 'Showing all events';
-                }
-            }
+            const eventsUrl = "{{ url_for('event.view_events') }}";
 
             calendarButtons.forEach((btn) => {
                 btn.addEventListener('click', () => {
                     if (btn.dataset.empty === 'true') {
                         return;
                     }
-                    const isSameSelection = btn.dataset.date === selectedDate;
-                    const newDate = isSameSelection ? '' : btn.dataset.date;
-                    const label = isSameSelection ? '' : btn.dataset.label;
-                    updateFilter(newDate, label || '');
+
+                    const targetUrl = new URL(eventsUrl, window.location.origin);
+                    targetUrl.searchParams.set('date_filter', btn.dataset.date);
+                    window.location.href = targetUrl.toString();
                 });
             });
+
+            if (filterLabel) {
+                filterLabel.textContent = 'Selecting a date opens the filtered events view';
+            }
         });
     </script>
 {% endblock %}
