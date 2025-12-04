@@ -871,6 +871,11 @@ def _parse_date(value):
 
 
 def _get_event_filters(source):
+    raw_date_filter = (source.get("date_filter") or "").strip()
+    date_filter_value = ""
+    parsed_date_filter = _parse_date(raw_date_filter)
+    if parsed_date_filter:
+        date_filter_value = parsed_date_filter.isoformat()
     return {
         "type": (source.get("type") or "").strip(),
         "name_contains": (source.get("name_contains") or "").strip(),
@@ -880,6 +885,7 @@ def _get_event_filters(source):
         "end_date_from": (source.get("end_date_from") or "").strip(),
         "end_date_to": (source.get("end_date_to") or "").strip(),
         "closed_status": (source.get("closed_status") or "").strip(),
+        "date_filter": date_filter_value,
     }
 
 
@@ -911,6 +917,12 @@ def _apply_event_filters(query, filters):
     end_date_to = _parse_date(filters.get("end_date_to"))
     if end_date_to:
         query = query.filter(Event.end_date <= end_date_to)
+
+    date_filter = _parse_date(filters.get("date_filter"))
+    if date_filter:
+        query = query.filter(
+            Event.start_date <= date_filter, Event.end_date >= date_filter
+        )
 
     closed_status = filters.get("closed_status")
     if closed_status == "open":
