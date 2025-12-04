@@ -98,7 +98,13 @@
                 {{ item.item(class="form-control item-select") }}
                 <input type="hidden" name="items-{{ loop.index0 }}-position" class="item-position" value="{{ item.position.data or loop.index0 }}">
             </div>
-            <div class="col-auto unit-col"><select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data }}"></select></div>
+            <div class="col-auto unit-col">
+                <select name="items-{{ loop.index0 }}-unit" class="form-control unit-select" data-selected="{{ item.unit.data }}">
+                    {% for val, label in item.unit.choices %}
+                        <option value="{{ val }}" {% if val == item.unit.data %}selected{% endif %}>{{ label|e }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="col quantity-col">{{ item.quantity(class="form-control quantity") }}</div>
             <div class="col cost-col">{{ item.cost(class="form-control cost") }}</div>
             <div class="col line-total-col"><span class="line-total">0.00</span></div>
