@@ -356,7 +356,7 @@
 
 {% block scripts %}
     {{ super() }}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-6EZthTpL/2NfLKkELyhl725LLJoPLD114F8CbnMD4HzyBbs6k8ZZrVSu2VvulaHY" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script nonce="{{ csp_nonce }}">
         document.addEventListener('DOMContentLoaded', () => {
             const weeklyData = {{ context.charts.weekly_activity | tojson }};
