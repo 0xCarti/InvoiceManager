@@ -58,8 +58,8 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
                         <div>
-                            <h5 class="card-title mb-1">Weekly transfers & purchases</h5>
-                            <p class="text-muted mb-0">Track recent movement volume and received invoices at a glance.</p>
+                            <h5 class="card-title mb-1">Weekly transfers, purchases & sales</h5>
+                            <p class="text-muted mb-0">Track recent movement volume alongside purchase receipts and sales totals.</p>
                         </div>
                     </div>
                     <div class="ratio ratio-16x9">
@@ -75,6 +75,7 @@
                                         <th scope="col">Transfers</th>
                                         <th scope="col">Purchases</th>
                                         <th scope="col">Purchase total</th>
+                                        <th scope="col">Sales total</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -84,10 +85,11 @@
                                             <td>{{ bucket.transfers }}</td>
                                             <td>{{ bucket.purchases }}</td>
                                             <td>${{ '%.2f'|format(bucket.purchase_total) }}</td>
+                                            <td>${{ '%.2f'|format(bucket.sales_total) }}</td>
                                         </tr>
                                     {% else %}
                                         <tr>
-                                            <td colspan="4" class="text-muted">No recent transfer or purchase activity.</td>
+                                            <td colspan="5" class="text-muted">No recent transfer, purchase, or sales activity.</td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>
@@ -324,6 +326,7 @@
                 const transferCounts = weeklyData.map((bucket) => bucket.transfers);
                 const purchaseCounts = weeklyData.map((bucket) => bucket.purchases);
                 const purchaseTotals = weeklyData.map((bucket) => bucket.purchase_total);
+                const salesTotals = weeklyData.map((bucket) => bucket.sales_total);
 
                 new Chart(weeklyCanvas, {
                     type: 'bar',
@@ -359,6 +362,17 @@
                                 borderWidth: 2,
                                 pointRadius: 3,
                             },
+                            {
+                                type: 'line',
+                                label: 'Sales total',
+                                data: salesTotals,
+                                yAxisID: 'y1',
+                                borderColor: 'rgba(220, 53, 69, 0.9)',
+                                backgroundColor: 'rgba(220, 53, 69, 0.15)',
+                                tension: 0.3,
+                                borderWidth: 2,
+                                pointRadius: 3,
+                            },
                         ],
                     },
                     options: {
@@ -383,7 +397,7 @@
                                 },
                                 title: {
                                     display: true,
-                                    text: 'Purchase total ($)',
+                                    text: 'Financial totals ($)',
                                 },
                             },
                         },

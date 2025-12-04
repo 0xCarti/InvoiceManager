@@ -170,7 +170,7 @@ def dashboard_context() -> Dict[str, Any]:
 def weekly_transfer_purchase_activity(
     weeks: int = 6, today: Optional[date] = None
 ) -> List[Dict[str, Any]]:
-    """Return weekly counts/totals for transfers and purchases."""
+    """Return weekly counts/totals for transfers, purchases, and sales."""
 
     today = today or date.today()
 
@@ -187,6 +187,8 @@ def weekly_transfer_purchase_activity(
             "transfers": 0,
             "purchases": 0,
             "purchase_total": 0.0,
+            "sales": 0,
+            "sales_total": 0.0,
         }
         for start in week_starts
     }
@@ -208,5 +210,13 @@ def weekly_transfer_purchase_activity(
         if bucket_start in buckets:
             buckets[bucket_start]["purchases"] += 1
             buckets[bucket_start]["purchase_total"] += float(invoice.total)
+
+    sales = Invoice.query.filter(Invoice.date_created >= transfer_start_dt).all()
+
+    for sale in sales:
+        bucket_start = start_of_week(sale.date_created.date())
+        if bucket_start in buckets:
+            buckets[bucket_start]["sales"] += 1
+            buckets[bucket_start]["sales_total"] += float(sale.total)
 
     return [buckets[start] for start in sorted(buckets.keys())]
