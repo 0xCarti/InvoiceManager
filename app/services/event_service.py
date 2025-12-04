@@ -8,9 +8,8 @@ from datetime import date, datetime, timedelta, timezone as dt_timezone
 from typing import Iterable, List
 from zoneinfo import ZoneInfo
 
+from flask import current_app
 from flask_login import current_user
-
-from app import DEFAULT_TIMEZONE
 from app.models import Event
 
 
@@ -39,7 +38,14 @@ def current_user_today(today: date | None = None) -> date:
     if today is not None:
         return today
 
-    tz_name = getattr(current_user, "timezone", None) or DEFAULT_TIMEZONE or "UTC"
+    tz_name = getattr(current_user, "timezone", None)
+    if not tz_name:
+        tz_name = current_app.config.get("DEFAULT_TIMEZONE") if current_app else None
+    if not tz_name:
+        import app as app_module
+
+        tz_name = getattr(app_module, "DEFAULT_TIMEZONE", None)
+    tz_name = tz_name or "UTC"
     try:
         tz = ZoneInfo(tz_name)
     except Exception:
