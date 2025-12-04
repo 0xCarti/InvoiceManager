@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container mt-4" data-dashboard-container data-user-id="{{ current_user.id if current_user.is_authenticated else 'guest' }}">
     {% set can_manage_operations = current_user.is_admin %}
     {% set action_denied_message = "You do not have permission to perform this action." %}
     <div class="d-flex align-items-center justify-content-between mb-4">
@@ -27,7 +27,7 @@
                         <span class="fw-semibold">Toggle</span>
                     </button>
                 </div>
-                <div class="collapse show" id="dashboard-card-transfers">
+                <div class="collapse show" id="dashboard-card-transfers" data-dashboard-collapse>
                     <div class="card-body">
                         <p class="mb-1"><strong>Total:</strong> {{ context.transfers.total }}</p>
                         <p class="mb-1"><strong>Completed:</strong> {{ context.transfers.completed }}</p>
@@ -51,7 +51,7 @@
                         <span class="fw-semibold">Toggle</span>
                     </button>
                 </div>
-                <div class="collapse show" id="dashboard-card-purchase-orders">
+                <div class="collapse show" id="dashboard-card-purchase-orders" data-dashboard-collapse>
                     <div class="card-body">
                         <p class="mb-1"><strong>Open:</strong> {{ context.purchase_orders.open_count }}</p>
                         <p class="mb-1"><strong>Overdue:</strong> {{ context.purchase_orders.overdue_count }}</p>
@@ -75,7 +75,7 @@
                         <span class="fw-semibold">Toggle</span>
                     </button>
                 </div>
-                <div class="collapse show" id="dashboard-card-purchase-invoices">
+                <div class="collapse show" id="dashboard-card-purchase-invoices" data-dashboard-collapse>
                     <div class="card-body">
                         <p class="mb-1"><strong>Received:</strong> {{ context.purchase_invoices.count }}</p>
                         <p class="mb-0"><strong>Total Spend:</strong> ${{ '%.2f'|format(context.purchase_invoices.total) }}</p>
@@ -98,7 +98,7 @@
                         <span class="fw-semibold">Toggle</span>
                     </button>
                 </div>
-                <div class="collapse show" id="dashboard-card-invoices">
+                <div class="collapse show" id="dashboard-card-invoices" data-dashboard-collapse>
                     <div class="card-body">
                         <p class="mb-1"><strong>Issued:</strong> {{ context.invoices.count }}</p>
                         <p class="mb-0"><strong>Invoice Total:</strong> ${{ '%.2f'|format(context.invoices.total) }}</p>
@@ -127,7 +127,7 @@
                         <span class="fw-semibold">Toggle</span>
                     </button>
                 </div>
-                <div class="collapse show" id="dashboard-card-weekly">
+                <div class="collapse show" id="dashboard-card-weekly" data-dashboard-collapse>
                     <div class="card-body">
                         <div class="ratio ratio-16x9">
                             <canvas id="weekly-activity-chart" aria-label="Weekly transfers and purchases" role="img"></canvas>
@@ -184,7 +184,7 @@
                         <span class="fw-semibold">Toggle</span>
                     </button>
                 </div>
-                <div class="collapse show" id="dashboard-card-events-summary">
+                <div class="collapse show" id="dashboard-card-events-summary" data-dashboard-collapse>
                     <div class="card-body">
                         <p class="mb-1"><strong>Today:</strong> {{ context.events.today_count }}</p>
                         <p class="mb-1"><strong>Upcoming:</strong> {{ context.events.upcoming_count }}</p>
@@ -231,7 +231,7 @@
                         <span class="fw-semibold">Toggle</span>
                     </button>
                 </div>
-                <div class="collapse show" id="dashboard-card-action-queues">
+                <div class="collapse show" id="dashboard-card-action-queues" data-dashboard-collapse>
                     <div class="card-body">
                         <div class="row g-3 mt-2">
                             <div class="col-lg-6">
@@ -335,7 +335,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="collapse show" id="dashboard-card-event-schedule">
+                <div class="collapse show" id="dashboard-card-event-schedule" data-dashboard-collapse>
                     <div class="card-body">
                         <div class="row g-3 mt-3 align-items-start">
                             <div class="col-12 col-lg-8">
@@ -434,6 +434,60 @@
     </style>
     <script nonce="{{ csp_nonce }}">
         document.addEventListener('DOMContentLoaded', () => {
+            const dashboardContainer = document.querySelector('[data-dashboard-container]');
+            const userId = (dashboardContainer?.dataset.userId || 'guest').toString();
+            const collapseStorageKey = `dashboard-collapse-state:${userId}`;
+            const collapsibleSections = Array.from(document.querySelectorAll('[data-dashboard-collapse]'));
+
+            const readCollapseState = () => {
+                try {
+                    const stored = localStorage.getItem(collapseStorageKey);
+                    return stored ? JSON.parse(stored) : {};
+                } catch (error) {
+                    return {};
+                }
+            };
+
+            const persistCollapseState = (collapseId, isOpen) => {
+                const state = readCollapseState();
+                state[collapseId] = isOpen;
+
+                try {
+                    localStorage.setItem(collapseStorageKey, JSON.stringify(state));
+                } catch (error) {
+                    // Ignore storage errors (e.g., quota exceeded, disabled storage)
+                }
+            };
+
+            const applyStoredCollapseState = () => {
+                const state = readCollapseState();
+
+                collapsibleSections.forEach((section) => {
+                    const collapseId = section.id;
+                    const isOpen = state[collapseId];
+
+                    if (typeof isOpen !== 'boolean') {
+                        return;
+                    }
+
+                    section.classList.toggle('show', isOpen);
+                    section.classList.toggle('collapsing', false);
+
+                    const trigger = document.querySelector(`[data-bs-target="#${collapseId}"]`);
+                    if (trigger) {
+                        trigger.classList.toggle('collapsed', !isOpen);
+                        trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                    }
+                });
+            };
+
+            applyStoredCollapseState();
+
+            collapsibleSections.forEach((section) => {
+                section.addEventListener('shown.bs.collapse', () => persistCollapseState(section.id, true));
+                section.addEventListener('hidden.bs.collapse', () => persistCollapseState(section.id, false));
+            });
+
             const weeklyData = {{ context.charts.weekly_activity | tojson }};
 
             const weeklyCanvas = document.getElementById('weekly-activity-chart');
