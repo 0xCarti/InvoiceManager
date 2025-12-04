@@ -2263,19 +2263,29 @@ def event_terminal_sales_report():
             Product.price, 0
         )
 
+        event_total_sales = func.coalesce(func.sum(sale_amount), 0)
+
         event_totals = (
             db.session.query(
                 Event.id.label("event_id"),
                 Event.name.label("event_name"),
-                func.sum(sale_amount).label("total_sales"),
+                event_total_sales.label("total_sales"),
             )
-            .join(EventLocation, Event.locations)
-            .join(TerminalSale, EventLocation.terminal_sales)
-            .join(Product, TerminalSale.product)
-            .filter(TerminalSale.sold_at >= start_dt)
-            .filter(TerminalSale.sold_at <= end_dt)
+            .outerjoin(EventLocation, Event.locations)
+            .outerjoin(
+                TerminalSale,
+                and_(
+                    EventLocation.id == TerminalSale.event_location_id,
+                    TerminalSale.sold_at >= start_dt,
+                    TerminalSale.sold_at <= end_dt,
+                ),
+            )
+            .outerjoin(Product, TerminalSale.product)
+            .filter(Event.closed.is_(True))
+            .filter(Event.end_date >= start_date)
+            .filter(Event.end_date <= end_date)
             .group_by(Event.id, Event.name)
-            .order_by(func.sum(sale_amount).desc(), Event.name)
+            .order_by(event_total_sales.desc(), Event.name)
             .all()
         )
 
@@ -2284,20 +2294,30 @@ def event_terminal_sales_report():
                 Event.id.label("event_id"),
                 Location.id.label("location_id"),
                 Location.name.label("location_name"),
-                func.sum(sale_amount).label("total_sales"),
+                func.coalesce(func.sum(sale_amount), 0).label("total_sales"),
             )
-            .join(EventLocation, Event.locations)
-            .join(Location, EventLocation.location)
-            .join(TerminalSale, EventLocation.terminal_sales)
-            .join(Product, TerminalSale.product)
-            .filter(TerminalSale.sold_at >= start_dt)
-            .filter(TerminalSale.sold_at <= end_dt)
+            .outerjoin(EventLocation, Event.locations)
+            .outerjoin(Location, EventLocation.location)
+            .outerjoin(
+                TerminalSale,
+                and_(
+                    EventLocation.id == TerminalSale.event_location_id,
+                    TerminalSale.sold_at >= start_dt,
+                    TerminalSale.sold_at <= end_dt,
+                ),
+            )
+            .outerjoin(Product, TerminalSale.product)
+            .filter(Event.closed.is_(True))
+            .filter(Event.end_date >= start_date)
+            .filter(Event.end_date <= end_date)
             .group_by(Event.id, Location.id, Location.name)
             .all()
         )
 
         location_map: dict[int, list[dict]] = {}
         for row in location_totals:
+            if row.location_id is None:
+                continue
             location_entries = location_map.setdefault(row.event_id, [])
             location_entries.append(
                 {
