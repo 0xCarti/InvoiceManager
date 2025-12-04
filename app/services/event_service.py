@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from calendar import monthrange
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from typing import Iterable, List
+from zoneinfo import ZoneInfo
 
+from flask_login import current_user
+
+from app import DEFAULT_TIMEZONE
 from app.models import Event
 
 
@@ -20,6 +24,27 @@ class CalendarDay:
     @property
     def day(self) -> int:
         return self.date.day
+
+
+def _utcnow() -> datetime:
+    """Return the current UTC datetime for computing local dates."""
+
+    return datetime.now(dt_timezone.utc)
+
+
+def current_user_today(today: date | None = None) -> date:
+    """Return today's date localized to the current user's time zone."""
+
+    if today is not None:
+        return today
+
+    tz_name = getattr(current_user, "timezone", None) or DEFAULT_TIMEZONE or "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("UTC")
+
+    return _utcnow().astimezone(tz).date()
 
 
 def _event_status(event: Event, today: date) -> str:
@@ -54,7 +79,7 @@ def _calendar_days(events: Iterable[Event], today: date) -> List[CalendarDay]:
 def event_schedule(today: date | None = None) -> dict:
     """Return upcoming/active events and calendar data for the dashboard."""
 
-    today = today or date.today()
+    today = current_user_today(today)
 
     open_events = (
         Event.query.filter(Event.closed.is_(False))
