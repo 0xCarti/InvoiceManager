@@ -94,7 +94,6 @@ def event_schedule(today: date | None = None) -> dict:
     """Return upcoming/active events and calendar data for the dashboard."""
 
     today = current_user_today(today)
-    tomorrow = today + timedelta(days=1)
 
     open_events = (
         Event.query.filter(Event.closed.is_(False))
@@ -121,11 +120,9 @@ def event_schedule(today: date | None = None) -> dict:
         for event in open_events
     ]
 
-    tomorrow_events = [event for event in events if event["start_date"] == tomorrow]
-
     return {
         "events": events,
-        "tomorrow_events": tomorrow_events,
+        "sidebar_events": events,
         "calendar": {
             "month_label": today.strftime("%B %Y"),
             "days": calendar_days,
