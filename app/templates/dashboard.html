@@ -274,7 +274,9 @@
                                                     {% if ev.status == 'past_due' %}
                                                         <span class="badge bg-danger">Past close date</span>
                                                     {% elif ev.status == 'active' %}
-                                                        <span class="badge bg-success">Active</span>
+                                                        <span class="badge bg-success">Active today</span>
+                                                    {% elif ev.status == 'in_progress' %}
+                                                        <span class="badge bg-info text-dark">In progress</span>
                                                     {% else %}
                                                         <span class="badge bg-primary">Upcoming</span>
                                                     {% endif %}
