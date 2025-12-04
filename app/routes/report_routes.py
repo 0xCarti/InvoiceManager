@@ -2282,8 +2282,12 @@ def event_terminal_sales_report():
             )
             .outerjoin(Product, TerminalSale.product)
             .filter(Event.closed.is_(True))
-            .filter(Event.end_date >= start_date)
-            .filter(Event.end_date <= end_date)
+            .filter(
+                or_(
+                    and_(Event.end_date >= start_date, Event.end_date <= end_date),
+                    and_(TerminalSale.sold_at >= start_dt, TerminalSale.sold_at <= end_dt),
+                )
+            )
             .group_by(Event.id, Event.name)
             .order_by(event_total_sales.desc(), Event.name)
             .all()
@@ -2308,8 +2312,12 @@ def event_terminal_sales_report():
             )
             .outerjoin(Product, TerminalSale.product)
             .filter(Event.closed.is_(True))
-            .filter(Event.end_date >= start_date)
-            .filter(Event.end_date <= end_date)
+            .filter(
+                or_(
+                    and_(Event.end_date >= start_date, Event.end_date <= end_date),
+                    and_(TerminalSale.sold_at >= start_dt, TerminalSale.sold_at <= end_dt),
+                )
+            )
             .group_by(Event.id, Location.id, Location.name)
             .all()
         )
