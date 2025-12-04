@@ -239,14 +239,14 @@
                         </div>
                     </div>
                     <div class="row g-3 mt-3 align-items-start">
-                        <div class="col-lg-5">
+                        <div class="col-12 col-lg-8">
                             <div class="border rounded p-3 h-100">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="mb-0">{{ context.events.schedule.calendar.month_label }}</h6>
                                     <span class="badge bg-light text-body-secondary">Today: {{ context.events.schedule.calendar.today.strftime('%b %d') }}</span>
                                 </div>
                                 <p class="small text-muted mb-2">Click a date badge to view events filtered by that day.</p>
-                                <div class="d-grid gap-2 event-calendar-grid" style="grid-template-columns: repeat(7, minmax(3.25rem, 1fr));">
+                                <div class="d-grid gap-2 event-calendar-grid" style="grid-template-columns: repeat(7, minmax(2.75rem, 1fr));">
                                     {% for day in context.events.schedule.calendar.days %}
                                         {% set has_events = day.count > 0 %}
                                         <button
@@ -271,7 +271,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-7">
+                        <div class="col-12 col-lg-4">
                             <div class="border rounded p-3 h-100 d-flex flex-column">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="mb-0">Upcoming events</h6>
