@@ -259,11 +259,11 @@
                         <div class="col-12 col-lg-4">
                             <div class="border rounded p-3 h-100 d-flex flex-column">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="mb-0">Upcoming events</h6>
+                                    <h6 class="mb-0">Tomorrow's events</h6>
                                     <span class="small text-muted" data-event-filter-label>Selecting a date opens the filtered events view</span>
                                 </div>
                                 <ul class="list-group list-group-flush flex-grow-1" id="event-schedule-list">
-                                    {% for ev in context.events.schedule.events %}
+                                    {% for ev in context.events.schedule.tomorrow_events %}
                                         <li class="list-group-item" data-event-row data-start-date="{{ ev.start_date.isoformat() }}" data-end-date="{{ ev.end_date.isoformat() }}">
                                             <div class="d-flex justify-content-between align-items-start gap-3">
                                                 <div>
@@ -285,7 +285,7 @@
                                             </div>
                                         </li>
                                     {% else %}
-                                        <li class="list-group-item text-muted">No upcoming events scheduled.</li>
+                                        <li class="list-group-item text-muted">No events scheduled for tomorrow.</li>
                                     {% endfor %}
                                 </ul>
                             </div>
