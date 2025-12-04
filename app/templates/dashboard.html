@@ -235,11 +235,11 @@
                                             class="btn btn-sm btn-outline-secondary text-start event-calendar-day"
                                             data-date="{{ day.date.isoformat() }}"
                                             data-label="{{ day.date.strftime('%b %d') }}"
-                                            {% if has_events %}data-events='{{ day.event_names | tojson }}'{% endif %}
+                                            {% if has_events %}data-events='{{ day.events | tojson }}'{% endif %}
                                             {% if day.date == context.events.schedule.calendar.today %}data-today="true"{% endif %}
                                             {% if not has_events %}data-empty="true"{% endif %}
                                             {% if not has_events %}disabled{% endif %}
-                                            aria-label="{{ day.date.strftime('%b %d') }}{% if has_events %}: {{ day.event_names | join(', ') }}{% else %}: No events scheduled{% endif %}"
+                                            aria-label="{% if has_events %}{{ day.date.strftime('%b %d') }}: {% for ev in day.events %}{{ ev.name }} — {{ ev.open_location_count }} locations open{% if not loop.last %}, {% endif %}{% endfor %}{% else %}{{ day.date.strftime('%b %d') }}: No events scheduled{% endif %}"
                                             aria-haspopup="true"
                                             aria-expanded="false"
                                         >
@@ -440,10 +440,15 @@
                             const list = document.createElement('ul');
                             list.classList.add('mb-0', 'list-unstyled', 'small');
 
-                            events.forEach((name) => {
+                            events.forEach((event) => {
+                                const { name, open_location_count: openLocationCount } = event;
                                 const li = document.createElement('li');
                                 li.classList.add('mb-1');
-                                li.textContent = name;
+                                const openCountLabel =
+                                    typeof openLocationCount === 'number'
+                                        ? openLocationCount
+                                        : 0;
+                                li.textContent = `${name} — ${openCountLabel} locations open`;
                                 list.appendChild(li);
                             });
 
