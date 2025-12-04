@@ -101,7 +101,7 @@
         </div>
     </div>
     <div class="row g-3 mt-1">
-        <div class="col-md-4">
+        <div class="col-12">
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title">Events</h5>
@@ -112,28 +112,6 @@
                     {% else %}
                         <p class="mb-0 text-muted">No upcoming events scheduled.</p>
                     {% endif %}
-                </div>
-            </div>
-        </div>
-        <div class="col-md-8">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Quick Transfer Forms</h5>
-                    <p class="text-muted">Use these forms to prepare transfers without leaving the dashboard.</p>
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            {{ form.hidden_tag() }}
-                            {{ form.submit(class_="btn btn-primary w-100", value="Start Transfer") }}
-                        </div>
-                        <div class="col-md-4">
-                            {{ add_form.hidden_tag() }}
-                            {{ add_form.submit(class_="btn btn-outline-primary w-100", value="Add Transfer") }}
-                        </div>
-                        <div class="col-md-4">
-                            {{ edit_form.hidden_tag() }}
-                            {{ edit_form.submit(class_="btn btn-outline-secondary w-100", value="Edit Transfer") }}
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -186,9 +164,12 @@
                             <div class="border rounded p-3 h-100">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="mb-0">Transfers awaiting approval</h6>
-                                    {% if context.queues.transfers.total > context.queues.transfers['items']|length %}
-                                        <a class="small" href="{{ url_for('transfer.view_transfers') }}">Show more</a>
-                                    {% endif %}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <a class="btn btn-sm btn-primary" href="{{ url_for('transfer.add_transfer') }}">Start Transfer</a>
+                                        {% if context.queues.transfers.total > context.queues.transfers['items']|length %}
+                                            <a class="small" href="{{ url_for('transfer.view_transfers') }}">Show more</a>
+                                        {% endif %}
+                                    </div>
                                 </div>
                                 <ul class="list-group list-group-flush">
                                     {% for transfer in context.queues.transfers['items'] %}

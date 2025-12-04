@@ -72,6 +72,11 @@
         <label for="filter-name-not-contains" class="form-label">Name Does Not Contain</label>
         <input type="text" name="name_not_contains" id="filter-name-not-contains" class="form-control" value="{{ filter_values.name_not_contains }}" placeholder="e.g. Test" />
     </div>
+    <div class="mb-3">
+        <label for="filter-date" class="form-label">Date Includes</label>
+        <input type="date" name="date_filter" id="filter-date" class="form-control" value="{{ filter_values.date_filter }}" />
+        <div class="form-text">Shows events active on the selected date.</div>
+    </div>
     <div class="row g-2 mb-3">
         <div class="col-sm-6">
             <label for="filter-start-date-from" class="form-label">Start Date From</label>
