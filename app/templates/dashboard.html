@@ -230,22 +230,12 @@
                                 <div class="d-grid gap-2 event-calendar-grid" style="grid-template-columns: repeat(7, minmax(2.75rem, 1fr));">
                                     {% for day in context.events.schedule.calendar.days %}
                                         {% set has_events = day.count > 0 %}
-                                        {% set event_list_html = '' %}
-                                        {% if has_events %}
-                                            {% set event_list_html %}
-                                                <ul class="mb-0 list-unstyled small">
-                                                    {% for name in day.event_names %}
-                                                        <li class="mb-1">{{ name }}</li>
-                                                    {% endfor %}
-                                                </ul>
-                                            {% endset %}
-                                        {% endif %}
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-secondary text-start event-calendar-day"
                                             data-date="{{ day.date.isoformat() }}"
                                             data-label="{{ day.date.strftime('%b %d') }}"
-                                            {% if has_events %}data-events-html="{{ event_list_html | trim }}"{% endif %}
+                                            {% if has_events %}data-events='{{ day.event_names | tojson }}'{% endif %}
                                             {% if day.date == context.events.schedule.calendar.today %}data-today="true"{% endif %}
                                             {% if not has_events %}data-empty="true"{% endif %}
                                             {% if not has_events %}disabled{% endif %}
@@ -434,10 +424,31 @@
                 calendarButtons
                     .filter((btn) => btn.dataset.empty !== 'true')
                     .forEach((btn) => {
-                        const popoverContent = btn.dataset.eventsHtml;
-                        if (!popoverContent) {
+                        let events = [];
+
+                        try {
+                            events = JSON.parse(btn.dataset.events || '[]');
+                        } catch (e) {
+                            events = [];
+                        }
+
+                        if (!Array.isArray(events) || events.length === 0) {
                             return;
                         }
+
+                        const renderContent = () => {
+                            const list = document.createElement('ul');
+                            list.classList.add('mb-0', 'list-unstyled', 'small');
+
+                            events.forEach((name) => {
+                                const li = document.createElement('li');
+                                li.classList.add('mb-1');
+                                li.textContent = name;
+                                list.appendChild(li);
+                            });
+
+                            return list;
+                        };
 
                         const popover = new bootstrap.Popover(btn, {
                             title: btn.dataset.label,
@@ -445,9 +456,8 @@
                             trigger: 'hover focus',
                             placement: 'top',
                             container: 'body',
-                            content: popoverContent,
+                            content: renderContent,
                             customClass: 'event-calendar-popover',
-                            sanitize: false,
                         });
 
                         btn.addEventListener('shown.bs.popover', () => {
