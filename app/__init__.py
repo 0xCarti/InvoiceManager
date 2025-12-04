@@ -2,7 +2,6 @@ import os
 import secrets
 import sys
 from datetime import date, datetime, timedelta
-from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
@@ -195,12 +194,13 @@ def create_app(args=None):
             tz = ZoneInfo("UTC")
         if isinstance(value, date) and not isinstance(value, datetime):
             value = datetime.combine(value, datetime.min.time())
-            value = value.replace(tzinfo=dt_timezone.utc)
-        elif value.tzinfo is None:
-            value = value.replace(tzinfo=dt_timezone.utc)
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=tz)
+            value = value.astimezone(tz)
         if sys.platform.startswith("win"):
             fmt = fmt.replace("%-", "%#")
-        return value.astimezone(tz).strftime(fmt)
+        return value.strftime(fmt)
 
     app.jinja_env.filters["format_datetime"] = format_datetime
 

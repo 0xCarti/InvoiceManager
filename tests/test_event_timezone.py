@@ -40,3 +40,27 @@ def test_event_schedule_uses_user_timezone(app, monkeypatch):
         assert summary["upcoming_count"] == 1
         assert schedule["calendar"]["today"] == date(2024, 3, 14)
         assert schedule["events"][0]["status"] == "upcoming"
+
+
+def test_dashboard_today_format_preserves_user_timezone(app, monkeypatch):
+    with app.app_context():
+        user = User(
+            email="dashboardtz@example.com",
+            password="pass",
+            active=True,
+            timezone="America/Winnipeg",
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        fake_now = datetime(2024, 3, 15, 3, 0, tzinfo=timezone.utc)
+        monkeypatch.setattr(event_service, "_utcnow", lambda: fake_now)
+
+        fmt = app.jinja_env.filters["format_datetime"]
+
+        with app.test_request_context():
+            login_user(user)
+            today_label = fmt(event_service.event_schedule()["calendar"]["today"], "%Y-%m-%d")
+            logout_user()
+
+        assert today_label == "2024-03-14"
