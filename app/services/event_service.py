@@ -20,6 +20,7 @@ class CalendarDay:
 
     date: date
     count: int
+    event_names: List[str]
 
     @property
     def day(self) -> int:
@@ -66,12 +67,14 @@ def _calendar_days(events: Iterable[Event], today: date) -> List[CalendarDay]:
     calendar_days: List[CalendarDay] = []
     for offset in range(days_in_month):
         current_day = month_start + timedelta(days=offset)
-        count = sum(
-            1
+        event_names = [
+            event.name
             for event in events
             if event.start_date <= current_day <= event.end_date
+        ]
+        calendar_days.append(
+            CalendarDay(date=current_day, count=len(event_names), event_names=event_names)
         )
-        calendar_days.append(CalendarDay(date=current_day, count=count))
 
     return calendar_days
 

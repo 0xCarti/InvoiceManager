@@ -254,9 +254,11 @@
                                             class="btn btn-sm btn-outline-secondary text-start event-calendar-day"
                                             data-date="{{ day.date.isoformat() }}"
                                             data-label="{{ day.date.strftime('%b %d') }}"
+                                            data-events-tooltip="{{ day.event_names | join(', ') }}"
                                             {% if day.date == context.events.schedule.calendar.today %}data-today="true"{% endif %}
                                             {% if not has_events %}data-empty="true"{% endif %}
                                             {% if not has_events %}disabled{% endif %}
+                                            title="{{ day.event_names | join(', ') }}"
                                         >
                                             <div class="d-flex justify-content-between align-items-center">
                                                 <span class="fw-semibold">{{ day.day }}</span>
@@ -424,6 +426,24 @@
             const calendarButtons = Array.from(document.querySelectorAll('.event-calendar-day'));
             const filterLabel = document.querySelector('[data-event-filter-label]');
             const eventsUrl = "{{ url_for('event.view_events') }}";
+
+            if (typeof bootstrap !== 'undefined') {
+                calendarButtons
+                    .filter((btn) => btn.dataset.empty !== 'true')
+                    .forEach((btn) => {
+                        const tooltipContent = btn.dataset.eventsTooltip;
+                        if (!tooltipContent) {
+                            return;
+                        }
+
+                        new bootstrap.Tooltip(btn, {
+                            title: tooltipContent,
+                            trigger: 'hover focus',
+                            placement: 'top',
+                            container: 'body',
+                        });
+                    });
+            }
 
             calendarButtons.forEach((btn) => {
                 btn.addEventListener('click', () => {
