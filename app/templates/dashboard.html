@@ -53,7 +53,7 @@
     </div>
 
     <div class="row g-3 mt-1">
-        <div class="col-lg-8">
+        <div class="col-12">
             <div class="card h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
@@ -88,46 +88,6 @@
                                     {% else %}
                                         <tr>
                                             <td colspan="4" class="text-muted">No recent transfer or purchase activity.</td>
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </noscript>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-                        <div>
-                            <h5 class="card-title mb-1">Invoice status distribution</h5>
-                            <p class="text-muted mb-0">Aging buckets help highlight attention areas.</p>
-                        </div>
-                    </div>
-                    <div class="ratio ratio-1x1">
-                        <canvas id="invoice-status-chart" aria-label="Invoice status distribution" role="img"></canvas>
-                    </div>
-                    <noscript>
-                        <div class="alert alert-info mt-3 mb-2">JavaScript is disabled; showing tabular summary instead.</div>
-                        <div class="table-responsive">
-                            <table class="table table-sm mb-0">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Status</th>
-                                        <th scope="col">Count</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for label, value in {
-                                        'Current (0-30d)': context.charts.invoice_statuses.current,
-                                        'Approaching due (31-60d)': context.charts.invoice_statuses.approaching,
-                                        'Past due (60d+)': context.charts.invoice_statuses.past_due
-                                    }.items() %}
-                                        <tr>
-                                            <td>{{ label }}</td>
-                                            <td>{{ value }}</td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>
@@ -357,7 +317,6 @@
     <script nonce="{{ csp_nonce }}">
         document.addEventListener('DOMContentLoaded', () => {
             const weeklyData = {{ context.charts.weekly_activity | tojson }};
-            const invoiceStatuses = {{ context.charts.invoice_statuses | tojson }};
 
             const weeklyCanvas = document.getElementById('weekly-activity-chart');
             if (weeklyCanvas && weeklyData) {
@@ -440,59 +399,6 @@
                                             return `${label}: $${context.parsed.y.toFixed(2)}`;
                                         }
                                         return `${label}: ${context.parsed.y}`;
-                                    },
-                                },
-                            },
-                        },
-                    },
-                });
-            }
-
-            const invoiceCanvas = document.getElementById('invoice-status-chart');
-            if (invoiceCanvas && invoiceStatuses) {
-                const labels = [
-                    'Current (0-30d)',
-                    'Approaching due (31-60d)',
-                    'Past due (60d+)',
-                ];
-                const data = [
-                    invoiceStatuses.current || 0,
-                    invoiceStatuses.approaching || 0,
-                    invoiceStatuses.past_due || 0,
-                ];
-
-                new Chart(invoiceCanvas, {
-                    type: 'doughnut',
-                    data: {
-                        labels,
-                        datasets: [
-                            {
-                                data,
-                                backgroundColor: [
-                                    'rgba(13, 110, 253, 0.7)',
-                                    'rgba(255, 193, 7, 0.7)',
-                                    'rgba(220, 53, 69, 0.7)',
-                                ],
-                                borderColor: [
-                                    'rgba(13, 110, 253, 1)',
-                                    'rgba(255, 193, 7, 1)',
-                                    'rgba(220, 53, 69, 1)',
-                                ],
-                                borderWidth: 1,
-                            },
-                        ],
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function (context) {
-                                        const value = context.parsed;
-                                        return `${context.label}: ${value}`;
                                     },
                                 },
                             },
