@@ -149,7 +149,6 @@ def dashboard_context() -> Dict[str, Any]:
     events["schedule"] = event_schedule(today)
 
     weekly_activity = weekly_transfer_purchase_activity(today=today)
-    invoice_statuses = invoice_status_distribution(today=today)
 
     return {
         "transfers": transfer_summary(),
@@ -159,7 +158,6 @@ def dashboard_context() -> Dict[str, Any]:
         "events": events,
         "charts": {
             "weekly_activity": weekly_activity,
-            "invoice_statuses": invoice_statuses,
         },
         "queues": {
             "purchase_orders": pending_purchase_orders(),
@@ -167,31 +165,6 @@ def dashboard_context() -> Dict[str, Any]:
             "purchase_invoices": invoices_pending_posting(),
         },
     }
-
-
-def invoice_status_distribution(today: Optional[date] = None) -> Dict[str, int]:
-    """Approximate invoice status buckets based on age."""
-
-    today = today or date.today()
-    invoices = Invoice.query.all()
-
-    buckets = {
-        "current": 0,
-        "approaching": 0,
-        "past_due": 0,
-    }
-
-    for invoice in invoices:
-        created = invoice.date_created.date()
-        age_days = (today - created).days
-        if age_days <= 30:
-            buckets["current"] += 1
-        elif age_days <= 60:
-            buckets["approaching"] += 1
-        else:
-            buckets["past_due"] += 1
-
-    return buckets
 
 
 def weekly_transfer_purchase_activity(
