@@ -200,6 +200,72 @@ def test_edit_location_without_menu_preserves_products(client, app):
         assert stand_items[0].item_id == expected_item_id
 
 
+def test_email_stand_sheet_success(monkeypatch, client, app):
+    with app.app_context():
+        location = Location(name="Emailable")
+        db.session.add(location)
+        db.session.commit()
+        location_id = location.id
+
+    sent_email = {}
+    monkeypatch.setattr(
+        "app.routes.location_routes.render_stand_sheet_pdf",
+        lambda templates: b"PDF",
+    )
+
+    def fake_send_email(**kwargs):
+        sent_email.update(kwargs)
+
+    monkeypatch.setattr(
+        "app.routes.location_routes.send_email", fake_send_email
+    )
+
+    with client:
+        login(client, "admin@example.com", "adminpass")
+        response = client.post(
+            f"/locations/{location_id}/stand_sheet/email",
+            data={"email": "dest@example.com"},
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert sent_email["to_address"] == "dest@example.com"
+    assert b"Stand sheet sent to dest@example.com." in response.data
+
+
+def test_email_stand_sheet_missing_configuration(monkeypatch, client, app):
+    with app.app_context():
+        location = Location(name="No SMTP")
+        db.session.add(location)
+        db.session.commit()
+        location_id = location.id
+
+    monkeypatch.setattr(
+        "app.routes.location_routes.render_stand_sheet_pdf",
+        lambda templates: b"PDF",
+    )
+
+    def fake_send_email(**kwargs):
+        from app.utils.email import SMTPConfigurationError
+
+        raise SMTPConfigurationError(["SMTP_HOST"])
+
+    monkeypatch.setattr(
+        "app.routes.location_routes.send_email", fake_send_email
+    )
+
+    with client:
+        login(client, "admin@example.com", "adminpass")
+        response = client.post(
+            f"/locations/{location_id}/stand_sheet/email",
+            data={"email": "dest@example.com"},
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert b"Email settings are not configured." in response.data
+
+
 def test_view_locations_filters_by_menu_and_spoilage(client, app):
     email, _, base_menu_id = setup_data(app)
     with app.app_context():
