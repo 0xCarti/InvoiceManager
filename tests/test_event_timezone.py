@@ -42,6 +42,29 @@ def test_event_schedule_uses_user_timezone(app, monkeypatch):
         assert schedule["events"][0]["status"] == "upcoming"
 
 
+def test_current_user_today_uses_config_default_timezone(app, monkeypatch):
+    with app.app_context():
+        app.config["DEFAULT_TIMEZONE"] = "Pacific/Auckland"
+
+        user = User(
+            email="defaulttz@example.com",
+            password="pass",
+            active=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        fake_now = datetime(2024, 3, 15, 11, 0, tzinfo=timezone.utc)
+        monkeypatch.setattr(event_service, "_utcnow", lambda: fake_now)
+
+        with app.test_request_context():
+            login_user(user)
+            today = event_service.current_user_today()
+            logout_user()
+
+        assert today == date(2024, 3, 16)
+
+
 def test_dashboard_today_format_preserves_user_timezone(app, monkeypatch):
     with app.app_context():
         user = User(
