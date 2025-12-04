@@ -9,7 +9,7 @@ from sqlalchemy import func
 
 from app import db
 from app.models import Event, Invoice, PurchaseInvoice, PurchaseOrder, Transfer
-from app.services.event_service import event_schedule
+from app.services.event_service import current_user_today, event_schedule
 
 
 def _coalesce_scalar(query) -> float:
@@ -120,7 +120,7 @@ def pending_transfers(limit: int = 5) -> Dict[str, Any]:
 def event_summary(today: Optional[date] = None) -> Dict[str, Any]:
     """Return today's and upcoming event counts for dashboard widgets."""
 
-    today = today or date.today()
+    today = current_user_today(today)
 
     todays_events = Event.query.filter(
         Event.closed.is_(False),
@@ -143,7 +143,7 @@ def event_summary(today: Optional[date] = None) -> Dict[str, Any]:
 def dashboard_context() -> Dict[str, Any]:
     """Aggregate metrics for the dashboard view."""
 
-    today = date.today()
+    today = current_user_today()
 
     events = event_summary(today)
     events["schedule"] = event_schedule(today)
