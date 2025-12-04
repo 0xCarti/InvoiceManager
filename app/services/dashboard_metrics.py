@@ -121,6 +121,7 @@ def event_summary(today: Optional[date] = None) -> Dict[str, Any]:
     """Return today's and upcoming event counts for dashboard widgets."""
 
     today = current_user_today(today)
+    next_day = today + timedelta(days=1)
 
     todays_events = Event.query.filter(
         Event.closed.is_(False),
@@ -132,11 +133,21 @@ def event_summary(today: Optional[date] = None) -> Dict[str, Any]:
         Event.start_date > today,
     )
     next_event = upcoming_events.order_by(Event.start_date.asc()).first()
+    next_day_events = (
+        Event.query.filter(
+            Event.closed.is_(False),
+            Event.start_date == next_day,
+        )
+        .order_by(Event.start_date.asc(), Event.name.asc())
+        .all()
+    )
 
     return {
         "today_count": todays_events.count(),
         "upcoming_count": upcoming_events.count(),
         "next_event": next_event,
+        "next_day": next_day,
+        "next_day_events": next_day_events,
     }
 
 
