@@ -118,11 +118,11 @@ def pending_transfers(limit: int = 5) -> Dict[str, Any]:
 
 
 def event_summary(today: Optional[date] = None) -> Dict[str, Any]:
-    """Return active/upcoming event counts for dashboard widgets."""
+    """Return today's and upcoming event counts for dashboard widgets."""
 
     today = today or date.today()
 
-    active_events = Event.query.filter(
+    todays_events = Event.query.filter(
         Event.closed.is_(False),
         Event.start_date <= today,
         Event.end_date >= today,
@@ -134,7 +134,7 @@ def event_summary(today: Optional[date] = None) -> Dict[str, Any]:
     next_event = upcoming_events.order_by(Event.start_date.asc()).first()
 
     return {
-        "active_count": active_events.count(),
+        "today_count": todays_events.count(),
         "upcoming_count": upcoming_events.count(),
         "next_event": next_event,
     }

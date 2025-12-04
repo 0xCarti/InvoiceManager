@@ -143,7 +143,7 @@
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title">Events</h5>
-                    <p class="mb-1"><strong>Active:</strong> {{ context.events.active_count }}</p>
+                    <p class="mb-1"><strong>Today:</strong> {{ context.events.today_count }}</p>
                     <p class="mb-1"><strong>Upcoming:</strong> {{ context.events.upcoming_count }}</p>
                     {% if context.events.next_event %}
                         <p class="mb-0"><strong>Next:</strong> {{ context.events.next_event.name }} ({{ context.events.next_event.start_date.strftime('%Y-%m-%d') }} - {{ context.events.next_event.end_date.strftime('%Y-%m-%d') }})</p>
