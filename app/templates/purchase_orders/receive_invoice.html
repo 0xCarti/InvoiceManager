@@ -321,6 +321,39 @@
         setDepositVisibility(row, initialEnabled);
     }
 
+    function setOptionalPanelState(row, expanded) {
+        const optionalPanel = row.querySelector('.optional-panel');
+        const toggleBtn = row.querySelector('.toggle-optional');
+        if (!optionalPanel || !toggleBtn) {
+            return;
+        }
+        if (expanded) {
+            optionalPanel.classList.add('show');
+            toggleBtn.classList.remove('collapsed');
+            toggleBtn.setAttribute('aria-expanded', 'true');
+        } else {
+            optionalPanel.classList.remove('show');
+            toggleBtn.classList.add('collapsed');
+            toggleBtn.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    function shouldExpandOptional(row) {
+        const depositToggle = row.querySelector('.toggle-deposit');
+        const depositInput = row.querySelector('.deposit');
+        const depositActive = (depositToggle && depositToggle.dataset.active === '1') ||
+            (depositInput && !depositInput.disabled && depositInput.value && depositInput.value !== '0' && depositInput.value !== '0.00');
+
+        const locationSelect = row.querySelector('.location-select');
+        const hasLocation = locationSelect && locationSelect.value && locationSelect.value !== '0';
+
+        const glSelect = row.querySelector('.gl-code-select');
+        const defaultGl = glSelect ? glSelect.dataset.defaultValue : null;
+        const glDiffers = glSelect && glSelect.value && defaultGl && glSelect.value !== defaultGl;
+
+        return Boolean(depositActive || hasLocation || glDiffers);
+    }
+
     function fetchUnits(selectEl, selectedUnitId=null) {
         const itemId = selectEl.value;
         const row = selectEl.closest('.item-row');
