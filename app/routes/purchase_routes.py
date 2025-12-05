@@ -496,6 +496,7 @@ def resolve_vendor_items():
         flash("Vendor item mappings saved. Review the purchase order details next.", "success")
         return redirect(url_for("purchase.create_purchase_order"))
 
+    gl_codes = _purchase_gl_code_choices()
     return render_template(
         "purchase_orders/resolve_vendor_items.html",
         form=form,
@@ -503,6 +504,7 @@ def resolve_vendor_items():
         unresolved_lines=unresolved_lines,
         units_map=units_map,
         source_filename=payload.get("source_filename"),
+        gl_codes=gl_codes,
     )
 
 
