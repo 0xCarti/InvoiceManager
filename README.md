@@ -33,8 +33,10 @@ The application requires several variables to be present in your environment:
 - `ADMIN_EMAIL` – email address for the initial administrator account.
 - `ADMIN_PASS` – password for the administrator account.
 - `PORT` – port the web server listens on (optional, defaults to 5000).
-- `SMTP_HOST` – hostname of your SMTP server.
-- `SMTP_PORT` – port for the SMTP server (defaults to 25).
+- `SMTP_HOST` – hostname of your SMTP server. Defaults to `mailpit` when using
+  `docker-compose`.
+- `SMTP_PORT` – port for the SMTP server (defaults to `1025` for the bundled
+  SMTP sink).
 - `SMTP_USERNAME` – username for SMTP authentication.
 - `SMTP_PASSWORD` – password for SMTP authentication.
 - `SMTP_SENDER` – email address used as the sender.
@@ -115,6 +117,11 @@ service:
 ```bash
 docker compose up --build
 ```
+
+The compose file also starts a [Mailpit](https://github.com/axllent/mailpit)
+SMTP sink for local development, exposed on port `1025` for SMTP and `8025` for
+its web UI. By default the web application is configured to send mail through
+this relay using the service hostname `mailpit`.
 
 The repository includes an `import_files` directory containing example CSV files
 that can be used as templates for data imports.
