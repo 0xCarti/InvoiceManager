@@ -14,7 +14,12 @@ PDFPage = Tuple[str, Mapping[str, object]]
 
 def _render_html_to_pdf(html: str) -> bytes:
     """Render an HTML string to a PDF byte string."""
-    return HTML(string=html, base_url=current_app.root_path).write_pdf()
+    output = BytesIO()
+    try:
+        HTML(string=html, base_url=current_app.root_path).write_pdf(output)
+        return output.getvalue()
+    finally:
+        output.close()
 
 
 def render_stand_sheet_pdf(pages: Sequence[PDFPage]) -> bytes:
