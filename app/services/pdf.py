@@ -12,12 +12,9 @@ from weasyprint import HTML
 PDFPage = Tuple[str, Mapping[str, object]]
 
 
-def _render_html_to_pdf(html: str) -> BytesIO:
-    """Render an HTML string to a PDF byte stream."""
-    pdf_stream = BytesIO()
-    HTML(string=html, base_url=current_app.root_path).write_pdf(pdf_stream)
-    pdf_stream.seek(0)
-    return pdf_stream
+def _render_html_to_pdf(html: str) -> bytes:
+    """Render an HTML string to a PDF byte string."""
+    return HTML(string=html, base_url=current_app.root_path).write_pdf()
 
 
 def render_stand_sheet_pdf(pages: Sequence[PDFPage]) -> bytes:
@@ -39,20 +36,20 @@ def render_stand_sheet_pdf(pages: Sequence[PDFPage]) -> bytes:
     if not pages:
         raise ValueError("At least one template must be provided")
 
-    pdf_streams = []
+    pdf_pages = []
     for template_name, context in pages:
         html = render_template(template_name, **context)
-        pdf_streams.append(_render_html_to_pdf(html))
+        pdf_pages.append(_render_html_to_pdf(html))
 
-    if len(pdf_streams) == 1:
-        try:
-            return pdf_streams[0].getvalue()
-        finally:
-            pdf_streams[0].close()
+    if len(pdf_pages) == 1:
+        return pdf_pages[0]
 
     writer = PdfWriter()
+    streams = []
     try:
-        for stream in pdf_streams:
+        for pdf_bytes in pdf_pages:
+            stream = BytesIO(pdf_bytes)
+            streams.append(stream)
             writer.append(stream)
         output = BytesIO()
         writer.write(output)
@@ -61,5 +58,5 @@ def render_stand_sheet_pdf(pages: Sequence[PDFPage]) -> bytes:
         return data
     finally:
         writer.close()
-        for stream in pdf_streams:
+        for stream in streams:
             stream.close()
