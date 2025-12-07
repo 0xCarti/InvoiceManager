@@ -210,7 +210,7 @@ def test_email_stand_sheet_success(monkeypatch, client, app):
     sent_email = {}
     monkeypatch.setattr(
         "app.routes.location_routes.render_stand_sheet_pdf",
-        lambda templates: b"PDF",
+        lambda templates, *, base_url=None: b"PDF",
     )
 
     def fake_send_email(**kwargs):
@@ -242,7 +242,7 @@ def test_email_stand_sheet_missing_configuration(monkeypatch, client, app):
 
     monkeypatch.setattr(
         "app.routes.location_routes.render_stand_sheet_pdf",
-        lambda templates: b"PDF",
+        lambda templates, *, base_url=None: b"PDF",
     )
 
     def fake_send_email(**kwargs):

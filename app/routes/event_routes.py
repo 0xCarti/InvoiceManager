@@ -5132,7 +5132,8 @@ def email_bulk_stand_sheets(event_id):
                         "pdf_export": True,
                     },
                 )
-            ]
+            ],
+            base_url=request.url_root,
         )
     except Exception:
         current_app.logger.exception(
