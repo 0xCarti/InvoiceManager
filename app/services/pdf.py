@@ -8,7 +8,7 @@ from typing import Mapping, Sequence, Tuple
 from flask import current_app, render_template, request
 from pydyf import Stream as PDFStream
 from pydyf import _to_bytes as _pdf_to_bytes
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
 from weasyprint import CSS, HTML
 from weasyprint.formatting_structure.boxes import TableCellBox
 
@@ -97,6 +97,37 @@ def _render_html_to_pdf(
         output.close()
 
 
+def _ensure_landscape_orientation(pdf_bytes: bytes) -> bytes:
+    """Rotate portrait pages so stand sheets always render in landscape."""
+
+    input_stream = BytesIO(pdf_bytes)
+    reader = PdfReader(input_stream)
+    writer = PdfWriter()
+    rotated = False
+
+    for page in reader.pages:
+        width = float(page.mediabox.width)
+        height = float(page.mediabox.height)
+        if width < height:
+            page.rotate(90)
+            rotated = True
+        writer.add_page(page)
+
+    if not rotated:
+        writer.close()
+        input_stream.close()
+        return pdf_bytes
+
+    output_stream = BytesIO()
+    try:
+        writer.write(output_stream)
+        return output_stream.getvalue()
+    finally:
+        output_stream.close()
+        writer.close()
+        input_stream.close()
+
+
 def render_stand_sheet_pdf(
     pages: Sequence[PDFPage], *, base_url: str | None = None
 ) -> bytes:
@@ -123,8 +154,10 @@ def render_stand_sheet_pdf(
     for template_name, context in pages:
         html = render_template(template_name, **context)
         pdf_pages.append(
-            _render_html_to_pdf(
-                html, base_url=base_url, stylesheets=[landscape_stylesheet]
+            _ensure_landscape_orientation(
+                _render_html_to_pdf(
+                    html, base_url=base_url, stylesheets=[landscape_stylesheet]
+                )
             )
         )
 
