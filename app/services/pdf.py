@@ -10,6 +10,7 @@ from pydyf import Stream as PDFStream
 from pydyf import _to_bytes as _pdf_to_bytes
 from pypdf import PdfWriter
 from weasyprint import HTML
+from weasyprint.formatting_structure.boxes import TableCellBox
 
 PDFPage = Tuple[str, Mapping[str, object]]
 
@@ -58,6 +59,15 @@ if not hasattr(PDFStream, "text_matrix"):
             )
 
     PDFStream.text_matrix = _stream_text_matrix
+
+# Some WeasyPrint builds omit border radius attributes on ``TableCellBox`` and
+# emit ``AttributeError`` during stand sheet rendering. Align the class with
+# other box types by providing zero-radius defaults when they are missing.
+if not hasattr(TableCellBox, "border_top_left_radius"):
+    TableCellBox.border_top_left_radius = (0, 0)
+    TableCellBox.border_top_right_radius = (0, 0)
+    TableCellBox.border_bottom_left_radius = (0, 0)
+    TableCellBox.border_bottom_right_radius = (0, 0)
 
 
 def _render_html_to_pdf(html: str, base_url: str | None = None) -> bytes:
