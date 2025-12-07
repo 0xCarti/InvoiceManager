@@ -5,24 +5,36 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Mapping, Sequence, Tuple
 
-from flask import current_app, render_template
+from flask import current_app, render_template, request
 from pypdf import PdfWriter
 from weasyprint import HTML
 
 PDFPage = Tuple[str, Mapping[str, object]]
 
 
-def _render_html_to_pdf(html: str) -> bytes:
+def _render_html_to_pdf(html: str, base_url: str | None = None) -> bytes:
     """Render an HTML string to a PDF byte string."""
+    resolved_base_url = base_url
+    if resolved_base_url is None:
+        try:
+            resolved_base_url = request.url_root
+        except RuntimeError:
+            resolved_base_url = None
+
+    if resolved_base_url is None:
+        resolved_base_url = current_app.root_path
+
     output = BytesIO()
     try:
-        HTML(string=html, base_url=current_app.root_path).write_pdf(output)
+        HTML(string=html, base_url=resolved_base_url).write_pdf(output)
         return output.getvalue()
     finally:
         output.close()
 
 
-def render_stand_sheet_pdf(pages: Sequence[PDFPage]) -> bytes:
+def render_stand_sheet_pdf(
+    pages: Sequence[PDFPage], *, base_url: str | None = None
+) -> bytes:
     """Render one or more stand sheet templates into a merged PDF.
 
     Args:
@@ -44,7 +56,7 @@ def render_stand_sheet_pdf(pages: Sequence[PDFPage]) -> bytes:
     pdf_pages = []
     for template_name, context in pages:
         html = render_template(template_name, **context)
-        pdf_pages.append(_render_html_to_pdf(html))
+        pdf_pages.append(_render_html_to_pdf(html, base_url=base_url))
 
     if len(pdf_pages) == 1:
         return pdf_pages[0]

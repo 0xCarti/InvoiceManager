@@ -376,7 +376,8 @@ def email_stand_sheet(location_id):
                         "pdf_export": True,
                     },
                 )
-            ]
+            ],
+            base_url=request.url_root,
         )
     except Exception:
         current_app.logger.exception(
