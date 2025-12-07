@@ -9,7 +9,7 @@ from flask import current_app, render_template, request
 from pydyf import Stream as PDFStream
 from pydyf import _to_bytes as _pdf_to_bytes
 from pypdf import PdfWriter
-from weasyprint import HTML
+from weasyprint import CSS, HTML
 from weasyprint.formatting_structure.boxes import TableCellBox
 
 PDFPage = Tuple[str, Mapping[str, object]]
@@ -70,7 +70,12 @@ if not hasattr(TableCellBox, "border_top_left_radius"):
     TableCellBox.border_bottom_right_radius = (0, 0)
 
 
-def _render_html_to_pdf(html: str, base_url: str | None = None) -> bytes:
+def _render_html_to_pdf(
+    html: str,
+    *,
+    base_url: str | None = None,
+    stylesheets: Sequence[CSS] | None = None,
+) -> bytes:
     """Render an HTML string to a PDF byte string."""
     resolved_base_url = base_url
     if resolved_base_url is None:
@@ -84,7 +89,9 @@ def _render_html_to_pdf(html: str, base_url: str | None = None) -> bytes:
 
     output = BytesIO()
     try:
-        HTML(string=html, base_url=resolved_base_url).write_pdf(output)
+        HTML(string=html, base_url=resolved_base_url).write_pdf(
+            output, stylesheets=stylesheets
+        )
         return output.getvalue()
     finally:
         output.close()
@@ -112,9 +119,14 @@ def render_stand_sheet_pdf(
         raise ValueError("At least one template must be provided")
 
     pdf_pages = []
+    landscape_stylesheet = CSS(string="@page { size: letter landscape; }")
     for template_name, context in pages:
         html = render_template(template_name, **context)
-        pdf_pages.append(_render_html_to_pdf(html, base_url=base_url))
+        pdf_pages.append(
+            _render_html_to_pdf(
+                html, base_url=base_url, stylesheets=[landscape_stylesheet]
+            )
+        )
 
     if len(pdf_pages) == 1:
         return pdf_pages[0]
