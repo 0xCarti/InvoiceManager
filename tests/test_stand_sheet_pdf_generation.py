@@ -54,7 +54,7 @@ def test_location_stand_sheet_pdf_contains_items(app, monkeypatch):
         pdf_bytes = render_stand_sheet_pdf(
             [
                 (
-                    "locations/stand_sheet.html",
+                    "locations/stand_sheet_pdf.html",
                     {
                         "location": location,
                         "stand_items": stand_items,
@@ -124,7 +124,7 @@ def test_event_stand_sheet_pdf_contains_items(app, monkeypatch):
         pdf_bytes = render_stand_sheet_pdf(
             [
                 (
-                    "events/bulk_stand_sheets.html",
+                    "events/bulk_stand_sheets_pdf.html",
                     {
                         "event": event,
                         "data": data,

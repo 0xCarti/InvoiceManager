@@ -5124,7 +5124,7 @@ def email_bulk_stand_sheets(event_id):
         pdf_bytes = render_stand_sheet_pdf(
             [
                 (
-                    "events/bulk_stand_sheets.html",
+                    "events/bulk_stand_sheets_pdf.html",
                     {
                         "event": ev,
                         "data": data,
