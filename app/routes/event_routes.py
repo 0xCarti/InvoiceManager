@@ -5105,9 +5105,20 @@ def email_bulk_stand_sheets(event_id):
     if ev is None:
         abort(404)
 
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     email_address = (request.form.get("email") or "").strip()
     if not email_address:
-        flash("Please provide an email address.", "danger")
+        message = "Please provide an email address."
+        if is_ajax:
+            return (
+                jsonify({
+                    "success": False,
+                    "field_errors": {"email": [message]},
+                    "message": message,
+                }),
+                400,
+            )
+        flash(message, "danger")
         return redirect(url_for("event.bulk_stand_sheets", event_id=event_id))
 
     data = []
@@ -5139,7 +5150,10 @@ def email_bulk_stand_sheets(event_id):
         current_app.logger.exception(
             "Failed to render stand sheet PDF for event %s", event_id
         )
-        flash("Unable to generate the stand sheet PDF.", "danger")
+        message = "Unable to generate the stand sheet PDF."
+        if is_ajax:
+            return jsonify({"success": False, "message": message}), 500
+        flash(message, "danger")
         return redirect(url_for("event.bulk_stand_sheets", event_id=event_id))
 
     try:
@@ -5159,13 +5173,19 @@ def email_bulk_stand_sheets(event_id):
         current_app.logger.exception(
             "Failed to send stand sheet email for event %s", event_id
         )
-        flash("Unable to send the stand sheet email.", "danger")
+        message = "Unable to send the stand sheet email."
+        if is_ajax:
+            return jsonify({"success": False, "message": message}), 500
+        flash(message, "danger")
         return redirect(url_for("event.bulk_stand_sheets", event_id=event_id))
 
     log_activity(
         f"Emailed stand sheets for event {event_id} to {email_address}"
     )
-    flash(f"Stand sheets sent to {email_address}.", "success")
+    success_message = f"Stand sheets sent to {email_address}."
+    if is_ajax:
+        return jsonify({"success": True, "message": success_message})
+    flash(success_message, "success")
     return redirect(url_for("event.bulk_stand_sheets", event_id=event_id))
 
 

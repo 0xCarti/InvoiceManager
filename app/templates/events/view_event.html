@@ -49,6 +49,7 @@
             data-email-action="{{ url_for('event.email_bulk_stand_sheets', event_id=event.id) }}"
             data-email-label="all stand sheets for {{ event.name }}"
             data-email-success="Stand sheets emailed successfully."
+            data-location-ids="{{ event.locations | map(attribute='location_id') | join(',') }}"
         >
             Email Stand Sheets
         </button>
@@ -77,7 +78,7 @@
     </form>
     {% endif %}
         <div class="table-responsive">
-            <table class="table align-middle">
+            <table class="table align-middle" id="locations-table">
                 <thead>
                     <tr>
                         {% if not event.closed %}
