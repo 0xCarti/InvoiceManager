@@ -9,6 +9,16 @@
         <div class="col-auto">
             <button id="addLocationBtn" class="btn btn-primary mb-3" type="button">Add New Location</button>
             <button type="button" class="btn btn-outline-secondary mb-3" id="bulkEditLocationsBtn" disabled>Bulk Edit</button>
+            <button
+                type="button"
+                class="btn btn-outline-secondary mb-3"
+                id="emailStandSheetsBtn"
+                data-email-stand-sheet
+                data-email-action="{{ url_for('locations.email_stand_sheets') }}"
+                disabled
+            >
+                Email Stand Sheets
+            </button>
         </div>
         <div class="col-auto text-end">
             {{ column_visibility_dropdown(
@@ -219,14 +229,22 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentSourceId = null;
 
     const bulkEditLocationsBtn = document.getElementById('bulkEditLocationsBtn');
+    const emailStandSheetsBtn = document.getElementById('emailStandSheetsBtn');
     const selectAllLocations = document.getElementById('select-all-locations');
 
     function updateLocationBulkButtonState() {
-        if (!bulkEditLocationsBtn) {
-            return;
+        const ids = getSelectedLocationIds();
+        const selectedCount = ids.length;
+        if (bulkEditLocationsBtn) {
+            bulkEditLocationsBtn.disabled = selectedCount === 0;
         }
-        const selectedCount = document.querySelectorAll('#locations-table tbody input[name="location_ids"]:checked').length;
-        bulkEditLocationsBtn.disabled = selectedCount === 0;
+        if (emailStandSheetsBtn) {
+            emailStandSheetsBtn.disabled = selectedCount === 0;
+            emailStandSheetsBtn.setAttribute('data-location-ids', ids.join(','));
+            const names = getSelectedLocationNames();
+            const label = selectedCount === 1 ? (names[0] || 'this location') : `${selectedCount} locations`;
+            emailStandSheetsBtn.setAttribute('data-email-label', label);
+        }
     }
 
     window.updateLocationBulkButtonState = updateLocationBulkButtonState;
@@ -403,7 +421,6 @@ document.addEventListener('DOMContentLoaded', function() {
             <td class=\"col-location-actions\">
                 <button type=\"button\" class=\"btn btn-info edit-location-btn\" data-id=\"${loc.id}\">Edit</button>
                 <a href=\"/locations/${loc.id}/stand_sheet\" class=\"btn btn-secondary\">Stand Sheet</a>
-                <button type=\"button\" class=\"btn btn-outline-secondary ms-1\" data-email-stand-sheet data-email-action=\"/locations/${loc.id}/stand_sheet/email\" data-email-label=\"${locationLabel}\">Email Stand Sheet</button>
                 <a href=\"/locations/${loc.id}/items\" class=\"btn btn-outline-secondary\">Manage Items</a>
                 <a href=\"${notesUrl}\" class=\"btn btn-outline-secondary\">Notes</a>
                 <button type=\"button\" class=\"btn btn-warning copy-location-btn\" data-id=\"${loc.id}\">Copy Stand Sheet</button>
@@ -435,6 +452,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function getSelectedLocationIds() {
         return Array.from(document.querySelectorAll('#locations-table tbody input[name="location_ids"]:checked')).map(cb => cb.value);
+    }
+
+    function getSelectedLocationNames() {
+        return getSelectedLocationIds().map(id => {
+            const row = document.getElementById(`location-row-${id}`);
+            if (!row) {
+                return '';
+            }
+            const nameCell = row.querySelector('.col-location-name');
+            return nameCell ? nameCell.textContent.trim() : '';
+        }).filter(Boolean);
     }
 
     function bindBulkLocationForm() {

@@ -223,14 +223,54 @@ def test_email_stand_sheet_success(monkeypatch, client, app):
     with client:
         login(client, "admin@example.com", "adminpass")
         response = client.post(
-            f"/locations/{location_id}/stand_sheet/email",
-            data={"email": "dest@example.com"},
+            "/locations/stand_sheets/email",
+            data={"email": "dest@example.com", "location_ids": str(location_id)},
             follow_redirects=True,
         )
 
     assert response.status_code == 200
     assert sent_email["to_address"] == "dest@example.com"
     assert b"Stand sheet sent to dest@example.com." in response.data
+
+
+def test_email_multiple_stand_sheets(monkeypatch, client, app):
+    with app.app_context():
+        location_one = Location(name="First")
+        location_two = Location(name="Second")
+        db.session.add_all([location_one, location_two])
+        db.session.commit()
+
+        first_id = location_one.id
+        second_id = location_two.id
+
+    sent_email = {}
+    monkeypatch.setattr(
+        "app.routes.location_routes.render_stand_sheet_pdf",
+        lambda templates, *, base_url=None: b"PDF",
+    )
+
+    def fake_send_email(**kwargs):
+        sent_email.update(kwargs)
+
+    monkeypatch.setattr(
+        "app.routes.location_routes.send_email", fake_send_email
+    )
+
+    with client:
+        login(client, "admin@example.com", "adminpass")
+        response = client.post(
+            "/locations/stand_sheets/email",
+            data={
+                "email": "dest@example.com",
+                "location_ids": [str(first_id), str(second_id)],
+            },
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert sent_email["subject"] == "Stand sheets"
+    assert sent_email["attachments"][0][0] == "stand-sheets.pdf"
+    assert b"Stand sheets sent to dest@example.com." in response.data
 
 
 def test_email_stand_sheet_missing_configuration(monkeypatch, client, app):
@@ -257,8 +297,8 @@ def test_email_stand_sheet_missing_configuration(monkeypatch, client, app):
     with client:
         login(client, "admin@example.com", "adminpass")
         response = client.post(
-            f"/locations/{location_id}/stand_sheet/email",
-            data={"email": "dest@example.com"},
+            "/locations/stand_sheets/email",
+            data={"email": "dest@example.com", "location_ids": str(location_id)},
             follow_redirects=True,
         )
 
