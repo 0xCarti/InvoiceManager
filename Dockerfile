@@ -7,6 +7,17 @@ ENV PYTHONUNBUFFERED=1 \
 # Set working directory
 WORKDIR /app
 
+# Install native dependencies required by WeasyPrint
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libcairo2 \
+        libgdk-pixbuf2.0-0 \
+        libgobject-2.0-0 \
+        libglib2.0-0 \
+        libpango-1.0-0 \
+        fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
