@@ -2,12 +2,12 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="emailStandSheetModalLabel">Email Stand Sheet</h5>
+                <h5 class="modal-title" id="emailStandSheetModalLabel">Email Stand Sheets</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-danger d-none" data-role="form-errors"></div>
-                <p class="mb-3">Send the stand sheet for <span class="fw-semibold" data-role="stand-sheet-target">this location</span> directly to an email inbox.</p>
+                <p class="mb-3">Send stand sheet PDFs for <span class="fw-semibold" data-role="stand-sheet-target">this location</span> directly to an email inbox.</p>
                 <form id="emailStandSheetForm" novalidate>
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="location_ids" data-role="location-ids">

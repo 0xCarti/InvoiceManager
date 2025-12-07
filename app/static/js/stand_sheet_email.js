@@ -43,7 +43,12 @@
                 return;
             }
 
-            currentAction = trigger.getAttribute('data-email-action');
+            const action = trigger.getAttribute('data-email-action');
+            if (!action) {
+                return;
+            }
+
+            currentAction = action;
             const rawIds = trigger.getAttribute('data-location-ids') || '';
             const locationIds = rawIds
                 .split(',')
@@ -53,7 +58,7 @@
 
             const label = trigger.getAttribute('data-email-label') || (locationIds.length > 1
                 ? `${locationIds.length} locations`
-                : 'this location');
+                : locationIds.length === 1 ? 'this location' : 'stand sheets');
             const defaultEmail = trigger.getAttribute('data-email-default') || '';
             successMessage = trigger.getAttribute('data-email-success') || 'Stand sheet email sent.';
 
