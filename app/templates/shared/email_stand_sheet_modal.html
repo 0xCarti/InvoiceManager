@@ -10,6 +10,7 @@
                 <p class="mb-3">Send the stand sheet for <span class="fw-semibold" data-role="stand-sheet-target">this location</span> directly to an email inbox.</p>
                 <form id="emailStandSheetForm" novalidate>
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="location_ids" data-role="location-ids">
                     <div class="mb-3">
                         <label for="stand-sheet-email" class="form-label">Recipient Email</label>
                         <input type="email" class="form-control" id="stand-sheet-email" name="email" required>

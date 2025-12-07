@@ -346,24 +346,65 @@ def view_stand_sheet(location_id):
     )
 
 
+@location.route("/locations/stand_sheets/email", methods=["POST"])
 @location.route(
     "/locations/<int:location_id>/stand_sheet/email",
     methods=["POST"],
 )
 @login_required
-def email_stand_sheet(location_id):
-    location = db.session.get(Location, location_id)
-    if location is None:
-        abort(404)
+def email_stand_sheets(location_id: int | None = None):
+    def _respond_error(message: str):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"success": False, "message": message}), 400
+        flash(message, "danger")
+        redirect_target = (
+            url_for("locations.view_stand_sheet", location_id=location_id)
+            if location_id
+            else url_for("locations.view_locations")
+        )
+        return redirect(redirect_target)
 
     email_address = (request.form.get("email") or "").strip()
     if not email_address:
-        flash("Please provide an email address.", "danger")
-        return redirect(
-            url_for("locations.view_stand_sheet", location_id=location_id)
-        )
+        return _respond_error("Please provide an email address.")
 
-    stand_items = _build_location_stand_sheet_items(location)
+    location_ids_raw = list(request.form.getlist("location_ids"))
+    if location_id is not None:
+        location_ids_raw.append(str(location_id))
+
+    location_ids = []
+    for raw in location_ids_raw:
+        if not raw:
+            continue
+        for part in raw.split(","):
+            try:
+                location_ids.append(int(part.strip()))
+            except ValueError:
+                continue
+
+    # Preserve the order provided by the client
+    seen_ids = set()
+    ordered_ids: list[int] = []
+    for loc_id in location_ids:
+        if loc_id not in seen_ids:
+            seen_ids.add(loc_id)
+            ordered_ids.append(loc_id)
+
+    if not ordered_ids:
+        return _respond_error("Please select at least one location.")
+
+    locations = (
+        Location.query.options(selectinload(Location.current_menu))
+        .filter(Location.id.in_(ordered_ids))
+        .all()
+    )
+    location_map = {loc.id: loc for loc in locations}
+    ordered_locations: list[Location] = []
+    for loc_id in ordered_ids:
+        location_obj = location_map.get(loc_id)
+        if not location_obj:
+            abort(404)
+        ordered_locations.append(location_obj)
 
     try:
         pdf_bytes = render_stand_sheet_pdf(
@@ -371,65 +412,84 @@ def email_stand_sheet(location_id):
                 (
                     "locations/stand_sheet_pdf.html",
                     {
-                        "location": location,
-                        "stand_items": stand_items,
+                        "location": loc,
+                        "stand_items": _build_location_stand_sheet_items(loc),
                         "pdf_export": True,
                     },
                 )
+                for loc in ordered_locations
             ],
             base_url=request.url_root,
         )
     except Exception:
         current_app.logger.exception(
-            "Failed to render stand sheet PDF for location %s", location_id
+            "Failed to render stand sheet PDF for locations %s",
+            ", ".join(map(str, ordered_ids)),
         )
-        flash("Unable to generate the stand sheet PDF.", "danger")
-        return redirect(
-            url_for("locations.view_stand_sheet", location_id=location_id)
-        )
+        return _respond_error("Unable to generate the stand sheet PDF.")
+
+    is_multiple = len(ordered_locations) > 1
+    filename = (
+        "stand-sheets.pdf"
+        if is_multiple
+        else f"location-{ordered_locations[0].id}-stand-sheet.pdf"
+    )
+    subject = (
+        "Stand sheets"
+        if is_multiple
+        else f"{ordered_locations[0].name} stand sheet"
+    )
+    body = (
+        "Attached are the stand sheets for the selected locations."
+        if is_multiple
+        else "Attached is the stand sheet for the requested location."
+    )
 
     try:
         send_email(
             to_address=email_address,
-            subject=f"{location.name} stand sheet",
-            body=(
-                "Attached is the stand sheet for the requested location."
-            ),
-            attachments=[
-                (
-                    f"location-{location_id}-stand-sheet.pdf",
-                    pdf_bytes,
-                    "application/pdf",
-                )
-            ],
+            subject=subject,
+            body=body,
+            attachments=[(
+                filename,
+                pdf_bytes,
+                "application/pdf",
+            )],
         )
     except SMTPConfigurationError as exc:
         current_app.logger.warning(
             "SMTP configuration missing for stand sheet email: %s", exc
         )
-        flash(
-            "Email settings are not configured. Please update SMTP settings before sending emails.",
-            "danger",
-        )
-        return redirect(
-            url_for("locations.view_stand_sheet", location_id=location_id)
+        return _respond_error(
+            "Email settings are not configured. Please update SMTP settings before sending emails."
         )
     except Exception:
         current_app.logger.exception(
-            "Failed to send stand sheet email for location %s", location_id
+            "Failed to send stand sheet email for locations %s",
+            ", ".join(map(str, ordered_ids)),
         )
-        flash("Unable to send the stand sheet email.", "danger")
-        return redirect(
-            url_for("locations.view_stand_sheet", location_id=location_id)
-        )
+        return _respond_error("Unable to send the stand sheet email.")
 
     log_activity(
-        f"Emailed stand sheet for location {location_id} to {email_address}"
+        "Emailed stand sheet(s) for locations %s to %s"
+        % (", ".join(map(str, ordered_ids)), email_address)
     )
-    flash(f"Stand sheet sent to {email_address}.", "success")
-    return redirect(
-        url_for("locations.view_stand_sheet", location_id=location_id)
+    message = (
+        f"Stand sheets sent to {email_address}."
+        if is_multiple
+        else f"Stand sheet sent to {email_address}."
     )
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"success": True, "sent": True, "message": message})
+
+    flash(message, "success")
+    redirect_target = (
+        url_for("locations.view_stand_sheet", location_id=ordered_locations[0].id)
+        if not is_multiple and ordered_locations
+        else url_for("locations.view_locations")
+    )
+    return redirect(redirect_target)
 
 
 @location.route("/locations/<int:location_id>/items", methods=["GET", "POST"])

@@ -13,9 +13,11 @@
         const targetLabel = modalElement.querySelector('[data-role="stand-sheet-target"]');
         const submitButton = modalElement.querySelector('button[type="submit"]');
         const csrfField = form ? form.querySelector('input[name="csrf_token"]') : null;
+        const locationIdsField = form ? form.querySelector('[data-role="location-ids"]') : null;
 
         let currentAction = null;
         let successMessage = 'Stand sheet email sent.';
+        let currentLocationIds = [];
 
         function resetErrors() {
             if (alertContainer) {
@@ -42,7 +44,16 @@
             }
 
             currentAction = trigger.getAttribute('data-email-action');
-            const label = trigger.getAttribute('data-email-label') || 'this location';
+            const rawIds = trigger.getAttribute('data-location-ids') || '';
+            const locationIds = rawIds
+                .split(',')
+                .map(function (value) { return value.trim(); })
+                .filter(Boolean);
+            currentLocationIds = locationIds;
+
+            const label = trigger.getAttribute('data-email-label') || (locationIds.length > 1
+                ? `${locationIds.length} locations`
+                : 'this location');
             const defaultEmail = trigger.getAttribute('data-email-default') || '';
             successMessage = trigger.getAttribute('data-email-success') || 'Stand sheet email sent.';
 
@@ -50,6 +61,10 @@
 
             if (targetLabel) {
                 targetLabel.textContent = label;
+            }
+
+            if (locationIdsField) {
+                locationIdsField.value = locationIds.join(',');
             }
 
             emailInput.value = defaultEmail;
@@ -124,8 +139,18 @@
                 return;
             }
 
+            if (locationIdsField) {
+                locationIdsField.value = currentLocationIds.join(',');
+            }
+
             const formData = new FormData(form);
             formData.set('email', emailValue);
+            if (currentLocationIds.length === 0 && formData.get('location_ids')) {
+                currentLocationIds = String(formData.get('location_ids'))
+                    .split(',')
+                    .map(function (value) { return value.trim(); })
+                    .filter(Boolean);
+            }
 
             if (submitButton) {
                 submitButton.disabled = true;
@@ -179,8 +204,12 @@
         function handleHidden() {
             resetErrors();
             currentAction = null;
+            currentLocationIds = [];
             if (emailInput) {
                 emailInput.value = '';
+            }
+            if (locationIdsField) {
+                locationIdsField.value = '';
             }
         }
 
