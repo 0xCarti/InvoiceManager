@@ -6,10 +6,58 @@ from io import BytesIO
 from typing import Mapping, Sequence, Tuple
 
 from flask import current_app, render_template, request
+from pydyf import Stream as PDFStream
+from pydyf import _to_bytes as _pdf_to_bytes
 from pypdf import PdfWriter
 from weasyprint import HTML
 
 PDFPage = Tuple[str, Mapping[str, object]]
+
+
+# WeasyPrint 62 expects ``pydyf.Stream`` to provide a ``transform`` helper, but
+# ``pydyf`` 0.12 removed that method.  When the newer dependency is installed,
+# the PDF rendering path raises ``AttributeError`` and generates blank files.
+# Add a backwards-compatible shim so WeasyPrint can apply page transforms again
+# even with newer ``pydyf`` releases.
+if not hasattr(PDFStream, "transform"):
+
+    def _stream_transform(
+        self, a: float = 1, b: float = 0, c: float = 0, d: float = 1,
+        e: float = 0, f: float = 0,
+    ) -> None:
+        self.stream.append(
+            b" ".join(_pdf_to_bytes(v) for v in (a, b, c, d, e, f)) + b" cm"
+        )
+
+    PDFStream.transform = _stream_transform
+
+if not hasattr(PDFStream, "push_state"):
+
+    def _stream_push_state(self) -> None:
+        self.stream.append(b"q")
+
+    def _stream_pop_state(self) -> None:
+        self.stream.append(b"Q")
+
+    PDFStream.push_state = _stream_push_state
+    PDFStream.pop_state = _stream_pop_state
+
+if not hasattr(PDFStream, "text_matrix"):
+
+    def _stream_text_matrix(
+        self, a: float, b: float, c: float, d: float, e: float, f: float
+    ) -> None:
+        # Older pydyf versions exposed ``text_matrix`` while newer ones only
+        # provide ``set_text_matrix``.
+        if hasattr(self, "set_text_matrix"):
+            self.set_text_matrix(a, b, c, d, e, f)
+        else:
+            self.stream.append(
+                b" ".join(_pdf_to_bytes(v) for v in (a, b, c, d, e, f))
+                + b" Tm"
+            )
+
+    PDFStream.text_matrix = _stream_text_matrix
 
 
 def _render_html_to_pdf(html: str, base_url: str | None = None) -> bytes:
