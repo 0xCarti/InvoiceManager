@@ -108,10 +108,16 @@ def _ensure_landscape_orientation(pdf_bytes: bytes) -> bytes:
     for page in reader.pages:
         width = float(page.mediabox.width)
         height = float(page.mediabox.height)
+
+        # ``PageObject.rotate`` returns a new page in recent ``pypdf`` versions
+        # instead of mutating in place. Always use the returned page to ensure
+        # the rotation is applied before writing to the merged document.
+        rotated_page = page
         if width < height:
-            page.rotate(90)
+            rotated_page = page.rotate(90)
             rotated = True
-        writer.add_page(page)
+
+        writer.add_page(rotated_page)
 
     if not rotated:
         writer.close()
