@@ -19,6 +19,14 @@
         let successMessage = 'Stand sheet email sent.';
         let currentLocationIds = [];
 
+        function getCheckedLocationIds() {
+            return Array.prototype.slice.call(
+                document.querySelectorAll('#locations-table input[name="location_ids"]:checked')
+            )
+                .map(function (input) { return input.value; })
+                .filter(Boolean);
+        }
+
         function resetErrors() {
             if (alertContainer) {
                 alertContainer.classList.add('d-none');
@@ -54,6 +62,10 @@
                 .split(',')
                 .map(function (value) { return value.trim(); })
                 .filter(Boolean);
+
+            if (!locationIds.length) {
+                Array.prototype.push.apply(locationIds, getCheckedLocationIds());
+            }
             currentLocationIds = locationIds;
 
             const label = trigger.getAttribute('data-email-label') || (locationIds.length > 1
@@ -142,6 +154,10 @@
                     invalidFeedback.textContent = 'Please enter an email address.';
                 }
                 return;
+            }
+
+            if (!currentLocationIds.length) {
+                currentLocationIds = getCheckedLocationIds();
             }
 
             if (locationIdsField) {
