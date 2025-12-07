@@ -369,7 +369,7 @@ def email_stand_sheet(location_id):
         pdf_bytes = render_stand_sheet_pdf(
             [
                 (
-                    "locations/stand_sheet.html",
+                    "locations/stand_sheet_pdf.html",
                     {
                         "location": location,
                         "stand_items": stand_items,
