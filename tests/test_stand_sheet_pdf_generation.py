@@ -14,16 +14,23 @@ def test_location_stand_sheet_pdf_contains_items(app, monkeypatch):
     item_name = "PDF Lemonade"
 
     captured_base_url = {}
+    captured_styles = {}
 
     class FakeHTML:
         def __init__(self, string: str, base_url: str | None = None):
             captured_base_url["base_url"] = base_url
             self.string = string
 
-        def write_pdf(self, stream):
+        def write_pdf(self, stream, stylesheets=None):
             stream.write(b"%PDF-FAKE\n")
             stream.write(self.string.encode())
+            captured_styles["stylesheets"] = stylesheets
 
+    class FakeCSS:
+        def __init__(self, string: str):
+            captured_styles["string"] = string
+
+    monkeypatch.setattr("app.services.pdf.CSS", FakeCSS)
     monkeypatch.setattr("app.services.pdf.HTML", FakeHTML)
 
     with app.app_context():
@@ -66,6 +73,8 @@ def test_location_stand_sheet_pdf_contains_items(app, monkeypatch):
         )
         assert item_name.encode() in pdf_bytes
         assert captured_base_url["base_url"] == request.url_root
+        assert captured_styles["string"] == "@page { size: letter landscape; }"
+        assert isinstance(captured_styles["stylesheets"], list)
 
 
 def test_event_stand_sheet_pdf_contains_items(app, monkeypatch):
@@ -73,16 +82,23 @@ def test_event_stand_sheet_pdf_contains_items(app, monkeypatch):
     today = date.today()
 
     captured_base_url = {}
+    captured_styles = {}
 
     class FakeHTML:
         def __init__(self, string: str, base_url: str | None = None):
             captured_base_url["base_url"] = base_url
             self.string = string
 
-        def write_pdf(self, stream):
+        def write_pdf(self, stream, stylesheets=None):
             stream.write(b"%PDF-FAKE\n")
             stream.write(self.string.encode())
+            captured_styles["stylesheets"] = stylesheets
 
+    class FakeCSS:
+        def __init__(self, string: str):
+            captured_styles["string"] = string
+
+    monkeypatch.setattr("app.services.pdf.CSS", FakeCSS)
     monkeypatch.setattr("app.services.pdf.HTML", FakeHTML)
 
     with app.app_context():
@@ -139,3 +155,5 @@ def test_event_stand_sheet_pdf_contains_items(app, monkeypatch):
         )
         assert item_name.encode() in pdf_bytes
         assert captured_base_url["base_url"] == request.url_root
+        assert captured_styles["string"] == "@page { size: letter landscape; }"
+        assert isinstance(captured_styles["stylesheets"], list)
