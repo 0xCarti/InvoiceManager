@@ -74,18 +74,48 @@ _PURCHASE_UPLOAD_SESSION_KEY = "purchase_order_upload"
 
 
 def _get_enabled_import_vendors():
-    enabled_names = {
-        name.upper() for name in Setting.get_enabled_purchase_import_vendors()
+    def _normalize_label(label: str | None) -> str | None:
+        if not label:
+            return None
+        normalized = label.strip()
+        if not normalized:
+            return None
+        return normalized.upper()
+
+    enabled_labels = {
+        normalized
+        for normalized in (
+            _normalize_label(name) for name in Setting.get_enabled_purchase_import_vendors()
+        )
+        if normalized
     }
-    if not enabled_names:
-        enabled_names = {
-            name.upper() for name in Setting.DEFAULT_PURCHASE_IMPORT_VENDORS
+    if not enabled_labels:
+        enabled_labels = {
+            normalized
+            for normalized in (
+                _normalize_label(name) for name in Setting.DEFAULT_PURCHASE_IMPORT_VENDORS
+            )
+            if normalized
         }
+
+    def _vendor_labels(vendor: Vendor) -> set[str]:
+        labels: set[str] = set()
+        first = _normalize_label(vendor.first_name)
+        last = _normalize_label(vendor.last_name)
+
+        if first:
+            labels.add(first)
+        if last:
+            labels.add(last)
+        if first and last:
+            labels.add(f"{first} {last}")
+
+        return labels
 
     return [
         vendor
         for vendor in Vendor.query.filter_by(archived=False).all()
-        if f"{vendor.first_name} {vendor.last_name}".strip().upper() in enabled_names
+        if _vendor_labels(vendor) & enabled_labels
     ]
 
 
