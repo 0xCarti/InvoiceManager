@@ -1046,6 +1046,8 @@ class Setting(db.Model):
     value = db.Column(db.String(255))
 
     RECEIVE_LOCATION_SETTING = "PURCHASE_RECEIVE_LOCATION_DEFAULTS"
+    PURCHASE_IMPORT_VENDORS = "PURCHASE_IMPORT_VENDORS"
+    DEFAULT_PURCHASE_IMPORT_VENDORS = ["SYSCO", "PRATTS", "CENTRAL SUPPLY"]
 
     @classmethod
     def get_receive_location_defaults(cls) -> dict[str, int]:
@@ -1087,5 +1089,42 @@ class Setting(db.Model):
         if setting is None:
             setting = cls(name=cls.RECEIVE_LOCATION_SETTING)
             db.session.add(setting)
+        setting.value = json.dumps(cleaned)
+        return setting
+
+    @classmethod
+    def get_enabled_purchase_import_vendors(cls) -> list[str]:
+        """Return the enabled vendors for purchase-order imports."""
+
+        setting = cls.query.filter_by(name=cls.PURCHASE_IMPORT_VENDORS).first()
+        if setting is None or not setting.value:
+            return list(cls.DEFAULT_PURCHASE_IMPORT_VENDORS)
+
+        try:
+            vendors = json.loads(setting.value)
+        except (TypeError, ValueError):
+            return list(cls.DEFAULT_PURCHASE_IMPORT_VENDORS)
+
+        cleaned = []
+        for vendor in vendors:
+            if isinstance(vendor, str) and vendor.strip():
+                cleaned.append(vendor.strip())
+
+        return cleaned or list(cls.DEFAULT_PURCHASE_IMPORT_VENDORS)
+
+    @classmethod
+    def set_enabled_purchase_import_vendors(cls, vendors: list[str]):
+        """Persist enabled vendors for purchase-order imports."""
+
+        cleaned: list[str] = []
+        for vendor in vendors:
+            if isinstance(vendor, str) and vendor.strip():
+                cleaned.append(vendor.strip())
+
+        setting = cls.query.filter_by(name=cls.PURCHASE_IMPORT_VENDORS).first()
+        if setting is None:
+            setting = cls(name=cls.PURCHASE_IMPORT_VENDORS)
+            db.session.add(setting)
+
         setting.value = json.dumps(cleaned)
         return setting

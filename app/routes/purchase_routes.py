@@ -73,6 +73,22 @@ purchase = Blueprint("purchase", __name__)
 _PURCHASE_UPLOAD_SESSION_KEY = "purchase_order_upload"
 
 
+def _get_enabled_import_vendors():
+    enabled_names = {
+        name.upper() for name in Setting.get_enabled_purchase_import_vendors()
+    }
+    if not enabled_names:
+        enabled_names = {
+            name.upper() for name in Setting.DEFAULT_PURCHASE_IMPORT_VENDORS
+        }
+
+    return [
+        vendor
+        for vendor in Vendor.query.filter_by(archived=False).all()
+        if f"{vendor.first_name} {vendor.last_name}".strip().upper() in enabled_names
+    ]
+
+
 def _merge_error_response(message: str, wants_json: bool):
     if wants_json:
         return jsonify({"error": message}), 400
@@ -250,6 +266,7 @@ def view_purchase_orders():
     )
 
     vendors = Vendor.query.filter_by(archived=False).all()
+    upload_vendors = _get_enabled_import_vendors()
     filter_items = (
         Item.query.filter_by(archived=False)
         .order_by(Item.name)
@@ -266,6 +283,7 @@ def view_purchase_orders():
         delete_form=delete_form,
         merge_form=merge_form,
         vendors=vendors,
+        upload_vendors=upload_vendors,
         vendor_id=vendor_id,
         start_date=start_date_str,
         end_date=end_date_str,
@@ -360,9 +378,10 @@ def upload_purchase_order():
     file = request.files.get("purchase_order_file")
     vendor_id = request.form.get("vendor_id", type=int)
     vendor = db.session.get(Vendor, vendor_id) if vendor_id else None
+    enabled_vendor_ids = {vendor.id for vendor in _get_enabled_import_vendors()}
 
-    if vendor is None or vendor.archived:
-        flash("Select an active vendor before uploading a purchase order file.", "danger")
+    if vendor is None or vendor.archived or vendor.id not in enabled_vendor_ids:
+        flash("Select an enabled vendor before uploading a purchase order file.", "danger")
         return redirect(url_for("purchase.view_purchase_orders"))
 
     try:
