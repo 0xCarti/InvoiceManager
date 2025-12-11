@@ -98,10 +98,41 @@ def _get_enabled_import_vendors():
             if normalized
         }
 
+    _CORPORATE_SUFFIXES = {
+        "INC",
+        "INC.",
+        "INCORPORATED",
+        "LLC",
+        "L.L.C.",
+        "LTD",
+        "LTD.",
+        "LIMITED",
+        "CO",
+        "CO.",
+        "COMPANY",
+        "CORP",
+        "CORP.",
+        "CORPORATION",
+    }
+
+    def _tokenize_parts(value: str | None) -> list[str]:
+        normalized = _normalize_label(value)
+        if not normalized:
+            return []
+        return [part for part in re.split(r"[\s\W]+", normalized) if part]
+
+    def _strip_corporate_suffixes(parts: list[str]) -> list[str]:
+        stripped = list(parts)
+        while stripped and stripped[-1] in _CORPORATE_SUFFIXES:
+            stripped.pop()
+        return stripped
+
     def _vendor_labels(vendor: Vendor) -> set[str]:
         labels: set[str] = set()
         first = _normalize_label(vendor.first_name)
         last = _normalize_label(vendor.last_name)
+        first_parts = _tokenize_parts(vendor.first_name)
+        last_parts = _tokenize_parts(vendor.last_name)
 
         if first:
             labels.add(first)
@@ -109,6 +140,14 @@ def _get_enabled_import_vendors():
             labels.add(last)
         if first and last:
             labels.add(f"{first} {last}")
+        if last_parts:
+            labels.add(" ".join(last_parts))
+        if first and last_parts:
+            labels.add(f"{first} {last_parts[0]}")
+
+        stripped_full_name = _strip_corporate_suffixes(first_parts + last_parts)
+        if stripped_full_name:
+            labels.add(" ".join(stripped_full_name))
 
         return labels
 
