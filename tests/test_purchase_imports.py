@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 
 import pytest
 from werkzeug.datastructures import FileStorage
@@ -17,6 +18,14 @@ def _make_pratts_file(csv_text: str) -> FileStorage:
 
 def _make_pratts_vendor() -> Vendor:
     return Vendor(first_name="Pratt", last_name="Supplies")
+
+
+def _make_central_supply_file(csv_text: str) -> FileStorage:
+    return FileStorage(stream=io.BytesIO(csv_text.encode()), filename="central.csv")
+
+
+def _make_central_supply_vendor() -> Vendor:
+    return Vendor(first_name="Central", last_name="Supply")
 
 
 def test_parse_pratts_csv_success():
@@ -68,3 +77,53 @@ def test_parse_pratts_csv_invalid_quantities():
         parse_purchase_order_csv(_make_pratts_file(csv_text), _make_pratts_vendor())
 
     assert "No purchasable lines found" in str(excinfo.value)
+
+
+def test_parse_central_supply_csv_success():
+    fixture_path = Path(__file__).parent / "fixtures" / "central_supply_sample.csv"
+    parsed = parse_purchase_order_csv(
+        _make_central_supply_file(fixture_path.read_text()),
+        _make_central_supply_vendor(),
+    )
+
+    assert parsed.order_number == "ORD-42"
+    assert parsed.expected_total == 25.0
+
+    quantities = [line.quantity for line in parsed.items]
+    assert quantities == [2, 5, 3]
+
+    order_numbers = {line.vendor_description for line in parsed.items}
+    assert order_numbers == {"Alpha Item", "Beta Item", "Gamma Item"}
+
+
+def test_parse_central_supply_missing_headers():
+    csv_text = """Item #,Description,Qty,Ext Price
+CS-001,Alpha Item,2,7.00
+"""
+
+    with pytest.raises(CSVImportError) as excinfo:
+        parse_purchase_order_csv(
+            _make_central_supply_file(csv_text), _make_central_supply_vendor()
+        )
+
+    assert "Missing required Central Supply columns" in str(excinfo.value)
+    assert "price" in str(excinfo.value)
+
+
+def test_parse_central_supply_ignores_invalid_quantities():
+    csv_text = """Item #,Description,Qty,Unit Price,Ext Price
+CS-001,Alpha Item,0,3.50,0.00
+CS-002,Beta Item,,1.20,0.00
+CS-003,Gamma Item,-1,4.00,-4.00
+CS-004,Delta Item,4,2.00,8.00
+"""
+
+    parsed = parse_purchase_order_csv(
+        _make_central_supply_file(csv_text), _make_central_supply_vendor()
+    )
+
+    assert len(parsed.items) == 1
+    only_item: ParsedPurchaseLine = parsed.items[0]
+    assert only_item.vendor_sku == "CS-004"
+    assert only_item.quantity == 4
+    assert parsed.expected_total == 8.0
