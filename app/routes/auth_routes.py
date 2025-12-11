@@ -1,3 +1,4 @@
+import json
 import os
 import platform
 import sqlite3
@@ -766,6 +767,16 @@ def settings():
         max_backups_setting = Setting(name="MAX_BACKUPS", value="5")
         db.session.add(max_backups_setting)
 
+    import_vendor_setting = Setting.query.filter_by(
+        name=Setting.PURCHASE_IMPORT_VENDORS
+    ).first()
+    if import_vendor_setting is None:
+        import_vendor_setting = Setting(
+            name=Setting.PURCHASE_IMPORT_VENDORS,
+            value=json.dumps(Setting.DEFAULT_PURCHASE_IMPORT_VENDORS),
+        )
+        db.session.add(import_vendor_setting)
+
     conversions_setting = Setting.query.filter_by(
         name="BASE_UNIT_CONVERSIONS"
     ).first()
@@ -780,6 +791,7 @@ def settings():
 
     conversion_mapping = parse_conversion_setting(conversions_setting.value)
     receive_defaults = Setting.get_receive_location_defaults()
+    enabled_import_vendors = Setting.get_enabled_purchase_import_vendors()
     retail_pop_price_value = retail_pop_price_setting.value or "0"
     try:
         retail_pop_price_decimal = Decimal(retail_pop_price_value)
@@ -795,6 +807,7 @@ def settings():
         max_backups=int(max_backups_setting.value),
         base_unit_mapping=conversion_mapping,
         receive_location_defaults=receive_defaults,
+        purchase_import_vendors=enabled_import_vendors,
         retail_pop_price=retail_pop_price_decimal,
     )
     if form.validate_on_submit():
@@ -812,6 +825,17 @@ def settings():
             conversion_updates.setdefault(unit, unit)
 
         if has_conversion_error:
+            return render_template("admin/settings.html", form=form)
+
+        enabled_import_vendors = [
+            label
+            for label, field in form.iter_purchase_import_vendors()
+            if field.data
+        ]
+        if not enabled_import_vendors:
+            form.enable_sysco_imports.errors.append(
+                "Select at least one vendor to enable for imports."
+            )
             return render_template("admin/settings.html", form=form)
 
         receive_location_updates = {}
@@ -837,6 +861,7 @@ def settings():
             retail_pop_price_setting.value = format(
                 form.retail_pop_price.data, ".2f"
             )
+        Setting.set_enabled_purchase_import_vendors(enabled_import_vendors)
         Setting.set_receive_location_defaults(receive_location_updates)
         db.session.commit()
         import app

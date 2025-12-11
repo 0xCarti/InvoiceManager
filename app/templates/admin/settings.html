@@ -57,6 +57,23 @@
             </div>
         </div>
         <div class="mt-4">
+            <h3>Purchase Order Imports</h3>
+            <p class="text-muted">Choose which preset vendors can be selected when importing purchase orders.</p>
+            <div class="row g-3">
+                {% for label, field in form.iter_purchase_import_vendors() %}
+                <div class="col-md-4">
+                    <div class="form-check form-switch">
+                        {{ field(class='form-check-input') }}
+                        <label class="form-check-label" for="{{ field.id }}">{{ label }}</label>
+                    </div>
+                    {% if field.errors %}
+                        <div class="text-danger small">{{ field.errors[0] }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="mt-4">
             <h3>Reporting Units</h3>
             <p class="text-muted">Choose how base units should appear in reports.</p>
             <div class="table-responsive">

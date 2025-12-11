@@ -1687,6 +1687,9 @@ class SettingsForm(FlaskForm):
     receive_default_other = SelectField(
         "Other Default Location", coerce=int, validate_choice=False
     )
+    enable_sysco_imports = BooleanField("SYSCO", default=True)
+    enable_pratts_imports = BooleanField("PRATTS", default=True)
+    enable_central_supply_imports = BooleanField("CENTRAL SUPPLY", default=True)
     submit = SubmitField("Update")
 
     def __init__(
@@ -1694,6 +1697,7 @@ class SettingsForm(FlaskForm):
         *args,
         base_unit_mapping=None,
         receive_location_defaults=None,
+        purchase_import_vendors=None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -1725,6 +1729,13 @@ class SettingsForm(FlaskForm):
             if not self.is_submitted():
                 field.data = defaults.get(department, 0)
 
+        enabled_vendors = {
+            vendor.upper() for vendor in (purchase_import_vendors or [])
+        }
+        for vendor_label, field in self.iter_purchase_import_vendors():
+            if not self.is_submitted():
+                field.data = vendor_label.upper() in enabled_vendors
+
     def iter_base_unit_conversions(self):
         for unit in BASE_UNITS:
             field = getattr(self, f"convert_{unit}")
@@ -1733,6 +1744,13 @@ class SettingsForm(FlaskForm):
     def iter_receive_location_defaults(self):
         for _, label, field_name in PURCHASE_RECEIVE_DEPARTMENT_CONFIG:
             yield label, getattr(self, field_name)
+
+    def iter_purchase_import_vendors(self):
+        return [
+            ("SYSCO", self.enable_sysco_imports),
+            ("PRATTS", self.enable_pratts_imports),
+            ("CENTRAL SUPPLY", self.enable_central_supply_imports),
+        ]
 
 
 class TimezoneForm(FlaskForm):
