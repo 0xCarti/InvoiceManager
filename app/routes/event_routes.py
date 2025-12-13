@@ -484,11 +484,31 @@ def _ensure_location_items(location_obj: Location, product_obj: Product) -> None
             )
 
 
+def _normalize_variance_details(value):
+    """Return a dict variance payload, decoding JSON strings when needed."""
+
+    if not value:
+        return None
+
+    normalized = value
+    if isinstance(value, str):
+        try:
+            normalized = json.loads(value)
+        except (TypeError, ValueError):
+            return None
+
+    if not isinstance(normalized, dict):
+        return None
+
+    return normalized
+
+
 def _derive_summary_totals_from_details(
     details: dict | None,
 ) -> tuple[float | None, float | None]:
     """Derive total quantity and amount values from variance details."""
 
+    details = _normalize_variance_details(details)
     if not details:
         return (None, None)
 
@@ -585,7 +605,8 @@ def _apply_pending_sales(
         db.session.flush()
 
     def _sanitize_variance_details(value):
-        if not value:
+        normalized = _normalize_variance_details(value)
+        if not normalized:
             return None
 
         def _sanitize_prices(values):
@@ -596,7 +617,7 @@ def _apply_pending_sales(
             ]
 
         sanitized_products: list[dict] = []
-        for entry in value.get("products", []):
+        for entry in normalized.get("products", []):
             sanitized_products.append(
                 {
                     "product_id": entry.get("product_id"),
@@ -610,7 +631,7 @@ def _apply_pending_sales(
             )
 
         sanitized_price_mismatches: list[dict] = []
-        for entry in value.get("price_mismatches", []):
+        for entry in normalized.get("price_mismatches", []):
             sanitized_price_mismatches.append(
                 {
                     "product_id": entry.get("product_id"),
@@ -622,7 +643,7 @@ def _apply_pending_sales(
             )
 
         sanitized_menu_issues: list[dict] = []
-        for entry in value.get("menu_issues", []):
+        for entry in normalized.get("menu_issues", []):
             sanitized_menu_issues.append(
                 {
                     "product_id": entry.get("product_id"),
@@ -633,7 +654,7 @@ def _apply_pending_sales(
             )
 
         sanitized_unmapped: list[dict] = []
-        for entry in value.get("unmapped_products", []):
+        for entry in normalized.get("unmapped_products", []):
             sanitized_unmapped.append(
                 {
                     "product_name": entry.get("product_name"),
