@@ -4399,7 +4399,7 @@ def confirm_location(event_id, el_id):
         "show_toggle": False,
     }
     if summary_record is not None and summary_record.variance_details:
-        details = summary_record.variance_details or {}
+        details = _normalize_variance_details(summary_record.variance_details) or {}
         product_entries = details.get("products") or []
         price_entries = details.get("price_mismatches") or []
         menu_entries = details.get("menu_issues") or []
