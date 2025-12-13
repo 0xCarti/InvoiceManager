@@ -18,7 +18,11 @@ from app.models import (
     TerminalSalesResolutionState,
     User,
 )
-from app.routes.event_routes import _apply_pending_sales, _apply_resolution_actions
+from app.routes.event_routes import (
+    _apply_pending_sales,
+    _apply_resolution_actions,
+    _derive_summary_totals_from_details,
+)
 from app.utils.pos_import import (
     combine_terminal_sales_totals,
     derive_terminal_sales_quantity,
@@ -1248,3 +1252,99 @@ def test_terminal_sales_raw_price_triggers_discrepancy_when_totals_match_catalog
     assert not all(
         math.isclose(price, catalog_price, abs_tol=0.01) for price in price_candidates
     )
+
+
+def test_derive_summary_totals_handles_string_details():
+    details = {
+        "products": [
+            {
+                "quantity": "2",
+                "file_amount": "10.5",
+                "file_prices": ["5.25"],
+            }
+        ],
+        "unmapped_products": [
+            {
+                "product_name": "Unknown",
+                "quantity": 1,
+                "file_prices": [3.0],
+            }
+        ],
+    }
+
+    quantity, amount = _derive_summary_totals_from_details(details)
+
+    assert quantity == pytest.approx(3.0)
+    assert amount == pytest.approx(13.5)
+
+    string_quantity, string_amount = _derive_summary_totals_from_details(
+        json.dumps(details)
+    )
+
+    assert string_quantity == pytest.approx(3.0)
+    assert string_amount == pytest.approx(13.5)
+
+    assert _derive_summary_totals_from_details("not json") == (None, None)
+
+
+def test_apply_pending_sales_normalizes_string_variance_details(app):
+    with app.app_context():
+        event = Event(
+            name="Variance Normalization Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Variance Stand")
+        event_location = EventLocation(event=event, location=location)
+        db.session.add_all([event, location, event_location])
+        db.session.commit()
+
+        variance_details = {
+            "products": [
+                {
+                    "product_id": None,
+                    "product_name": "Snacks",
+                    "quantity": "2",
+                    "file_amount": "10.5",
+                    "file_prices": ["5.25"],
+                }
+            ],
+            "unmapped_products": [
+                {
+                    "product_name": "Unknown",
+                    "quantity": "1",
+                    "file_amount": None,
+                    "file_prices": ["3.0"],
+                }
+            ],
+        }
+
+        _apply_pending_sales(
+            [],
+            pending_totals=[
+                {
+                    "event_location_id": event_location.id,
+                    "total_quantity": None,
+                    "total_amount": None,
+                    "variance_details": json.dumps(variance_details),
+                }
+            ],
+            link_products_to_locations=False,
+        )
+
+        summary = EventLocationTerminalSalesSummary.query.filter_by(
+            event_location_id=event_location.id
+        ).one()
+
+        assert isinstance(summary.variance_details, dict)
+
+        derived_quantity = summary.total_quantity
+        derived_amount = summary.total_amount
+
+        assert derived_quantity == pytest.approx(3.0)
+        assert derived_amount == pytest.approx(13.5)
+
+        product_entry = summary.variance_details.get("products", [])[0]
+        assert product_entry.get("quantity") == pytest.approx(2.0)
+        assert product_entry.get("file_amount") == pytest.approx(10.5)
+        assert product_entry.get("file_prices") == [pytest.approx(5.25)]
