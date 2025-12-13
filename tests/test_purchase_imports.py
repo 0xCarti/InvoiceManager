@@ -86,18 +86,21 @@ def test_parse_central_supply_csv_success():
         _make_central_supply_vendor(),
     )
 
-    assert parsed.order_number == "ORD-42"
+    assert parsed.order_number == "ORD-9001"
     assert parsed.expected_total == 25.0
 
     quantities = [line.quantity for line in parsed.items]
     assert quantities == [2, 5, 3]
 
-    order_numbers = {line.vendor_description for line in parsed.items}
-    assert order_numbers == {"Alpha Item", "Beta Item", "Gamma Item"}
+    descriptions = {line.vendor_description for line in parsed.items}
+    assert descriptions == {"Alpha Item", "Beta Item", "Gamma Item"}
+
+    pack_sizes = {line.pack_size for line in parsed.items}
+    assert pack_sizes == {"1/12 oz", "2/6 ct", "1/1 lb"}
 
 
 def test_parse_central_supply_missing_headers():
-    csv_text = """Item #,Description,Qty,Ext Price
+    csv_text = """Vendor SKU,Item Description,Order Qty,Extended Price
 CS-001,Alpha Item,2,7.00
 """
 
@@ -111,7 +114,7 @@ CS-001,Alpha Item,2,7.00
 
 
 def test_parse_central_supply_ignores_invalid_quantities():
-    csv_text = """Item #,Description,Qty,Unit Price,Ext Price
+    csv_text = """Vendor SKU,Item Description,Order Qty,Unit Price,Extended Price
 CS-001,Alpha Item,0,3.50,0.00
 CS-002,Beta Item,,1.20,0.00
 CS-003,Gamma Item,-1,4.00,-4.00

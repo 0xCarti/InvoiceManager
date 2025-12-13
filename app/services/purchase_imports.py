@@ -69,17 +69,37 @@ _PRATTS_OPTIONAL_HEADERS = {
 }
 
 _CENTRAL_SUPPLY_REQUIRED_HEADERS = {
-    "item": {"item", "item #", "item number"},
+    "item": {"item", "item #", "item number", "vendor sku", "vendor item #"},
     "description": {"description", "item description"},
-    "quantity": {"qty ship", "qty shipped", "quantity shipped", "qty"},
-    "price": {"price", "unit price"},
-    "ext_price": {"ext price", "extended price", "extd price"},
+    "quantity": {
+        "qty ship",
+        "qty shipped",
+        "quantity shipped",
+        "qty",
+        "order qty",
+        "quantity ordered",
+    },
+    "price": {"price", "unit price", "unit cost"},
+    "ext_price": {
+        "ext price",
+        "extended price",
+        "extd price",
+        "extended cost",
+        "ext cost",
+    },
 }
 
 _CENTRAL_SUPPLY_OPTIONAL_HEADERS = {
-    "pack": {"pack"},
+    "pack": {"pack", "pack size", "pack/size", "pack & size"},
     "size": {"size"},
-    "order_number": {"order #", "po number", "order number", "po #"},
+    "order_number": {
+        "order #",
+        "po number",
+        "order number",
+        "po #",
+        "po no.",
+        "order no.",
+    },
 }
 
 
@@ -253,10 +273,7 @@ def _parse_central_supply_csv(file_obj: IO) -> ParsedPurchaseOrder:
     expected_total = 0.0
     has_ext_price = False
 
-    for row_index, row in enumerate(reader, start=2):
-        if row_index == 3:
-            continue
-
+    for row in reader:
         vendor_sku = row.get(header_lookup["item"], "").strip()
         raw_description = row.get(header_lookup["description"], "").strip()
         raw_qty = row.get(header_lookup["quantity"], "")
@@ -269,8 +286,16 @@ def _parse_central_supply_csv(file_obj: IO) -> ParsedPurchaseOrder:
         if not order_number and "order_number" in header_lookup:
             order_number = row.get(header_lookup["order_number"], "").strip() or None
 
-        pack = row.get(header_lookup.get("pack", ""), "").strip() if "pack" in header_lookup else ""
-        size = row.get(header_lookup.get("size", ""), "").strip() if "size" in header_lookup else ""
+        pack = (
+            row.get(header_lookup.get("pack", ""), "").strip()
+            if "pack" in header_lookup
+            else ""
+        )
+        size = (
+            row.get(header_lookup.get("size", ""), "").strip()
+            if "size" in header_lookup
+            else ""
+        )
         pack_size = " ".join(filter(None, [pack, size])) or None
 
         unit_cost = coerce_float(raw_price)
