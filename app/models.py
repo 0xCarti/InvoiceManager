@@ -336,11 +336,19 @@ class TransferItem(db.Model):
     )
     item_id = db.Column(db.Integer, db.ForeignKey("item.id"), nullable=False)
     quantity = db.Column(db.Float, nullable=False)
+    completed_quantity = db.Column(
+        db.Float, nullable=False, default=0.0, server_default="0.0"
+    )
+    completed_at = db.Column(db.DateTime, nullable=True)
+    completed_by_id = db.Column(
+        db.Integer, db.ForeignKey("user.id"), nullable=True
+    )
     unit_id = db.Column(db.Integer, db.ForeignKey("item_unit.id"), nullable=True)
     unit_quantity = db.Column(db.Float, nullable=True)
     base_quantity = db.Column(db.Float, nullable=True)
     item = relationship("Item", backref="transfer_items", lazy=True)
     unit = relationship("ItemUnit", foreign_keys=[unit_id])
+    completed_by = relationship("User", foreign_keys=[completed_by_id])
     item_name = db.Column(db.String(100), nullable=False, server_default="")
 
 

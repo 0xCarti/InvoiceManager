@@ -4,6 +4,7 @@
 
 
 import re
+from datetime import datetime
 
 from flask import (
     Blueprint,
@@ -590,6 +591,11 @@ def complete_transfer(transfer_id):
             title="Confirm Transfer Completion",
         )
     transfer.completed = True
+    completed_at = datetime.utcnow()
+    for transfer_item in transfer.transfer_items:
+        transfer_item.completed_quantity = transfer_item.quantity
+        transfer_item.completed_at = completed_at
+        transfer_item.completed_by_id = current_user.id
     update_expected_counts(transfer, multiplier=1)
     db.session.commit()
     log_activity(f"Completed transfer {transfer.id}")
@@ -631,6 +637,10 @@ def uncomplete_transfer(transfer_id):
             title="Confirm Transfer Incomplete",
         )
     transfer.completed = False
+    for transfer_item in transfer.transfer_items:
+        transfer_item.completed_quantity = 0.0
+        transfer_item.completed_at = None
+        transfer_item.completed_by_id = None
     update_expected_counts(transfer, multiplier=-1)
     db.session.commit()
     log_activity(f"Uncompleted transfer {transfer.id}")
