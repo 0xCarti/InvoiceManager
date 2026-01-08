@@ -110,7 +110,8 @@ described above. A persistent backing service such as Redis is required for
 rate limiting in production; set `RATELIMIT_STORAGE_URI` to its connection
 string. You can also specify the port the app will use by adding a `PORT`
 variable to `.env` (or by exporting it in your shell) before starting the
-service:
+service. Database migrations run automatically when the container starts via
+`entrypoint.sh`, rather than during the image build:
 
 ```bash
 docker compose up --build
