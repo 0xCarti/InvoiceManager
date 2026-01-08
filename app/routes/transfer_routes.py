@@ -905,7 +905,9 @@ def generate_report():
                 from_location.name.label("from_location_name"),
                 to_location.name.label("to_location_name"),
                 Item.name.label("item_name"),
-                func.sum(TransferItem.quantity).label("total_quantity"),
+                func.sum(TransferItem.completed_quantity).label(
+                    "total_quantity"
+                ),
             )
             .select_from(Transfer)
             .join(TransferItem, Transfer.id == TransferItem.transfer_id)
@@ -913,7 +915,7 @@ def generate_report():
             .join(from_location, Transfer.from_location_id == from_location.id)
             .join(to_location, Transfer.to_location_id == to_location.id)
             .filter(
-                Transfer.completed == True,
+                TransferItem.completed_quantity > 0,
                 Transfer.date_created >= start_datetime,
                 Transfer.date_created <= end_datetime,
             )
