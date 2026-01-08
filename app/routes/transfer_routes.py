@@ -108,16 +108,43 @@ def _extract_transfer_items(prefix: str):
     return results
 
 
-def check_negative_transfer(transfer_obj, multiplier=1):
+def _build_transfer_item_quantities(transfer_items, multiplier):
+    quantities = {}
+    for transfer_item in transfer_items:
+        if multiplier >= 0:
+            quantity = (
+                transfer_item.quantity - transfer_item.completed_quantity
+            )
+        else:
+            quantity = transfer_item.completed_quantity
+        if quantity:
+            quantities[transfer_item.id] = quantity
+    return quantities
+
+
+def _sync_transfer_completed(transfer_obj):
+    transfer_obj.completed = all(
+        transfer_item.completed_quantity >= transfer_item.quantity
+        for transfer_item in transfer_obj.transfer_items
+    )
+
+
+def check_negative_transfer(
+    transfer_obj, multiplier=1, transfer_items=None, quantities=None
+):
     """Return warnings if a transfer would cause negative inventory."""
     warnings = []
+    transfer_items = transfer_items or transfer_obj.transfer_items
+    quantities = quantities or {}
     pairs = {
         (transfer_obj.from_location_id, ti.item_id)
-        for ti in transfer_obj.transfer_items
+        for ti in transfer_items
     } | {
         (transfer_obj.to_location_id, ti.item_id)
-        for ti in transfer_obj.transfer_items
+        for ti in transfer_items
     }
+    if not pairs:
+        return warnings
     records = LocationStandItem.query.filter(
         tuple_(LocationStandItem.location_id, LocationStandItem.item_id).in_(
             pairs
@@ -125,10 +152,13 @@ def check_negative_transfer(transfer_obj, multiplier=1):
     ).all()
     indexed = {(r.location_id, r.item_id): r for r in records}
 
-    for ti in transfer_obj.transfer_items:
+    for ti in transfer_items:
+        quantity = quantities.get(ti.id, ti.quantity)
+        if not quantity:
+            continue
         from_record = indexed.get((transfer_obj.from_location_id, ti.item_id))
         current_from = from_record.expected_count if from_record else 0
-        new_from = current_from - multiplier * ti.quantity
+        new_from = current_from - multiplier * quantity
         if new_from < 0:
             item = db.session.get(Item, ti.item_id)
             item_name = item.name if item else ti.item_name
@@ -143,7 +173,7 @@ def check_negative_transfer(transfer_obj, multiplier=1):
 
         to_record = indexed.get((transfer_obj.to_location_id, ti.item_id))
         current_to = to_record.expected_count if to_record else 0
-        new_to = current_to + multiplier * ti.quantity
+        new_to = current_to + multiplier * quantity
         if new_to < 0:
             item = db.session.get(Item, ti.item_id)
             item_name = item.name if item else ti.item_name
@@ -158,15 +188,21 @@ def check_negative_transfer(transfer_obj, multiplier=1):
     return warnings
 
 
-def update_expected_counts(transfer_obj, multiplier=1):
+def update_expected_counts(
+    transfer_obj, multiplier=1, transfer_items=None, quantities=None
+):
     """Update expected counts for locations involved in a transfer."""
+    transfer_items = transfer_items or transfer_obj.transfer_items
+    quantities = quantities or {}
     pairs = {
         (transfer_obj.from_location_id, ti.item_id)
-        for ti in transfer_obj.transfer_items
+        for ti in transfer_items
     } | {
         (transfer_obj.to_location_id, ti.item_id)
-        for ti in transfer_obj.transfer_items
+        for ti in transfer_items
     }
+    if not pairs:
+        return
     records = LocationStandItem.query.filter(
         tuple_(LocationStandItem.location_id, LocationStandItem.item_id).in_(
             pairs
@@ -174,7 +210,10 @@ def update_expected_counts(transfer_obj, multiplier=1):
     ).all()
     indexed = {(r.location_id, r.item_id): r for r in records}
 
-    for ti in transfer_obj.transfer_items:
+    for ti in transfer_items:
+        quantity = quantities.get(ti.id, ti.quantity)
+        if not quantity:
+            continue
         item_obj = db.session.get(Item, ti.item_id)
 
         from_key = (transfer_obj.from_location_id, ti.item_id)
@@ -191,7 +230,7 @@ def update_expected_counts(transfer_obj, multiplier=1):
             db.session.add(from_record)
             indexed[from_key] = from_record
         from_record.expected_count = (
-            from_record.expected_count - multiplier * ti.quantity
+            from_record.expected_count - multiplier * quantity
         )
 
         to_key = (transfer_obj.to_location_id, ti.item_id)
@@ -208,7 +247,7 @@ def update_expected_counts(transfer_obj, multiplier=1):
             db.session.add(to_record)
             indexed[to_key] = to_record
         to_record.expected_count = (
-            to_record.expected_count + multiplier * ti.quantity
+            to_record.expected_count + multiplier * quantity
         )
 
 
@@ -566,7 +605,18 @@ def complete_transfer(transfer_id):
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
-    warnings = check_negative_transfer(transfer, multiplier=1)
+    transfer_items = [
+        transfer_item
+        for transfer_item in transfer.transfer_items
+        if transfer_item.quantity > transfer_item.completed_quantity
+    ]
+    quantities = _build_transfer_item_quantities(transfer_items, multiplier=1)
+    warnings = check_negative_transfer(
+        transfer,
+        multiplier=1,
+        transfer_items=transfer_items,
+        quantities=quantities,
+    )
     form = ConfirmForm()
     if warnings and request.method == "GET":
         return render_template(
@@ -590,17 +640,94 @@ def complete_transfer(transfer_id):
             cancel_url=url_for("transfer.view_transfers"),
             title="Confirm Transfer Completion",
         )
-    transfer.completed = True
     completed_at = datetime.utcnow()
-    for transfer_item in transfer.transfer_items:
+    for transfer_item in transfer_items:
         transfer_item.completed_quantity = transfer_item.quantity
         transfer_item.completed_at = completed_at
         transfer_item.completed_by_id = current_user.id
-    update_expected_counts(transfer, multiplier=1)
+    transfer.completed = True
+    update_expected_counts(
+        transfer,
+        multiplier=1,
+        transfer_items=transfer_items,
+        quantities=quantities,
+    )
     db.session.commit()
     log_activity(f"Completed transfer {transfer.id}")
     flash("Transfer marked as complete!", "success")
     return redirect(url_for("transfer.view_transfers"))
+
+
+@transfer.route(
+    "/transfers/items/complete/<int:transfer_item_id>",
+    methods=["GET", "POST"],
+)
+@login_required
+def complete_transfer_item(transfer_item_id):
+    """Mark a transfer item as completed."""
+    transfer_item = db.session.get(TransferItem, transfer_item_id)
+    if transfer_item is None:
+        abort(404)
+    transfer = transfer_item.transfer
+    if transfer_item.quantity <= transfer_item.completed_quantity:
+        flash("Transfer item already completed.", "info")
+        return redirect(
+            url_for("transfer.view_transfer", transfer_id=transfer.id)
+        )
+    transfer_items = [transfer_item]
+    quantities = _build_transfer_item_quantities(transfer_items, multiplier=1)
+    warnings = check_negative_transfer(
+        transfer,
+        multiplier=1,
+        transfer_items=transfer_items,
+        quantities=quantities,
+    )
+    form = ConfirmForm()
+    if warnings and request.method == "GET":
+        return render_template(
+            "confirm_action.html",
+            form=form,
+            warnings=warnings,
+            action_url=url_for(
+                "transfer.complete_transfer_item",
+                transfer_item_id=transfer_item_id,
+            ),
+            cancel_url=url_for(
+                "transfer.view_transfer", transfer_id=transfer.id
+            ),
+            title="Confirm Transfer Item Completion",
+        )
+    if warnings and not form.validate_on_submit():
+        return render_template(
+            "confirm_action.html",
+            form=form,
+            warnings=warnings,
+            action_url=url_for(
+                "transfer.complete_transfer_item",
+                transfer_item_id=transfer_item_id,
+            ),
+            cancel_url=url_for(
+                "transfer.view_transfer", transfer_id=transfer.id
+            ),
+            title="Confirm Transfer Item Completion",
+        )
+    completed_at = datetime.utcnow()
+    transfer_item.completed_quantity = transfer_item.quantity
+    transfer_item.completed_at = completed_at
+    transfer_item.completed_by_id = current_user.id
+    update_expected_counts(
+        transfer,
+        multiplier=1,
+        transfer_items=transfer_items,
+        quantities=quantities,
+    )
+    _sync_transfer_completed(transfer)
+    db.session.commit()
+    log_activity(
+        f"Completed transfer item {transfer_item.id} on transfer {transfer.id}"
+    )
+    flash("Transfer item marked as complete!", "success")
+    return redirect(url_for("transfer.view_transfer", transfer_id=transfer.id))
 
 
 @transfer.route(
@@ -612,7 +739,18 @@ def uncomplete_transfer(transfer_id):
     transfer = db.session.get(Transfer, transfer_id)
     if transfer is None:
         abort(404)
-    warnings = check_negative_transfer(transfer, multiplier=-1)
+    transfer_items = [
+        transfer_item
+        for transfer_item in transfer.transfer_items
+        if transfer_item.completed_quantity
+    ]
+    quantities = _build_transfer_item_quantities(transfer_items, multiplier=-1)
+    warnings = check_negative_transfer(
+        transfer,
+        multiplier=-1,
+        transfer_items=transfer_items,
+        quantities=quantities,
+    )
     form = ConfirmForm()
     if warnings and request.method == "GET":
         return render_template(
@@ -637,15 +775,91 @@ def uncomplete_transfer(transfer_id):
             title="Confirm Transfer Incomplete",
         )
     transfer.completed = False
-    for transfer_item in transfer.transfer_items:
+    for transfer_item in transfer_items:
         transfer_item.completed_quantity = 0.0
         transfer_item.completed_at = None
         transfer_item.completed_by_id = None
-    update_expected_counts(transfer, multiplier=-1)
+    update_expected_counts(
+        transfer,
+        multiplier=-1,
+        transfer_items=transfer_items,
+        quantities=quantities,
+    )
     db.session.commit()
     log_activity(f"Uncompleted transfer {transfer.id}")
     flash("Transfer marked as not completed.", "success")
     return redirect(url_for("transfer.view_transfers"))
+
+
+@transfer.route(
+    "/transfers/items/uncomplete/<int:transfer_item_id>",
+    methods=["GET", "POST"],
+)
+@login_required
+def uncomplete_transfer_item(transfer_item_id):
+    """Revert a transfer item to not completed."""
+    transfer_item = db.session.get(TransferItem, transfer_item_id)
+    if transfer_item is None:
+        abort(404)
+    transfer = transfer_item.transfer
+    if not transfer_item.completed_quantity:
+        flash("Transfer item is already not completed.", "info")
+        return redirect(
+            url_for("transfer.view_transfer", transfer_id=transfer.id)
+        )
+    transfer_items = [transfer_item]
+    quantities = _build_transfer_item_quantities(transfer_items, multiplier=-1)
+    warnings = check_negative_transfer(
+        transfer,
+        multiplier=-1,
+        transfer_items=transfer_items,
+        quantities=quantities,
+    )
+    form = ConfirmForm()
+    if warnings and request.method == "GET":
+        return render_template(
+            "confirm_action.html",
+            form=form,
+            warnings=warnings,
+            action_url=url_for(
+                "transfer.uncomplete_transfer_item",
+                transfer_item_id=transfer_item_id,
+            ),
+            cancel_url=url_for(
+                "transfer.view_transfer", transfer_id=transfer.id
+            ),
+            title="Confirm Transfer Item Incomplete",
+        )
+    if warnings and not form.validate_on_submit():
+        return render_template(
+            "confirm_action.html",
+            form=form,
+            warnings=warnings,
+            action_url=url_for(
+                "transfer.uncomplete_transfer_item",
+                transfer_item_id=transfer_item_id,
+            ),
+            cancel_url=url_for(
+                "transfer.view_transfer", transfer_id=transfer.id
+            ),
+            title="Confirm Transfer Item Incomplete",
+        )
+    transfer_item.completed_quantity = 0.0
+    transfer_item.completed_at = None
+    transfer_item.completed_by_id = None
+    update_expected_counts(
+        transfer,
+        multiplier=-1,
+        transfer_items=transfer_items,
+        quantities=quantities,
+    )
+    _sync_transfer_completed(transfer)
+    db.session.commit()
+    log_activity(
+        f"Uncompleted transfer item {transfer_item.id} on transfer {transfer.id}"
+    )
+    flash("Transfer item marked as not completed.", "success")
+    return redirect(url_for("transfer.view_transfer", transfer_id=transfer.id))
 
 
 @transfer.route("/transfers/view/<int:transfer_id>", methods=["GET"])
