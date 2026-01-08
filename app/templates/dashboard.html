@@ -113,6 +113,48 @@
             <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <div>
+                        <h5 class="mb-0">Transfer completion by location</h5>
+                        <p class="text-muted mb-0 small">Item-level completion for incoming transfers.</p>
+                    </div>
+                    <button
+                        class="btn btn-sm btn-outline-secondary"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#dashboard-card-transfer-completion"
+                        aria-expanded="true"
+                        aria-controls="dashboard-card-transfer-completion"
+                    >
+                        <span class="fw-semibold">Toggle</span>
+                    </button>
+                </div>
+                <div class="collapse show" id="dashboard-card-transfer-completion" data-dashboard-collapse>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            {% for location in context.transfer_completion_by_location %}
+                                <li class="list-group-item px-0">
+                                    <div class="d-flex justify-content-between align-items-center gap-2">
+                                        <div class="fw-semibold">{{ location.location_name }}</div>
+                                        <div class="text-end">
+                                            <div class="small text-muted">{{ location.transfer_count }} transfers</div>
+                                            <div class="fw-semibold">{{ '%.1f'|format(location.completion_percent) }}% complete</div>
+                                        </div>
+                                    </div>
+                                </li>
+                            {% else %}
+                                <li class="list-group-item px-0 text-muted">No transfer activity yet.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-12">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
                         <h5 class="mb-0">Weekly transfers, purchases & sales</h5>
                         <p class="text-muted mb-0 small">Track recent movement volume alongside purchase receipts and sales totals.</p>
                     </div>

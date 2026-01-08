@@ -8,7 +8,15 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func
 
 from app import db
-from app.models import Event, Invoice, PurchaseInvoice, PurchaseOrder, Transfer
+from app.models import (
+    Event,
+    Invoice,
+    Location,
+    PurchaseInvoice,
+    PurchaseOrder,
+    Transfer,
+    TransferItem,
+)
 from app.services.event_service import current_user_today, event_schedule
 
 
@@ -33,6 +41,40 @@ def transfer_summary() -> Dict[str, int]:
         "completed": int(completed),
         "pending": pending,
     }
+
+
+def transfer_completion_by_location() -> List[Dict[str, Any]]:
+    """Return transfer completion ratios grouped by destination location."""
+
+    rows = (
+        db.session.query(
+            Transfer.to_location_id.label("location_id"),
+            Location.name.label("location_name"),
+            func.count(func.distinct(Transfer.id)).label("transfer_count"),
+            func.sum(TransferItem.quantity).label("total_quantity"),
+            func.sum(TransferItem.completed_quantity).label("completed_quantity"),
+        )
+        .join(TransferItem, TransferItem.transfer_id == Transfer.id)
+        .join(Location, Location.id == Transfer.to_location_id)
+        .group_by(Transfer.to_location_id, Location.name)
+        .order_by(Location.name.asc())
+    )
+
+    results: List[Dict[str, Any]] = []
+    for row in rows:
+        total_qty = float(row.total_quantity or 0.0)
+        completed_qty = float(row.completed_quantity or 0.0)
+        completion_percent = (completed_qty / total_qty * 100.0) if total_qty else 0.0
+        results.append(
+            {
+                "location_id": row.location_id,
+                "location_name": row.location_name,
+                "transfer_count": int(row.transfer_count or 0),
+                "completion_percent": completion_percent,
+            }
+        )
+
+    return results
 
 
 def purchase_order_summary(today: Optional[date] = None) -> Dict[str, Any]:
@@ -163,6 +205,7 @@ def dashboard_context() -> Dict[str, Any]:
 
     return {
         "transfers": transfer_summary(),
+        "transfer_completion_by_location": transfer_completion_by_location(),
         "purchase_orders": purchase_order_summary(today),
         "purchase_invoices": purchase_invoice_summary(),
         "invoices": invoice_summary(),
