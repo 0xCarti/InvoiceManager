@@ -22,17 +22,55 @@
             <tr>
                 <th scope="col">Item</th>
                 <th scope="col">Quantity</th>
+                <th scope="col">Status</th>
+                <th scope="col">Mark Complete</th>
             </tr>
         </thead>
         <tbody>
             {% for item in transfer_items %}
+            {% set is_completed = item.completed_quantity >= item.quantity %}
             <tr>
                 <td>{{ item.item.name }}</td>
                 <td>{{ item.quantity }}</td>
+                <td>
+                    {% if is_completed %}
+                        <span class="badge bg-success">Completed</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="form-check form-switch">
+                        <input
+                            class="form-check-input js-transfer-item-toggle"
+                            type="checkbox"
+                            role="switch"
+                            id="transfer-item-{{ item.id }}"
+                            data-complete-url="{{ url_for('transfer.complete_transfer_item', transfer_item_id=item.id) }}"
+                            data-uncomplete-url="{{ url_for('transfer.uncomplete_transfer_item', transfer_item_id=item.id) }}"
+                            {% if is_completed %}checked{% endif %}
+                        >
+                        <label class="form-check-label" for="transfer-item-{{ item.id }}">
+                            {% if is_completed %}Complete{% else %}Incomplete{% endif %}
+                        </label>
+                    </div>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
     </div>
 </div>
+<script nonce="{{ csp_nonce }}">
+    document.querySelectorAll('.js-transfer-item-toggle').forEach(function(toggle) {
+        toggle.addEventListener('change', function(event) {
+            const completeUrl = event.target.dataset.completeUrl;
+            const uncompleteUrl = event.target.dataset.uncompleteUrl;
+            if (!completeUrl || !uncompleteUrl) {
+                return;
+            }
+            window.location.href = event.target.checked ? completeUrl : uncompleteUrl;
+        });
+    });
+</script>
 {% endblock %}
