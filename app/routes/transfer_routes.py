@@ -513,6 +513,8 @@ def transfer_json(transfer_id):
                 "id": ti.item_id,
                 "name": item_obj.name if item_obj else ti.item_name,
                 "quantity": ti.quantity,
+                "completed_quantity": ti.completed_quantity,
+                "is_completed": ti.completed_quantity >= ti.quantity,
                 "unit_id": ti.unit_id,
                 "unit_quantity": ti.unit_quantity,
                 "base_quantity": ti.base_quantity,
