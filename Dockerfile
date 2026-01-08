@@ -41,12 +41,7 @@ ENV DATABASE_PATH=/app/data/inventory.db
 
 EXPOSE ${PORT}
 
-# Run database migrations during the image build so freshly built
-# containers always start with the latest schema. Running the command as the
-# non-root application user mirrors how the application executes at runtime
-# and ensures the generated SQLite database file has the correct ownership.
 USER app
-RUN flask db upgrade
 
 ENTRYPOINT ["./entrypoint.sh"]
 CMD ["gunicorn", "-c", "gunicorn.conf.py", "run:app"]
