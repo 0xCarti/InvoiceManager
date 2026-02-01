@@ -1682,7 +1682,10 @@ def _invoice_gl_code_rows(invoice: PurchaseInvoice):
             },
         )
 
-        line_total = _quantize(_to_decimal(item.quantity) * _to_decimal(item.cost))
+        line_total = _quantize(
+            _to_decimal(item.quantity)
+            * (_to_decimal(item.cost) + _to_decimal(item.container_deposit))
+        )
         entry["base_amount"] += line_total
 
     if not buckets:
