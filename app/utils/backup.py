@@ -6,14 +6,106 @@ import shutil
 import sqlite3
 import tempfile
 import time
+from dataclasses import dataclass
 from contextlib import suppress
 from datetime import datetime
 from threading import Event, Thread
 
 from flask import current_app
+from sqlalchemy import inspect
 
 from app import db
+from app.models import Setting
 from app.utils.activity import log_activity
+
+BACKUP_SCHEMA_VERSION = "2026.03"
+
+
+@dataclass
+class RestoreCompatibilityResult:
+    compatible: bool
+    issues: list[str]
+
+
+def ensure_backup_schema_marker() -> str:
+    """Ensure the DB has a schema marker used for backup compatibility checks."""
+
+    setting = Setting.query.filter_by(name="APP_SCHEMA_VERSION").first()
+    if setting is None:
+        setting = Setting(name="APP_SCHEMA_VERSION")
+        db.session.add(setting)
+    if setting.value != BACKUP_SCHEMA_VERSION:
+        setting.value = BACKUP_SCHEMA_VERSION
+        db.session.commit()
+    return setting.value or BACKUP_SCHEMA_VERSION
+
+
+def validate_restored_backup_compatibility() -> RestoreCompatibilityResult:
+    """Validate whether the currently restored DB is compatible with this app."""
+
+    issues: list[str] = []
+
+    marker = Setting.query.filter_by(name="APP_SCHEMA_VERSION").first()
+    if marker is None or not (marker.value or "").strip():
+        issues.append(
+            "Backup is missing APP_SCHEMA_VERSION marker in settings."
+        )
+    elif marker.value.strip() != BACKUP_SCHEMA_VERSION:
+        issues.append(
+            "Backup APP_SCHEMA_VERSION "
+            f"{marker.value.strip()} does not match expected {BACKUP_SCHEMA_VERSION}."
+        )
+
+    inspector = inspect(db.engine)
+    existing_tables = set(inspector.get_table_names())
+    required_tables = set(
+        current_app.config.get(
+            "RESTORE_REQUIRED_TABLES",
+            ["setting", "user", "invoice", "transfer"],
+        )
+    )
+    missing_tables = sorted(required_tables - existing_tables)
+    if missing_tables:
+        issues.append(f"Missing required tables: {', '.join(missing_tables)}.")
+
+    required_feature_flags = current_app.config.get(
+        "RESTORE_REQUIRED_FEATURE_FLAGS", []
+    )
+    missing_feature_flags: list[str] = []
+    for setting_name in required_feature_flags:
+        if not setting_name:
+            continue
+        if Setting.query.filter_by(name=setting_name).first() is None:
+            missing_feature_flags.append(setting_name)
+    if missing_feature_flags:
+        issues.append(
+            "Missing required feature-flag settings: "
+            + ", ".join(sorted(missing_feature_flags))
+            + "."
+        )
+
+    endpoint_expectations = current_app.config.get(
+        "RESTORE_ENDPOINT_EXPECTATIONS", []
+    )
+    for expectation in endpoint_expectations:
+        module_name = expectation.get("module", "unknown")
+        enabled = expectation.get("enabled", True)
+        endpoints = expectation.get("endpoints", [])
+        if not enabled:
+            continue
+        missing_endpoints = [
+            endpoint
+            for endpoint in endpoints
+            if endpoint not in current_app.view_functions
+        ]
+        if missing_endpoints:
+            issues.append(
+                f"Enabled module '{module_name}' is missing expected endpoints: "
+                + ", ".join(missing_endpoints)
+                + "."
+            )
+
+    return RestoreCompatibilityResult(compatible=not issues, issues=issues)
 
 UNIT_SECONDS = {
     "hour": 60 * 60,
@@ -44,6 +136,7 @@ def create_backup(*, initiated_by_system: bool = False):
         When ``True`` the activity log will record that the system created a
         backup (as opposed to a user triggered backup).
     """
+    ensure_backup_schema_marker()
     backups_dir = current_app.config["BACKUP_FOLDER"]
     os.makedirs(backups_dir, exist_ok=True)
     try:
@@ -132,10 +225,13 @@ def start_auto_backup_thread(app):
 
 
 __all__ = [
+    "BACKUP_SCHEMA_VERSION",
     "create_backup",
+    "ensure_backup_schema_marker",
     "restore_backup",
     "start_auto_backup_thread",
     "UNIT_SECONDS",
+    "validate_restored_backup_compatibility",
 ]
 
 

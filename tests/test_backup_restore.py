@@ -1,5 +1,6 @@
 import os
 import shutil
+import sqlite3
 import time
 from datetime import date
 import json
@@ -29,9 +30,16 @@ from app.models import (
     TerminalSale,
     User,
     Vendor,
+    Setting,
 )
 from app.utils.activity import flush_activity_logs
-from app.utils.backup import _backup_loop, create_backup, restore_backup
+from app.utils.backup import (
+    BACKUP_SCHEMA_VERSION,
+    _backup_loop,
+    create_backup,
+    restore_backup,
+    validate_restored_backup_compatibility,
+)
 from tests.utils import login
 
 
@@ -365,3 +373,62 @@ def test_restore_backup_route_rejects_invalid_sqlite(client, app):
             follow_redirects=True,
         )
         assert b"Invalid SQLite database." in resp.data
+
+
+def test_create_backup_persists_schema_version_marker(app):
+    with app.app_context():
+        Setting.query.filter_by(name="APP_SCHEMA_VERSION").delete()
+        db.session.commit()
+
+        create_backup()
+
+        marker = Setting.query.filter_by(name="APP_SCHEMA_VERSION").first()
+        assert marker is not None
+        assert marker.value == BACKUP_SCHEMA_VERSION
+
+
+def test_restore_compatibility_detects_missing_marker(app):
+    with app.app_context():
+        db.create_all()
+        Setting.query.filter_by(name="APP_SCHEMA_VERSION").delete()
+        db.session.commit()
+
+        result = validate_restored_backup_compatibility()
+
+        assert result.compatible is False
+        assert any("APP_SCHEMA_VERSION" in issue for issue in result.issues)
+
+
+def test_restore_backup_file_logs_incompatible_restore(client, app):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with app.app_context():
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
+            "sqlite:///", "", 1
+        )
+        backup_path = os.path.join(app.config["BACKUP_FOLDER"], "incompatible.db")
+        shutil.copyfile(db_path, backup_path)
+
+    with sqlite3.connect(backup_path) as conn:
+        conn.execute(
+            "DELETE FROM setting WHERE name = ?",
+            ("APP_SCHEMA_VERSION",),
+        )
+        conn.commit()
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.post(
+            "/controlpanel/backups/restore/incompatible.db",
+            follow_redirects=True,
+        )
+
+    assert b"Incompatible backup" in response.data
+
+    with app.app_context():
+        activities = [
+            row.activity
+            for row in ActivityLog.query.order_by(ActivityLog.id).all()
+        ]
+        assert any("Restore incompatibility detected" in a for a in activities)

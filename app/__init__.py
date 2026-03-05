@@ -159,6 +159,21 @@ def create_app(args=None):
     app.config["UPLOAD_FOLDER"] = os.path.join(base_dir, "uploads")
     app.config["BACKUP_FOLDER"] = os.path.join(base_dir, "backups")
     app.config["IMPORT_FILES_FOLDER"] = os.path.join(repo_dir, "import_files")
+    app.config.setdefault(
+        "RESTORE_REQUIRED_TABLES",
+        ["setting", "user", "invoice", "transfer"],
+    )
+    app.config.setdefault("RESTORE_REQUIRED_FEATURE_FLAGS", [])
+    app.config.setdefault(
+        "RESTORE_ENDPOINT_EXPECTATIONS",
+        [
+            {
+                "module": "core",
+                "enabled": True,
+                "endpoints": ["admin.backups", "transfer.view_transfers"],
+            }
+        ],
+    )
 
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
     os.makedirs(app.config["BACKUP_FOLDER"], exist_ok=True)
