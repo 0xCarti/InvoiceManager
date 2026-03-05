@@ -67,6 +67,7 @@ from app.utils.backup import (
     create_backup,
     restore_backup,
     start_auto_backup_thread,
+    validate_restored_backup_compatibility,
 )
 from app.utils.imports import (
     _import_csv,
@@ -495,6 +496,19 @@ def restore_backup_route():
             flash("Invalid SQLite database.", "error")
             return redirect(url_for("admin.backups"))
         restore_backup(filepath)
+        compatibility = validate_restored_backup_compatibility()
+        if not compatibility.compatible:
+            details = "; ".join(compatibility.issues)
+            log_activity(
+                f"Restore incompatibility detected for {filename}: {details}"
+            )
+            flash(
+                "⚠️ Incompatible backup: this backup was created by a "
+                "different application version and restoration is not safe. "
+                "Please restore a backup created by the current release.",
+                "danger",
+            )
+            return redirect(url_for("admin.backups"))
         log_activity(f"Restored backup {filename}")
         flash("Backup restored from " + filename, "success")
     else:
@@ -520,6 +534,19 @@ def restore_backup_file(filename):
         abort(404)
     restore_backup(filepath)
     fname = os.path.basename(filepath)
+    compatibility = validate_restored_backup_compatibility()
+    if not compatibility.compatible:
+        details = "; ".join(compatibility.issues)
+        log_activity(
+            f"Restore incompatibility detected for {fname}: {details}"
+        )
+        flash(
+            "⚠️ Incompatible backup: this backup was created by a "
+            "different application version and restoration is not safe. "
+            "Please restore a backup created by the current release.",
+            "danger",
+        )
+        return redirect(url_for("admin.backups"))
     log_activity(f"Restored backup {fname}")
     flash("Backup restored from " + fname, "success")
     return redirect(url_for("admin.backups"))

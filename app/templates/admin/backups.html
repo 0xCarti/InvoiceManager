@@ -9,6 +9,13 @@
     </form>
 
     <h4>Restore Backup</h4>
+    <div class="alert alert-info" role="alert">
+        <strong>Restore compatibility:</strong>
+        Backups are only supported for safe restore on the <em>same application release</em>.
+        Cross-version restores are blocked when compatibility checks fail (schema marker, required tables/settings, and enabled-module endpoint expectations).
+        If a backup was created by a different release, create a fresh backup from the current version before restoring.
+    </div>
+
     <form action="{{ url_for('admin.restore_backup_route') }}" method="post" enctype="multipart/form-data" class="mb-4">
         {{ restore_form.hidden_tag() }}
         <div class="form-group">
