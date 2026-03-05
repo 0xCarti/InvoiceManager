@@ -14,6 +14,7 @@ from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import CSRFProtect
 from flask_wtf.csrf import CSRFError
+from werkzeug.routing import BuildError
 from werkzeug.security import generate_password_hash
 
 load_dotenv()
@@ -228,6 +229,18 @@ def create_app(args=None):
     def inject_nav_links():
         """Provide navigation labels to templates."""
         return dict(NAV_LINKS=NAV_LINKS)
+
+    @app.context_processor
+    def inject_safe_url_for():
+        """Provide a URL helper that tolerates missing endpoints."""
+
+        def safe_url_for(endpoint, **kwargs):
+            try:
+                return url_for(endpoint, **kwargs)
+            except BuildError:
+                return None
+
+        return {"safe_url_for": safe_url_for}
 
     @app.context_processor
     def inject_pagination_sizes():

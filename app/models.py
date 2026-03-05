@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
+from flask import current_app, has_app_context
 from flask_login import UserMixin
 from sqlalchemy import ForeignKeyConstraint, func, select
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -98,14 +99,23 @@ class User(UserMixin, db.Model):
 
     def get_favorites(self):
         """Return the user's favourite endpoint names as a list."""
-        return [f for f in (self.favorites or "").split(",") if f]
+        favorites = [f for f in (self.favorites or "").split(",") if f]
+        if not has_app_context():
+            return favorites
+        valid_endpoints = {rule.endpoint for rule in current_app.url_map.iter_rules()}
+        return [favorite for favorite in favorites if favorite in valid_endpoints]
 
     def toggle_favorite(self, endpoint: str):
         """Add or remove an endpoint from the favourites list."""
         favs = set(self.get_favorites())
+        if not has_app_context():
+            valid_endpoints = set()
+        else:
+            valid_endpoints = {rule.endpoint for rule in current_app.url_map.iter_rules()}
+        favs = {favorite for favorite in favs if favorite in valid_endpoints}
         if endpoint in favs:
             favs.remove(endpoint)
-        else:
+        elif endpoint in valid_endpoints:
             favs.add(endpoint)
         self.favorites = ",".join(sorted(favs))
 
