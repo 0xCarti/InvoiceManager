@@ -1287,6 +1287,9 @@ class RestoreBackupForm(FlaskForm):
             FileAllowed({"db"}, "DB files only!"),
         ],
     )
+    ignore_favorites = BooleanField(
+        "Ignore favorites from backup (clear all user favorites)"
+    )
     submit = SubmitField("Restore")
 
     def validate_file(self, field):

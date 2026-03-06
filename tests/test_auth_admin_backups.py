@@ -2,6 +2,7 @@ import os
 import shutil
 import sqlite3
 
+from app.models import ActivityLog, User
 from app.utils.backup import RestoreCompatibilityResult
 from tests.utils import login
 
@@ -93,14 +94,57 @@ def test_restore_backup_file_prunes_invalid_favorites(client, app, monkeypatch):
         )
 
     assert response.status_code == 200
-    assert b"Backup restored from invalid_favorites.db" in response.data
+    assert b"Favorites mode: pruned invalid favorites." in response.data
 
     with app.app_context():
-        from app.models import User
-
         admin_user = User.query.filter_by(email=admin_email).first()
         assert admin_user is not None
         assert admin_user.favorites == "admin.backups,transfer.view_transfers"
+        activities = [row.activity for row in ActivityLog.query.order_by(ActivityLog.id).all()]
+        assert any("Removed stale favorites" in item for item in activities)
+        assert any("favorites_mode=cleaned" in item for item in activities)
+
+
+def test_restore_backup_file_ignore_favorites_clears_all(client, app, monkeypatch):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with app.app_context():
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
+        backup_path = os.path.join(app.config["BACKUP_FOLDER"], "ignore_favorites.db")
+        shutil.copyfile(db_path, backup_path)
+        with sqlite3.connect(backup_path) as conn:
+            conn.execute(
+                "UPDATE user SET favorites = ?",
+                ("admin.backups,missing.endpoint,transfer.view_transfers",),
+            )
+            conn.commit()
+
+    monkeypatch.setattr(
+        "app.routes.auth_routes.validate_restored_backup_compatibility",
+        lambda: RestoreCompatibilityResult(compatible=True, issues=[]),
+    )
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.post(
+            "/controlpanel/backups/restore/ignore_favorites.db?ignore_favorites=1",
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert (
+        b"Favorites mode: ignored backup favorites and cleared all user favorites."
+        in response.data
+    )
+
+    with app.app_context():
+        users = User.query.all()
+        assert users
+        assert all((user.favorites or "") == "" for user in users)
+        activities = [row.activity for row in ActivityLog.query.order_by(ActivityLog.id).all()]
+        assert any("Cleared favorites for" in item for item in activities)
+        assert any("favorites_mode=ignored" in item for item in activities)
 
 
 def test_admin_backups_renders_with_invalid_favorites(client, app, monkeypatch):

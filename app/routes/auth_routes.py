@@ -123,6 +123,21 @@ def _cleanup_restored_user_favorites() -> int:
     return changed
 
 
+def _apply_restore_favorites_mode(ignore_favorites: bool) -> tuple[str, int]:
+    """Apply post-restore favorites behavior and return mode + changed count."""
+
+    if ignore_favorites:
+        changed = (
+            User.query.filter(User.favorites.isnot(None), User.favorites != "")
+            .update({User.favorites: ""}, synchronize_session=False)
+        )
+        db.session.commit()
+        return "ignored", changed
+
+    cleaned_count = _cleanup_restored_user_favorites()
+    return "cleaned", cleaned_count
+
+
 def _serializer():
     from flask import current_app
 
@@ -516,7 +531,9 @@ def restore_backup_route():
             flash("Invalid SQLite database.", "error")
             return redirect(url_for("admin.backups"))
         restore_backup(filepath)
-        cleaned_count = _cleanup_restored_user_favorites()
+        mode, changed_count = _apply_restore_favorites_mode(
+            bool(form.ignore_favorites.data)
+        )
         compatibility = validate_restored_backup_compatibility()
         if not compatibility.compatible:
             details = "; ".join(compatibility.issues)
@@ -530,12 +547,24 @@ def restore_backup_route():
                 "danger",
             )
             return redirect(url_for("admin.backups"))
-        if cleaned_count:
+        if mode == "ignored":
             log_activity(
-                f"Removed stale favorites for {cleaned_count} user(s) after restore {filename}"
+                f"Cleared favorites for {changed_count} user(s) after restore {filename} (ignore_favorites=true)"
             )
-        log_activity(f"Restored backup {filename}")
-        flash("Backup restored from " + filename, "success")
+            flash(
+                f"Backup restored from {filename}. Favorites mode: ignored backup favorites and cleared all user favorites.",
+                "success",
+            )
+        else:
+            if changed_count:
+                log_activity(
+                    f"Removed stale favorites for {changed_count} user(s) after restore {filename}"
+                )
+            flash(
+                f"Backup restored from {filename}. Favorites mode: pruned invalid favorites.",
+                "success",
+            )
+        log_activity(f"Restored backup {filename} (favorites_mode={mode})")
     else:
         for error in form.file.errors:
             flash(error, "error")
@@ -558,7 +587,13 @@ def restore_backup_file(filename):
     if filepath is None or not os.path.isfile(filepath):
         abort(404)
     restore_backup(filepath)
-    cleaned_count = _cleanup_restored_user_favorites()
+    ignore_values = {
+        value.lower()
+        for value in flask.request.values.getlist("ignore_favorites")
+        if value
+    }
+    ignore_favorites = bool(ignore_values & {"1", "true", "on", "yes"})
+    mode, changed_count = _apply_restore_favorites_mode(ignore_favorites)
     fname = os.path.basename(filepath)
     compatibility = validate_restored_backup_compatibility()
     if not compatibility.compatible:
@@ -573,12 +608,24 @@ def restore_backup_file(filename):
             "danger",
         )
         return redirect(url_for("admin.backups"))
-    if cleaned_count:
+    if mode == "ignored":
         log_activity(
-            f"Removed stale favorites for {cleaned_count} user(s) after restore {fname}"
+            f"Cleared favorites for {changed_count} user(s) after restore {fname} (ignore_favorites=true)"
         )
-    log_activity(f"Restored backup {fname}")
-    flash("Backup restored from " + fname, "success")
+        flash(
+            f"Backup restored from {fname}. Favorites mode: ignored backup favorites and cleared all user favorites.",
+            "success",
+        )
+    else:
+        if changed_count:
+            log_activity(
+                f"Removed stale favorites for {changed_count} user(s) after restore {fname}"
+            )
+        flash(
+            f"Backup restored from {fname}. Favorites mode: pruned invalid favorites.",
+            "success",
+        )
+    log_activity(f"Restored backup {fname} (favorites_mode={mode})")
     return redirect(url_for("admin.backups"))
 
 
