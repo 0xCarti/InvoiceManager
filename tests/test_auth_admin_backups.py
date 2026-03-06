@@ -163,3 +163,22 @@ def test_admin_backups_renders_with_invalid_favorites(client, app, monkeypatch):
     assert response.status_code == 200
     assert b"Database Backups" in response.data
     assert b"BuildError" not in response.data
+
+
+def test_admin_backups_renders_when_menu_endpoint_missing(client, app):
+    removed = app.view_functions.pop("menu.view_menus", None)
+    try:
+        with client:
+            login(
+                client,
+                os.getenv("ADMIN_EMAIL", "admin@example.com"),
+                os.getenv("ADMIN_PASS", "adminpass"),
+            )
+            response = client.get("/controlpanel/backups")
+    finally:
+        if removed is not None:
+            app.view_functions["menu.view_menus"] = removed
+
+    assert response.status_code == 200
+    assert b"Database Backups" in response.data
+    assert b"BuildError" not in response.data
