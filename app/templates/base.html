@@ -178,11 +178,13 @@
                 {% for fav in current_user.get_favorites() if not fav.startswith('admin.') %}
                 {% set label = NAV_LINKS.get(fav, fav.split('.')[-1].replace('_', ' ').title()) %}
                 {% set fav_url = safe_url_for(fav) %}
-                {% if fav_url %}
                 <li class="nav-item">
+                    {% if fav_url %}
                     <a class="nav-link nav-top px-2" href="{{ fav_url }}">{{ label }}</a>
+                    {% else %}
+                    <span class="nav-link nav-top px-2 disabled" title="Unavailable in this build">{{ label }}</span>
+                    {% endif %}
                 </li>
-                {% endif %}
                 {% endfor %}
             </ul>
             </div>
@@ -191,11 +193,13 @@
                 {% for fav in current_user.get_favorites() if fav.startswith('admin.') %}
                 {% set label = NAV_LINKS.get(fav, fav.split('.')[-1].replace('_', ' ').title()) %}
                 {% set fav_url = safe_url_for(fav) %}
-                {% if fav_url %}
                 <li class="nav-item">
+                    {% if fav_url %}
                     <a class="nav-link nav-top px-2" href="{{ fav_url }}">{{ label }}</a>
+                    {% else %}
+                    <span class="nav-link nav-top px-2 disabled" title="Unavailable in this build">{{ label }}</span>
+                    {% endif %}
                 </li>
-                {% endif %}
                 {% endfor %}
             </ul>
             </div>
@@ -307,11 +311,13 @@
                         {% for fav in current_user.get_favorites() %}
                         {% set label = NAV_LINKS.get(fav, fav.split('.')[-1].replace('_', ' ').title()) %}
                         {% set fav_url = safe_url_for(fav) %}
-                        {% if fav_url %}
                         <li class="nav-item">
+                            {% if fav_url %}
                             <a class="nav-link" href="{{ fav_url }}">{{ label }}</a>
+                            {% else %}
+                            <span class="nav-link disabled" title="Unavailable in this build">{{ label }}</span>
+                            {% endif %}
                         </li>
-                        {% endif %}
                         {% endfor %}
                         {% endif %}
                     </ul>
