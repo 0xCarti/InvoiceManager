@@ -36,9 +36,7 @@ def _collect_missing_expected_endpoints() -> list[str]:
     """Return missing endpoint issues for enabled restore expectations."""
 
     issues: list[str] = []
-    endpoint_expectations = current_app.config.get(
-        "RESTORE_ENDPOINT_EXPECTATIONS", []
-    )
+    endpoint_expectations = current_app.config.get("RESTORE_ENDPOINT_EXPECTATIONS", [])
     for expectation in endpoint_expectations:
         module_name = expectation.get("module", "unknown")
         enabled = expectation.get("enabled", True)
@@ -79,9 +77,7 @@ def validate_restored_backup_compatibility() -> RestoreCompatibilityResult:
 
     marker = Setting.query.filter_by(name="APP_SCHEMA_VERSION").first()
     if marker is None or not (marker.value or "").strip():
-        issues.append(
-            "Backup is missing APP_SCHEMA_VERSION marker in settings."
-        )
+        issues.append("Backup is missing APP_SCHEMA_VERSION marker in settings.")
     elif marker.value.strip() != BACKUP_SCHEMA_VERSION:
         issues.append(
             "Backup APP_SCHEMA_VERSION "
@@ -146,9 +142,9 @@ def validate_backup_file_compatibility(
         )
         missing_tables = sorted(required_tables - existing_tables)
         if missing_tables:
-            issues.append(
-                f"Missing required tables: {', '.join(missing_tables)}."
-            )
+            issues.append(f"Missing required tables: {', '.join(missing_tables)}.")
+        if "setting" not in existing_tables:
+            warnings.append("Missing setting table.")
 
         if "setting" in existing_tables:
             cursor = conn.execute(
@@ -167,17 +163,14 @@ def validate_backup_file_compatibility(
                     f"{marker_value.strip()} does not match expected {BACKUP_SCHEMA_VERSION}."
                 )
         else:
-            warnings.append(
-                "Backup is missing APP_SCHEMA_VERSION marker in settings."
-            )
+            warnings.append("Backup is missing APP_SCHEMA_VERSION marker in settings.")
 
         required_feature_flags = current_app.config.get(
             "RESTORE_REQUIRED_FEATURE_FLAGS", []
         )
         if "setting" in existing_tables:
             existing_settings = {
-                row["name"]
-                for row in conn.execute("SELECT name FROM setting")
+                row["name"] for row in conn.execute("SELECT name FROM setting")
             }
         else:
             existing_settings = set()
@@ -202,6 +195,7 @@ def validate_backup_file_compatibility(
         issues=issues,
         warnings=warnings,
     )
+
 
 UNIT_SECONDS = {
     "hour": 60 * 60,
@@ -248,9 +242,7 @@ def create_backup(*, initiated_by_system: bool = False):
             try:
                 os.remove(os.path.join(backups_dir, oldest))
                 if initiated_by_system:
-                    log_activity(
-                        f"System automatically deleted backup {oldest}"
-                    )
+                    log_activity(f"System automatically deleted backup {oldest}")
                 logger.info("Deleted oldest backup %s", oldest)
             except OSError:
                 logger.warning("Failed to delete backup %s", oldest, exc_info=True)
@@ -314,9 +306,7 @@ def start_auto_backup_thread(app):
     interval = app.config.get("AUTO_BACKUP_INTERVAL")
     if not interval:
         return
-    _backup_thread = Thread(
-        target=_backup_loop, args=(app, interval), daemon=True
-    )
+    _backup_thread = Thread(target=_backup_loop, args=(app, interval), daemon=True)
     _backup_thread.start()
 
 
@@ -342,9 +332,7 @@ def restore_backup(file_path):
     """
 
     # Open the backup file in a separate SQLite connection
-    backup_conn = sqlite3.connect(
-        file_path, detect_types=sqlite3.PARSE_DECLTYPES
-    )
+    backup_conn = sqlite3.connect(file_path, detect_types=sqlite3.PARSE_DECLTYPES)
     backup_conn.row_factory = sqlite3.Row
     backup_cursor = backup_conn.cursor()
 
@@ -407,20 +395,14 @@ def restore_backup(file_path):
                     record[col.name] = default
                 else:
                     value = record[col.name]
-                    if isinstance(col.type, db.DateTime) and isinstance(
-                        value, str
-                    ):
+                    if isinstance(col.type, db.DateTime) and isinstance(value, str):
                         try:
                             record[col.name] = datetime.fromisoformat(value)
                         except ValueError:
                             pass
-                    elif isinstance(col.type, db.Date) and isinstance(
-                        value, str
-                    ):
+                    elif isinstance(col.type, db.Date) and isinstance(value, str):
                         try:
-                            record[col.name] = datetime.fromisoformat(
-                                value
-                            ).date()
+                            record[col.name] = datetime.fromisoformat(value).date()
                         except ValueError:
                             pass
 
