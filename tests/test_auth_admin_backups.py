@@ -5,6 +5,7 @@ import sqlite3
 from app.models import ActivityLog, User
 from app.utils.backup import RestoreCompatibilityResult
 from tests.utils import login
+from app.utils.activity import flush_activity_logs
 
 
 def test_restore_backup_file_compatible_metadata_flashes_success(
@@ -97,6 +98,7 @@ def test_restore_backup_file_prunes_invalid_favorites(client, app, monkeypatch):
     assert b"Favorites mode: pruned invalid favorites." in response.data
 
     with app.app_context():
+        flush_activity_logs()
         admin_user = User.query.filter_by(email=admin_email).first()
         assert admin_user is not None
         assert admin_user.favorites == "admin.backups,transfer.view_transfers"
@@ -139,6 +141,7 @@ def test_restore_backup_file_ignore_favorites_clears_all(client, app, monkeypatc
     )
 
     with app.app_context():
+        flush_activity_logs()
         users = User.query.all()
         assert users
         assert all((user.favorites or "") == "" for user in users)
