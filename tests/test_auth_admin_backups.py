@@ -19,8 +19,8 @@ def test_restore_backup_file_compatible_metadata_flashes_success(
         shutil.copyfile(db_path, backup_path)
 
     monkeypatch.setattr(
-        "app.routes.auth_routes.validate_restored_backup_compatibility",
-        lambda: RestoreCompatibilityResult(compatible=True, issues=[]),
+        "app.routes.auth_routes.validate_backup_file_compatibility",
+        lambda *_args, **_kwargs: RestoreCompatibilityResult(compatible=True, issues=[]),
     )
 
     with client:
@@ -47,8 +47,8 @@ def test_restore_backup_file_incompatible_metadata_shows_failure_flash(
         shutil.copyfile(db_path, backup_path)
 
     monkeypatch.setattr(
-        "app.routes.auth_routes.validate_restored_backup_compatibility",
-        lambda: RestoreCompatibilityResult(compatible=False, issues=["missing marker"]),
+        "app.routes.auth_routes.validate_backup_file_compatibility",
+        lambda *_args, **_kwargs: RestoreCompatibilityResult(compatible=False, issues=["missing marker"]),
     )
 
     with client:
@@ -82,8 +82,8 @@ def test_restore_backup_file_prunes_invalid_favorites(client, app, monkeypatch):
             conn.commit()
 
     monkeypatch.setattr(
-        "app.routes.auth_routes.validate_restored_backup_compatibility",
-        lambda: RestoreCompatibilityResult(compatible=True, issues=[]),
+        "app.routes.auth_routes.validate_backup_file_compatibility",
+        lambda *_args, **_kwargs: RestoreCompatibilityResult(compatible=True, issues=[]),
     )
 
     with client:
@@ -121,8 +121,8 @@ def test_restore_backup_file_ignore_favorites_clears_all(client, app, monkeypatc
             conn.commit()
 
     monkeypatch.setattr(
-        "app.routes.auth_routes.validate_restored_backup_compatibility",
-        lambda: RestoreCompatibilityResult(compatible=True, issues=[]),
+        "app.routes.auth_routes.validate_backup_file_compatibility",
+        lambda *_args, **_kwargs: RestoreCompatibilityResult(compatible=True, issues=[]),
     )
 
     with client:

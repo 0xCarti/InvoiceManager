@@ -107,6 +107,98 @@ def validate_restored_backup_compatibility() -> RestoreCompatibilityResult:
 
     return RestoreCompatibilityResult(compatible=not issues, issues=issues)
 
+
+def validate_backup_file_compatibility(
+    file_path: str,
+) -> RestoreCompatibilityResult:
+    """Validate whether a backup file is compatible before restore."""
+
+    issues: list[str] = []
+
+    with sqlite3.connect(f"file:{file_path}?mode=ro", uri=True) as conn:
+        conn.row_factory = sqlite3.Row
+
+        cursor = conn.execute(
+            "SELECT value FROM setting WHERE name = ? LIMIT 1",
+            ("APP_SCHEMA_VERSION",),
+        )
+        marker = cursor.fetchone()
+        marker_value = "" if marker is None else (marker["value"] or "")
+        if not marker_value.strip():
+            issues.append(
+                "Backup is missing APP_SCHEMA_VERSION marker in settings."
+            )
+        elif marker_value.strip() != BACKUP_SCHEMA_VERSION:
+            issues.append(
+                "Backup APP_SCHEMA_VERSION "
+                f"{marker_value.strip()} does not match expected {BACKUP_SCHEMA_VERSION}."
+            )
+
+        existing_tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        required_tables = set(
+            current_app.config.get(
+                "RESTORE_REQUIRED_TABLES",
+                ["setting", "user", "invoice", "transfer"],
+            )
+        )
+        missing_tables = sorted(required_tables - existing_tables)
+        if missing_tables:
+            issues.append(
+                f"Missing required tables: {', '.join(missing_tables)}."
+            )
+
+        required_feature_flags = current_app.config.get(
+            "RESTORE_REQUIRED_FEATURE_FLAGS", []
+        )
+        if "setting" in existing_tables:
+            existing_settings = {
+                row["name"]
+                for row in conn.execute("SELECT name FROM setting")
+            }
+        else:
+            existing_settings = set()
+        missing_feature_flags = sorted(
+            {
+                setting_name
+                for setting_name in required_feature_flags
+                if setting_name and setting_name not in existing_settings
+            }
+        )
+        if missing_feature_flags:
+            issues.append(
+                "Missing required feature-flag settings: "
+                + ", ".join(missing_feature_flags)
+                + "."
+            )
+
+    endpoint_expectations = current_app.config.get(
+        "RESTORE_ENDPOINT_EXPECTATIONS", []
+    )
+    for expectation in endpoint_expectations:
+        module_name = expectation.get("module", "unknown")
+        enabled = expectation.get("enabled", True)
+        endpoints = expectation.get("endpoints", [])
+        if not enabled:
+            continue
+        missing_endpoints = [
+            endpoint
+            for endpoint in endpoints
+            if endpoint not in current_app.view_functions
+        ]
+        if missing_endpoints:
+            issues.append(
+                f"Enabled module '{module_name}' is missing expected endpoints: "
+                + ", ".join(missing_endpoints)
+                + "."
+            )
+
+    return RestoreCompatibilityResult(compatible=not issues, issues=issues)
+
 UNIT_SECONDS = {
     "hour": 60 * 60,
     "day": 60 * 60 * 24,
@@ -231,6 +323,7 @@ __all__ = [
     "restore_backup",
     "start_auto_backup_thread",
     "UNIT_SECONDS",
+    "validate_backup_file_compatibility",
     "validate_restored_backup_compatibility",
 ]
 
