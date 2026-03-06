@@ -67,7 +67,7 @@ from app.utils.backup import (
     create_backup,
     restore_backup,
     start_auto_backup_thread,
-    validate_restored_backup_compatibility,
+    validate_backup_file_compatibility,
 )
 from app.utils.imports import (
     _import_csv,
@@ -524,19 +524,18 @@ def restore_backup_route():
         filepath = os.path.join(backups_dir, filename)
         file.save(filepath)
         try:
-            with sqlite3.connect(f"file:{filepath}?mode=ro", uri=True) as conn:
-                conn.execute("SELECT name FROM sqlite_master LIMIT 1")
+            compatibility = validate_backup_file_compatibility(filepath)
         except sqlite3.Error:
             os.remove(filepath)
             flash("Invalid SQLite database.", "error")
             return redirect(url_for("admin.backups"))
-        restore_backup(filepath)
-        mode, changed_count = _apply_restore_favorites_mode(
-            bool(form.ignore_favorites.data)
-        )
-        compatibility = validate_restored_backup_compatibility()
         if not compatibility.compatible:
             details = "; ".join(compatibility.issues)
+            current_app.logger.warning(
+                "Restore preflight incompatibility detected for %s: %s",
+                filename,
+                details,
+            )
             log_activity(
                 f"Restore incompatibility detected for {filename}: {details}"
             )
@@ -547,6 +546,11 @@ def restore_backup_route():
                 "danger",
             )
             return redirect(url_for("admin.backups"))
+
+        restore_backup(filepath)
+        mode, changed_count = _apply_restore_favorites_mode(
+            bool(form.ignore_favorites.data)
+        )
         if mode == "ignored":
             log_activity(
                 f"Cleared favorites for {changed_count} user(s) after restore {filename} (ignore_favorites=true)"
@@ -586,18 +590,20 @@ def restore_backup_file(filename):
         abort(404)
     if filepath is None or not os.path.isfile(filepath):
         abort(404)
-    restore_backup(filepath)
-    ignore_values = {
-        value.lower()
-        for value in flask.request.values.getlist("ignore_favorites")
-        if value
-    }
-    ignore_favorites = bool(ignore_values & {"1", "true", "on", "yes"})
-    mode, changed_count = _apply_restore_favorites_mode(ignore_favorites)
     fname = os.path.basename(filepath)
-    compatibility = validate_restored_backup_compatibility()
+    try:
+        compatibility = validate_backup_file_compatibility(filepath)
+    except sqlite3.Error:
+        flash("Invalid SQLite database.", "error")
+        return redirect(url_for("admin.backups"))
+
     if not compatibility.compatible:
         details = "; ".join(compatibility.issues)
+        current_app.logger.warning(
+            "Restore preflight incompatibility detected for %s: %s",
+            fname,
+            details,
+        )
         log_activity(
             f"Restore incompatibility detected for {fname}: {details}"
         )
@@ -608,6 +614,15 @@ def restore_backup_file(filename):
             "danger",
         )
         return redirect(url_for("admin.backups"))
+
+    restore_backup(filepath)
+    ignore_values = {
+        value.lower()
+        for value in flask.request.values.getlist("ignore_favorites")
+        if value
+    }
+    ignore_favorites = bool(ignore_values & {"1", "true", "on", "yes"})
+    mode, changed_count = _apply_restore_favorites_mode(ignore_favorites)
     if mode == "ignored":
         log_activity(
             f"Cleared favorites for {changed_count} user(s) after restore {fname} (ignore_favorites=true)"
