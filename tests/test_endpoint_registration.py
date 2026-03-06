@@ -9,3 +9,16 @@ def test_nav_links_endpoints_registered(app):
 
     missing = sorted(set(NAV_LINKS) - endpoint_names)
     assert missing == []
+
+
+def test_restore_endpoint_expectations_include_core_navigation(app):
+    expectations = app.config["RESTORE_ENDPOINT_EXPECTATIONS"]
+    configured_endpoints = {
+        endpoint
+        for expectation in expectations
+        if expectation.get("enabled", True)
+        for endpoint in expectation.get("endpoints", [])
+    }
+
+    assert "menu.view_menus" in configured_endpoints
+    assert "event.view_events" in configured_endpoints

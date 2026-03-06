@@ -399,6 +399,21 @@ def test_restore_compatibility_detects_missing_marker(app):
         assert any("APP_SCHEMA_VERSION" in issue for issue in result.issues)
 
 
+def test_restore_compatibility_detects_missing_menu_endpoint(app):
+    with app.app_context():
+        db.create_all()
+
+        removed = app.view_functions.pop("menu.view_menus", None)
+        try:
+            result = validate_restored_backup_compatibility()
+        finally:
+            if removed is not None:
+                app.view_functions["menu.view_menus"] = removed
+
+        assert result.compatible is False
+        assert any("menu.view_menus" in issue for issue in result.issues)
+
+
 def test_restore_backup_file_logs_incompatible_restore(client, app):
     admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
     admin_pass = os.getenv("ADMIN_PASS", "adminpass")

@@ -27,6 +27,33 @@ class RestoreCompatibilityResult:
     issues: list[str]
 
 
+def _collect_missing_expected_endpoints() -> list[str]:
+    """Return missing endpoint issues for enabled restore expectations."""
+
+    issues: list[str] = []
+    endpoint_expectations = current_app.config.get(
+        "RESTORE_ENDPOINT_EXPECTATIONS", []
+    )
+    for expectation in endpoint_expectations:
+        module_name = expectation.get("module", "unknown")
+        enabled = expectation.get("enabled", True)
+        endpoints = expectation.get("endpoints", [])
+        if not enabled:
+            continue
+        missing_endpoints = [
+            endpoint
+            for endpoint in endpoints
+            if endpoint not in current_app.view_functions
+        ]
+        if missing_endpoints:
+            issues.append(
+                f"Enabled module '{module_name}' is missing expected endpoints: "
+                + ", ".join(missing_endpoints)
+                + "."
+            )
+    return issues
+
+
 def ensure_backup_schema_marker() -> str:
     """Ensure the DB has a schema marker used for backup compatibility checks."""
 
@@ -84,26 +111,7 @@ def validate_restored_backup_compatibility() -> RestoreCompatibilityResult:
             + "."
         )
 
-    endpoint_expectations = current_app.config.get(
-        "RESTORE_ENDPOINT_EXPECTATIONS", []
-    )
-    for expectation in endpoint_expectations:
-        module_name = expectation.get("module", "unknown")
-        enabled = expectation.get("enabled", True)
-        endpoints = expectation.get("endpoints", [])
-        if not enabled:
-            continue
-        missing_endpoints = [
-            endpoint
-            for endpoint in endpoints
-            if endpoint not in current_app.view_functions
-        ]
-        if missing_endpoints:
-            issues.append(
-                f"Enabled module '{module_name}' is missing expected endpoints: "
-                + ", ".join(missing_endpoints)
-                + "."
-            )
+    issues.extend(_collect_missing_expected_endpoints())
 
     return RestoreCompatibilityResult(compatible=not issues, issues=issues)
 
@@ -176,26 +184,7 @@ def validate_backup_file_compatibility(
                 + "."
             )
 
-    endpoint_expectations = current_app.config.get(
-        "RESTORE_ENDPOINT_EXPECTATIONS", []
-    )
-    for expectation in endpoint_expectations:
-        module_name = expectation.get("module", "unknown")
-        enabled = expectation.get("enabled", True)
-        endpoints = expectation.get("endpoints", [])
-        if not enabled:
-            continue
-        missing_endpoints = [
-            endpoint
-            for endpoint in endpoints
-            if endpoint not in current_app.view_functions
-        ]
-        if missing_endpoints:
-            issues.append(
-                f"Enabled module '{module_name}' is missing expected endpoints: "
-                + ", ".join(missing_endpoints)
-                + "."
-            )
+    issues.extend(_collect_missing_expected_endpoints())
 
     return RestoreCompatibilityResult(compatible=not issues, issues=issues)
 
