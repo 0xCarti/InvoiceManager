@@ -103,6 +103,26 @@ IMPORT_FILES = {
 }
 
 
+def _cleanup_restored_user_favorites() -> int:
+    """Remove stale favourite endpoints after a backup restore."""
+
+    valid_endpoints = {rule.endpoint for rule in current_app.url_map.iter_rules()}
+    users = User.query.all()
+    changed = 0
+
+    for user in users:
+        favorites = [f for f in (user.favorites or "").split(",") if f]
+        filtered = [favorite for favorite in favorites if favorite in valid_endpoints]
+        if filtered != favorites:
+            user.favorites = ",".join(filtered)
+            changed += 1
+
+    if changed:
+        db.session.commit()
+
+    return changed
+
+
 def _serializer():
     from flask import current_app
 
@@ -496,6 +516,7 @@ def restore_backup_route():
             flash("Invalid SQLite database.", "error")
             return redirect(url_for("admin.backups"))
         restore_backup(filepath)
+        cleaned_count = _cleanup_restored_user_favorites()
         compatibility = validate_restored_backup_compatibility()
         if not compatibility.compatible:
             details = "; ".join(compatibility.issues)
@@ -509,6 +530,10 @@ def restore_backup_route():
                 "danger",
             )
             return redirect(url_for("admin.backups"))
+        if cleaned_count:
+            log_activity(
+                f"Removed stale favorites for {cleaned_count} user(s) after restore {filename}"
+            )
         log_activity(f"Restored backup {filename}")
         flash("Backup restored from " + filename, "success")
     else:
@@ -533,6 +558,7 @@ def restore_backup_file(filename):
     if filepath is None or not os.path.isfile(filepath):
         abort(404)
     restore_backup(filepath)
+    cleaned_count = _cleanup_restored_user_favorites()
     fname = os.path.basename(filepath)
     compatibility = validate_restored_backup_compatibility()
     if not compatibility.compatible:
@@ -547,6 +573,10 @@ def restore_backup_file(filename):
             "danger",
         )
         return redirect(url_for("admin.backups"))
+    if cleaned_count:
+        log_activity(
+            f"Removed stale favorites for {cleaned_count} user(s) after restore {fname}"
+        )
     log_activity(f"Restored backup {fname}")
     flash("Backup restored from " + fname, "success")
     return redirect(url_for("admin.backups"))
