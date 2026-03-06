@@ -537,20 +537,33 @@ def restore_backup_route():
                 details,
             )
             log_activity(
-                f"Restore incompatibility detected for {filename}: {details}"
+                f"Restore blocked due to compatibility errors for {filename}: {details}"
             )
             flash(
-                "⚠️ Incompatible backup: this backup was created by a "
-                "different application version and restoration is not safe. "
-                "Please restore a backup created by the current release.",
+                "⚠️ Incompatible backup: this backup is missing critical database "
+                "structures and cannot be restored safely.",
                 "danger",
             )
             return redirect(url_for("admin.backups"))
+
+        if compatibility.warnings:
+            warning_details = "; ".join(compatibility.warnings)
+            current_app.logger.warning(
+                "Restore preflight compatibility warnings for %s: %s",
+                filename,
+                warning_details,
+            )
+            log_activity(
+                f"Restore compatibility warnings detected for {filename}: {warning_details}"
+            )
 
         restore_backup(filepath)
         mode, changed_count = _apply_restore_favorites_mode(
             bool(form.ignore_favorites.data)
         )
+        if compatibility.warnings:
+            flash("Restored with compatibility warnings.", "warning")
+
         if mode == "ignored":
             log_activity(
                 f"Cleared favorites for {changed_count} user(s) after restore {filename} (ignore_favorites=true)"
@@ -568,7 +581,13 @@ def restore_backup_route():
                 f"Backup restored from {filename}. Favorites mode: pruned invalid favorites.",
                 "success",
             )
-        log_activity(f"Restored backup {filename} (favorites_mode={mode})")
+        restore_message = (
+            f"Restored backup {filename} with compatibility warnings "
+            f"(favorites_mode={mode})"
+            if compatibility.warnings
+            else f"Restored backup {filename} (favorites_mode={mode})"
+        )
+        log_activity(restore_message)
     else:
         for error in form.file.errors:
             flash(error, "error")
@@ -605,15 +624,25 @@ def restore_backup_file(filename):
             details,
         )
         log_activity(
-            f"Restore incompatibility detected for {fname}: {details}"
+            f"Restore blocked due to compatibility errors for {fname}: {details}"
         )
         flash(
-            "⚠️ Incompatible backup: this backup was created by a "
-            "different application version and restoration is not safe. "
-            "Please restore a backup created by the current release.",
+            "⚠️ Incompatible backup: this backup is missing critical database "
+            "structures and cannot be restored safely.",
             "danger",
         )
         return redirect(url_for("admin.backups"))
+
+    if compatibility.warnings:
+        warning_details = "; ".join(compatibility.warnings)
+        current_app.logger.warning(
+            "Restore preflight compatibility warnings for %s: %s",
+            fname,
+            warning_details,
+        )
+        log_activity(
+            f"Restore compatibility warnings detected for {fname}: {warning_details}"
+        )
 
     restore_backup(filepath)
     ignore_values = {
@@ -623,6 +652,9 @@ def restore_backup_file(filename):
     }
     ignore_favorites = bool(ignore_values & {"1", "true", "on", "yes"})
     mode, changed_count = _apply_restore_favorites_mode(ignore_favorites)
+    if compatibility.warnings:
+        flash("Restored with compatibility warnings.", "warning")
+
     if mode == "ignored":
         log_activity(
             f"Cleared favorites for {changed_count} user(s) after restore {fname} (ignore_favorites=true)"
@@ -640,7 +672,13 @@ def restore_backup_file(filename):
             f"Backup restored from {fname}. Favorites mode: pruned invalid favorites.",
             "success",
         )
-    log_activity(f"Restored backup {fname} (favorites_mode={mode})")
+    restore_message = (
+        f"Restored backup {fname} with compatibility warnings "
+        f"(favorites_mode={mode})"
+        if compatibility.warnings
+        else f"Restored backup {fname} (favorites_mode={mode})"
+    )
+    log_activity(restore_message)
     return redirect(url_for("admin.backups"))
 
 

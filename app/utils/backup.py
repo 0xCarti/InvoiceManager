@@ -25,6 +25,11 @@ BACKUP_SCHEMA_VERSION = "2026.03"
 class RestoreCompatibilityResult:
     compatible: bool
     issues: list[str]
+    warnings: list[str] | None = None
+
+    def __post_init__(self):
+        if self.warnings is None:
+            self.warnings = []
 
 
 def _collect_missing_expected_endpoints() -> list[str]:
@@ -122,25 +127,10 @@ def validate_backup_file_compatibility(
     """Validate whether a backup file is compatible before restore."""
 
     issues: list[str] = []
+    warnings: list[str] = []
 
     with sqlite3.connect(f"file:{file_path}?mode=ro", uri=True) as conn:
         conn.row_factory = sqlite3.Row
-
-        cursor = conn.execute(
-            "SELECT value FROM setting WHERE name = ? LIMIT 1",
-            ("APP_SCHEMA_VERSION",),
-        )
-        marker = cursor.fetchone()
-        marker_value = "" if marker is None else (marker["value"] or "")
-        if not marker_value.strip():
-            issues.append(
-                "Backup is missing APP_SCHEMA_VERSION marker in settings."
-            )
-        elif marker_value.strip() != BACKUP_SCHEMA_VERSION:
-            issues.append(
-                "Backup APP_SCHEMA_VERSION "
-                f"{marker_value.strip()} does not match expected {BACKUP_SCHEMA_VERSION}."
-            )
 
         existing_tables = {
             row["name"]
@@ -158,6 +148,27 @@ def validate_backup_file_compatibility(
         if missing_tables:
             issues.append(
                 f"Missing required tables: {', '.join(missing_tables)}."
+            )
+
+        if "setting" in existing_tables:
+            cursor = conn.execute(
+                "SELECT value FROM setting WHERE name = ? LIMIT 1",
+                ("APP_SCHEMA_VERSION",),
+            )
+            marker = cursor.fetchone()
+            marker_value = "" if marker is None else (marker["value"] or "")
+            if not marker_value.strip():
+                warnings.append(
+                    "Backup is missing APP_SCHEMA_VERSION marker in settings."
+                )
+            elif marker_value.strip() != BACKUP_SCHEMA_VERSION:
+                warnings.append(
+                    "Backup APP_SCHEMA_VERSION "
+                    f"{marker_value.strip()} does not match expected {BACKUP_SCHEMA_VERSION}."
+                )
+        else:
+            warnings.append(
+                "Backup is missing APP_SCHEMA_VERSION marker in settings."
             )
 
         required_feature_flags = current_app.config.get(
@@ -178,15 +189,19 @@ def validate_backup_file_compatibility(
             }
         )
         if missing_feature_flags:
-            issues.append(
+            warnings.append(
                 "Missing required feature-flag settings: "
                 + ", ".join(missing_feature_flags)
                 + "."
             )
 
-    issues.extend(_collect_missing_expected_endpoints())
+    warnings.extend(_collect_missing_expected_endpoints())
 
-    return RestoreCompatibilityResult(compatible=not issues, issues=issues)
+    return RestoreCompatibilityResult(
+        compatible=not issues,
+        issues=issues,
+        warnings=warnings,
+    )
 
 UNIT_SECONDS = {
     "hour": 60 * 60,

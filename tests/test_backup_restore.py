@@ -414,7 +414,7 @@ def test_restore_compatibility_detects_missing_menu_endpoint(app):
         assert any("menu.view_menus" in issue for issue in result.issues)
 
 
-def test_restore_backup_file_logs_incompatible_restore(client, app):
+def test_restore_backup_file_logs_warning_restore_on_missing_marker(client, app):
     admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
     admin_pass = os.getenv("ADMIN_PASS", "adminpass")
 
@@ -422,7 +422,7 @@ def test_restore_backup_file_logs_incompatible_restore(client, app):
         db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
             "sqlite:///", "", 1
         )
-        backup_path = os.path.join(app.config["BACKUP_FOLDER"], "incompatible.db")
+        backup_path = os.path.join(app.config["BACKUP_FOLDER"], "marker_warning.db")
         shutil.copyfile(db_path, backup_path)
 
     with sqlite3.connect(backup_path) as conn:
@@ -435,23 +435,24 @@ def test_restore_backup_file_logs_incompatible_restore(client, app):
     with client:
         login(client, admin_email, admin_pass)
         response = client.post(
-            "/controlpanel/backups/restore/incompatible.db",
+            "/controlpanel/backups/restore/marker_warning.db",
             follow_redirects=True,
         )
 
-    assert b"Incompatible backup" in response.data
+    assert b"Restored with compatibility warnings." in response.data
+    assert b"Backup restored from marker_warning.db" in response.data
 
     with app.app_context():
+        flush_activity_logs()
         activities = [
             row.activity
             for row in ActivityLog.query.order_by(ActivityLog.id).all()
         ]
-        assert any("Restore incompatibility detected" in a for a in activities)
+        assert not any("Restore blocked due to compatibility errors" in a for a in activities)
+        assert any("Restored backup marker_warning.db with compatibility warnings" in a for a in activities)
 
 
-def test_restore_preflight_incompatible_backup_does_not_mutate_live_db(
-    client, app
-):
+def test_restore_with_marker_warning_mutates_live_db_from_backup(client, app):
     admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
     admin_pass = os.getenv("ADMIN_PASS", "adminpass")
 
@@ -468,7 +469,7 @@ def test_restore_preflight_incompatible_backup_does_not_mutate_live_db(
             "sqlite:///", "", 1
         )
         backup_path = os.path.join(
-            app.config["BACKUP_FOLDER"], "incompatible_state_check.db"
+            app.config["BACKUP_FOLDER"], "marker_warning_state_check.db"
         )
         shutil.copyfile(db_path, backup_path)
 
@@ -484,16 +485,50 @@ def test_restore_preflight_incompatible_backup_does_not_mutate_live_db(
     with client:
         login(client, admin_email, admin_pass)
         response = client.post(
-            "/controlpanel/backups/restore/incompatible_state_check.db",
+            "/controlpanel/backups/restore/marker_warning_state_check.db",
             follow_redirects=True,
         )
 
-    assert b"Incompatible backup" in response.data
+    assert b"Restored with compatibility warnings." in response.data
 
     with app.app_context():
         assert (
-            User.query.filter_by(email="live-only@example.com").count() == 1
+            User.query.filter_by(email="live-only@example.com").count() == 0
         )
+
+
+def test_restore_with_older_schema_marker_value_proceeds(client, app):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with app.app_context():
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
+            "sqlite:///", "", 1
+        )
+        backup_path = os.path.join(
+            app.config["BACKUP_FOLDER"], "older_marker.db"
+        )
+        shutil.copyfile(db_path, backup_path)
+
+    with sqlite3.connect(backup_path) as conn:
+        conn.execute(
+            "UPDATE setting SET value = ? WHERE name = ?",
+            ("2025.12", "APP_SCHEMA_VERSION"),
+        )
+        conn.commit()
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.post(
+            "/controlpanel/backups/restore/older_marker.db",
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert b"Restored with compatibility warnings." in response.data
+    assert b"Backup restored from older_marker.db" in response.data
+
+
 
 
 def test_restore_backup_prunes_invalid_favorites_and_backups_page_loads(
