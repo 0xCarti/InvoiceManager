@@ -15,7 +15,7 @@ from flask import current_app
 from sqlalchemy import inspect
 
 from app import db
-from app.models import Setting, User
+from app.models import Setting
 from app.utils.activity import log_activity
 
 BACKUP_SCHEMA_VERSION = "2026.03"
@@ -333,22 +333,5 @@ def restore_backup(file_path):
             db.session.execute(table.insert(), insert_rows)
 
     db.session.commit()
-
-    # Backups can contain favourite links for endpoints that are not available
-    # in the currently running build. Prune those stale endpoints so rendering
-    # navigation never fails after a restore.
-    valid_endpoints = {
-        rule.endpoint for rule in current_app.url_map.iter_rules()
-    }
-    users = db.session.query(User).all()
-    favorites_changed = False
-    for user in users:
-        favorites = [f for f in (user.favorites or "").split(",") if f]
-        filtered = [f for f in favorites if f in valid_endpoints]
-        if filtered != favorites:
-            user.favorites = ",".join(filtered)
-            favorites_changed = True
-    if favorites_changed:
-        db.session.commit()
 
     backup_conn.close()
