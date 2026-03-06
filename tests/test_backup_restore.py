@@ -38,6 +38,7 @@ from app.utils.backup import (
     _backup_loop,
     create_backup,
     restore_backup,
+    validate_backup_file_compatibility,
     validate_restored_backup_compatibility,
 )
 from tests.utils import login
@@ -63,9 +64,7 @@ def populate_data():
     db.session.add_all([gl, item, unit, vendor, location, user])
     db.session.commit()
 
-    product = Product(
-        name="BackupProduct", price=1.0, cost=0.5, gl_code="6000"
-    )
+    product = Product(name="BackupProduct", price=1.0, cost=0.5, gl_code="6000")
     recipe = ProductRecipeItem(
         product=product,
         item=item,
@@ -85,9 +84,7 @@ def populate_data():
     db.session.add(po)
     db.session.flush()
 
-    poi = PurchaseOrderItem(
-        purchase_order=po, item=item, unit=unit, quantity=1
-    )
+    poi = PurchaseOrderItem(purchase_order=po, item=item, unit=unit, quantity=1)
     archive = PurchaseOrderItemArchive(
         purchase_order_id=po.id,
         item_id=item.id,
@@ -191,9 +188,7 @@ def populate_data():
 def test_backup_and_restore(app):
     with app.app_context():
         counts, models = populate_data()
-        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
-            "sqlite:///", "", 1
-        )
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
         inode_before = os.stat(db_path).st_ino
 
         filename = create_backup()
@@ -258,9 +253,7 @@ def test_auto_backup_activity_logging(app):
         flush_activity_logs()
 
         logs = [log.activity for log in ActivityLog.query.order_by(ActivityLog.id)]
-        assert (
-            f"System automatically deleted backup {filename1}" in logs
-        )
+        assert f"System automatically deleted backup {filename1}" in logs
         assert logs[-1] == f"System automatically created backup {filename2}"
 
 
@@ -375,6 +368,54 @@ def test_restore_backup_route_rejects_invalid_sqlite(client, app):
         assert b"Invalid SQLite database." in resp.data
 
 
+def test_validate_backup_file_compatibility_handles_missing_setting_table(app):
+    with app.app_context():
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
+        backup_path = os.path.join(
+            app.config["BACKUP_FOLDER"], "missing_setting_table_preflight.db"
+        )
+        shutil.copyfile(db_path, backup_path)
+
+    with sqlite3.connect(backup_path) as conn:
+        conn.execute("DROP TABLE setting")
+        conn.commit()
+
+    with app.app_context():
+        result = validate_backup_file_compatibility(backup_path)
+
+    assert result.compatible is False
+    assert any("Missing required tables: setting." in issue for issue in result.issues)
+    assert any("Missing setting table." in warning for warning in result.warnings)
+
+
+def test_restore_backup_route_missing_setting_table_shows_compatibility_error(
+    client, app
+):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with app.app_context():
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
+        backup_path = os.path.join(
+            app.config["BACKUP_FOLDER"], "missing_setting_table_route.db"
+        )
+        shutil.copyfile(db_path, backup_path)
+
+    with sqlite3.connect(backup_path) as conn:
+        conn.execute("DROP TABLE setting")
+        conn.commit()
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.post(
+            "/controlpanel/backups/restore/missing_setting_table_route.db",
+            follow_redirects=True,
+        )
+
+    assert b"Incompatible backup" in response.data
+    assert b"Invalid SQLite database." not in response.data
+
+
 def test_create_backup_persists_schema_version_marker(app):
     with app.app_context():
         Setting.query.filter_by(name="APP_SCHEMA_VERSION").delete()
@@ -419,9 +460,7 @@ def test_restore_backup_file_logs_warning_restore_on_missing_marker(client, app)
     admin_pass = os.getenv("ADMIN_PASS", "adminpass")
 
     with app.app_context():
-        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
-            "sqlite:///", "", 1
-        )
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
         backup_path = os.path.join(app.config["BACKUP_FOLDER"], "marker_warning.db")
         shutil.copyfile(db_path, backup_path)
 
@@ -445,11 +484,15 @@ def test_restore_backup_file_logs_warning_restore_on_missing_marker(client, app)
     with app.app_context():
         flush_activity_logs()
         activities = [
-            row.activity
-            for row in ActivityLog.query.order_by(ActivityLog.id).all()
+            row.activity for row in ActivityLog.query.order_by(ActivityLog.id).all()
         ]
-        assert not any("Restore blocked due to compatibility errors" in a for a in activities)
-        assert any("Restored backup marker_warning.db with compatibility warnings" in a for a in activities)
+        assert not any(
+            "Restore blocked due to compatibility errors" in a for a in activities
+        )
+        assert any(
+            "Restored backup marker_warning.db with compatibility warnings" in a
+            for a in activities
+        )
 
 
 def test_restore_with_marker_warning_mutates_live_db_from_backup(client, app):
@@ -465,21 +508,15 @@ def test_restore_with_marker_warning_mutates_live_db_from_backup(client, app):
         db.session.add(live_user)
         db.session.commit()
 
-        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
-            "sqlite:///", "", 1
-        )
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
         backup_path = os.path.join(
             app.config["BACKUP_FOLDER"], "marker_warning_state_check.db"
         )
         shutil.copyfile(db_path, backup_path)
 
     with sqlite3.connect(backup_path) as conn:
-        conn.execute(
-            "DELETE FROM setting WHERE name = ?", ("APP_SCHEMA_VERSION",)
-        )
-        conn.execute(
-            "DELETE FROM user WHERE email = ?", ("live-only@example.com",)
-        )
+        conn.execute("DELETE FROM setting WHERE name = ?", ("APP_SCHEMA_VERSION",))
+        conn.execute("DELETE FROM user WHERE email = ?", ("live-only@example.com",))
         conn.commit()
 
     with client:
@@ -492,9 +529,7 @@ def test_restore_with_marker_warning_mutates_live_db_from_backup(client, app):
     assert b"Restored with compatibility warnings." in response.data
 
     with app.app_context():
-        assert (
-            User.query.filter_by(email="live-only@example.com").count() == 0
-        )
+        assert User.query.filter_by(email="live-only@example.com").count() == 0
 
 
 def test_restore_with_older_schema_marker_value_proceeds(client, app):
@@ -502,12 +537,8 @@ def test_restore_with_older_schema_marker_value_proceeds(client, app):
     admin_pass = os.getenv("ADMIN_PASS", "adminpass")
 
     with app.app_context():
-        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
-            "sqlite:///", "", 1
-        )
-        backup_path = os.path.join(
-            app.config["BACKUP_FOLDER"], "older_marker.db"
-        )
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
+        backup_path = os.path.join(app.config["BACKUP_FOLDER"], "older_marker.db")
         shutil.copyfile(db_path, backup_path)
 
     with sqlite3.connect(backup_path) as conn:
@@ -529,11 +560,7 @@ def test_restore_with_older_schema_marker_value_proceeds(client, app):
     assert b"Backup restored from older_marker.db" in response.data
 
 
-
-
-def test_restore_backup_prunes_invalid_favorites_and_backups_page_loads(
-    client, app
-):
+def test_restore_backup_prunes_invalid_favorites_and_backups_page_loads(client, app):
     admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
     admin_pass = os.getenv("ADMIN_PASS", "adminpass")
 
@@ -543,12 +570,8 @@ def test_restore_backup_prunes_invalid_favorites_and_backups_page_loads(
         admin_user.favorites = "admin.backups,missing.endpoint,item.view_items"
         db.session.commit()
 
-        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
-            "sqlite:///", "", 1
-        )
-        backup_path = os.path.join(
-            app.config["BACKUP_FOLDER"], "favorites_prune.db"
-        )
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
+        backup_path = os.path.join(app.config["BACKUP_FOLDER"], "favorites_prune.db")
         shutil.copyfile(db_path, backup_path)
 
     with client:
@@ -577,12 +600,8 @@ def test_restore_backup_ignore_favorites_clears_all_user_favorites(client, app):
         admin_user.favorites = "admin.backups,item.view_items"
         db.session.commit()
 
-        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
-            "sqlite:///", "", 1
-        )
-        backup_path = os.path.join(
-            app.config["BACKUP_FOLDER"], "favorites_ignore.db"
-        )
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "", 1)
+        backup_path = os.path.join(app.config["BACKUP_FOLDER"], "favorites_ignore.db")
         shutil.copyfile(db_path, backup_path)
 
     with client:
