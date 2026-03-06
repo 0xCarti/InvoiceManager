@@ -447,3 +447,124 @@ def test_restore_backup_file_logs_incompatible_restore(client, app):
             for row in ActivityLog.query.order_by(ActivityLog.id).all()
         ]
         assert any("Restore incompatibility detected" in a for a in activities)
+
+
+def test_restore_preflight_incompatible_backup_does_not_mutate_live_db(
+    client, app
+):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with app.app_context():
+        live_user = User(
+            email="live-only@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        db.session.add(live_user)
+        db.session.commit()
+
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
+            "sqlite:///", "", 1
+        )
+        backup_path = os.path.join(
+            app.config["BACKUP_FOLDER"], "incompatible_state_check.db"
+        )
+        shutil.copyfile(db_path, backup_path)
+
+    with sqlite3.connect(backup_path) as conn:
+        conn.execute(
+            "DELETE FROM setting WHERE name = ?", ("APP_SCHEMA_VERSION",)
+        )
+        conn.execute(
+            "DELETE FROM user WHERE email = ?", ("live-only@example.com",)
+        )
+        conn.commit()
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.post(
+            "/controlpanel/backups/restore/incompatible_state_check.db",
+            follow_redirects=True,
+        )
+
+    assert b"Incompatible backup" in response.data
+
+    with app.app_context():
+        assert (
+            User.query.filter_by(email="live-only@example.com").count() == 1
+        )
+
+
+def test_restore_backup_prunes_invalid_favorites_and_backups_page_loads(
+    client, app
+):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with app.app_context():
+        admin_user = User.query.filter_by(email=admin_email).first()
+        assert admin_user is not None
+        admin_user.favorites = "admin.backups,missing.endpoint,item.view_items"
+        db.session.commit()
+
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
+            "sqlite:///", "", 1
+        )
+        backup_path = os.path.join(
+            app.config["BACKUP_FOLDER"], "favorites_prune.db"
+        )
+        shutil.copyfile(db_path, backup_path)
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.post(
+            "/controlpanel/backups/restore/favorites_prune.db",
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert b"Favorites mode: pruned invalid favorites" in response.data
+
+    with app.app_context():
+        restored_admin = User.query.filter_by(email=admin_email).first()
+        assert restored_admin is not None
+        assert restored_admin.favorites == "admin.backups,item.view_items"
+
+
+def test_restore_backup_ignore_favorites_clears_all_user_favorites(client, app):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with app.app_context():
+        admin_user = User.query.filter_by(email=admin_email).first()
+        assert admin_user is not None
+        admin_user.favorites = "admin.backups,item.view_items"
+        db.session.commit()
+
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace(
+            "sqlite:///", "", 1
+        )
+        backup_path = os.path.join(
+            app.config["BACKUP_FOLDER"], "favorites_ignore.db"
+        )
+        shutil.copyfile(db_path, backup_path)
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.post(
+            "/controlpanel/backups/restore/favorites_ignore.db",
+            data={"ignore_favorites": "1"},
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert (
+        b"Favorites mode: ignored backup favorites and cleared all user favorites"
+        in response.data
+    )
+
+    with app.app_context():
+        restored_admin = User.query.filter_by(email=admin_email).first()
+        assert restored_admin is not None
+        assert restored_admin.favorites == ""
