@@ -72,6 +72,15 @@ NAV_LINKS = {
     "admin.system_info": "System Info",
 }
 
+# Endpoints required for baseline navigation/rendering support.
+MANDATORY_NAV_ENDPOINTS = [
+    "transfer.view_transfers",
+    "item.view_items",
+    "locations.view_locations",
+    "menu.view_menus",
+    "event.view_events",
+]
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -169,9 +178,14 @@ def create_app(args=None):
         "RESTORE_ENDPOINT_EXPECTATIONS",
         [
             {
-                "module": "core",
+                "module": "core_navigation",
                 "enabled": True,
-                "endpoints": ["admin.backups", "transfer.view_transfers"],
+                "endpoints": MANDATORY_NAV_ENDPOINTS,
+            },
+            {
+                "module": "admin_backups",
+                "enabled": True,
+                "endpoints": ["admin.backups"],
             }
         ],
     )
