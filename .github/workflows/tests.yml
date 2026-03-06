@@ -21,6 +21,14 @@ jobs:
           pip install -r requirements.txt
       - name: Run tests
         run: pytest --cov --cov-branch --cov-report=xml
+      - name: Verify Alembic has a single head
+        run: |
+          HEADS=$(flask --app run.py db heads | wc -l)
+          if [ "$HEADS" -ne 1 ]; then
+            echo "Expected 1 Alembic head, found $HEADS"
+            flask --app run.py db heads
+            exit 1
+          fi
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
