@@ -244,6 +244,11 @@ def restore_backup(file_path):
     current schema and supplying defaults for any new columns.
     """
 
+    preserved_favorites_by_email = {
+        email: favorites
+        for email, favorites in db.session.query(User.email, User.favorites).all()
+    }
+
     # Open the backup file in a separate SQLite connection
     backup_conn = sqlite3.connect(
         file_path, detect_types=sqlite3.PARSE_DECLTYPES
@@ -334,14 +339,24 @@ def restore_backup(file_path):
 
     db.session.commit()
 
-    # Backups can contain favourite links for endpoints that are not available
-    # in the currently running build. Prune those stale endpoints so rendering
-    # navigation never fails after a restore.
+    # Keep current favourite links so restores don't unexpectedly overwrite a
+    # user's current navigation preferences with whatever was captured in the
+    # backup file.
+    users = db.session.query(User).all()
+    favorites_changed = False
+    for user in users:
+        if user.email in preserved_favorites_by_email:
+            preserved = preserved_favorites_by_email[user.email] or ""
+            if (user.favorites or "") != preserved:
+                user.favorites = preserved
+                favorites_changed = True
+
+    # Backups or preserved values can contain favourite links for endpoints
+    # that are not available in the currently running build. Prune those stale
+    # endpoints so rendering navigation never fails after a restore.
     valid_endpoints = {
         rule.endpoint for rule in current_app.url_map.iter_rules()
     }
-    users = db.session.query(User).all()
-    favorites_changed = False
     for user in users:
         favorites = [f for f in (user.favorites or "").split(",") if f]
         filtered = [f for f in favorites if f in valid_endpoints]

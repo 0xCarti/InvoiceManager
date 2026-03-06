@@ -213,6 +213,28 @@ def test_backup_and_restore(app):
             assert m.query.count() == count
 
 
+def test_restore_backup_preserves_current_user_favorites(app):
+    with app.app_context():
+        populate_data()
+        user = User.query.filter_by(email="backup@example.com").first()
+        assert user is not None
+
+        user.favorites = "event.view_events"
+        db.session.commit()
+
+        filename = create_backup()
+        backup_path = os.path.join(app.config["BACKUP_FOLDER"], filename)
+
+        user.favorites = "main.home"
+        db.session.commit()
+
+        restore_backup(backup_path)
+
+        restored_user = User.query.filter_by(email="backup@example.com").first()
+        assert restored_user is not None
+        assert restored_user.favorites == "main.home"
+
+
 def test_restore_backup_file_rejects_path_traversal(client, app):
     with app.app_context():
         admin = User.query.filter_by(is_admin=True).first()
