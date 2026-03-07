@@ -73,6 +73,43 @@ purchase = Blueprint("purchase", __name__)
 _PURCHASE_UPLOAD_SESSION_KEY = "purchase_order_upload"
 
 
+def _duplicate_blocker_destination(category: str) -> dict[str, str]:
+    if category == "producer_address":
+        return {
+            "view": "resolve_producer_address",
+            "section": "producer-address-section",
+        }
+    if category == "duplicate_persistence":
+        return {
+            "view": "duplicate_resolution",
+            "section": "duplicate-resolution-section",
+        }
+    return {
+        "view": "staging_cleanup",
+        "section": "staging-cleanup-section",
+    }
+
+
+def _blocked_rows_payload(duplicate_blockers: list[dict]) -> list[dict]:
+    payload: list[dict] = []
+    for blocker in duplicate_blockers:
+        destination = _duplicate_blocker_destination(
+            str(blocker.get("category") or "").strip()
+        )
+        payload.append(
+            {
+                "row_id": blocker.get("row_id") or blocker.get("id"),
+                "row_label": blocker.get("row_label"),
+                "category": blocker.get("category"),
+                "destination": destination,
+                "conflict_keys": blocker.get("conflict_keys")
+                or blocker.get("key_fields")
+                or {},
+            }
+        )
+    return payload
+
+
 def _get_enabled_import_vendors():
     def _normalize_label(label: str | None) -> str | None:
         if not label:
@@ -185,15 +222,27 @@ def _normalized_duplicate_blockers(payload: dict | None) -> list[dict]:
         if not isinstance(blocker, dict):
             continue
         category = (blocker.get("category") or "duplicate_persistence").strip()
-        if category not in {"producer_address", "duplicate_persistence"}:
-            category = "duplicate_persistence"
+        if category not in {
+            "producer_address",
+            "duplicate_persistence",
+            "staging_integrity",
+        }:
+            category = "staging_integrity"
+        destination = _duplicate_blocker_destination(category)
         normalized.append(
             {
                 "id": blocker.get("id") or f"blocker-{idx}",
+                "row_id": blocker.get("row_id")
+                or blocker.get("id")
+                or f"blocked-row-{idx}",
                 "row_index": blocker.get("row_index"),
                 "row_label": blocker.get("row_label") or f"Row {idx + 1}",
                 "category": category,
                 "key_fields": blocker.get("key_fields") or {},
+                "conflict_keys": blocker.get("conflict_keys")
+                or blocker.get("key_fields")
+                or {},
+                "destination": destination,
                 "supports_merge": bool(blocker.get("supports_merge")),
             }
         )
@@ -207,6 +256,9 @@ def _duplicate_blocker_counts(duplicate_blockers: list[dict]) -> dict[str, int]:
         ),
         "duplicate_persistence": len(
             [b for b in duplicate_blockers if b.get("category") == "duplicate_persistence"]
+        ),
+        "staging_integrity": len(
+            [b for b in duplicate_blockers if b.get("category") == "staging_integrity"]
         ),
     }
 
@@ -722,11 +774,25 @@ def create_purchase_order():
         return redirect(url_for("purchase.resolve_vendor_items"))
 
     if upload_state and any(blocker_counts.values()):
+        blocked_rows = _blocked_rows_payload(duplicate_blockers)
+        wants_json = request.accept_mimetypes["application/json"] > request.accept_mimetypes[
+            "text/html"
+        ]
+        if wants_json:
+            return (
+                jsonify(
+                    {
+                        "error": "Finalize preflight blocked by staging conflicts.",
+                        "blocked_rows": blocked_rows,
+                    }
+                ),
+                409,
+            )
         flash(
-            "Continue import is blocked until duplicate-key decisions are saved successfully.",
+            "Continue import is blocked until duplicate-key decisions are saved successfully. Go to blocked rows.",
             "danger",
         )
-        return redirect(url_for("purchase.resolve_vendor_items"))
+        return redirect(url_for("purchase.resolve_vendor_items") + "#duplicate-blockers-table")
 
     if request.method == "GET":
         seed = session.pop("po_recommendation_seed", None)

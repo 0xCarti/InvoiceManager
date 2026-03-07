@@ -29,17 +29,17 @@
     <p class="text-muted">Source file: {{ source_filename }}</p>
     {% endif %}
 
-    {% set total_duplicate_blockers = (blocker_counts.producer_address or 0) + (blocker_counts.duplicate_persistence or 0) %}
+    {% set total_duplicate_blockers = (blocker_counts.producer_address or 0) + (blocker_counts.duplicate_persistence or 0) + (blocker_counts.staging_integrity or 0) %}
     <div class="card border-warning mb-4">
         <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
             <h3 class="h6 mb-0">Duplicate key blockers</h3>
             <span class="badge bg-warning text-dark">{{ total_duplicate_blockers }}</span>
         </div>
-        <div class="card-body">
+        <div class="card-body" id="duplicate-blockers-table">
             <p class="mb-2 text-muted">
                 Finalize failed because duplicate values conflict with existing remittance records.
             </p>
-            <p class="mb-3">Remaining import blockers</p>
+            <p class="mb-3">Remaining import blockers. <a href="#duplicate-blockers-table" class="fw-semibold">Go to blocked rows</a></p>
             <div class="row g-2 mb-3">
                 <div class="col-md-6">
                     <div class="border rounded p-2 h-100">
@@ -53,34 +53,47 @@
                         <div class="fw-semibold">{{ blocker_counts.duplicate_persistence or 0 }}</div>
                     </div>
                 </div>
+                <div class="col-md-6">
+                    <div class="border rounded p-2 h-100">
+                        <div class="small text-muted">Staging integrity blockers</div>
+                        <div class="fw-semibold">{{ blocker_counts.staging_integrity or 0 }}</div>
+                    </div>
+                </div>
             </div>
 
             {% if duplicate_blockers %}
                 <div class="table-responsive">
                     <table class="table table-sm align-middle">
                         <thead>
-                            <tr>
-                                <th>Blocked Row</th>
-                                <th>Category</th>
-                                <th>Conflicting keys</th>
-                                <th>Actions</th>
-                            </tr>
+                                <tr>
+                                    <th>Blocked Row</th>
+                                    <th>Category</th>
+                                    <th>Destination</th>
+                                    <th>Conflicting keys</th>
+                                    <th>Actions</th>
+                                </tr>
                         </thead>
                         <tbody>
                             {% for blocker in duplicate_blockers %}
-                                <tr>
-                                    <td>{{ blocker.row_label }}</td>
+                                <tr data-row-id="{{ blocker.row_id }}" data-conflict-keys='{{ blocker.conflict_keys|tojson }}'>
+                                    <td>{{ blocker.row_label }}<div class="small text-muted">ID: {{ blocker.row_id }}</div></td>
                                     <td>
                                         {% if blocker.category == 'producer_address' %}
                                             Producer / Address
+                                        {% elif blocker.category == 'staging_integrity' %}
+                                            Staging Integrity
                                         {% else %}
                                             Duplicate / Persistence
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if blocker.key_fields %}
+                                        <div class="small"><strong>View:</strong> {{ blocker.destination.view }}</div>
+                                        <div class="small"><strong>Section:</strong> {{ blocker.destination.section }}</div>
+                                    </td>
+                                    <td>
+                                        {% if blocker.conflict_keys %}
                                             <ul class="mb-0 ps-3">
-                                                {% for key_name, key_value in blocker.key_fields.items() %}
+                                                {% for key_name, key_value in blocker.conflict_keys.items() %}
                                                     <li><strong>{{ key_name }}:</strong> {{ key_value or '—' }}</li>
                                                 {% endfor %}
                                             </ul>
