@@ -176,6 +176,52 @@ def _get_purchase_upload_state() -> dict | None:
     return state
 
 
+def _normalized_duplicate_blockers(payload: dict | None) -> list[dict]:
+    if not isinstance(payload, dict):
+        return []
+    raw_duplicate_blockers = payload.get("duplicate_blockers") or []
+    normalized: list[dict] = []
+    for idx, blocker in enumerate(raw_duplicate_blockers):
+        if not isinstance(blocker, dict):
+            continue
+        category = (blocker.get("category") or "duplicate_persistence").strip()
+        if category not in {"producer_address", "duplicate_persistence"}:
+            category = "duplicate_persistence"
+        normalized.append(
+            {
+                "id": blocker.get("id") or f"blocker-{idx}",
+                "row_index": blocker.get("row_index"),
+                "row_label": blocker.get("row_label") or f"Row {idx + 1}",
+                "category": category,
+                "key_fields": blocker.get("key_fields") or {},
+                "supports_merge": bool(blocker.get("supports_merge")),
+            }
+        )
+    return normalized
+
+
+def _duplicate_blocker_counts(duplicate_blockers: list[dict]) -> dict[str, int]:
+    return {
+        "producer_address": len(
+            [b for b in duplicate_blockers if b.get("category") == "producer_address"]
+        ),
+        "duplicate_persistence": len(
+            [b for b in duplicate_blockers if b.get("category") == "duplicate_persistence"]
+        ),
+    }
+
+
+def _persist_duplicate_blockers(payload: dict, blockers: list[dict]) -> bool:
+    payload["duplicate_blockers"] = blockers
+    session[_PURCHASE_UPLOAD_SESSION_KEY] = payload
+    session.modified = True
+
+    persisted = _get_purchase_upload_state() or {}
+    persisted_ids = [str(b.get("id") or "") for b in persisted.get("duplicate_blockers") or []]
+    expected_ids = [str(b.get("id") or "") for b in blockers]
+    return persisted_ids == expected_ids
+
+
 def _parse_source_ids(raw_source_ids) -> list[int]:
     source_ids: list[int] = []
     if isinstance(raw_source_ids, str):
@@ -512,23 +558,7 @@ def resolve_vendor_items():
     unresolved_lines = [line for line in payload.get("items", []) if not line.get("item_id")]
 
     raw_duplicate_blockers = payload.get("duplicate_blockers") or []
-    duplicate_blockers = []
-    for idx, blocker in enumerate(raw_duplicate_blockers):
-        if not isinstance(blocker, dict):
-            continue
-        category = (blocker.get("category") or "duplicate_persistence").strip()
-        if category not in {"producer_address", "duplicate_persistence"}:
-            category = "duplicate_persistence"
-        duplicate_blockers.append(
-            {
-                "id": blocker.get("id") or f"blocker-{idx}",
-                "row_index": blocker.get("row_index"),
-                "row_label": blocker.get("row_label") or f"Row {idx + 1}",
-                "category": category,
-                "key_fields": blocker.get("key_fields") or {},
-                "supports_merge": bool(blocker.get("supports_merge")),
-            }
-        )
+    duplicate_blockers = _normalized_duplicate_blockers(payload)
 
     if request.method == "POST" and request.form.get("step") == "resolve_duplicate_blocker":
         blocker_id = (request.form.get("blocker_id") or "").strip()
@@ -554,9 +584,12 @@ def resolve_vendor_items():
                 for blocker in raw_duplicate_blockers
                 if str(blocker.get("id") or "") != blocker_id
             ]
-            payload["duplicate_blockers"] = raw_duplicate_blockers
-            session[_PURCHASE_UPLOAD_SESSION_KEY] = payload
-            session.modified = True
+            if not _persist_duplicate_blockers(payload, raw_duplicate_blockers):
+                flash(
+                    "Could not persist duplicate blocker decision. Finalize was not run; please try again.",
+                    "danger",
+                )
+                return redirect(url_for("purchase.resolve_vendor_items"))
             flash("Blocked row skipped for this import.", "success")
             return redirect(url_for("purchase.resolve_vendor_items"))
 
@@ -570,9 +603,12 @@ def resolve_vendor_items():
                 for blocker in raw_duplicate_blockers
                 if str(blocker.get("id") or "") != blocker_id
             ]
-            payload["duplicate_blockers"] = raw_duplicate_blockers
-            session[_PURCHASE_UPLOAD_SESSION_KEY] = payload
-            session.modified = True
+            if not _persist_duplicate_blockers(payload, raw_duplicate_blockers):
+                flash(
+                    "Could not persist duplicate blocker decision. Finalize was not run; please try again.",
+                    "danger",
+                )
+                return redirect(url_for("purchase.resolve_vendor_items"))
             flash("Merge/overwrite has been applied for the blocked row.", "success")
             return redirect(url_for("purchase.resolve_vendor_items"))
 
@@ -662,18 +698,9 @@ def resolve_vendor_items():
         source_filename=payload.get("source_filename"),
         gl_codes=gl_codes,
         duplicate_blockers=duplicate_blockers,
-        blocker_counts={
-            "producer_address": len(
-                [b for b in duplicate_blockers if b.get("category") == "producer_address"]
-            ),
-            "duplicate_persistence": len(
-                [
-                    b
-                    for b in duplicate_blockers
-                    if b.get("category") == "duplicate_persistence"
-                ]
-            ),
-        },
+        blocker_counts=_duplicate_blocker_counts(
+            _normalized_duplicate_blockers(_get_purchase_upload_state())
+        ),
     )
 
 
@@ -684,11 +711,21 @@ def create_purchase_order():
     form = PurchaseOrderForm()
     upload_state = _get_purchase_upload_state()
 
+    duplicate_blockers = _normalized_duplicate_blockers(upload_state)
+    blocker_counts = _duplicate_blocker_counts(duplicate_blockers)
+
     if request.args.get("reset_upload"):
         _clear_purchase_upload_state()
         return redirect(url_for("purchase.create_purchase_order"))
 
     if upload_state and any(not line.get("item_id") for line in upload_state.get("items", [])):
+        return redirect(url_for("purchase.resolve_vendor_items"))
+
+    if upload_state and any(blocker_counts.values()):
+        flash(
+            "Continue import is blocked until duplicate-key decisions are saved successfully.",
+            "danger",
+        )
         return redirect(url_for("purchase.resolve_vendor_items"))
 
     if request.method == "GET":
