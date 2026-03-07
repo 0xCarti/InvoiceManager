@@ -1,6 +1,6 @@
 from werkzeug.security import generate_password_hash
 
-from app.models import User
+from app.models import User, Vendor
 from tests.utils import extract_csrf_token, login
 
 
@@ -152,3 +152,94 @@ def test_duplicate_blocker_decision_persists_before_continue(client, app):
 
         continue_response = client.get("/purchase_orders/create", follow_redirects=False)
         assert continue_response.status_code == 200
+
+
+def test_non_blocking_duplicate_warnings_do_not_block_continue(client, app):
+    with app.app_context():
+        user = User(
+            email="non-blocking@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        vendor = Vendor(first_name="Non", last_name="Blocking")
+        from app import db
+
+        db.session.add_all([user, vendor])
+        db.session.commit()
+        vendor_id = vendor.id
+
+    with client:
+        login(client, "non-blocking@example.com", "pass")
+        with client.session_transaction() as session_data:
+            session_data[_PURCHASE_UPLOAD_SESSION_KEY] = {
+                "vendor_id": vendor_id,
+                "items": [{"item_id": 123, "quantity": 1}],
+                "duplicate_blockers": [
+                    {
+                        "id": "warn-1",
+                        "row_id": "row-201",
+                        "category": "duplicate_persistence",
+                        "row_label": "Row 201",
+                        "blocks_import": False,
+                    }
+                ],
+            }
+
+        response = client.get("/purchase_orders/create", follow_redirects=False)
+        assert response.status_code == 200
+
+
+def test_resolve_page_groups_blocking_and_non_blocking_messages(client, app):
+    with app.app_context():
+        user = User(
+            email="grouped-warnings@example.com",
+            password=generate_password_hash("pass"),
+            active=True,
+        )
+        vendor = Vendor(first_name="Grouped", last_name="Warnings")
+        from app import db
+
+        db.session.add_all([user, vendor])
+        db.session.commit()
+        vendor_id = vendor.id
+
+    with client:
+        login(client, "grouped-warnings@example.com", "pass")
+        with client.session_transaction() as session_data:
+            session_data[_PURCHASE_UPLOAD_SESSION_KEY] = {
+                "vendor_id": vendor_id,
+                "items": [
+                    {
+                        "item_id": None,
+                        "vendor_sku": "SKU-1",
+                        "vendor_description": "Unresolved item",
+                        "pack_size": "1 EA",
+                        "quantity": 1,
+                        "unit_cost": 1.23,
+                    }
+                ],
+                "duplicate_blockers": [
+                    {
+                        "id": "block-1",
+                        "row_id": "row-301",
+                        "category": "producer_address",
+                        "row_label": "Row 301",
+                    },
+                    {
+                        "id": "warn-1",
+                        "row_id": "row-302",
+                        "category": "staging_integrity",
+                        "row_label": "Row 302",
+                        "blocks_import": False,
+                    },
+                ],
+            }
+
+        response = client.get("/purchase_orders/resolve_vendor_items")
+        assert response.status_code == 200
+        assert b"Blocking errors" in response.data
+        assert b"Blocks import" in response.data
+        assert b"Non-blocking warnings" in response.data
+        assert b"Does not block import" in response.data
+        assert b"Row 301" in response.data
+        assert b"Row 302" in response.data

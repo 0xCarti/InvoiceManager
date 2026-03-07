@@ -105,9 +105,18 @@ def _blocked_rows_payload(duplicate_blockers: list[dict]) -> list[dict]:
                 "conflict_keys": blocker.get("conflict_keys")
                 or blocker.get("key_fields")
                 or {},
+                "blocks_import": bool(blocker.get("blocks_import", True)),
             }
         )
     return payload
+
+
+def _blocking_duplicate_blockers(duplicate_blockers: list[dict]) -> list[dict]:
+    return [b for b in duplicate_blockers if bool(b.get("blocks_import", True))]
+
+
+def _non_blocking_duplicate_blockers(duplicate_blockers: list[dict]) -> list[dict]:
+    return [b for b in duplicate_blockers if not bool(b.get("blocks_import", True))]
 
 
 def _get_enabled_import_vendors():
@@ -244,21 +253,23 @@ def _normalized_duplicate_blockers(payload: dict | None) -> list[dict]:
                 or {},
                 "destination": destination,
                 "supports_merge": bool(blocker.get("supports_merge")),
+                "blocks_import": bool(blocker.get("blocks_import", True)),
             }
         )
     return normalized
 
 
 def _duplicate_blocker_counts(duplicate_blockers: list[dict]) -> dict[str, int]:
+    blocking = _blocking_duplicate_blockers(duplicate_blockers)
     return {
         "producer_address": len(
-            [b for b in duplicate_blockers if b.get("category") == "producer_address"]
+            [b for b in blocking if b.get("category") == "producer_address"]
         ),
         "duplicate_persistence": len(
-            [b for b in duplicate_blockers if b.get("category") == "duplicate_persistence"]
+            [b for b in blocking if b.get("category") == "duplicate_persistence"]
         ),
         "staging_integrity": len(
-            [b for b in duplicate_blockers if b.get("category") == "staging_integrity"]
+            [b for b in blocking if b.get("category") == "staging_integrity"]
         ),
     }
 
@@ -611,6 +622,8 @@ def resolve_vendor_items():
 
     raw_duplicate_blockers = payload.get("duplicate_blockers") or []
     duplicate_blockers = _normalized_duplicate_blockers(payload)
+    blocking_duplicate_blockers = _blocking_duplicate_blockers(duplicate_blockers)
+    non_blocking_duplicate_blockers = _non_blocking_duplicate_blockers(duplicate_blockers)
 
     if request.method == "POST" and request.form.get("step") == "resolve_duplicate_blocker":
         blocker_id = (request.form.get("blocker_id") or "").strip()
@@ -750,6 +763,8 @@ def resolve_vendor_items():
         source_filename=payload.get("source_filename"),
         gl_codes=gl_codes,
         duplicate_blockers=duplicate_blockers,
+        blocking_duplicate_blockers=blocking_duplicate_blockers,
+        non_blocking_duplicate_blockers=non_blocking_duplicate_blockers,
         blocker_counts=_duplicate_blocker_counts(
             _normalized_duplicate_blockers(_get_purchase_upload_state())
         ),
@@ -764,6 +779,7 @@ def create_purchase_order():
     upload_state = _get_purchase_upload_state()
 
     duplicate_blockers = _normalized_duplicate_blockers(upload_state)
+    blocking_duplicate_blockers = _blocking_duplicate_blockers(duplicate_blockers)
     blocker_counts = _duplicate_blocker_counts(duplicate_blockers)
 
     if request.args.get("reset_upload"):
@@ -774,7 +790,7 @@ def create_purchase_order():
         return redirect(url_for("purchase.resolve_vendor_items"))
 
     if upload_state and any(blocker_counts.values()):
-        blocked_rows = _blocked_rows_payload(duplicate_blockers)
+        blocked_rows = _blocked_rows_payload(blocking_duplicate_blockers)
         wants_json = request.accept_mimetypes["application/json"] > request.accept_mimetypes[
             "text/html"
         ]
