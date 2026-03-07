@@ -510,6 +510,74 @@ def resolve_vendor_items():
         return redirect(url_for("purchase.create_purchase_order"))
 
     unresolved_lines = [line for line in payload.get("items", []) if not line.get("item_id")]
+
+    raw_duplicate_blockers = payload.get("duplicate_blockers") or []
+    duplicate_blockers = []
+    for idx, blocker in enumerate(raw_duplicate_blockers):
+        if not isinstance(blocker, dict):
+            continue
+        category = (blocker.get("category") or "duplicate_persistence").strip()
+        if category not in {"producer_address", "duplicate_persistence"}:
+            category = "duplicate_persistence"
+        duplicate_blockers.append(
+            {
+                "id": blocker.get("id") or f"blocker-{idx}",
+                "row_index": blocker.get("row_index"),
+                "row_label": blocker.get("row_label") or f"Row {idx + 1}",
+                "category": category,
+                "key_fields": blocker.get("key_fields") or {},
+                "supports_merge": bool(blocker.get("supports_merge")),
+            }
+        )
+
+    if request.method == "POST" and request.form.get("step") == "resolve_duplicate_blocker":
+        blocker_id = (request.form.get("blocker_id") or "").strip()
+        action = (request.form.get("blocker_action") or "").strip()
+        selected = None
+        for blocker in raw_duplicate_blockers:
+            if str(blocker.get("id") or "") == blocker_id:
+                selected = blocker
+                break
+
+        if selected is None:
+            flash("The selected duplicate key blocker could not be found.", "warning")
+            return redirect(url_for("purchase.resolve_vendor_items"))
+
+        if action == "edit_keys":
+            flash("Edit the key fields directly in the source row, then continue import.", "info")
+            return redirect(url_for("purchase.resolve_vendor_items"))
+
+        if action == "skip_row":
+            selected["resolution"] = "skip"
+            raw_duplicate_blockers = [
+                blocker
+                for blocker in raw_duplicate_blockers
+                if str(blocker.get("id") or "") != blocker_id
+            ]
+            payload["duplicate_blockers"] = raw_duplicate_blockers
+            session[_PURCHASE_UPLOAD_SESSION_KEY] = payload
+            session.modified = True
+            flash("Blocked row skipped for this import.", "success")
+            return redirect(url_for("purchase.resolve_vendor_items"))
+
+        if action == "merge_overwrite":
+            if not selected.get("supports_merge"):
+                flash("Merge/overwrite is not supported for this blocked row.", "warning")
+                return redirect(url_for("purchase.resolve_vendor_items"))
+            selected["resolution"] = "merge_overwrite"
+            raw_duplicate_blockers = [
+                blocker
+                for blocker in raw_duplicate_blockers
+                if str(blocker.get("id") or "") != blocker_id
+            ]
+            payload["duplicate_blockers"] = raw_duplicate_blockers
+            session[_PURCHASE_UPLOAD_SESSION_KEY] = payload
+            session.modified = True
+            flash("Merge/overwrite has been applied for the blocked row.", "success")
+            return redirect(url_for("purchase.resolve_vendor_items"))
+
+        flash("Choose a valid action for the selected blocker.", "warning")
+        return redirect(url_for("purchase.resolve_vendor_items"))
     if not unresolved_lines:
         return redirect(url_for("purchase.create_purchase_order"))
 
@@ -593,6 +661,19 @@ def resolve_vendor_items():
         units_map=units_map,
         source_filename=payload.get("source_filename"),
         gl_codes=gl_codes,
+        duplicate_blockers=duplicate_blockers,
+        blocker_counts={
+            "producer_address": len(
+                [b for b in duplicate_blockers if b.get("category") == "producer_address"]
+            ),
+            "duplicate_persistence": len(
+                [
+                    b
+                    for b in duplicate_blockers
+                    if b.get("category") == "duplicate_persistence"
+                ]
+            ),
+        },
     )
 
 
