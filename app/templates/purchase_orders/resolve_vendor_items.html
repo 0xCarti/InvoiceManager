@@ -39,7 +39,7 @@
             <p class="mb-2 text-muted">
                 Finalize failed because duplicate values conflict with existing remittance records.
             </p>
-            <p class="mb-3">Remaining import blockers. <a href="#duplicate-blockers-table" class="fw-semibold">Go to blocked rows</a></p>
+            <p class="mb-3">Only groups marked <strong>Blocks import</strong> contribute to unresolved blocker count.</p>
             <div class="row g-2 mb-3">
                 <div class="col-md-6">
                     <div class="border rounded p-2 h-100">
@@ -61,64 +61,128 @@
                 </div>
             </div>
 
-            {% if duplicate_blockers %}
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle">
-                        <thead>
-                                <tr>
-                                    <th>Blocked Row</th>
-                                    <th>Category</th>
-                                    <th>Destination</th>
-                                    <th>Conflicting keys</th>
-                                    <th>Actions</th>
-                                </tr>
-                        </thead>
-                        <tbody>
-                            {% for blocker in duplicate_blockers %}
-                                <tr data-row-id="{{ blocker.row_id }}" data-conflict-keys='{{ blocker.conflict_keys|tojson }}'>
-                                    <td>{{ blocker.row_label }}<div class="small text-muted">ID: {{ blocker.row_id }}</div></td>
-                                    <td>
-                                        {% if blocker.category == 'producer_address' %}
-                                            Producer / Address
-                                        {% elif blocker.category == 'staging_integrity' %}
-                                            Staging Integrity
-                                        {% else %}
-                                            Duplicate / Persistence
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <div class="small"><strong>View:</strong> {{ blocker.destination.view }}</div>
-                                        <div class="small"><strong>Section:</strong> {{ blocker.destination.section }}</div>
-                                    </td>
-                                    <td>
-                                        {% if blocker.conflict_keys %}
-                                            <ul class="mb-0 ps-3">
-                                                {% for key_name, key_value in blocker.conflict_keys.items() %}
-                                                    <li><strong>{{ key_name }}:</strong> {{ key_value or '—' }}</li>
-                                                {% endfor %}
-                                            </ul>
-                                        {% else %}
-                                            <span class="text-muted">No key details provided</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <form method="post" class="d-flex flex-column gap-1">
-                                            {{ form.hidden_tag() }}
-                                            <input type="hidden" name="step" value="resolve_duplicate_blocker">
-                                            <input type="hidden" name="blocker_id" value="{{ blocker.id }}">
-                                            <button type="submit" class="btn btn-sm btn-outline-primary text-start" name="blocker_action" value="edit_keys">Edit key values</button>
-                                            <button type="submit" class="btn btn-sm btn-outline-secondary text-start" name="blocker_action" value="skip_row">Skip row</button>
-                                            <button type="submit" class="btn btn-sm btn-outline-danger text-start" name="blocker_action" value="merge_overwrite" {% if not blocker.supports_merge %}disabled{% endif %}>Merge/overwrite behavior</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            <div class="card border-danger mb-3">
+                <div class="card-header bg-danger-subtle d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">Blocking errors</span>
+                    <span class="badge bg-danger">Blocks import</span>
                 </div>
-            {% else %}
-                <div class="alert alert-success mb-0">No duplicate key blockers remain. Continue import.</div>
-            {% endif %}
+                <div class="card-body">
+                    {% if blocking_duplicate_blockers %}
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Blocked Row</th>
+                                        <th>Category</th>
+                                        <th>Destination</th>
+                                        <th>Conflicting keys</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for blocker in blocking_duplicate_blockers %}
+                                        <tr data-row-id="{{ blocker.row_id }}" data-conflict-keys='{{ blocker.conflict_keys|tojson }}'>
+                                            <td>{{ blocker.row_label }}<div class="small text-muted">ID: {{ blocker.row_id }}</div></td>
+                                            <td>
+                                                {% if blocker.category == 'producer_address' %}
+                                                    Producer / Address
+                                                {% elif blocker.category == 'staging_integrity' %}
+                                                    Staging Integrity
+                                                {% else %}
+                                                    Duplicate / Persistence
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="small"><strong>View:</strong> {{ blocker.destination.view }}</div>
+                                                <div class="small"><strong>Section:</strong> {{ blocker.destination.section }}</div>
+                                            </td>
+                                            <td>
+                                                {% if blocker.conflict_keys %}
+                                                    <ul class="mb-0 ps-3">
+                                                        {% for key_name, key_value in blocker.conflict_keys.items() %}
+                                                            <li><strong>{{ key_name }}:</strong> {{ key_value or '—' }}</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                {% else %}
+                                                    <span class="text-muted">No key details provided</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <form method="post" class="d-flex flex-column gap-1">
+                                                    {{ form.hidden_tag() }}
+                                                    <input type="hidden" name="step" value="resolve_duplicate_blocker">
+                                                    <input type="hidden" name="blocker_id" value="{{ blocker.id }}">
+                                                    <button type="submit" class="btn btn-sm btn-outline-primary text-start" name="blocker_action" value="edit_keys">Edit key values</button>
+                                                    <button type="submit" class="btn btn-sm btn-outline-secondary text-start" name="blocker_action" value="skip_row">Skip row</button>
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger text-start" name="blocker_action" value="merge_overwrite" {% if not blocker.supports_merge %}disabled{% endif %}>Merge/overwrite behavior</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-success mb-0">No blocking errors remain.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card border-info">
+                <div class="card-header bg-info-subtle d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">Non-blocking warnings</span>
+                    <span class="badge bg-info text-dark">Does not block import</span>
+                </div>
+                <div class="card-body">
+                    {% if non_blocking_duplicate_blockers %}
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Row</th>
+                                        <th>Category</th>
+                                        <th>Destination</th>
+                                        <th>Conflicting keys</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for blocker in non_blocking_duplicate_blockers %}
+                                        <tr>
+                                            <td>{{ blocker.row_label }}<div class="small text-muted">ID: {{ blocker.row_id }}</div></td>
+                                            <td>
+                                                {% if blocker.category == 'producer_address' %}
+                                                    Producer / Address
+                                                {% elif blocker.category == 'staging_integrity' %}
+                                                    Staging Integrity
+                                                {% else %}
+                                                    Duplicate / Persistence
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="small"><strong>View:</strong> {{ blocker.destination.view }}</div>
+                                                <div class="small"><strong>Section:</strong> {{ blocker.destination.section }}</div>
+                                            </td>
+                                            <td>
+                                                {% if blocker.conflict_keys %}
+                                                    <ul class="mb-0 ps-3">
+                                                        {% for key_name, key_value in blocker.conflict_keys.items() %}
+                                                            <li><strong>{{ key_name }}:</strong> {{ key_value or '—' }}</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                {% else %}
+                                                    <span class="text-muted">No key details provided</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-muted">No non-blocking warnings.</div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
 
