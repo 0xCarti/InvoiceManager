@@ -29,6 +29,86 @@
     <p class="text-muted">Source file: {{ source_filename }}</p>
     {% endif %}
 
+    {% set total_duplicate_blockers = (blocker_counts.producer_address or 0) + (blocker_counts.duplicate_persistence or 0) %}
+    <div class="card border-warning mb-4">
+        <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
+            <h3 class="h6 mb-0">Duplicate key blockers</h3>
+            <span class="badge bg-warning text-dark">{{ total_duplicate_blockers }}</span>
+        </div>
+        <div class="card-body">
+            <p class="mb-2 text-muted">
+                Finalize failed because duplicate values conflict with existing remittance records.
+            </p>
+            <p class="mb-3">Remaining import blockers</p>
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <div class="border rounded p-2 h-100">
+                        <div class="small text-muted">Producer / Address blockers</div>
+                        <div class="fw-semibold">{{ blocker_counts.producer_address or 0 }}</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="border rounded p-2 h-100">
+                        <div class="small text-muted">Duplicate / Persistence blockers</div>
+                        <div class="fw-semibold">{{ blocker_counts.duplicate_persistence or 0 }}</div>
+                    </div>
+                </div>
+            </div>
+
+            {% if duplicate_blockers %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Blocked Row</th>
+                                <th>Category</th>
+                                <th>Conflicting keys</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for blocker in duplicate_blockers %}
+                                <tr>
+                                    <td>{{ blocker.row_label }}</td>
+                                    <td>
+                                        {% if blocker.category == 'producer_address' %}
+                                            Producer / Address
+                                        {% else %}
+                                            Duplicate / Persistence
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if blocker.key_fields %}
+                                            <ul class="mb-0 ps-3">
+                                                {% for key_name, key_value in blocker.key_fields.items() %}
+                                                    <li><strong>{{ key_name }}:</strong> {{ key_value or '—' }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <span class="text-muted">No key details provided</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <form method="post" class="d-flex flex-column gap-1">
+                                            {{ form.hidden_tag() }}
+                                            <input type="hidden" name="step" value="resolve_duplicate_blocker">
+                                            <input type="hidden" name="blocker_id" value="{{ blocker.id }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-primary text-start" name="blocker_action" value="edit_keys">Edit key values</button>
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary text-start" name="blocker_action" value="skip_row">Skip row</button>
+                                            <button type="submit" class="btn btn-sm btn-outline-danger text-start" name="blocker_action" value="merge_overwrite" {% if not blocker.supports_merge %}disabled{% endif %}>Merge/overwrite behavior</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-success mb-0">No duplicate key blockers remain. Continue import.</div>
+            {% endif %}
+        </div>
+    </div>
+
     <form method="post">
         {{ form.hidden_tag() }}
         <input type="hidden" name="step" value="resolve_vendor_aliases">
