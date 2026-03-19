@@ -139,6 +139,36 @@ def _coerce_float(value):
         return None
 
 
+def _compute_vendor_invoice_line_base(invoice: Invoice, item: InvoiceProduct) -> float:
+    """Compute line base with resilient fallbacks when product links are missing."""
+
+    if item.product is None:
+        current_app.logger.warning(
+            "Vendor invoice report encountered null product reference "
+            "(invoice_id=%s, invoice_product_id=%s).",
+            invoice.id,
+            item.id,
+        )
+
+    line_subtotal = _coerce_float(item.line_subtotal)
+    if line_subtotal is not None:
+        return line_subtotal
+
+    quantity = _coerce_float(item.quantity) or 0.0
+    unit_price = _coerce_float(item.unit_price)
+    if unit_price is not None:
+        return quantity * unit_price
+
+    if item.product is None:
+        return 0.0
+
+    product_price = _coerce_float(item.product.price)
+    if product_price is not None:
+        return quantity * product_price
+
+    return 0.0
+
+
 _DEPARTMENT_SALES_STATE_KEY = "department_sales_forecast_state"
 _SKIP_SELECTION_VALUE = "__skip__"
 _CREATE_SELECTION_VALUE = "__create__"
@@ -946,8 +976,8 @@ def vendor_invoice_report_results():
         pst_total = 0
 
         for item in invoice.products:
-            line_total = item.quantity * item.product.price
-            subtotal += line_total
+            line_base = _compute_vendor_invoice_line_base(invoice, item)
+            subtotal += line_base
 
             apply_gst = (
                 item.override_gst
@@ -961,9 +991,9 @@ def vendor_invoice_report_results():
             )
 
             if apply_gst:
-                gst_total += line_total * 0.05
+                gst_total += line_base * 0.05
             if apply_pst:
-                pst_total += line_total * 0.07
+                pst_total += line_base * 0.07
 
         enriched_invoices.append(
             {"invoice": invoice, "total": subtotal + gst_total + pst_total}

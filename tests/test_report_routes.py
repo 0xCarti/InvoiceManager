@@ -795,6 +795,127 @@ def test_vendor_and_sales_reports(client, app):
     assert b"Gadget" not in resp.data
 
 
+def test_vendor_invoice_report_uses_line_subtotals_not_live_product_price(client, app):
+    customer_id = setup_invoice(app)
+    login(client, "report@example.com", "pass")
+
+    with app.app_context():
+        product = Product.query.filter_by(name="Widget").first()
+        product.price = 999.0
+        db.session.commit()
+
+    response = client.get(
+        "/reports/vendor-invoices/results",
+        query_string={
+            "customer_ids": str(customer_id),
+            "start": "2023-01-01",
+            "end": "2023-12-31",
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"INVREP001" in response.data
+    assert b"$31.36" in response.data
+
+
+def test_vendor_invoice_report_handles_null_product_rows_with_warning(
+    client, app, caplog
+):
+    customer_id = setup_invoice(app)
+    login(client, "report@example.com", "pass")
+
+    with app.app_context():
+        invoice = Invoice.query.get("INVREP001")
+        orphan_row = InvoiceProduct(
+            invoice_id=invoice.id,
+            quantity=3,
+            product_id=None,
+            product_name="Orphaned Row",
+            unit_price=4.0,
+            line_subtotal=11.0,
+            line_gst=0.0,
+            line_pst=0.0,
+        )
+        db.session.add(orphan_row)
+        db.session.commit()
+        orphan_id = orphan_row.id
+
+    with caplog.at_level("WARNING"):
+        response = client.get(
+            "/reports/vendor-invoices/results",
+            query_string={
+                "customer_ids": str(customer_id),
+                "start": "2023-01-01",
+                "end": "2023-12-31",
+            },
+        )
+
+    assert response.status_code == 200
+    assert b"$43.68" in response.data
+    assert any(
+        "invoice_id=INVREP001" in record.message
+        and f"invoice_product_id={orphan_id}" in record.message
+        for record in caplog.records
+    )
+
+
+def test_vendor_invoice_report_mixed_invoices_include_linked_and_orphan_rows(client, app):
+    customer_id = setup_invoice(app)
+    login(client, "report@example.com", "pass")
+
+    with app.app_context():
+        user = User.query.filter_by(email="report@example.com").first()
+        customer = Customer.query.get(customer_id)
+        gadget = Product.query.filter_by(name="Gadget").first()
+        invoice = Invoice(
+            id="INVREP002",
+            user_id=user.id,
+            customer_id=customer.id,
+            date_created=date(2023, 2, 1),
+        )
+        db.session.add(invoice)
+        db.session.flush()
+        db.session.add(
+            InvoiceProduct(
+                invoice_id=invoice.id,
+                quantity=2,
+                product_id=gadget.id,
+                product_name=gadget.name,
+                unit_price=8.0,
+                line_subtotal=16.0,
+                line_gst=0.0,
+                line_pst=0.0,
+            )
+        )
+        db.session.add(
+            InvoiceProduct(
+                invoice_id=invoice.id,
+                quantity=1,
+                product_id=None,
+                product_name="Legacy Row",
+                unit_price=2.0,
+                line_subtotal=2.0,
+                line_gst=0.0,
+                line_pst=0.0,
+            )
+        )
+        db.session.commit()
+
+    response = client.get(
+        "/reports/vendor-invoices/results",
+        query_string={
+            "customer_ids": str(customer_id),
+            "start": "2023-01-01",
+            "end": "2023-12-31",
+        },
+    )
+    assert response.status_code == 200
+    assert b"INVREP001" in response.data
+    assert b"INVREP002" in response.data
+    assert b"$20.16" in response.data
+    assert b"$51.52" in response.data
+
+
 def test_purchase_cost_forecast_report(client, app):
     setup_invoice(app)
     login(client, "report@example.com", "pass")
