@@ -80,3 +80,48 @@ def test_filter_by_date_range(client, app):
         assert b"INV1" not in response.data
         assert b"INV2" in response.data
         assert b"INV3" in response.data
+
+
+def test_view_invoices_reports_dropdown_and_layout_markers(client, app):
+    user_email, _, _ = setup_invoices(app)
+
+    with client:
+        login(client, user_email, "pass")
+        response = client.get("/view_invoices", follow_redirects=True)
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+
+    # Consolidated reports dropdown remains present.
+    assert "dropdown-toggle\" type=\"button\" data-bs-toggle=\"dropdown\"" in html
+    assert ">\n                Reports\n            </button>" in html
+    assert "dropdown-item" in html
+
+    # Old standalone report-button cluster is absent (no direct report buttons).
+    assert "btn btn-secondary mb-3\">Vendor Report</a>" not in html
+    assert "btn btn-secondary mb-3\">Revenue Report</a>" not in html
+
+    # Header create action and utility controls are in distinct blocks.
+    assert "d-flex flex-column flex-md-row justify-content-between" in html
+    assert "Create Invoice" in html
+    assert "d-flex flex-wrap align-items-center gap-2 mb-3" in html
+    assert 'id="invoice-search"' in html
+    assert "data-bs-target=\"#filterModal\"" in html
+
+
+def test_view_invoices_actions_column_uses_overflow_menu_with_delete(client, app):
+    user_email, _, _ = setup_invoices(app)
+
+    with client:
+        login(client, user_email, "pass")
+        response = client.get("/view_invoices", follow_redirects=True)
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+
+    assert 'class="col-invoice-actions" data-sortable="false">Actions</th>' in html
+    assert 'class="btn btn-primary mr-2">View</a>' in html
+    assert 'aria-label="Invoice actions"' in html
+    assert 'class="js-confirm-delete-invoice"' in html
+    assert 'method="post"' in html
+    assert 'class="dropdown-item text-danger">Delete</button>' in html
