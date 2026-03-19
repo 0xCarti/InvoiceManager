@@ -1310,11 +1310,19 @@ def inventory_variance_report():
                 )
                 .join(ProductRecipeItem, ProductRecipeItem.item_id == Item.id)
                 .join(Product, Product.id == ProductRecipeItem.product_id)
-                .join(InvoiceProduct, InvoiceProduct.product_id == Product.id)
+                .join(
+                    InvoiceProduct,
+                    or_(
+                        InvoiceProduct.product_id == Product.id,
+                        and_(
+                            InvoiceProduct.product_id.is_(None),
+                            InvoiceProduct.product_name == Product.name,
+                        ),
+                    ),
+                )
                 .join(Invoice, Invoice.id == InvoiceProduct.invoice_id)
                 .outerjoin(ItemUnit, ItemUnit.id == ProductRecipeItem.unit_id)
                 .filter(
-                    InvoiceProduct.product_id.isnot(None),
                     Invoice.date_created >= start,
                     Invoice.date_created <= end,
                 )
@@ -2003,11 +2011,19 @@ def product_stock_usage_report():
                 )
                 .join(ProductRecipeItem, ProductRecipeItem.item_id == Item.id)
                 .join(Product, Product.id == ProductRecipeItem.product_id)
-                .join(InvoiceProduct, InvoiceProduct.product_id == Product.id)
+                .join(
+                    InvoiceProduct,
+                    or_(
+                        InvoiceProduct.product_id == Product.id,
+                        and_(
+                            InvoiceProduct.product_id.is_(None),
+                            InvoiceProduct.product_name == Product.name,
+                        ),
+                    ),
+                )
                 .join(Invoice, Invoice.id == InvoiceProduct.invoice_id)
                 .outerjoin(ItemUnit, ItemUnit.id == ProductRecipeItem.unit_id)
                 .filter(
-                    InvoiceProduct.product_id.isnot(None),
                     Invoice.date_created >= start,
                     Invoice.date_created <= end,
                 )
