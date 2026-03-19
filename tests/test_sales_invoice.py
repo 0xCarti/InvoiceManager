@@ -112,3 +112,39 @@ def test_sales_invoice_returns(client, app):
         assert invoice.total == pytest.approx(-22.4)
         product = Product.query.get(prod_id)
         assert product.quantity == 7
+
+
+def test_delete_invoice_route_still_accepts_post_from_list_form(client, app):
+    email, cust_id, prod_name, _ = setup_sales(app)
+
+    with client:
+        login(client, email, "pass")
+        create_resp = client.post(
+            "/create_invoice",
+            data={"customer": float(cust_id), "products": f"{prod_name}?1??"},
+            follow_redirects=True,
+        )
+        assert create_resp.status_code == 200
+
+    with app.app_context():
+        invoice = Invoice.query.filter_by(customer_id=cust_id).first()
+        assert invoice is not None
+        invoice_id = invoice.id
+
+    with client:
+        login(client, email, "pass")
+        list_resp = client.get("/view_invoices", follow_redirects=True)
+        assert list_resp.status_code == 200
+        html = list_resp.get_data(as_text=True)
+        assert f'action="/delete_invoice/{invoice_id}"' in html
+        assert 'class="js-confirm-delete-invoice"' in html
+        assert 'method="post"' in html
+
+        delete_resp = client.post(
+            f"/delete_invoice/{invoice_id}", follow_redirects=True
+        )
+        assert delete_resp.status_code == 200
+        assert b"Invoice deleted successfully!" in delete_resp.data
+
+    with app.app_context():
+        assert db.session.get(Invoice, invoice_id) is None
