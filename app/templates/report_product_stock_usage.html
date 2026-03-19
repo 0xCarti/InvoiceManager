@@ -51,6 +51,37 @@
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <h3 class="mb-0">Report Results</h3>
             <div class="d-flex align-items-center flex-wrap gap-2">
+                {% if excluded_occurrences %}
+                <span class="position-relative">
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-warning"
+                        data-bs-toggle="popover"
+                        data-bs-trigger="hover focus"
+                        data-bs-placement="bottom"
+                        data-bs-html="true"
+                        data-bs-custom-class="excluded-products-popover"
+                        data-bs-content="
+                            <div class='small text-start' style='max-height: 280px; overflow-y: auto; min-width: 360px;'>
+                                <div class='fw-semibold mb-2'>Excluded (no stock item mapping)</div>
+                                <ul class='mb-0 ps-3'>
+                                    {% for occurrence in excluded_occurrences %}
+                                    <li class='mb-1'>
+                                        <span class='fw-semibold'>{{ occurrence.product_name|e }}</span> —
+                                        Invoice {{ occurrence.invoice_id|e }},
+                                        {{ occurrence.customer_name|e }},
+                                        {{ occurrence.invoice_date|format_datetime('%Y-%m-%d') }}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        "
+                        aria-label="View excluded products with invoice details"
+                    >
+                        ⚠ {{ excluded_occurrences|length }} excluded {{ 'occurrence' if excluded_occurrences|length == 1 else 'occurrences' }}
+                    </button>
+                </span>
+                {% endif %}
                 {% if start and end %}
                 <span class="text-muted">{{ start.strftime('%Y-%m-%d') }} to {{ end.strftime('%Y-%m-%d') }}</span>
                 {% endif %}
@@ -118,4 +149,15 @@
         {% endif %}
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const popovers = document.querySelectorAll('[data-bs-toggle="popover"]');
+    popovers.forEach((popoverTriggerEl) => {
+        new bootstrap.Popover(popoverTriggerEl);
+    });
+});
+</script>
 {% endblock %}
