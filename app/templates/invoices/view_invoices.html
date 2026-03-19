@@ -191,6 +191,16 @@
 <script nonce="{{ csp_nonce }}">
 $(document).ready(function(){
     const deleteFormHTML = {{ delete_form.hidden_tag()|tojson }};
+    const viewInvoiceUrlTemplate = {{ url_for('invoice.view_invoice', invoice_id=0)|tojson }};
+    const deleteInvoiceUrlTemplate = {{ url_for('invoice.delete_invoice', invoice_id=0)|tojson }};
+
+    function invoiceUrlFromTemplate(urlTemplate, invoiceId) {
+        const encodedInvoiceId = encodeURIComponent(invoiceId);
+        if (urlTemplate.endsWith('/0')) {
+            return `${urlTemplate.slice(0, -1)}${encodedInvoiceId}`;
+        }
+        return urlTemplate.replace(/0(?!.*0)/, encodedInvoiceId);
+    }
 
     function renderInvoices(invoices){
         const tbody = $('#invoiceTable tbody');
@@ -201,7 +211,7 @@ $(document).ready(function(){
             <td class="col-invoice-date">${inv.date}</td>
             <td class="col-invoice-customer">${inv.customer}</td>
             <td class="col-invoice-actions">
-                <a href="/view_invoice/${inv.id}" class="btn btn-primary mr-2">View</a>
+                <a href="${invoiceUrlFromTemplate(viewInvoiceUrlTemplate, inv.id)}" class="btn btn-primary mr-2">View</a>
                 <div class="dropdown d-inline">
                     <button
                         class="btn btn-outline-secondary dropdown-toggle"
@@ -215,7 +225,7 @@ $(document).ready(function(){
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invoice-actions-${inv.id}">
                         <li>
-                            <form action="/delete_invoice/${inv.id}" method="post">
+                            <form action="${invoiceUrlFromTemplate(deleteInvoiceUrlTemplate, inv.id)}" method="post">
                                 ${deleteFormHTML}
                                 <button type="submit" class="dropdown-item text-danger">Delete</button>
                             </form>
