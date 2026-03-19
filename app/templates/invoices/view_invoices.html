@@ -18,36 +18,53 @@
         </div>
     </div>
 
-    <div class="row mb-3 g-2 align-items-start justify-content-between">
-        <div class="col-12 col-xl">
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
-                <div class="dropdown">
-                    <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Reports
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="{{ url_for('report.vendor_invoice_report') }}">Vendor Report</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('report.purchase_inventory_summary') }}">Purchase Inventory Summary</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('report.inventory_variance_report') }}">Inventory Variance Report</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('report.product_sales_report') }}">Revenue Report</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('report.product_stock_usage_report') }}">Stock Usage Report</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('report.department_sales_forecast') }}">Department Sales Forecast</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        <div class="col-12 col-xl-auto">
-            {{ column_visibility_dropdown(
-                table_id='invoiceTable',
-                storage_key='invoiceTableColumnVisibility',
-                columns=[
-                    {'id': 'toggle-invoice-number', 'target': 'col-invoice-number', 'label': 'Invoice Number', 'checked': True},
-                    {'id': 'toggle-invoice-date', 'target': 'col-invoice-date', 'label': 'Date', 'checked': True},
-                    {'id': 'toggle-invoice-customer', 'target': 'col-invoice-customer', 'label': 'Customer Name', 'checked': True},
-                    {'id': 'toggle-invoice-actions', 'target': 'col-invoice-actions', 'label': 'Actions', 'checked': True},
-                ]
-            ) }}
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <form method="get" class="d-flex flex-grow-1 flex-wrap align-items-center gap-2">
+            {% for key, values in request.args.lists() %}
+                {% if key not in ['invoice_id', 'page'] %}
+                    {% for value in values %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+            <input type="hidden" name="page" value="1">
+            <label for="invoice-search" class="visually-hidden">Search invoice number</label>
+            <input
+                id="invoice-search"
+                name="invoice_id"
+                value="{{ request.args.get('invoice_id', '') }}"
+                class="form-control"
+                style="max-width: 28rem;"
+                placeholder="Search invoice # or customer (invoice # only; use Filter for customer)"
+            >
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+
+        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
+
+        {{ column_visibility_dropdown(
+            table_id='invoiceTable',
+            storage_key='invoiceTableColumnVisibility',
+            columns=[
+                {'id': 'toggle-invoice-number', 'target': 'col-invoice-number', 'label': 'Invoice Number', 'checked': True},
+                {'id': 'toggle-invoice-date', 'target': 'col-invoice-date', 'label': 'Date', 'checked': True},
+                {'id': 'toggle-invoice-customer', 'target': 'col-invoice-customer', 'label': 'Customer Name', 'checked': True},
+                {'id': 'toggle-invoice-actions', 'target': 'col-invoice-actions', 'label': 'Actions', 'checked': True},
+            ]
+        ) }}
+
+        <div class="dropdown">
+            <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                Reports
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="{{ url_for('report.vendor_invoice_report') }}">Vendor Report</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('report.purchase_inventory_summary') }}">Purchase Inventory Summary</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('report.inventory_variance_report') }}">Inventory Variance Report</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('report.product_sales_report') }}">Revenue Report</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('report.product_stock_usage_report') }}">Stock Usage Report</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('report.department_sales_forecast') }}">Department Sales Forecast</a></li>
+            </ul>
         </div>
     </div>
 
