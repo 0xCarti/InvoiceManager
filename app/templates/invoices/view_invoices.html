@@ -8,19 +8,29 @@
 
 {% block content %}
 <div class="container mt-5">
-    <h2>Invoices</h2>
-    <div class="row mb-3 align-items-start justify-content-between">
-        <div class="col">
-            <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createInvoiceModal">Create Invoice</button>
-            <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
-            <a href="{{ url_for('report.vendor_invoice_report') }}" class="btn btn-secondary mb-3">Vendor Report</a>
-            <a href="{{ url_for('report.purchase_inventory_summary') }}" class="btn btn-secondary mb-3">Purchase Inventory Summary</a>
-            <a href="{{ url_for('report.inventory_variance_report') }}" class="btn btn-secondary mb-3">Inventory Variance Report</a>
-            <a href="{{ url_for('report.product_sales_report') }}" class="btn btn-secondary mb-3">Revenue Report</a>
-            <a href="{{ url_for('report.product_stock_usage_report') }}" class="btn btn-secondary mb-3">Stock Usage Report</a>
-            <a href="{{ url_for('report.department_sales_forecast') }}" class="btn btn-secondary mb-3">Department Sales Forecast</a>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+        <div>
+            <h2 class="mb-1">Invoices</h2>
+            <p class="text-muted mb-0">Search and manage customer invoices</p>
         </div>
-        <div class="col-auto text-end">
+        <div>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createInvoiceModal">Create Invoice</button>
+        </div>
+    </div>
+
+    <div class="row mb-3 g-2 align-items-start justify-content-between">
+        <div class="col-12 col-xl">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
+                <a href="{{ url_for('report.vendor_invoice_report') }}" class="btn btn-secondary">Vendor Report</a>
+                <a href="{{ url_for('report.purchase_inventory_summary') }}" class="btn btn-secondary">Purchase Inventory Summary</a>
+                <a href="{{ url_for('report.inventory_variance_report') }}" class="btn btn-secondary">Inventory Variance Report</a>
+                <a href="{{ url_for('report.product_sales_report') }}" class="btn btn-secondary">Revenue Report</a>
+                <a href="{{ url_for('report.product_stock_usage_report') }}" class="btn btn-secondary">Stock Usage Report</a>
+                <a href="{{ url_for('report.department_sales_forecast') }}" class="btn btn-secondary">Department Sales Forecast</a>
+            </div>
+        </div>
+        <div class="col-12 col-xl-auto">
             {{ column_visibility_dropdown(
                 table_id='invoiceTable',
                 storage_key='invoiceTableColumnVisibility',
