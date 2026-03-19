@@ -22,12 +22,19 @@
         <div class="col-12 col-xl">
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#filterModal">Filter</button>
-                <a href="{{ url_for('report.vendor_invoice_report') }}" class="btn btn-secondary">Vendor Report</a>
-                <a href="{{ url_for('report.purchase_inventory_summary') }}" class="btn btn-secondary">Purchase Inventory Summary</a>
-                <a href="{{ url_for('report.inventory_variance_report') }}" class="btn btn-secondary">Inventory Variance Report</a>
-                <a href="{{ url_for('report.product_sales_report') }}" class="btn btn-secondary">Revenue Report</a>
-                <a href="{{ url_for('report.product_stock_usage_report') }}" class="btn btn-secondary">Stock Usage Report</a>
-                <a href="{{ url_for('report.department_sales_forecast') }}" class="btn btn-secondary">Department Sales Forecast</a>
+                <div class="dropdown">
+                    <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Reports
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{{ url_for('report.vendor_invoice_report') }}">Vendor Report</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('report.purchase_inventory_summary') }}">Purchase Inventory Summary</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('report.inventory_variance_report') }}">Inventory Variance Report</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('report.product_sales_report') }}">Revenue Report</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('report.product_stock_usage_report') }}">Stock Usage Report</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('report.department_sales_forecast') }}">Department Sales Forecast</a></li>
+                    </ul>
+                </div>
             </div>
         </div>
         <div class="col-12 col-xl-auto">
