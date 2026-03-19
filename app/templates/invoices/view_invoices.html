@@ -99,7 +99,12 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invoice-actions-{{ invoice.id }}">
                             <li>
-                                <form action="{{ url_for('invoice.delete_invoice', invoice_id=invoice.id) }}" method="post">
+                                <form
+                                    action="{{ url_for('invoice.delete_invoice', invoice_id=invoice.id) }}"
+                                    method="post"
+                                    class="js-confirm-delete-invoice"
+                                    data-invoice-id="{{ invoice.id }}"
+                                >
                                     {{ delete_form.hidden_tag() }}
                                     <button type="submit" class="dropdown-item text-danger">Delete</button>
                                 </form>
@@ -225,7 +230,12 @@ $(document).ready(function(){
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invoice-actions-${inv.id}">
                         <li>
-                            <form action="${invoiceUrlFromTemplate(deleteInvoiceUrlTemplate, inv.id)}" method="post">
+                            <form
+                                action="${invoiceUrlFromTemplate(deleteInvoiceUrlTemplate, inv.id)}"
+                                method="post"
+                                class="js-confirm-delete-invoice"
+                                data-invoice-id="${inv.id}"
+                            >
                                 ${deleteFormHTML}
                                 <button type="submit" class="dropdown-item text-danger">Delete</button>
                             </form>
@@ -252,6 +262,17 @@ $(document).ready(function(){
             renderInvoices(data.invoices);
         });
     }
+
+    $(document).on('submit', '.js-confirm-delete-invoice', function (e) {
+        const invoiceId = $(this).data('invoice-id');
+        const confirmationText = invoiceId
+            ? `Delete invoice #${invoiceId}?`
+            : 'Delete this invoice?';
+
+        if (!window.confirm(confirmationText)) {
+            e.preventDefault();
+        }
+    });
 
     if (filterFormEl) {
         const $filterForm = $(filterFormEl);
