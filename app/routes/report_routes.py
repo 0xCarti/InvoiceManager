@@ -2014,6 +2014,7 @@ def product_stock_usage_report():
     end = None
     selected_product_names = []
     selected_gl_labels = []
+    excluded_occurrences = []
 
     if form.validate_on_submit():
         start = form.start_date.data
@@ -2077,6 +2078,71 @@ def product_stock_usage_report():
                 .order_by(Item.name)
                 .all()
             )
+
+            excluded_query = (
+                db.session.query(
+                    Invoice.id.label("invoice_id"),
+                    Invoice.date_created.label("invoice_date"),
+                    Product.name.label("product_name"),
+                    Customer.first_name.label("customer_first_name"),
+                    Customer.last_name.label("customer_last_name"),
+                )
+                .join(InvoiceProduct, InvoiceProduct.invoice_id == Invoice.id)
+                .join(
+                    Product,
+                    or_(
+                        InvoiceProduct.product_id == Product.id,
+                        and_(
+                            InvoiceProduct.product_id.is_(None),
+                            InvoiceProduct.product_name == Product.name,
+                        ),
+                    ),
+                )
+                .join(Customer, Customer.id == Invoice.customer_id)
+                .outerjoin(
+                    ProductRecipeItem,
+                    ProductRecipeItem.product_id == Product.id,
+                )
+                .filter(
+                    Invoice.date_created >= start,
+                    Invoice.date_created <= end,
+                    ProductRecipeItem.id.is_(None),
+                )
+            )
+
+            if selected_product_ids:
+                excluded_query = excluded_query.filter(
+                    Product.id.in_(selected_product_ids)
+                )
+
+            if selected_gl_code_ids:
+                included_ids = [gid for gid in selected_gl_code_ids if gid != -1]
+                conditions = []
+                if included_ids:
+                    conditions.append(Product.sales_gl_code_id.in_(included_ids))
+                if -1 in selected_gl_code_ids:
+                    conditions.append(Product.sales_gl_code_id.is_(None))
+                if conditions:
+                    excluded_query = excluded_query.filter(or_(*conditions))
+
+            excluded_occurrences = [
+                {
+                    "invoice_id": row.invoice_id,
+                    "invoice_date": row.invoice_date,
+                    "product_name": row.product_name,
+                    "customer_name": (
+                        (
+                            f"{(row.customer_first_name or '').strip()} "
+                            f"{(row.customer_last_name or '').strip()}"
+                        ).strip()
+                        or "Unknown Customer"
+                    ),
+                }
+                for row in excluded_query.order_by(
+                    Invoice.date_created.desc(),
+                    Invoice.id.desc(),
+                ).all()
+            ]
 
             report_data = []
             total_quantity = 0.0
@@ -2142,6 +2208,7 @@ def product_stock_usage_report():
         end=end,
         selected_product_names=selected_product_names,
         selected_gl_labels=selected_gl_labels,
+        excluded_occurrences=excluded_occurrences,
     )
 
 
