@@ -86,10 +86,26 @@
                 <td class="col-invoice-customer">{{ invoice.customer.first_name }} {{ invoice.customer.last_name }}</td>
                 <td class="col-invoice-actions">
                     <a href="{{ url_for('invoice.view_invoice', invoice_id=invoice.id) }}" class="btn btn-primary mr-2">View</a>
-                    <form action="{{ url_for('invoice.delete_invoice', invoice_id=invoice.id) }}" method="post" class="d-inline">
-                        {{ delete_form.hidden_tag() }}
-                        <button type="submit" class="btn btn-danger">Delete</button>
-                    </form>
+                    <div class="dropdown d-inline">
+                        <button
+                            class="btn btn-outline-secondary dropdown-toggle"
+                            type="button"
+                            id="invoice-actions-{{ invoice.id }}"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                            aria-label="Invoice actions"
+                        >
+                            &hellip;
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invoice-actions-{{ invoice.id }}">
+                            <li>
+                                <form action="{{ url_for('invoice.delete_invoice', invoice_id=invoice.id) }}" method="post">
+                                    {{ delete_form.hidden_tag() }}
+                                    <button type="submit" class="dropdown-item text-danger">Delete</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
                 </td>
             </tr>
             {% endfor %}
@@ -186,11 +202,27 @@ $(document).ready(function(){
             <td class="col-invoice-customer">${inv.customer}</td>
             <td class="col-invoice-actions">
                 <a href="/view_invoice/${inv.id}" class="btn btn-primary mr-2">View</a>
-                <form action="/delete_invoice/${inv.id}" method="post" class="d-inline">
-                    ${deleteFormHTML}
-                        <button type="submit" class="btn btn-danger">Delete</button>
-                    </form>
-                </td>
+                <div class="dropdown d-inline">
+                    <button
+                        class="btn btn-outline-secondary dropdown-toggle"
+                        type="button"
+                        id="invoice-actions-${inv.id}"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        aria-label="Invoice actions"
+                    >
+                        &hellip;
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invoice-actions-${inv.id}">
+                        <li>
+                            <form action="/delete_invoice/${inv.id}" method="post">
+                                ${deleteFormHTML}
+                                <button type="submit" class="dropdown-item text-danger">Delete</button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+            </td>
             </tr>`;
             tbody.append(row);
         });
