@@ -19,7 +19,7 @@
     </div>
 
     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-        <form method="get" class="d-flex flex-grow-1 flex-wrap align-items-center gap-2">
+        <form method="get" id="invoice-search-form" class="d-flex flex-grow-1 flex-wrap align-items-center gap-2">
             {% for key, values in request.args.lists() %}
                 {% if key not in ['invoice_id', 'page'] %}
                     {% for value in values %}
@@ -252,14 +252,56 @@ $(document).ready(function(){
     }
 
     let currentFilters = '';
+    const searchFormEl = document.getElementById('invoice-search-form');
+    const searchInputEl = document.getElementById('invoice-search');
+    let searchDebounceTimer = null;
 
     const filterModalEl = document.querySelector('[data-filter-modal]');
     const filterFormEl = filterModalEl ? filterModalEl.querySelector('[data-filter-form]') : null;
     const filterFormAction = filterFormEl ? (filterFormEl.getAttribute('action') || '{{ url_for('invoice.filter_invoices_api') }}') : '{{ url_for('invoice.filter_invoices_api') }}';
 
+    function buildInvoiceQueryParams() {
+        const params = new URLSearchParams(currentFilters);
+
+        if (searchFormEl) {
+            const formData = new FormData(searchFormEl);
+            for (const [key, value] of formData.entries()) {
+                if (!value || key === 'page' || key === 'invoice_id') {
+                    continue;
+                }
+                params.append(key, value);
+            }
+        }
+
+        const query = searchInputEl ? searchInputEl.value.trim() : '';
+        if (query) {
+            params.set('invoice_id', query);
+        } else {
+            params.delete('invoice_id');
+        }
+
+        return params.toString();
+    }
+
     function loadInvoices(){
-        $.getJSON(filterFormAction, currentFilters, function(data){
+        $.getJSON(filterFormAction, buildInvoiceQueryParams(), function(data){
             renderInvoices(data.invoices);
+        });
+    }
+
+    if (searchFormEl) {
+        $(searchFormEl).on('submit', function (e) {
+            e.preventDefault();
+            loadInvoices();
+        });
+    }
+
+    if (searchInputEl) {
+        $(searchInputEl).on('input', function () {
+            window.clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = window.setTimeout(function () {
+                loadInvoices();
+            }, 250);
         });
     }
 
