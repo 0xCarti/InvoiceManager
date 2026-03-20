@@ -1,6 +1,6 @@
 {% macro column_visibility_dropdown(table_id, storage_key=None, columns=[], button_label='Columns', dropdown_id=None, align='end') %}
     {% set dropdown_id = dropdown_id or table_id ~ '-column-selector' %}
-    <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="{{ table_id }}"{% if storage_key %} data-storage-key="{{ storage_key }}"{% endif %}>
+    <div class="dropdown d-inline-block" data-column-visibility data-table-id="{{ table_id }}"{% if storage_key %} data-storage-key="{{ storage_key }}"{% endif %}>
         <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="{{ dropdown_id }}" data-bs-toggle="dropdown" aria-expanded="false">
             {{ button_label }}
         </button>
