@@ -3,8 +3,8 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <header class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4">
+<div class="desktop-dense py-3 py-lg-2">
+    <header class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3 section-block">
         <div>
             <h1 class="mb-1">Operations Dashboard</h1>
             <p class="text-muted mb-0">Monitor transfers, purchasing, invoicing, and upcoming events at a glance.</p>
@@ -15,12 +15,12 @@
         </div>
     </header>
 
-    <section aria-labelledby="metric-overview" class="mb-4">
+    <section aria-labelledby="metric-overview" class="section-block">
         <div class="d-flex align-items-center justify-content-between mb-3">
             <h2 class="h5 mb-0" id="metric-overview">Key Metrics</h2>
             <span class="text-muted small">Updated daily</span>
         </div>
-        <div class="row g-3 row-cols-1 row-cols-sm-2 row-cols-lg-4">
+        <div class="row compact-grid row-cols-1 row-cols-sm-2 row-cols-lg-4">
             <div class="col">
                 <div class="card h-100">
                     <div class="card-body">
@@ -60,14 +60,14 @@
         </div>
     </section>
 
-    <div class="row g-4">
+    <div class="row compact-grid">
         <div class="col-lg-8">
-            <section aria-labelledby="charts-title" class="mb-4">
+            <section aria-labelledby="charts-title" class="section-block">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <h2 class="h5 mb-0" id="charts-title">Trends &amp; Charts</h2>
                     <span class="text-muted small">Rolling 30 days</span>
                 </div>
-                <div class="row g-3">
+                <div class="row compact-grid">
                     <div class="col-md-6">
                         <div class="card h-100">
                             <div class="card-body">
@@ -93,12 +93,12 @@
                 </div>
             </section>
 
-            <section aria-labelledby="queue-title" class="mb-4">
+            <section aria-labelledby="queue-title" class="section-block">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <h2 class="h5 mb-0" id="queue-title">Work Queues</h2>
                     <span class="text-muted small">Stay ahead of deadlines</span>
                 </div>
-                <div class="row g-3 row-cols-1 row-cols-md-2">
+                <div class="row compact-grid row-cols-1 row-cols-md-2">
                     <div class="col">
                         <div class="card h-100">
                             <div class="card-body">
@@ -126,12 +126,12 @@
                 </div>
             </section>
 
-            <section aria-labelledby="quick-links-title" class="mb-4">
+            <section aria-labelledby="quick-links-title" class="section-block">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <h2 class="h5 mb-0" id="quick-links-title">Quick Links</h2>
                     <span class="text-muted small">Common actions</span>
                 </div>
-                <div class="row g-2 row-cols-1 row-cols-sm-2 row-cols-lg-4">
+                <div class="row compact-grid row-cols-1 row-cols-sm-2 row-cols-lg-4">
                     <div class="col">
                         <a class="btn btn-primary w-100" href="{{ url_for('transfer.view_transfers') }}">Transfers</a>
                     </div>
