@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from itertools import count
+import re
 
 import pytest
 
@@ -281,3 +282,83 @@ def test_dashboard_renders_sales_series(client, app):
 
     assert '"sales_total":' in body
     assert "$10.00" in body
+
+
+def test_dashboard_activity_interval_month_selected_and_serialized(
+    client, app, monkeypatch
+):
+    fixed_today = date(2024, 2, 20)
+    monkeypatch.setattr(
+        "app.services.dashboard_metrics.current_user_today",
+        lambda _value=None: fixed_today,
+    )
+
+    with app.app_context():
+        user = User.query.filter_by(email="admin@example.com").first()
+        loc_a = Location(name="Interval North")
+        loc_b = Location(name="Interval South")
+        db.session.add_all([loc_a, loc_b])
+        db.session.flush()
+
+        db.session.add(
+            Transfer(
+                from_location=loc_a,
+                to_location=loc_b,
+                creator=user,
+                date_created=datetime(2024, 2, 18, 12, 0, 0),
+            )
+        )
+        _create_basic_sale(user, when=datetime(2024, 2, 18, 14, 30, 0))
+        db.session.commit()
+
+    login(client, "admin@example.com", "adminpass")
+    response = client.get("/?activity_interval=month", follow_redirects=True)
+    body = response.data.decode()
+
+    assert response.status_code == 200
+    assert re.search(
+        r'<option[^>]*(?:value="month"[^>]*selected|selected[^>]*value="month")',
+        body,
+    )
+    assert re.search(r'"interval"\s*:\s*"month"', body)
+    assert '"week_start":"2024-02-01"' in body
+
+
+def test_dashboard_activity_interval_invalid_defaults_to_weekly(
+    client, app, monkeypatch
+):
+    fixed_today = date(2024, 2, 20)
+    monkeypatch.setattr(
+        "app.services.dashboard_metrics.current_user_today",
+        lambda _value=None: fixed_today,
+    )
+
+    with app.app_context():
+        user = User.query.filter_by(email="admin@example.com").first()
+        loc_a = Location(name="Fallback North")
+        loc_b = Location(name="Fallback South")
+        db.session.add_all([loc_a, loc_b])
+        db.session.flush()
+
+        db.session.add(
+            Transfer(
+                from_location=loc_a,
+                to_location=loc_b,
+                creator=user,
+                date_created=datetime(2024, 2, 20, 9, 0, 0),
+            )
+        )
+        _create_basic_sale(user, when=datetime(2024, 2, 20, 10, 15, 0))
+        db.session.commit()
+
+    login(client, "admin@example.com", "adminpass")
+    response = client.get("/?activity_interval=totally-invalid", follow_redirects=True)
+    body = response.data.decode()
+
+    assert response.status_code == 200
+    assert re.search(
+        r'<option[^>]*(?:value="(?:week|weekly)"[^>]*selected|selected[^>]*value="(?:week|weekly)")',
+        body,
+    )
+    assert re.search(r'"interval"\s*:\s*"week"', body)
+    assert '"week_start":"2024-02-19"' in body
