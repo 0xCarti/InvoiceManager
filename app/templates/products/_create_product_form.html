@@ -16,13 +16,17 @@
         </div>
         <div class="col-md-6 mb-3">
             {{ form.price.label(class="form-label") }}
-            {{ form.price(class="form-control") }}
-            <div class="form-text">Terminal/event sale price.</div>
+            {{ form.price(class="form-control" + (" is-invalid" if form.price.errors else ""), placeholder="0.00", step="0.01", min="0") }}
+            {% for error in form.price.errors %}
+            <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
         </div>
         <div class="col-md-6 mb-3">
             {{ form.invoice_sale_price.label(class="form-label") }}
-            {{ form.invoice_sale_price(class="form-control") }}
-            <div class="form-text">Used for 3rd-party customer invoices.</div>
+            {{ form.invoice_sale_price(class="form-control" + (" is-invalid" if form.invoice_sale_price.errors else ""), placeholder="0.00", step="0.01", min="0") }}
+            {% for error in form.invoice_sale_price.errors %}
+            <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
         </div>
     </div>
     <div class="row">

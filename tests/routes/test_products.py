@@ -116,3 +116,31 @@ def test_bulk_update_products_name_conflict(client, app):
     with app.app_context():
         target = db.session.get(Product, target_id)
         assert target.name == 'Target'
+
+
+def test_product_create_and_list_surfaces_show_both_price_labels(client, app):
+    with app.app_context():
+        product = Product(
+            name='Dual Price Product',
+            price=12.34,
+            invoice_sale_price=15.67,
+            cost=5.0,
+        )
+        db.session.add(product)
+        db.session.commit()
+
+    login_admin(client, app)
+
+    list_response = client.get('/products')
+    assert list_response.status_code == 200
+    page = list_response.get_data(as_text=True)
+    assert 'Terminal/Event Sell Price' in page
+    assert 'Sales Invoice Price (3rd-party customer)' in page
+    assert '12.34' in page
+    assert '15.67' in page
+
+    create_response = client.get('/products/create')
+    assert create_response.status_code == 200
+    create_page = create_response.get_data(as_text=True)
+    assert 'Terminal/Event Sell Price' in create_page
+    assert 'Sales Invoice Price (3rd-party customer)' in create_page

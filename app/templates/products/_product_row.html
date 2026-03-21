@@ -3,6 +3,7 @@
     <td class="col-product-id" data-sort-value="{{ product.id }}">{{ product.id }}</td>
     <td class="col-product-name">{{ product.name }}</td>
     <td class="col-product-price" data-sort-value="{{ '%.6f'|format(product.price or 0) }}">{{ '%.2f'|format(product.price or 0) }}</td>
+    <td class="col-product-invoice-price" data-sort-value="{{ '%.6f'|format(product.invoice_sale_price or 0) }}">{{ '%.2f'|format(product.invoice_sale_price if product.invoice_sale_price is not none else product.price or 0) }}</td>
     <td class="col-product-cost" data-sort-value="{{ '%.6f'|format(product.cost or 0) }}">{{ '%.2f'|format(product.cost or 0) }}</td>
     <td class="col-product-food-cost" data-sort-value="{{ '%.6f'|format(product.food_cost_percentage or 0) }}">{{ '{:.2f}%'.format(product.food_cost_percentage or 0) }}</td>
     <td class="col-product-last-sold" data-sort-value="{{ product.last_sold_at.strftime('%Y%m%d') if product.last_sold_at else '' }}">{{ product.last_sold_at.strftime('%Y-%m-%d') if product.last_sold_at else 'Never' }}</td>
