@@ -221,23 +221,63 @@ def dashboard_context() -> Dict[str, Any]:
     }
 
 
+def _interval_start(value: date, interval: str) -> date:
+    if interval == "week":
+        return value - timedelta(days=value.weekday())
+    if interval == "month":
+        return value.replace(day=1)
+    if interval == "quarter":
+        quarter_month = ((value.month - 1) // 3) * 3 + 1
+        return value.replace(month=quarter_month, day=1)
+    if interval == "half_year":
+        half_start_month = 1 if value.month <= 6 else 7
+        return value.replace(month=half_start_month, day=1)
+    if interval == "year":
+        return value.replace(month=1, day=1)
+    raise ValueError(f"Unsupported interval: {interval}")
+
+
+def _add_interval(start: date, interval: str, count: int = 1) -> date:
+    if interval == "week":
+        return start + timedelta(weeks=count)
+
+    if interval == "month":
+        total_months = start.month - 1 + count
+        year = start.year + (total_months // 12)
+        month = total_months % 12 + 1
+        return start.replace(year=year, month=month, day=1)
+
+    if interval == "quarter":
+        return _add_interval(start, "month", count * 3)
+
+    if interval == "half_year":
+        return _add_interval(start, "month", count * 6)
+
+    if interval == "year":
+        return start.replace(year=start.year + count, month=1, day=1)
+
+    raise ValueError(f"Unsupported interval: {interval}")
+
+
 def weekly_transfer_purchase_activity(
-    weeks: int = 6, today: Optional[date] = None
+    weeks: int = 6,
+    today: Optional[date] = None,
+    interval: str = "week",
+    periods: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Return interval buckets for transfer, purchase, and sales activity."""
 
     today = today or date.today()
 
-    def start_of_week(value: date) -> date:
-        return value - timedelta(days=value.weekday())
-
-    start_week = start_of_week(today) - timedelta(weeks=weeks - 1)
-    week_starts = [start_week + timedelta(weeks=i) for i in range(weeks)]
+    bucket_count = periods if periods is not None else weeks
+    current_interval_start = _interval_start(today, interval)
+    start_week = _add_interval(current_interval_start, interval, -(bucket_count - 1))
+    week_starts = [_add_interval(start_week, interval, i) for i in range(bucket_count)]
     buckets = {
         start: {
             "week_start": start.isoformat(),
-            "week_end": (start + timedelta(days=6)).isoformat(),
-            "label": f"{start.strftime('%b %d')} – {(start + timedelta(days=6)).strftime('%b %d')}",
+            "week_end": (_add_interval(start, interval) - timedelta(days=1)).isoformat(),
+            "label": f"{start.strftime('%b %d')} – {(_add_interval(start, interval) - timedelta(days=1)).strftime('%b %d')}",
             "transfers": 0,
             "purchases": 0,
             "purchase_total": 0.0,
@@ -251,7 +291,7 @@ def weekly_transfer_purchase_activity(
     transfers = Transfer.query.filter(Transfer.date_created >= transfer_start_dt).all()
 
     for transfer in transfers:
-        bucket_start = start_of_week(transfer.date_created.date())
+        bucket_start = _interval_start(transfer.date_created.date(), interval)
         if bucket_start in buckets:
             buckets[bucket_start]["transfers"] += 1
 
@@ -260,7 +300,7 @@ def weekly_transfer_purchase_activity(
     ).all()
 
     for invoice in purchases:
-        bucket_start = start_of_week(invoice.received_date)
+        bucket_start = _interval_start(invoice.received_date, interval)
         if bucket_start in buckets:
             buckets[bucket_start]["purchases"] += 1
             buckets[bucket_start]["purchase_total"] += float(invoice.total)
@@ -268,7 +308,7 @@ def weekly_transfer_purchase_activity(
     sales = Invoice.query.filter(Invoice.date_created >= transfer_start_dt).all()
 
     for sale in sales:
-        bucket_start = start_of_week(sale.date_created.date())
+        bucket_start = _interval_start(sale.date_created.date(), interval)
         if bucket_start in buckets:
             buckets[bucket_start]["sales"] += 1
             buckets[bucket_start]["sales_total"] += float(sale.total)
@@ -279,7 +319,7 @@ def weekly_transfer_purchase_activity(
     )
 
     return {
-        "interval": "week",
+        "interval": interval,
         "bucket_label": interval_bucket_label,
         "empty_state_text": interval_empty_state_text,
         "buckets": [buckets[start] for start in sorted(buckets.keys())],
