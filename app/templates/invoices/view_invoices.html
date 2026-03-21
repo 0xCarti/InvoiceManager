@@ -176,11 +176,14 @@
     form_id='filterForm',
     form_action=url_for('invoice.filter_invoices_api'),
     method='get',
-    reset_url=url_for('invoice.view_invoices'),
+    reset_url=(url_for('invoice.view_invoices', user_id=request.args.get('user_id', type=int)) if request.args.get('user_id', type=int) else url_for('invoice.view_invoices')),
     ajax=True,
     scope=request.endpoint
 ) %}
     {{ form.hidden_tag() }}
+    {% if request.args.get('user_id', type=int) %}
+    <input type="hidden" name="user_id" value="{{ request.args.get('user_id', type=int) }}">
+    {% endif %}
     <div class="mb-3">
         {{ form.invoice_id.label }} {{ form.invoice_id(class="form-control") }}
     </div>
