@@ -163,6 +163,39 @@ def delete_invoice(invoice_id):
     return redirect(url_for("invoice.view_invoices"))
 
 
+def _set_invoice_payment_status(invoice_id, *, is_paid):
+    invoice_record = db.session.get(Invoice, invoice_id)
+    if invoice_record is None:
+        abort(404)
+
+    invoice_record.is_paid = is_paid
+    invoice_record.paid_at = datetime.utcnow() if is_paid else None
+    db.session.commit()
+
+    status = "paid" if is_paid else "unpaid"
+    flash(f"Invoice {invoice_record.id} marked as {status}.", "success")
+    log_activity(f"Updated invoice {invoice_record.id} status to {status}")
+
+    return redirect(
+        request.referrer
+        or url_for("invoice.view_invoice", invoice_id=invoice_record.id)
+    )
+
+
+@invoice.route("/invoice/<invoice_id>/mark-paid", methods=["POST"])
+@login_required
+def mark_invoice_paid(invoice_id):
+    """Mark an invoice as paid and stamp payment time."""
+    return _set_invoice_payment_status(invoice_id, is_paid=True)
+
+
+@invoice.route("/invoice/<invoice_id>/mark-unpaid", methods=["POST"])
+@login_required
+def mark_invoice_unpaid(invoice_id):
+    """Mark an invoice as unpaid and clear payment time."""
+    return _set_invoice_payment_status(invoice_id, is_paid=False)
+
+
 @invoice.route("/view_invoice/<invoice_id>", methods=["GET"])
 @login_required
 def view_invoice(invoice_id):
