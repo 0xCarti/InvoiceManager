@@ -1991,6 +1991,18 @@ def upload_terminal_sales(event_id):
         except (TypeError, ValueError):
             return False
 
+    def _terminal_catalog_sell_price(product: Product | None) -> float | None:
+        """Return the terminal/event catalog price used for POS reconciliation.
+
+        Guardrail: terminal/event workflows intentionally use Product.price
+        (sell price). Product.invoice_sale_price is for customer invoices and
+        must not be used here.
+        """
+
+        if product is None:
+            return None
+        return coerce_float(product.price)
+
     def _store_location_aliases(pending_totals: list[dict]) -> set[str]:
         if not pending_totals:
             return set()
@@ -2213,7 +2225,7 @@ def upload_terminal_sales(event_id):
                                     issue["target_price"] = new_price
                                     if issue.get("catalog_price") is None:
                                         issue["catalog_price"] = coerce_float(
-                                            product.price
+                                            _terminal_catalog_sell_price(product)
                                         )
                                     product.price = new_price
                                 elif resolution_value == "skip":
@@ -3275,7 +3287,7 @@ def upload_terminal_sales(event_id):
                             }
                             # Menu additions are reviewed separately after the mapping
                             # wizard completes, so defer adding products to the menu here.
-                    app_price_value = coerce_float(product.price)
+                    app_price_value = _terminal_catalog_sell_price(product)
                     pending_sales.append(
                         {
                             "event_location_id": el.id,
@@ -3409,12 +3421,12 @@ def upload_terminal_sales(event_id):
                     matching_candidates = [
                         price
                         for price in price_candidates
-                        if _prices_match(price, product.price)
+                        if _prices_match(price, app_price_value)
                     ]
                     mismatched_candidates = [
                         price
                         for price in price_candidates
-                        if not _prices_match(price, product.price)
+                        if not _prices_match(price, app_price_value)
                     ]
 
                     if mismatched_candidates:
@@ -3443,7 +3455,7 @@ def upload_terminal_sales(event_id):
                                     "product": product.name,
                                     "product_id": product.id,
                                     "file_prices": file_prices,
-                                    "app_price": product.price,
+                                    "app_price": app_price_value,
                                     "catalog_price": catalog_price_value,
                                     "terminal_price": terminal_price_value,
                                     "sales_location": selected_loc,

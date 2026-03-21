@@ -992,6 +992,80 @@ def test_terminal_sales_zero_price_comp_does_not_queue_mismatch(app, client):
         assert any(math.isclose(value, product.price, abs_tol=0.01) for value in file_prices)
 
 
+def test_terminal_sales_price_matching_uses_sell_price_not_invoice_sale_price(
+    app, client
+):
+    with app.app_context():
+        event = Event(
+            name="Sell Price Source Event",
+            start_date=date.today(),
+            end_date=date.today(),
+        )
+        location = Location(name="Sell Price Stand")
+        event_location = EventLocation(event=event, location=location)
+        product = Product(
+            name="Source Guard Hot Dog",
+            price=9.0,
+            invoice_sale_price=3.5,
+            cost=2.0,
+        )
+        db.session.add_all([event, location, event_location, product])
+        db.session.commit()
+        event_id = event.id
+        mapping_field = f"mapping-{event_location.id}"
+        location_name = location.name
+        product_name = product.name
+
+    payload = json.dumps(
+        {
+            "rows": [
+                {
+                    "location": location_name,
+                    "product": product_name,
+                    "quantity": 2.0,
+                    "price": 9.0,
+                    "amount": 18.0,
+                }
+            ],
+            "filename": "terminal.xlsx",
+        }
+    )
+
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login_response = login(client, admin_email, admin_pass)
+        assert login_response.status_code == 200
+        assert login_response.request.path != "/auth/login"
+
+        response = client.post(
+            f"/events/{event_id}/terminal-sales",
+            data={
+                "step": "map",
+                "payload": payload,
+                "stage": "locations",
+                mapping_field: location_name,
+                "navigate": "finish",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 200
+
+    with app.app_context():
+        admin_user = User.query.filter_by(email=admin_email).one()
+        state_row = TerminalSalesResolutionState.query.filter_by(
+            event_id=event_id, user_id=admin_user.id
+        ).one()
+        issue_queue = state_row.payload.get("queue") or []
+        if issue_queue:
+            price_issues = issue_queue[0].get("price_issues") or []
+            assert price_issues == []
+        else:
+            assert issue_queue == []
+
+
 def test_terminal_sales_totals_without_unit_price_queue_price_issue(app, client):
     with app.app_context():
         event = Event(
