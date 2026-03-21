@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Vendor Invoice Report{% endblock %}
+{% block title %}Customer Invoice Report{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
@@ -10,8 +10,8 @@
         </div>
     </div>
 
-    <h1>Invoice Report</h1>
-    <p><strong>For Vendor(s):</strong>
+    <h1>Customer Invoice Report</h1>
+    <p><strong>For Customer(s):</strong>
         {% for vendor in customers %}
         {{ vendor.first_name }} {{ vendor.last_name }}{% if not loop.last %}, {% endif %}
         {% endfor %}

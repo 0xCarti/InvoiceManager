@@ -1142,7 +1142,7 @@ class VendorInvoiceReportForm(FlaskForm):
         validators=[Optional()],
     )
     customer = SelectMultipleField(
-        "Vendors",
+        "Customer(s)",
         coerce=int,
         validators=[Optional()],
         option_widget=CheckboxInput(),
