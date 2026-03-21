@@ -53,15 +53,16 @@ needed by blueprints or the factory to keep route files focused on request
 handling.
 
 Dashboard aggregation logic is intentionally grouped in
-`app/services/dashboard_metrics.py`. The dashboard trend interval selector uses
-an `interval` query parameter and currently supports these keys:
-`week`, `month`, `quarter`, `half_year`, and `year`. If no interval key is
-supplied, aggregation defaults to weekly buckets.
+`app/services/dashboard_metrics.py`. Dashboard trend requests may provide an
+`interval` query parameter (for example `/?interval=quarter`), with supported
+keys `week`, `month`, `quarter`, `half_year`, and `year`. When no interval key
+is supplied, aggregation defaults to `week`.
 
-For consistency, interval boundaries are computed from canonical period starts
-(`_interval_start`) and forward stepping (`_add_interval`), and labels are
-derived from each bucket's computed start/end date window. Any future interval
-changes should update boundary and label rules together so tabular and chart
+To keep visualizations consistent, bucket boundaries are derived from canonical
+period starts (`_interval_start`) and interval stepping (`_add_interval`), and
+bucket labels are produced from those same computed start/end boundaries inside
+`weekly_transfer_purchase_activity` (`"%b %d – %b %d"` format). Any future
+interval change should update boundary and label rules together so table/chart
 representations stay aligned.
 
 ## Data Models
