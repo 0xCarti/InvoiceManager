@@ -64,6 +64,68 @@
         font-size: 0.9rem;
         line-height: 1.2;
     }
+
+    .profile-activity-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .profile-activity-list {
+        max-height: 16.5rem;
+        overflow-y: auto;
+        border: 1px solid var(--bs-border-color-translucent);
+        border-radius: var(--bs-border-radius);
+    }
+
+    .profile-activity-row {
+        padding: 0.45rem 0.6rem;
+        border-bottom: 1px solid var(--bs-border-color-translucent);
+    }
+
+    .profile-activity-row:last-child {
+        border-bottom: 0;
+    }
+
+    .profile-activity-link {
+        display: block;
+        text-decoration: none;
+    }
+
+    .profile-activity-main {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        line-height: 1.2;
+    }
+
+    .profile-activity-meta {
+        margin-top: 0.15rem;
+        font-size: 0.78rem;
+        color: var(--bs-secondary-color);
+        line-height: 1.2;
+    }
+
+    .profile-activity-table {
+        margin-bottom: 0;
+        font-size: 0.88rem;
+    }
+
+    .profile-activity-table th,
+    .profile-activity-table td {
+        padding: 0.4rem 0.55rem;
+        vertical-align: middle;
+        line-height: 1.15;
+        white-space: nowrap;
+    }
+
+    .profile-activity-table th:last-child,
+    .profile-activity-table td:last-child {
+        text-align: right;
+    }
 </style>
 <div class="container px-0">
     <div class="profile-header">
@@ -149,31 +211,77 @@
             <div class="vstack gap-3">
                 <div class="card">
                     <div class="card-body">
-                        <h3 class="h5 mb-2">Transfers</h3>
-                        <ul class="list-group list-group-flush">
+                        <div class="profile-activity-header">
+                            <h3 class="h5 mb-0">Transfers</h3>
+                            {% if transfers %}
+                            <a class="small" href="{{ url_for('transfer.view_transfers') }}">View all</a>
+                            {% endif %}
+                        </div>
+                        <div class="profile-activity-list">
                             {% for t in transfers %}
-                            <li class="list-group-item px-0 py-2">
-                                <a href="{{ url_for('transfer.view_transfer', transfer_id=t.id) }}">Transfer #{{ t.id }}</a>
-                            </li>
+                            <div class="profile-activity-row">
+                                <a class="profile-activity-link" href="{{ url_for('transfer.view_transfer', transfer_id=t.id) }}">
+                                    <div class="profile-activity-main">
+                                        <span class="fw-semibold">Transfer #{{ t.id }}</span>
+                                        <span class="badge text-bg-{{ 'success' if t.completed else 'secondary' }}">
+                                            {{ 'Completed' if t.completed else 'Open' }}
+                                        </span>
+                                    </div>
+                                    <div class="profile-activity-meta">
+                                        {{ t.from_location_name }} → {{ t.to_location_name }}
+                                        {% if t.date_created %}
+                                        · {{ t.date_created.strftime('%Y-%m-%d') }}
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
                             {% else %}
-                            <li class="list-group-item px-0 py-2 text-muted">No transfers found.</li>
+                            <div class="profile-activity-row text-muted">No transfers found.</div>
                             {% endfor %}
-                        </ul>
+                        </div>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="card-body">
-                        <h3 class="h5 mb-2">Invoices</h3>
-                        <ul class="list-group list-group-flush">
+                        <div class="profile-activity-header">
+                            <h3 class="h5 mb-0">Invoices</h3>
+                            {% if invoices %}
+                            <a class="small" href="{{ url_for('invoice.view_invoices') }}">View all</a>
+                            {% endif %}
+                        </div>
+                        <div class="profile-activity-list">
+                            <table class="table table-sm table-hover profile-activity-table">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th scope="col">ID</th>
+                                        <th scope="col">Date</th>
+                                        <th scope="col">Status</th>
+                                        <th scope="col">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                             {% for inv in invoices %}
-                            <li class="list-group-item px-0 py-2">
-                                <a href="{{ url_for('invoice.view_invoice', invoice_id=inv.id) }}">Invoice #{{ inv.id }}</a>
-                            </li>
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('invoice.view_invoice', invoice_id=inv.id) }}">#{{ inv.id }}</a>
+                                    </td>
+                                    <td>{{ inv.date_created.strftime('%Y-%m-%d') if inv.date_created else '—' }}</td>
+                                    <td>
+                                        <span class="badge text-bg-{{ 'success' if inv.is_paid else 'secondary' }}">
+                                            {{ 'Paid' if inv.is_paid else 'Unpaid' }}
+                                        </span>
+                                    </td>
+                                    <td>${{ '%.2f'|format(inv.total) }}</td>
+                                </tr>
                             {% else %}
-                            <li class="list-group-item px-0 py-2 text-muted">No invoices found.</li>
+                                <tr>
+                                    <td colspan="4" class="text-muted">No invoices found.</td>
+                                </tr>
                             {% endfor %}
-                        </ul>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
