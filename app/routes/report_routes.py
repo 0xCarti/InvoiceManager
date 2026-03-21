@@ -930,7 +930,7 @@ def department_sales_forecast():
 
 @report.route("/reports/vendor-invoices", methods=["GET", "POST"])
 @login_required
-def vendor_invoice_report():
+def customer_invoice_report():
     """Form to select vendor invoice report parameters."""
     form = VendorInvoiceReportForm()
     form.customer.choices = [
@@ -940,7 +940,7 @@ def vendor_invoice_report():
     if form.validate_on_submit():
         return redirect(
             url_for(
-                "report.vendor_invoice_report_results",
+                "report.customer_invoice_report_results",
                 customer_ids=",".join(str(id) for id in form.customer.data),
                 start=form.start_date.data.isoformat(),
                 end=form.end_date.data.isoformat(),
@@ -953,7 +953,7 @@ def vendor_invoice_report():
 
 @report.route("/reports/vendor-invoices/results")
 @login_required
-def vendor_invoice_report_results():
+def customer_invoice_report_results():
     """Show vendor invoice report based on query parameters."""
     customer_ids = request.args.get("customer_ids")
     start = request.args.get("start")
