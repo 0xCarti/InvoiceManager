@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request
 from flask_login import current_user, login_required
 
 from app.forms import ConfirmForm
@@ -14,7 +14,8 @@ def home():
 
     from app.forms import TransferForm
 
-    context = dashboard_context()
+    activity_interval = request.args.get("activity_interval")
+    context = dashboard_context(activity_interval=activity_interval)
     form = TransferForm()
     add_form = TransferForm(prefix="add")
     edit_form = TransferForm(prefix="edit")

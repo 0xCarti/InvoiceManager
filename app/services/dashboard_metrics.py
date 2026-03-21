@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import func
 
@@ -193,7 +193,24 @@ def event_summary(today: Optional[date] = None) -> Dict[str, Any]:
     }
 
 
-def dashboard_context() -> Dict[str, Any]:
+def _resolve_activity_interval(value: Optional[str]) -> Tuple[str, str]:
+    """Return canonical/internal interval and selected UI value."""
+
+    selected_value = (value or "weekly").strip().lower()
+    allowed_intervals = {
+        "weekly": "week",
+        "month": "month",
+        "quarter": "quarter",
+        "half_year": "half_year",
+        "year": "year",
+    }
+    internal_interval = allowed_intervals.get(selected_value, "week")
+    if selected_value not in allowed_intervals:
+        selected_value = "weekly"
+    return internal_interval, selected_value
+
+
+def dashboard_context(activity_interval: Optional[str] = None) -> Dict[str, Any]:
     """Aggregate metrics for the dashboard view."""
 
     today = current_user_today()
@@ -201,7 +218,19 @@ def dashboard_context() -> Dict[str, Any]:
     events = event_summary(today)
     events["schedule"] = event_schedule(today)
 
-    weekly_activity = weekly_transfer_purchase_activity(today=today)
+    resolved_interval, selected_interval = _resolve_activity_interval(activity_interval)
+    weekly_activity = weekly_transfer_purchase_activity(
+        today=today,
+        interval=resolved_interval,
+    )
+    weekly_activity["selected_interval"] = selected_interval
+    weekly_activity["interval_options"] = [
+        {"value": "weekly", "label": "Weekly"},
+        {"value": "month", "label": "Monthly"},
+        {"value": "quarter", "label": "Quarterly"},
+        {"value": "half_year", "label": "Half-year"},
+        {"value": "year", "label": "Yearly"},
+    ]
 
     return {
         "transfers": transfer_summary(),
