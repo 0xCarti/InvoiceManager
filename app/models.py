@@ -536,6 +536,10 @@ class Invoice(db.Model):
     date_created = db.Column(
         db.DateTime, nullable=False, default=datetime.utcnow, index=True
     )
+    is_paid = db.Column(
+        db.Boolean, nullable=False, default=False, server_default="0"
+    )
+    paid_at = db.Column(db.DateTime, nullable=True)
 
     # Define a ForeignKeyConstraint to ensure referential integrity with InvoiceProduct
     __table_args__ = (
