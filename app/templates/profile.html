@@ -22,6 +22,12 @@
 
     .profile-actions {
         margin-top: calc(var(--bs-spacer) * 0.25);
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .profile-actions .btn {
+        min-width: 11rem;
     }
 
     .profile-header {
@@ -92,7 +98,9 @@
                                 {{ form.confirm_password.label(class_='form-label mb-0') }}
                                 {{ form.confirm_password(class_='form-control') }}
                             </div>
-                            <button type="submit" class="btn btn-primary profile-actions">{{ form.submit.label.text }}</button>
+                            <div class="profile-actions">
+                                <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -107,7 +115,9 @@
                                 {{ tz_form.timezone(class_='form-control') }}
                                 <div class="form-text mt-0">Used for reports, timestamps, and schedule defaults.</div>
                             </div>
-                            <button type="submit" class="btn btn-primary profile-actions">{{ tz_form.submit.label.text }}</button>
+                            <div class="profile-actions">
+                                <button type="submit" class="btn btn-primary">{{ tz_form.submit.label.text }}</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -126,7 +136,9 @@
                                 {{ notif_form.notify_transfers(class_='form-check-input') }}
                                 {{ notif_form.notify_transfers.label(class_='form-check-label') }}
                             </div>
-                            <button type="submit" class="btn btn-primary profile-actions">{{ notif_form.submit.label.text }}</button>
+                            <div class="profile-actions">
+                                <button type="submit" class="btn btn-primary">{{ notif_form.submit.label.text }}</button>
+                            </div>
                         </form>
                     </div>
                 </div>
