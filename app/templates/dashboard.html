@@ -180,7 +180,7 @@
                                 <table class="table table-sm mb-0">
                                     <thead>
                                         <tr>
-                                            <th scope="col">Week</th>
+                                            <th scope="col">{{ context.charts.weekly_activity.bucket_label }}</th>
                                             <th scope="col">Transfers</th>
                                             <th scope="col">Purchases</th>
                                             <th scope="col">Purchase total</th>
@@ -188,7 +188,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {% for bucket in context.charts.weekly_activity %}
+                                        {% for bucket in context.charts.weekly_activity.buckets %}
                                             <tr>
                                                 <td>{{ bucket.label }}</td>
                                                 <td>{{ bucket.transfers }}</td>
@@ -198,7 +198,7 @@
                                             </tr>
                                         {% else %}
                                             <tr>
-                                                <td colspan="5" class="text-muted">No recent transfer, purchase, or sales activity.</td>
+                                                <td colspan="5" class="text-muted">{{ context.charts.weekly_activity.empty_state_text }}</td>
                                             </tr>
                                         {% endfor %}
                                     </tbody>
@@ -530,10 +530,11 @@
                 section.addEventListener('hidden.bs.collapse', () => persistCollapseState(section.id, false));
             });
 
-            const weeklyData = {{ context.charts.weekly_activity | tojson }};
+            const weeklyActivity = {{ context.charts.weekly_activity | tojson }};
+            const weeklyData = weeklyActivity?.buckets || [];
 
             const weeklyCanvas = document.getElementById('weekly-activity-chart');
-            if (weeklyCanvas && weeklyData) {
+            if (weeklyCanvas && weeklyData.length) {
                 const labels = weeklyData.map((bucket) => bucket.label);
                 const transferCounts = weeklyData.map((bucket) => bucket.transfers);
                 const purchaseCounts = weeklyData.map((bucket) => bucket.purchases);
@@ -594,6 +595,12 @@
                             intersect: false,
                         },
                         scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: weeklyActivity?.bucket_label || 'Period',
+                                },
+                            },
                             y: {
                                 beginAtZero: true,
                                 title: {
