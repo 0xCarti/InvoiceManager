@@ -233,3 +233,38 @@ def test_view_invoices_shows_payment_status_text(client, app):
         paid_html = paid_list_resp.get_data(as_text=True)
         assert "badge text-bg-success" in paid_html
         assert re.search(r">\s*Paid\s*<", paid_html)
+
+
+def test_sales_invoice_uses_invoice_sale_price_for_line_snapshot(client, app):
+    email, cust_id, prod_name, prod_id = setup_sales(app)
+
+    with app.app_context():
+        product = db.session.get(Product, prod_id)
+        product.invoice_sale_price = 12.5
+        db.session.commit()
+
+    with client:
+        login(client, email, "pass")
+        create_resp = client.post(
+            "/create_invoice",
+            data={"customer": float(cust_id), "products": f"{prod_name}?2??"},
+            follow_redirects=True,
+        )
+        assert create_resp.status_code == 200
+
+    with app.app_context():
+        invoice = Invoice.query.filter_by(customer_id=cust_id).first()
+        assert invoice is not None
+        invoice_line = invoice.products[0]
+        assert invoice_line.unit_price == pytest.approx(12.5)
+        assert invoice_line.line_subtotal == pytest.approx(25.0)
+        assert invoice.total == pytest.approx(28.0)
+
+        product = db.session.get(Product, prod_id)
+        product.invoice_sale_price = 50.0
+        product.price = 99.0
+        db.session.commit()
+
+        refreshed_line = db.session.get(type(invoice_line), invoice_line.id)
+        assert refreshed_line.unit_price == pytest.approx(12.5)
+        assert refreshed_line.line_subtotal == pytest.approx(25.0)
