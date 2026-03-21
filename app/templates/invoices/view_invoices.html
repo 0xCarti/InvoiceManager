@@ -49,6 +49,7 @@
                 {'id': 'toggle-invoice-number', 'target': 'col-invoice-number', 'label': 'Invoice Number', 'checked': True},
                 {'id': 'toggle-invoice-date', 'target': 'col-invoice-date', 'label': 'Date', 'checked': True},
                 {'id': 'toggle-invoice-customer', 'target': 'col-invoice-customer', 'label': 'Customer Name', 'checked': True},
+                {'id': 'toggle-invoice-payment-status', 'target': 'col-invoice-payment-status', 'label': 'Payment Status', 'checked': True},
                 {'id': 'toggle-invoice-actions', 'target': 'col-invoice-actions', 'label': 'Actions', 'checked': True},
             ]
         ) }}
@@ -75,6 +76,7 @@
                 <th scope="col" class="col-invoice-number" data-type="number">Invoice Number</th>
                 <th scope="col" class="col-invoice-date">Date</th>
                 <th scope="col" class="col-invoice-customer">Customer Name</th>
+                <th scope="col" class="col-invoice-payment-status">Payment Status</th>
                 <th scope="col" class="col-invoice-actions" data-sortable="false">Actions</th>
             </tr>
         </thead>
@@ -84,6 +86,11 @@
                 <td class="col-invoice-number">{{ invoice.id }}</td>
                 <td class="col-invoice-date">{{ invoice.date_created|format_datetime('%Y-%m-%d') }}</td>
                 <td class="col-invoice-customer">{{ invoice.customer.first_name }} {{ invoice.customer.last_name }}</td>
+                <td class="col-invoice-payment-status">
+                    <span class="badge {{ 'text-bg-success' if invoice.is_paid else 'text-bg-warning' }}">
+                        {{ 'Paid' if invoice.is_paid else 'Unpaid' }}
+                    </span>
+                </td>
                 <td class="col-invoice-actions">
                     <a href="{{ url_for('invoice.view_invoice', invoice_id=invoice.id) }}" class="btn btn-primary mr-2">View</a>
                     <div class="dropdown d-inline">
@@ -98,6 +105,19 @@
                             &hellip;
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invoice-actions-{{ invoice.id }}">
+                            <li>
+                                <form action="{{ url_for('invoice.mark_invoice_paid', invoice_id=invoice.id) }}" method="post">
+                                    {{ delete_form.hidden_tag() }}
+                                    <button type="submit" class="dropdown-item" {% if invoice.is_paid %}disabled{% endif %}>Mark Paid</button>
+                                </form>
+                            </li>
+                            <li>
+                                <form action="{{ url_for('invoice.mark_invoice_unpaid', invoice_id=invoice.id) }}" method="post">
+                                    {{ delete_form.hidden_tag() }}
+                                    <button type="submit" class="dropdown-item" {% if not invoice.is_paid %}disabled{% endif %}>Mark Unpaid</button>
+                                </form>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
                             <li>
                                 <form
                                     action="{{ url_for('invoice.delete_invoice', invoice_id=invoice.id) }}"
@@ -174,6 +194,14 @@
     <div class="mb-3">
         {{ form.end_date.label }} {{ form.end_date(class="form-control") }}
     </div>
+    <div class="mb-3">
+        <label for="payment_status" class="form-label">Payment Status</label>
+        <select id="payment_status" name="payment_status" class="form-control">
+            <option value="all" {% if request.args.get('payment_status', 'all') == 'all' %}selected{% endif %}>All</option>
+            <option value="paid" {% if request.args.get('payment_status') == 'paid' %}selected{% endif %}>Paid</option>
+            <option value="unpaid" {% if request.args.get('payment_status') == 'unpaid' %}selected{% endif %}>Unpaid</option>
+        </select>
+    </div>
 {% endcall %}
 
 <!-- Create Invoice Modal -->
@@ -198,6 +226,8 @@ $(document).ready(function(){
     const deleteFormHTML = {{ delete_form.hidden_tag()|tojson }};
     const viewInvoiceUrlTemplate = {{ url_for('invoice.view_invoice', invoice_id=0)|tojson }};
     const deleteInvoiceUrlTemplate = {{ url_for('invoice.delete_invoice', invoice_id=0)|tojson }};
+    const markPaidUrlTemplate = {{ url_for('invoice.mark_invoice_paid', invoice_id=0)|tojson }};
+    const markUnpaidUrlTemplate = {{ url_for('invoice.mark_invoice_unpaid', invoice_id=0)|tojson }};
 
     function invoiceUrlFromTemplate(urlTemplate, invoiceId) {
         const encodedInvoiceId = encodeURIComponent(invoiceId);
@@ -211,10 +241,17 @@ $(document).ready(function(){
         const tbody = $('#invoiceTable tbody');
         tbody.empty();
         invoices.forEach(function(inv){
+        const isPaid = String(inv.payment_status || '').toLowerCase() === 'paid';
+        const statusBadgeClass = isPaid ? 'text-bg-success' : 'text-bg-warning';
+        const markPaidDisabled = isPaid ? 'disabled' : '';
+        const markUnpaidDisabled = isPaid ? '' : 'disabled';
         const row = `<tr>
             <td class="col-invoice-number">${inv.id}</td>
             <td class="col-invoice-date">${inv.date}</td>
             <td class="col-invoice-customer">${inv.customer}</td>
+            <td class="col-invoice-payment-status">
+                <span class="badge ${statusBadgeClass}">${inv.payment_status || 'Unpaid'}</span>
+            </td>
             <td class="col-invoice-actions">
                 <a href="${invoiceUrlFromTemplate(viewInvoiceUrlTemplate, inv.id)}" class="btn btn-primary mr-2">View</a>
                 <div class="dropdown d-inline">
@@ -229,6 +266,19 @@ $(document).ready(function(){
                         &hellip;
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invoice-actions-${inv.id}">
+                        <li>
+                            <form action="${invoiceUrlFromTemplate(markPaidUrlTemplate, inv.id)}" method="post">
+                                ${deleteFormHTML}
+                                <button type="submit" class="dropdown-item" ${markPaidDisabled}>Mark Paid</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form action="${invoiceUrlFromTemplate(markUnpaidUrlTemplate, inv.id)}" method="post">
+                                ${deleteFormHTML}
+                                <button type="submit" class="dropdown-item" ${markUnpaidDisabled}>Mark Unpaid</button>
+                            </form>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
                         <li>
                             <form
                                 action="${invoiceUrlFromTemplate(deleteInvoiceUrlTemplate, inv.id)}"
