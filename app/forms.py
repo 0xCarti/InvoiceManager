@@ -1218,6 +1218,16 @@ class InventoryVarianceReportForm(FlaskForm):
 class ProductSalesReportForm(FlaskForm):
     start_date = DateField("Start Date", validators=[DataRequired()])
     end_date = DateField("End Date", validators=[DataRequired()])
+    payment_status = SelectField(
+        "Payment Status",
+        choices=[
+            ("all", "All"),
+            ("paid", "Paid"),
+            ("unpaid", "Unpaid"),
+        ],
+        default="all",
+        validators=[Optional()],
+    )
     products = SelectMultipleField(
         "Products",
         coerce=int,

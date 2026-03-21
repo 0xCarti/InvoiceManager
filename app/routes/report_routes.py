@@ -2027,10 +2027,15 @@ def product_stock_usage_report():
     selected_product_names = []
     selected_gl_labels = []
     excluded_occurrences = []
+    selected_payment_status = "all"
 
     if form.validate_on_submit():
         start = form.start_date.data
         end = form.end_date.data
+        selected_payment_status = form.payment_status.data or "all"
+        if selected_payment_status not in {"all", "paid", "unpaid"}:
+            selected_payment_status = "all"
+        form.payment_status.data = selected_payment_status
 
         if end < start:
             form.end_date.errors.append(
@@ -2071,6 +2076,10 @@ def product_stock_usage_report():
                     Invoice.date_created <= end,
                 )
             )
+            if selected_payment_status == "paid":
+                items_query = items_query.filter(Invoice.is_paid.is_(True))
+            elif selected_payment_status == "unpaid":
+                items_query = items_query.filter(Invoice.is_paid.is_(False))
 
             if selected_product_ids:
                 items_query = items_query.filter(Product.id.in_(selected_product_ids))
@@ -2121,6 +2130,10 @@ def product_stock_usage_report():
                     ProductRecipeItem.id.is_(None),
                 )
             )
+            if selected_payment_status == "paid":
+                excluded_query = excluded_query.filter(Invoice.is_paid.is_(True))
+            elif selected_payment_status == "unpaid":
+                excluded_query = excluded_query.filter(Invoice.is_paid.is_(False))
 
             if selected_product_ids:
                 excluded_query = excluded_query.filter(
@@ -2220,6 +2233,7 @@ def product_stock_usage_report():
         end=end,
         selected_product_names=selected_product_names,
         selected_gl_labels=selected_gl_labels,
+        payment_status=selected_payment_status,
         excluded_occurrences=excluded_occurrences,
     )
 
