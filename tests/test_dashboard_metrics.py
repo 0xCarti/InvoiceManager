@@ -284,8 +284,15 @@ def test_dashboard_renders_sales_series(client, app):
     assert "$10.00" in body
 
 
-def test_dashboard_activity_interval_month_selected_and_serialized(
-    client, app, monkeypatch
+@pytest.mark.parametrize(
+    ("activity_interval", "expected_bucket_start"),
+    [
+        ("month", "2024-02-01"),
+        ("quarter", "2024-01-01"),
+    ],
+)
+def test_dashboard_activity_interval_selected_and_serialized(
+    client, app, monkeypatch, activity_interval, expected_bucket_start
 ):
     fixed_today = date(2024, 2, 20)
     monkeypatch.setattr(
@@ -312,16 +319,16 @@ def test_dashboard_activity_interval_month_selected_and_serialized(
         db.session.commit()
 
     login(client, "admin@example.com", "adminpass")
-    response = client.get("/?activity_interval=month", follow_redirects=True)
+    response = client.get(f"/?activity_interval={activity_interval}", follow_redirects=True)
     body = response.data.decode()
 
     assert response.status_code == 200
     assert re.search(
-        r'<option[^>]*(?:value="month"[^>]*selected|selected[^>]*value="month")',
+        rf'<option[^>]*(?:value="{activity_interval}"[^>]*selected|selected[^>]*value="{activity_interval}")',
         body,
     )
-    assert re.search(r'"interval"\s*:\s*"month"', body)
-    assert '"week_start":"2024-02-01"' in body
+    assert re.search(rf'"interval"\s*:\s*"{activity_interval}"', body)
+    assert re.search(rf'"week_start"\s*:\s*"{expected_bucket_start}"', body)
 
 
 def test_dashboard_activity_interval_invalid_defaults_to_weekly(
@@ -357,8 +364,8 @@ def test_dashboard_activity_interval_invalid_defaults_to_weekly(
 
     assert response.status_code == 200
     assert re.search(
-        r'<option[^>]*(?:value="(?:week|weekly)"[^>]*selected|selected[^>]*value="(?:week|weekly)")',
+        r'<option[^>]*(?:value="weekly"[^>]*selected|selected[^>]*value="weekly")',
         body,
     )
     assert re.search(r'"interval"\s*:\s*"week"', body)
-    assert '"week_start":"2024-02-19"' in body
+    assert re.search(r'"week_start"\s*:\s*"2024-02-19"', body)
