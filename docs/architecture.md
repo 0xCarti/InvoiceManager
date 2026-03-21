@@ -52,6 +52,18 @@ file import routines, and shared validation logic. They are imported where
 needed by blueprints or the factory to keep route files focused on request
 handling.
 
+Dashboard aggregation logic is intentionally grouped in
+`app/services/dashboard_metrics.py`. The dashboard trend interval selector uses
+an `interval` query parameter and currently supports these keys:
+`week`, `month`, `quarter`, `half_year`, and `year`. If no interval key is
+supplied, aggregation defaults to weekly buckets.
+
+For consistency, interval boundaries are computed from canonical period starts
+(`_interval_start`) and forward stepping (`_add_interval`), and labels are
+derived from each bucket's computed start/end date window. Any future interval
+changes should update boundary and label rules together so tabular and chart
+representations stay aligned.
+
 ## Data Models
 
 All persistent data structures are defined in [`app/models.py`](../app/models.py).
