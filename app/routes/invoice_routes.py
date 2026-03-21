@@ -264,6 +264,9 @@ def filter_invoices_api():
     customer_id = request.args.get("customer_id", type=int)
     start_date_str = request.args.get("start_date")
     end_date_str = request.args.get("end_date")
+    payment_status = request.args.get("payment_status", "all").lower()
+    if payment_status not in {"all", "paid", "unpaid"}:
+        payment_status = "all"
 
     start_date = (
         datetime.fromisoformat(start_date_str) if start_date_str else None
@@ -285,6 +288,10 @@ def filter_invoices_api():
             Invoice.date_created
             <= datetime.combine(end_date, datetime.max.time())
         )
+    if payment_status == "paid":
+        query = query.filter(Invoice.is_paid.is_(True))
+    elif payment_status == "unpaid":
+        query = query.filter(Invoice.is_paid.is_(False))
 
     invoices = query.order_by(Invoice.date_created.desc()).all()
     data = [
@@ -292,6 +299,7 @@ def filter_invoices_api():
             "id": inv.id,
             "date": inv.date_created.strftime("%Y-%m-%d"),
             "customer": f"{inv.customer.first_name} {inv.customer.last_name}",
+            "payment_status": "Paid" if inv.is_paid else "Unpaid",
         }
         for inv in invoices
     ]
@@ -339,11 +347,13 @@ def view_invoices():
         customer_id = form.customer_id.data
         start_date = form.start_date.data
         end_date = form.end_date.data
+        payment_status = request.form.get("payment_status", "all").lower()
     else:
         invoice_id = request.args.get("invoice_id", "")
         customer_id = request.args.get("customer_id", type=int)
         start_date_str = request.args.get("start_date")
         end_date_str = request.args.get("end_date")
+        payment_status = request.args.get("payment_status", "all").lower()
         start_date = (
             datetime.fromisoformat(start_date_str) if start_date_str else None
         )
@@ -357,6 +367,8 @@ def view_invoices():
             form.start_date.data = start_date
         if end_date:
             form.end_date.data = end_date
+    if payment_status not in {"all", "paid", "unpaid"}:
+        payment_status = "all"
 
     query = Invoice.query
     if invoice_id:
@@ -373,6 +385,10 @@ def view_invoices():
             Invoice.date_created
             <= datetime.combine(end_date, datetime.max.time())
         )
+    if payment_status == "paid":
+        query = query.filter(Invoice.is_paid.is_(True))
+    elif payment_status == "unpaid":
+        query = query.filter(Invoice.is_paid.is_(False))
     invoices = query.order_by(Invoice.date_created.desc()).paginate(
         page=page, per_page=per_page
     )
@@ -388,5 +404,14 @@ def view_invoices():
         delete_form=delete_form,
         create_form=create_form,
         per_page=per_page,
-        pagination_args=build_pagination_args(per_page),
+        pagination_args=build_pagination_args(
+            per_page,
+            extra_params={
+                "invoice_id": invoice_id or None,
+                "customer_id": customer_id,
+                "start_date": start_date.isoformat() if start_date else None,
+                "end_date": end_date.isoformat() if end_date else None,
+                "payment_status": payment_status,
+            },
+        ),
     )
