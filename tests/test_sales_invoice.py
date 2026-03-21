@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+import re
 
 import pytest
 from werkzeug.security import generate_password_hash
@@ -39,6 +40,8 @@ def test_sales_invoice_create_view_delete(client, app):
     with app.app_context():
         invoice = Invoice.query.filter_by(customer_id=cust_id).first()
         assert invoice is not None
+        assert invoice.is_paid is False
+        assert invoice.paid_at is None
         assert invoice.products[0].quantity == 2
         assert invoice.id.startswith("JD")
         invoice_id = invoice.id
@@ -148,3 +151,85 @@ def test_delete_invoice_route_still_accepts_post_from_list_form(client, app):
 
     with app.app_context():
         assert db.session.get(Invoice, invoice_id) is None
+
+
+def test_mark_invoice_paid_and_unpaid_endpoints_update_payment_state(client, app):
+    email, cust_id, prod_name, _ = setup_sales(app)
+
+    with client:
+        login(client, email, "pass")
+        create_resp = client.post(
+            "/create_invoice",
+            data={"customer": float(cust_id), "products": f"{prod_name}?1??"},
+            follow_redirects=True,
+        )
+        assert create_resp.status_code == 200
+
+    with app.app_context():
+        invoice = Invoice.query.filter_by(customer_id=cust_id).first()
+        assert invoice is not None
+        invoice_id = invoice.id
+        assert invoice.is_paid is False
+        assert invoice.paid_at is None
+
+    with client:
+        login(client, email, "pass")
+        mark_paid_resp = client.post(
+            f"/invoice/{invoice_id}/mark-paid", follow_redirects=True
+        )
+        assert mark_paid_resp.status_code == 200
+
+    with app.app_context():
+        paid_invoice = db.session.get(Invoice, invoice_id)
+        assert paid_invoice is not None
+        assert paid_invoice.is_paid is True
+        assert paid_invoice.paid_at is not None
+
+    with client:
+        login(client, email, "pass")
+        mark_unpaid_resp = client.post(
+            f"/invoice/{invoice_id}/mark-unpaid", follow_redirects=True
+        )
+        assert mark_unpaid_resp.status_code == 200
+
+    with app.app_context():
+        unpaid_invoice = db.session.get(Invoice, invoice_id)
+        assert unpaid_invoice is not None
+        assert unpaid_invoice.is_paid is False
+        assert unpaid_invoice.paid_at is None
+
+
+def test_view_invoices_shows_payment_status_text(client, app):
+    email, cust_id, prod_name, _ = setup_sales(app)
+
+    with client:
+        login(client, email, "pass")
+        create_resp = client.post(
+            "/create_invoice",
+            data={"customer": float(cust_id), "products": f"{prod_name}?1??"},
+            follow_redirects=True,
+        )
+        assert create_resp.status_code == 200
+
+    with app.app_context():
+        invoice = Invoice.query.filter_by(customer_id=cust_id).first()
+        assert invoice is not None
+        invoice_id = invoice.id
+
+    with client:
+        login(client, email, "pass")
+        list_resp = client.get("/view_invoices", follow_redirects=True)
+        assert list_resp.status_code == 200
+        html = list_resp.get_data(as_text=True)
+        assert re.search(rf">\s*{invoice_id}\s*<", html)
+        assert "badge text-bg-warning" in html
+        assert re.search(r">\s*Unpaid\s*<", html)
+
+    with client:
+        login(client, email, "pass")
+        client.post(f"/invoice/{invoice_id}/mark-paid", follow_redirects=True)
+        paid_list_resp = client.get("/view_invoices", follow_redirects=True)
+        assert paid_list_resp.status_code == 200
+        paid_html = paid_list_resp.get_data(as_text=True)
+        assert "badge text-bg-success" in paid_html
+        assert re.search(r">\s*Paid\s*<", paid_html)

@@ -82,6 +82,37 @@ def test_filter_by_date_range(client, app):
         assert b"INV3" in response.data
 
 
+def test_filter_by_payment_status(client, app):
+    user_email, _, _ = setup_invoices(app)
+
+    with app.app_context():
+        inv1 = db.session.get(Invoice, "INV1")
+        inv2 = db.session.get(Invoice, "INV2")
+        inv3 = db.session.get(Invoice, "INV3")
+        inv1.is_paid = True
+        inv2.is_paid = False
+        inv3.is_paid = True
+        db.session.commit()
+
+    with client:
+        login(client, user_email, "pass")
+        paid_response = client.get(
+            "/view_invoices?payment_status=paid",
+            follow_redirects=True,
+        )
+        assert b"INV1" in paid_response.data
+        assert b"INV3" in paid_response.data
+        assert b"INV2" not in paid_response.data
+
+        unpaid_response = client.get(
+            "/view_invoices?payment_status=unpaid",
+            follow_redirects=True,
+        )
+        assert b"INV2" in unpaid_response.data
+        assert b"INV1" not in unpaid_response.data
+        assert b"INV3" not in unpaid_response.data
+
+
 def test_view_invoices_reports_dropdown_and_layout_markers(client, app):
     user_email, _, _ = setup_invoices(app)
 

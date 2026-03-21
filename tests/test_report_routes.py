@@ -916,6 +916,171 @@ def test_vendor_invoice_report_mixed_invoices_include_linked_and_orphan_rows(cli
     assert b"$51.52" in response.data
 
 
+def test_vendor_invoice_report_payment_status_paid_filters_results(client, app):
+    customer_id = setup_invoice(app)
+    login(client, "report@example.com", "pass")
+
+    with app.app_context():
+        user = User.query.filter_by(email="report@example.com").first()
+        customer = Customer.query.get(customer_id)
+
+        paid_invoice = Invoice.query.get("INVREPPAID")
+        if not paid_invoice:
+            paid_invoice = Invoice(
+                id="INVREPPAID",
+                user_id=user.id,
+                customer_id=customer.id,
+                date_created=date(2023, 6, 15),
+                is_paid=True,
+                paid_at=date(2023, 6, 20),
+            )
+            db.session.add(paid_invoice)
+        else:
+            paid_invoice.date_created = date(2023, 6, 15)
+            paid_invoice.is_paid = True
+            paid_invoice.paid_at = date(2023, 6, 20)
+
+        unpaid_invoice = Invoice.query.get("INVREPUNPAID")
+        if not unpaid_invoice:
+            unpaid_invoice = Invoice(
+                id="INVREPUNPAID",
+                user_id=user.id,
+                customer_id=customer.id,
+                date_created=date(2023, 6, 10),
+                is_paid=False,
+                paid_at=None,
+            )
+            db.session.add(unpaid_invoice)
+        else:
+            unpaid_invoice.date_created = date(2023, 6, 10)
+            unpaid_invoice.is_paid = False
+            unpaid_invoice.paid_at = None
+
+        out_of_range_paid = Invoice.query.get("INVREPPAIDOLD")
+        if not out_of_range_paid:
+            out_of_range_paid = Invoice(
+                id="INVREPPAIDOLD",
+                user_id=user.id,
+                customer_id=customer.id,
+                date_created=date(2022, 12, 31),
+                is_paid=True,
+                paid_at=date(2022, 12, 31),
+            )
+            db.session.add(out_of_range_paid)
+        else:
+            out_of_range_paid.date_created = date(2022, 12, 31)
+            out_of_range_paid.is_paid = True
+            out_of_range_paid.paid_at = date(2022, 12, 31)
+
+        db.session.commit()
+
+    response = client.get(
+        "/reports/vendor-invoices/results",
+        query_string={
+            "customer_ids": str(customer_id),
+            "start": "2023-01-01",
+            "end": "2023-12-31",
+            "payment_status": "paid",
+        },
+    )
+    assert response.status_code == 200
+    assert b"INVREPPAID" in response.data
+    assert b"INVREPUNPAID" not in response.data
+    assert b"INVREPPAIDOLD" not in response.data
+    assert b"Status:</strong>" in response.data
+    assert b"Paid" in response.data
+
+
+def test_vendor_invoice_report_payment_status_unpaid_filters_results(client, app):
+    customer_id = setup_invoice(app)
+    login(client, "report@example.com", "pass")
+
+    with app.app_context():
+        invoice = Invoice.query.get("INVREP001")
+        invoice.date_created = date(2023, 1, 10)
+        invoice.is_paid = False
+        invoice.paid_at = None
+
+        paid_invoice = Invoice.query.get("INVREPPAID2")
+        if not paid_invoice:
+            user = User.query.filter_by(email="report@example.com").first()
+            paid_invoice = Invoice(
+                id="INVREPPAID2",
+                user_id=user.id,
+                customer_id=invoice.customer_id,
+                date_created=date(2023, 1, 11),
+                is_paid=True,
+                paid_at=date(2023, 1, 12),
+            )
+            db.session.add(paid_invoice)
+        else:
+            paid_invoice.date_created = date(2023, 1, 11)
+            paid_invoice.is_paid = True
+            paid_invoice.paid_at = date(2023, 1, 12)
+
+        db.session.commit()
+
+    response = client.get(
+        "/reports/vendor-invoices/results",
+        query_string={
+            "customer_ids": str(customer_id),
+            "start": "2023-01-01",
+            "end": "2023-12-31",
+            "payment_status": "unpaid",
+        },
+    )
+    assert response.status_code == 200
+    assert b"INVREP001" in response.data
+    assert b"INVREPPAID2" not in response.data
+    assert b"Unpaid" in response.data
+
+
+def test_vendor_invoice_report_payment_status_all_shows_mixed_status_column(client, app):
+    customer_id = setup_invoice(app)
+    login(client, "report@example.com", "pass")
+
+    with app.app_context():
+        base_invoice = Invoice.query.get("INVREP001")
+        base_invoice.is_paid = False
+        base_invoice.paid_at = None
+        base_invoice.date_created = date(2023, 2, 1)
+
+        paid_invoice = Invoice.query.get("INVREPMIXEDPAID")
+        if not paid_invoice:
+            user = User.query.filter_by(email="report@example.com").first()
+            paid_invoice = Invoice(
+                id="INVREPMIXEDPAID",
+                user_id=user.id,
+                customer_id=base_invoice.customer_id,
+                date_created=date(2023, 2, 2),
+                is_paid=True,
+                paid_at=date(2023, 2, 3),
+            )
+            db.session.add(paid_invoice)
+        else:
+            paid_invoice.is_paid = True
+            paid_invoice.paid_at = date(2023, 2, 3)
+            paid_invoice.date_created = date(2023, 2, 2)
+
+        db.session.commit()
+
+    response = client.get(
+        "/reports/vendor-invoices/results",
+        query_string={
+            "customer_ids": str(customer_id),
+            "start": "2023-01-01",
+            "end": "2023-12-31",
+            "payment_status": "all",
+        },
+    )
+    assert response.status_code == 200
+    assert b"INVREP001" in response.data
+    assert b"INVREPMIXEDPAID" in response.data
+    assert b"Payment Status" in response.data
+    assert b"Paid" in response.data
+    assert b"Unpaid" in response.data
+
+
 def test_purchase_cost_forecast_report(client, app):
     setup_invoice(app)
     login(client, "report@example.com", "pass")
