@@ -1,6 +1,29 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<style>
+    .profile-section-card {
+        --profile-card-padding: calc(var(--bs-spacer) * 1.25);
+    }
+
+    .profile-section-card .card-body {
+        padding: var(--profile-card-padding);
+    }
+
+    .profile-form {
+        display: grid;
+        gap: calc(var(--bs-spacer) * 0.75);
+    }
+
+    .profile-field {
+        display: grid;
+        gap: calc(var(--bs-spacer) * 0.375);
+    }
+
+    .profile-actions {
+        margin-top: calc(var(--bs-spacer) * 0.25);
+    }
+</style>
 <div class="container px-0">
     <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
         <h2 class="mb-0">User Profile</h2>
@@ -10,58 +33,60 @@
     <div class="row g-3 g-lg-4">
         <div class="col-12 col-lg-8">
             <div class="vstack gap-3">
-                <div class="card">
+                <div class="card profile-section-card">
                     <div class="card-body">
-                        <h3 class="h5 mb-3">Account &amp; Security</h3>
-                        <form method="post">
+                        <h3 class="h5 mb-3">Account Security</h3>
+                        <form method="post" class="profile-form">
                             {{ form.hidden_tag() }}
                             {% if form.current_password %}
-                            <div class="form-group mb-3">
-                                {{ form.current_password.label(class_='form-label') }}
+                            <div class="form-group profile-field">
+                                {{ form.current_password.label(class_='form-label mb-0') }}
                                 {{ form.current_password(class_='form-control') }}
                             </div>
                             {% endif %}
-                            <div class="form-group mb-3">
-                                {{ form.new_password.label(class_='form-label') }}
+                            <div class="form-group profile-field">
+                                {{ form.new_password.label(class_='form-label mb-0') }}
                                 {{ form.new_password(class_='form-control') }}
                             </div>
-                            <div class="form-group">
-                                {{ form.confirm_password.label(class_='form-label') }}
+                            <div class="form-group profile-field">
+                                {{ form.confirm_password.label(class_='form-label mb-0') }}
                                 {{ form.confirm_password(class_='form-control') }}
                             </div>
-                            <button type="submit" class="btn btn-primary mt-3">{{ form.submit.label.text }}</button>
+                            <button type="submit" class="btn btn-primary profile-actions">{{ form.submit.label.text }}</button>
                         </form>
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="card profile-section-card">
                     <div class="card-body">
                         <h3 class="h5 mb-3">Preferences</h3>
-                        <form method="post">
+                        <form method="post" class="profile-form">
                             {{ tz_form.hidden_tag() }}
-                            <div class="form-group">
-                                {{ tz_form.timezone.label(class_='form-label') }}
+                            <div class="form-group profile-field">
+                                {{ tz_form.timezone.label(class_='form-label mb-0') }}
                                 {{ tz_form.timezone(class_='form-control') }}
+                                <div class="form-text mt-0">Used for reports, timestamps, and schedule defaults.</div>
                             </div>
-                            <button type="submit" class="btn btn-primary mt-3">{{ tz_form.submit.label.text }}</button>
+                            <button type="submit" class="btn btn-primary profile-actions">{{ tz_form.submit.label.text }}</button>
                         </form>
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="card profile-section-card">
                     <div class="card-body">
-                        <h3 class="h5 mb-3">Notifications</h3>
-                        <form method="post">
+                        <h3 class="h5 mb-3">Contact / Notifications</h3>
+                        <form method="post" class="profile-form">
                             {{ notif_form.hidden_tag() }}
-                            <div class="form-group">
-                                {{ notif_form.phone_number.label(class_='form-label') }}
+                            <div class="form-group profile-field">
+                                {{ notif_form.phone_number.label(class_='form-label mb-0') }}
                                 {{ notif_form.phone_number(class_='form-control') }}
+                                <div class="form-text mt-0">SMS notifications are sent only when this number is set.</div>
                             </div>
-                            <div class="form-check mt-3">
+                            <div class="form-check mt-1">
                                 {{ notif_form.notify_transfers(class_='form-check-input') }}
                                 {{ notif_form.notify_transfers.label(class_='form-check-label') }}
                             </div>
-                            <button type="submit" class="btn btn-primary mt-3">{{ notif_form.submit.label.text }}</button>
+                            <button type="submit" class="btn btn-primary profile-actions">{{ notif_form.submit.label.text }}</button>
                         </form>
                     </div>
                 </div>
