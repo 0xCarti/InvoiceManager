@@ -36,7 +36,12 @@
                     <div class="form-check">
                         <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-price"
                             data-column-target="col-product-price" checked>
-                        <label class="form-check-label" for="toggle-product-column-price">Price</label>
+                        <label class="form-check-label" for="toggle-product-column-price">Terminal/Event Sell Price</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-invoice-price"
+                            data-column-target="col-product-invoice-price" checked>
+                        <label class="form-check-label" for="toggle-product-column-invoice-price">Sales Invoice Price (3rd-party customer)</label>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input column-toggle" type="checkbox" id="toggle-product-column-cost"
@@ -242,7 +247,8 @@
                 <th class="col-select"><input type="checkbox" id="select-all-products" style="transform: scale(1.5);"></th>
                 <th class="col-product-id" data-type="number">ID</th>
                 <th class="col-product-name">Name</th>
-                <th class="col-product-price" data-type="number">Price</th>
+                <th class="col-product-price" data-type="number">Terminal/Event Sell Price</th>
+                <th class="col-product-invoice-price" data-type="number">Sales Invoice Price (3rd-party customer)</th>
                 <th class="col-product-cost" data-type="number">Cost</th>
                 <th class="col-product-food-cost" data-type="number">Food Cost %</th>
                 <th class="col-product-last-sold">Last Sold</th>
