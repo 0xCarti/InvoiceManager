@@ -171,8 +171,8 @@
       </div>
       <div class="modal-body">
         <form action="{{ url_for('transfer.view_transfers') }}" method="get" class="d-flex flex-wrap align-items-end flex-grow-1">
-          {% if request.args.get('user_id', type=int) %}
-          <input type="hidden" name="user_id" value="{{ request.args.get('user_id', type=int) }}">
+          {% if request.args.get('user_id') %}
+          <input type="hidden" name="user_id" value="{{ request.args.get('user_id') }}">
           {% endif %}
           <select name="filter" class="form-control me-2 mt-1 narrow-field">
             <option value="not_completed">Not Completed</option>
