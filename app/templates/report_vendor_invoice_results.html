@@ -2,6 +2,7 @@
 {% block title %}Customer Invoice Report{% endblock %}
 
 {% block content %}
+{% set payment_status_labels = {'all': 'All', 'paid': 'Paid', 'unpaid': 'Unpaid'} %}
 <div class="container mt-5">
     <div class="row justify-content-center">
         <div class="col-md-6">
@@ -20,13 +21,7 @@
         <strong>From:</strong> {{ start }}
         <strong>To:</strong> {{ end }}
         <strong>Status:</strong>
-        {% if payment_status == 'paid' %}
-        Paid
-        {% elif payment_status == 'unpaid' %}
-        Unpaid
-        {% else %}
-        All
-        {% endif %}
+        {{ payment_status_labels.get(payment_status, payment_status|title) }}
     </p>
 
     {% if invoices %}
