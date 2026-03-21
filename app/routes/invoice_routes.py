@@ -262,6 +262,7 @@ def filter_invoices_api():
     """Return invoices matching filters as JSON."""
     invoice_id = request.args.get("invoice_id", "")
     customer_id = request.args.get("customer_id", type=int)
+    user_id = request.args.get("user_id", type=int)
     start_date_str = request.args.get("start_date")
     end_date_str = request.args.get("end_date")
     payment_status = request.args.get("payment_status", "all").lower()
@@ -274,6 +275,8 @@ def filter_invoices_api():
     end_date = datetime.fromisoformat(end_date_str) if end_date_str else None
 
     query = Invoice.query
+    if user_id:
+        query = query.filter(Invoice.user_id == user_id)
     if invoice_id:
         query = query.filter(Invoice.id.ilike(f"%{invoice_id}%"))
     if customer_id and customer_id != -1:
@@ -341,6 +344,8 @@ def view_invoices():
         ).items
     ]
 
+    user_id = request.args.get("user_id", type=int)
+
     # Determine filter values from form submission or query params
     if form.validate_on_submit():
         invoice_id = form.invoice_id.data
@@ -371,6 +376,8 @@ def view_invoices():
         payment_status = "all"
 
     query = Invoice.query
+    if user_id:
+        query = query.filter(Invoice.user_id == user_id)
     if invoice_id:
         query = query.filter(Invoice.id.ilike(f"%{invoice_id}%"))
     if customer_id and customer_id != -1:
@@ -408,6 +415,7 @@ def view_invoices():
             per_page,
             extra_params={
                 "invoice_id": invoice_id or None,
+                "user_id": user_id,
                 "customer_id": customer_id,
                 "start_date": start_date.isoformat() if start_date else None,
                 "end_date": end_date.isoformat() if end_date else None,

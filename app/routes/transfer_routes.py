@@ -256,6 +256,7 @@ def update_expected_counts(
 def view_transfers():
     """Show transfers with optional filtering."""
     filter_option = request.args.get("filter", "not_completed")
+    user_id = request.args.get("user_id", type=int)
     transfer_id = request.args.get(
         "transfer_id", "", type=int
     )  # Optional: Search by Transfer ID
@@ -268,6 +269,8 @@ def view_transfers():
     page = request.args.get("page", 1, type=int)
 
     query = Transfer.query
+    if user_id:
+        query = query.filter(Transfer.user_id == user_id)
     if transfer_id != "":
         query = query.filter(Transfer.id == transfer_id)
 
@@ -299,7 +302,10 @@ def view_transfers():
         add_form=add_form,
         edit_form=edit_form,
         per_page=per_page,
-        pagination_args=build_pagination_args(per_page),
+        pagination_args=build_pagination_args(
+            per_page,
+            extra_params={"user_id": user_id},
+        ),
     )
 
 

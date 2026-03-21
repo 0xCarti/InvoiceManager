@@ -285,7 +285,7 @@
                         <div class="profile-activity-header">
                             <h3 class="h5 mb-0">Transfers</h3>
                             {% if transfers %}
-                            <a class="small" href="{{ url_for('transfer.view_transfers') }}">View all</a>
+                            <a class="small" href="{{ url_for('transfer.view_transfers', user_id=user.id) }}">View all</a>
                             {% endif %}
                         </div>
                         <div class="profile-activity-list">
@@ -318,7 +318,7 @@
                         <div class="profile-activity-header">
                             <h3 class="h5 mb-0">Invoices</h3>
                             {% if invoices %}
-                            <a class="small" href="{{ url_for('invoice.view_invoices') }}">View all</a>
+                            <a class="small" href="{{ url_for('invoice.view_invoices', user_id=user.id) }}">View all</a>
                             {% endif %}
                         </div>
                         <div class="profile-activity-list">
