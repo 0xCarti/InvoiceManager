@@ -3,21 +3,25 @@
 {% block content %}
 <style>
     .profile-section-card {
-        --profile-card-padding: calc(var(--bs-spacer) * 1.25);
+        --profile-card-padding: calc(var(--bs-spacer) * 1.5);
     }
 
     .profile-section-card .card-body {
         padding: var(--profile-card-padding);
     }
 
+    .profile-section-card .card-body > h3 {
+        margin-bottom: calc(var(--bs-spacer) * 1.125) !important;
+    }
+
     .profile-form {
         display: grid;
-        gap: calc(var(--bs-spacer) * 0.75);
+        gap: calc(var(--bs-spacer) * 0.875);
     }
 
     .profile-field {
         display: grid;
-        gap: calc(var(--bs-spacer) * 0.375);
+        gap: calc(var(--bs-spacer) * 0.5);
     }
 
     .profile-feedback {
@@ -98,7 +102,7 @@
         justify-content: space-between;
         align-items: baseline;
         gap: 0.5rem;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
     }
 
     .profile-activity-list {
@@ -110,7 +114,7 @@
     }
 
     .profile-activity-row {
-        padding: 0.45rem 0.6rem;
+        padding: 0.55rem 0.75rem;
         border-bottom: 1px solid var(--bs-border-color-translucent);
     }
 
@@ -145,7 +149,7 @@
 
     .profile-activity-table th,
     .profile-activity-table td {
-        padding: 0.4rem 0.55rem;
+        padding: 0.5rem 0.65rem;
         vertical-align: middle;
         line-height: 1.15;
         white-space: nowrap;
