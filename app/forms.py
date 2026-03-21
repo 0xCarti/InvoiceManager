@@ -1134,9 +1134,9 @@ class VendorInvoiceReportForm(FlaskForm):
     payment_status = SelectField(
         "Payment Status",
         choices=[
-            ("all", "all"),
-            ("paid", "paid"),
-            ("unpaid", "unpaid"),
+            ("all", "All"),
+            ("paid", "Paid"),
+            ("unpaid", "Unpaid"),
         ],
         default="all",
         validators=[Optional()],
