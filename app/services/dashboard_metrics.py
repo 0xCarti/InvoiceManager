@@ -223,8 +223,8 @@ def dashboard_context() -> Dict[str, Any]:
 
 def weekly_transfer_purchase_activity(
     weeks: int = 6, today: Optional[date] = None
-) -> List[Dict[str, Any]]:
-    """Return weekly counts/totals for transfers, purchases, and sales."""
+) -> Dict[str, Any]:
+    """Return interval buckets for transfer, purchase, and sales activity."""
 
     today = today or date.today()
 
@@ -273,4 +273,14 @@ def weekly_transfer_purchase_activity(
             buckets[bucket_start]["sales"] += 1
             buckets[bucket_start]["sales_total"] += float(sale.total)
 
-    return [buckets[start] for start in sorted(buckets.keys())]
+    interval_bucket_label = "Period"
+    interval_empty_state_text = (
+        "No recent transfer, purchase, or sales activity for the selected period."
+    )
+
+    return {
+        "interval": "week",
+        "bucket_label": interval_bucket_label,
+        "empty_state_text": interval_empty_state_text,
+        "buckets": [buckets[start] for start in sorted(buckets.keys())],
+    }
