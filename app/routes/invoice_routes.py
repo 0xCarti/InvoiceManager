@@ -74,7 +74,12 @@ def _create_invoice_from_form(form):
             if quantity_value is None:
                 continue
             quantity = quantity_value
-            unit_price = product.price
+            invoice_price = product.invoice_sale_price
+            unit_price = (
+                float(invoice_price)
+                if invoice_price is not None
+                else float(product.price)
+            )
             line_subtotal = quantity * unit_price
 
             override_gst = (

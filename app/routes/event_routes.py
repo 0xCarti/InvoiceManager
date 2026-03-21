@@ -701,6 +701,7 @@ def _apply_pending_sales(
             product = Product(
                 name=product_name,
                 price=price_value,
+                invoice_sale_price=price_value,
                 cost=0.0,
             )
             db.session.add(product)

@@ -405,7 +405,8 @@ $(document).ready(function(){
             data: { query: query },
             success: function (response) {
                 var suggestions = response.map(function (product) {
-                    return '<a href="#" class="list-group-item list-group-item-action" data-name="' + product.name + '" data-price="' + product.price + '">' + product.name + ' - $' + product.price + '</a>';
+                    const invoicePrice = product.invoice_sale_price ?? product.price;
+                    return '<a href="#" class="list-group-item list-group-item-action" data-name="' + product.name + '" data-price="' + invoicePrice + '">' + product.name + ' - $' + invoicePrice + '</a>';
                 });
                 $('#productSuggestions').html(suggestions.join(''));
             }
