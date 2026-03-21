@@ -944,6 +944,7 @@ def vendor_invoice_report():
                 customer_ids=",".join(str(id) for id in form.customer.data),
                 start=form.start_date.data.isoformat(),
                 end=form.end_date.data.isoformat(),
+                payment_status=form.payment_status.data,
             )
         )
 
@@ -957,16 +958,26 @@ def vendor_invoice_report_results():
     customer_ids = request.args.get("customer_ids")
     start = request.args.get("start")
     end = request.args.get("end")
+    payment_status = request.args.get("payment_status", "all")
+    if payment_status not in {"all", "paid", "unpaid"}:
+        payment_status = "all"
 
     # Convert comma-separated IDs to list of ints
     id_list = [int(cid) for cid in customer_ids.split(",") if cid.isdigit()]
     customers = Customer.query.filter(Customer.id.in_(id_list)).all()
 
-    invoices = Invoice.query.filter(
+    invoice_query = Invoice.query.filter(
         Invoice.customer_id.in_(id_list),
         Invoice.date_created >= start,
         Invoice.date_created <= end,
-    ).all()
+    )
+
+    if payment_status == "paid":
+        invoice_query = invoice_query.filter(Invoice.is_paid.is_(True))
+    elif payment_status == "unpaid":
+        invoice_query = invoice_query.filter(Invoice.is_paid.is_(False))
+
+    invoices = invoice_query.all()
 
     # Compute totals with proper GST/PST logic
     enriched_invoices = []
@@ -1005,6 +1016,7 @@ def vendor_invoice_report_results():
         invoices=enriched_invoices,
         start=start,
         end=end,
+        payment_status=payment_status,
     )
 
 
