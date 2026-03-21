@@ -283,8 +283,16 @@ def profile():
         flash("Notification settings updated.", "success")
         return redirect(url_for("auth.profile"))
 
-    transfers = Transfer.query.filter_by(user_id=current_user.id).all()
-    invoices = Invoice.query.filter_by(user_id=current_user.id).all()
+    transfers = (
+        Transfer.query.filter_by(user_id=current_user.id)
+        .order_by(Transfer.date_created.desc(), Transfer.id.desc())
+        .all()
+    )
+    invoices = (
+        Invoice.query.filter_by(user_id=current_user.id)
+        .order_by(Invoice.date_created.desc(), Invoice.id.desc())
+        .all()
+    )
     return render_template(
         "profile.html",
         user=current_user,
@@ -347,8 +355,16 @@ def user_profile(user_id):
         flash("Notification settings updated.", "success")
         return redirect(url_for("admin.user_profile", user_id=user_id))
 
-    transfers = Transfer.query.filter_by(user_id=user.id).all()
-    invoices = Invoice.query.filter_by(user_id=user.id).all()
+    transfers = (
+        Transfer.query.filter_by(user_id=user.id)
+        .order_by(Transfer.date_created.desc(), Transfer.id.desc())
+        .all()
+    )
+    invoices = (
+        Invoice.query.filter_by(user_id=user.id)
+        .order_by(Invoice.date_created.desc(), Invoice.id.desc())
+        .all()
+    )
     return render_template(
         "profile.html",
         user=user,
