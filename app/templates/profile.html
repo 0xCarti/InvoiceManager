@@ -1,60 +1,106 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h2>User Profile - {{ user.email }}</h2>
-<form method="post">
-    {{ form.hidden_tag() }}
-    {% if form.current_password %}
-    <div class="form-group">
-        {{ form.current_password.label(class_='form-label') }}
-        {{ form.current_password(class_='form-control') }}
+<div class="container px-0">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+        <h2 class="mb-0">User Profile</h2>
+        <span class="text-muted">{{ user.email }}</span>
     </div>
-    {% endif %}
-    <div class="form-group">
-        {{ form.new_password.label(class_='form-label') }}
-        {{ form.new_password(class_='form-control') }}
+
+    <div class="row g-3 g-lg-4">
+        <div class="col-12 col-lg-8">
+            <div class="vstack gap-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="h5 mb-3">Account &amp; Security</h3>
+                        <form method="post">
+                            {{ form.hidden_tag() }}
+                            {% if form.current_password %}
+                            <div class="form-group mb-3">
+                                {{ form.current_password.label(class_='form-label') }}
+                                {{ form.current_password(class_='form-control') }}
+                            </div>
+                            {% endif %}
+                            <div class="form-group mb-3">
+                                {{ form.new_password.label(class_='form-label') }}
+                                {{ form.new_password(class_='form-control') }}
+                            </div>
+                            <div class="form-group">
+                                {{ form.confirm_password.label(class_='form-label') }}
+                                {{ form.confirm_password(class_='form-control') }}
+                            </div>
+                            <button type="submit" class="btn btn-primary mt-3">{{ form.submit.label.text }}</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="h5 mb-3">Preferences</h3>
+                        <form method="post">
+                            {{ tz_form.hidden_tag() }}
+                            <div class="form-group">
+                                {{ tz_form.timezone.label(class_='form-label') }}
+                                {{ tz_form.timezone(class_='form-control') }}
+                            </div>
+                            <button type="submit" class="btn btn-primary mt-3">{{ tz_form.submit.label.text }}</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="h5 mb-3">Notifications</h3>
+                        <form method="post">
+                            {{ notif_form.hidden_tag() }}
+                            <div class="form-group">
+                                {{ notif_form.phone_number.label(class_='form-label') }}
+                                {{ notif_form.phone_number(class_='form-control') }}
+                            </div>
+                            <div class="form-check mt-3">
+                                {{ notif_form.notify_transfers(class_='form-check-input') }}
+                                {{ notif_form.notify_transfers.label(class_='form-check-label') }}
+                            </div>
+                            <button type="submit" class="btn btn-primary mt-3">{{ notif_form.submit.label.text }}</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+            <div class="vstack gap-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="h5 mb-2">Transfers</h3>
+                        <ul class="list-group list-group-flush">
+                            {% for t in transfers %}
+                            <li class="list-group-item px-0 py-2">
+                                <a href="{{ url_for('transfer.view_transfer', transfer_id=t.id) }}">Transfer #{{ t.id }}</a>
+                            </li>
+                            {% else %}
+                            <li class="list-group-item px-0 py-2 text-muted">No transfers found.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="h5 mb-2">Invoices</h3>
+                        <ul class="list-group list-group-flush">
+                            {% for inv in invoices %}
+                            <li class="list-group-item px-0 py-2">
+                                <a href="{{ url_for('invoice.view_invoice', invoice_id=inv.id) }}">Invoice #{{ inv.id }}</a>
+                            </li>
+                            {% else %}
+                            <li class="list-group-item px-0 py-2 text-muted">No invoices found.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="form-group">
-        {{ form.confirm_password.label(class_='form-label') }}
-        {{ form.confirm_password(class_='form-control') }}
-    </div>
-    <button type="submit" class="btn btn-primary mt-2">{{ form.submit.label.text }}</button>
-</form>
-<form method="post" class="mt-3">
-    {{ tz_form.hidden_tag() }}
-    <div class="form-group">
-        {{ tz_form.timezone.label(class_='form-label') }}
-        {{ tz_form.timezone(class_='form-control') }}
-    </div>
-    <button type="submit" class="btn btn-primary mt-2">{{ tz_form.submit.label.text }}</button>
-</form>
-<form method="post" class="mt-3">
-    {{ notif_form.hidden_tag() }}
-    <div class="form-group">
-        {{ notif_form.phone_number.label(class_='form-label') }}
-        {{ notif_form.phone_number(class_='form-control') }}
-    </div>
-    <div class="form-check mt-2">
-        {{ notif_form.notify_transfers(class_='form-check-input') }}
-        {{ notif_form.notify_transfers.label(class_='form-check-label') }}
-    </div>
-    <button type="submit" class="btn btn-primary mt-2">{{ notif_form.submit.label.text }}</button>
-</form>
-<hr>
-<h3>Transfers</h3>
-<ul>
-    {% for t in transfers %}
-    <li><a href="{{ url_for('transfer.view_transfer', transfer_id=t.id) }}">{{ t.id }}</a></li>
-    {% else %}
-    <li>No transfers found.</li>
-    {% endfor %}
-</ul>
-<h3>Invoices</h3>
-<ul>
-    {% for inv in invoices %}
-    <li><a href="{{ url_for('invoice.view_invoice', invoice_id=inv.id) }}">{{ inv.id }}</a></li>
-    {% else %}
-    <li>No invoices found.</li>
-    {% endfor %}
-</ul>
+</div>
 {% endblock %}
