@@ -62,11 +62,29 @@ that developers should keep in mind when working on or extending the routes.
 - **Blueprint name and prefix:** `main` (no additional prefix).
 - **Primary endpoints:** A single `GET /` route renders the transfers
   dashboard, pre-populating create/edit forms (`TransferForm`).
+  - Dashboard trend cards/charts accept an `interval` query parameter on `/`
+    (for example `/?interval=month`) to control chart aggregation windows.
+  - Supported interval keys are `week`, `month`, `quarter`, `half_year`, and
+    `year`.
 - **Key dependencies:** Imports `TransferForm` on demand to avoid circular
   dependencies and uses `current_user` from `flask_login` to display the
-  authenticated user.
+  authenticated user. Aggregation behavior for the dashboard widgets and trend
+  charts is centralized in `app/services/dashboard_metrics.py`.
 - **Cross-cutting behaviors:** The home view is guarded by `@login_required`
-  and mirrors the transfer blueprint patterns for rendering forms.
+  and mirrors the transfer blueprint patterns for rendering forms. When no
+  interval is provided, the dashboard defaults to `week` buckets (6 periods by
+  default in the current trend dataset).
+
+#### Dashboard interval + bucket consistency notes
+
+- Interval bucket boundaries are derived from normalized period starts in
+  `app/services/dashboard_metrics.py` (`_interval_start` and `_add_interval`).
+  Weekly buckets start on Monday (`date.weekday()` alignment), month/quarter/
+  half-year/year buckets start on the first day of the corresponding period.
+- Bucket labels are generated from each bucket's computed start/end dates using
+  the same range format (`"%b %d – %b %d"`). Keep label formatting and boundary
+  calculations in sync when adding new interval keys so chart/table views stay
+  consistent.
 
 ### `location_routes`
 
