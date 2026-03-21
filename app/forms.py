@@ -1131,6 +1131,16 @@ class InvoiceForm(FlaskForm):
 
 
 class VendorInvoiceReportForm(FlaskForm):
+    payment_status = SelectField(
+        "Payment Status",
+        choices=[
+            ("all", "all"),
+            ("paid", "paid"),
+            ("unpaid", "unpaid"),
+        ],
+        default="all",
+        validators=[Optional()],
+    )
     customer = SelectMultipleField(
         "Vendors",
         coerce=int,
@@ -1781,4 +1791,3 @@ class NoteForm(FlaskForm):
     )
     pinned = BooleanField("Pin note")
     submit = SubmitField("Save Note")
-
