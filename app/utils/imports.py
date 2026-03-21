@@ -270,7 +270,11 @@ def _import_products(path):
     created = 0
     for name, price, cost, gl_code_id, recipe_items in pending:
         product = Product(
-            name=name, price=price, cost=cost, gl_code_id=gl_code_id
+            name=name,
+            price=price,
+            invoice_sale_price=price,
+            cost=cost,
+            gl_code_id=gl_code_id,
         )
         db.session.add(product)
         db.session.flush()

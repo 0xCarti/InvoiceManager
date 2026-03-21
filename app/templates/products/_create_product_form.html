@@ -17,6 +17,12 @@
         <div class="col-md-6 mb-3">
             {{ form.price.label(class="form-label") }}
             {{ form.price(class="form-control") }}
+            <div class="form-text">Terminal/event sale price.</div>
+        </div>
+        <div class="col-md-6 mb-3">
+            {{ form.invoice_sale_price.label(class="form-label") }}
+            {{ form.invoice_sale_price(class="form-control") }}
+            <div class="form-text">Used for 3rd-party customer invoices.</div>
         </div>
     </div>
     <div class="row">
