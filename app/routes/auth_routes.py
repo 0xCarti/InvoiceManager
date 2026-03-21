@@ -255,33 +255,47 @@ def profile():
         phone_number=current_user.phone_number or "",
         notify_transfers=current_user.notify_transfers,
     )
-    if form.validate_on_submit():
+    status_messages = {}
+    if request.args.get("password_status") == "updated":
+        status_messages["password"] = ("success", "Password updated.")
+    if request.args.get("timezone_status") == "updated":
+        status_messages["timezone"] = ("success", "Timezone updated.")
+    if request.args.get("notifications_status") == "updated":
+        status_messages["notifications"] = (
+            "success",
+            "Notification settings updated.",
+        )
+
+    password_submitted = "new_password" in request.form
+    timezone_submitted = "timezone" in request.form
+    notifications_submitted = (
+        "phone_number" in request.form or "notify_transfers" in request.form
+    )
+
+    if password_submitted and form.validate_on_submit():
         if not check_password_hash(
             current_user.password, form.current_password.data
         ):
-            flash("Current password incorrect.", "danger")
+            form.current_password.errors.append("Current password incorrect.")
         else:
             current_user.password = generate_password_hash(
                 form.new_password.data
             )
             db.session.commit()
-            flash("Password updated.", "success")
-            return redirect(url_for("auth.profile"))
-    elif "timezone" in request.form and tz_form.validate_on_submit():
+            return redirect(url_for("auth.profile", password_status="updated"))
+    elif timezone_submitted and tz_form.validate_on_submit():
         current_user.timezone = tz_form.timezone.data or None
         db.session.commit()
-        flash("Timezone updated.", "success")
-        return redirect(url_for("auth.profile"))
-    elif (
-        "phone_number" in request.form or "notify_transfers" in request.form
-    ) and notif_form.validate_on_submit():
+        return redirect(url_for("auth.profile", timezone_status="updated"))
+    elif notifications_submitted and notif_form.validate_on_submit():
         current_user.phone_number = notif_form.phone_number.data or None
         current_user.notify_transfers = (
             notif_form.notify_transfers.data or False
         )
         db.session.commit()
-        flash("Notification settings updated.", "success")
-        return redirect(url_for("auth.profile"))
+        return redirect(
+            url_for("auth.profile", notifications_status="updated")
+        )
 
     transfers = (
         Transfer.query.filter_by(user_id=current_user.id)
@@ -299,6 +313,10 @@ def profile():
         form=form,
         tz_form=tz_form,
         notif_form=notif_form,
+        status_messages=status_messages,
+        password_submitted=password_submitted,
+        timezone_submitted=timezone_submitted,
+        notifications_submitted=notifications_submitted,
         transfers=transfers,
         invoices=invoices,
     )
@@ -336,24 +354,50 @@ def user_profile(user_id):
         phone_number=user.phone_number or "",
         notify_transfers=user.notify_transfers,
     )
-    if form.validate_on_submit():
+    status_messages = {}
+    if request.args.get("password_status") == "updated":
+        status_messages["password"] = ("success", "Password updated.")
+    if request.args.get("timezone_status") == "updated":
+        status_messages["timezone"] = ("success", "Timezone updated.")
+    if request.args.get("notifications_status") == "updated":
+        status_messages["notifications"] = (
+            "success",
+            "Notification settings updated.",
+        )
+
+    password_submitted = "new_password" in request.form
+    timezone_submitted = "timezone" in request.form
+    notifications_submitted = (
+        "phone_number" in request.form or "notify_transfers" in request.form
+    )
+
+    if password_submitted and form.validate_on_submit():
         user.password = generate_password_hash(form.new_password.data)
         db.session.commit()
-        flash("Password updated.", "success")
-        return redirect(url_for("admin.user_profile", user_id=user_id))
-    elif "timezone" in request.form and tz_form.validate_on_submit():
+        return redirect(
+            url_for(
+                "admin.user_profile", user_id=user_id, password_status="updated"
+            )
+        )
+    elif timezone_submitted and tz_form.validate_on_submit():
         user.timezone = tz_form.timezone.data or None
         db.session.commit()
-        flash("Timezone updated.", "success")
-        return redirect(url_for("admin.user_profile", user_id=user_id))
-    elif (
-        "phone_number" in request.form or "notify_transfers" in request.form
-    ) and notif_form.validate_on_submit():
+        return redirect(
+            url_for(
+                "admin.user_profile", user_id=user_id, timezone_status="updated"
+            )
+        )
+    elif notifications_submitted and notif_form.validate_on_submit():
         user.phone_number = notif_form.phone_number.data or None
         user.notify_transfers = notif_form.notify_transfers.data or False
         db.session.commit()
-        flash("Notification settings updated.", "success")
-        return redirect(url_for("admin.user_profile", user_id=user_id))
+        return redirect(
+            url_for(
+                "admin.user_profile",
+                user_id=user_id,
+                notifications_status="updated",
+            )
+        )
 
     transfers = (
         Transfer.query.filter_by(user_id=user.id)
@@ -371,6 +415,10 @@ def user_profile(user_id):
         form=form,
         tz_form=tz_form,
         notif_form=notif_form,
+        status_messages=status_messages,
+        password_submitted=password_submitted,
+        timezone_submitted=timezone_submitted,
+        notifications_submitted=notifications_submitted,
         transfers=transfers,
         invoices=invoices,
     )
