@@ -479,6 +479,9 @@ def create_product():
         product = Product(
             name=form.name.data,
             price=form.price.data,
+            invoice_sale_price=form.invoice_sale_price.data
+            if form.invoice_sale_price.data is not None
+            else form.price.data,
             cost=form.cost.data,  # Save cost
             gl_code=form.gl_code.data,
             gl_code_id=selected_gl_code_id,
@@ -538,6 +541,9 @@ def ajax_create_product():
         product = Product(
             name=form.name.data,
             price=form.price.data,
+            invoice_sale_price=form.invoice_sale_price.data
+            if form.invoice_sale_price.data is not None
+            else form.price.data,
             cost=form.cost.data,
             gl_code=form.gl_code.data,
             gl_code_id=selected_gl_code_id,
@@ -575,6 +581,9 @@ def ajax_create_product():
             "id": product.id,
             "name": product.name,
             "price": float(product.price) if product.price is not None else None,
+            "invoice_sale_price": float(product.invoice_sale_price)
+            if product.invoice_sale_price is not None
+            else None,
         }
         return jsonify(success=True, html=row_html, product=product_payload)
     return jsonify(success=False, errors=form.errors), 400
@@ -599,6 +608,9 @@ def quick_create_product():
         product_obj = Product(
             name=form.name.data,
             price=form.price.data,
+            invoice_sale_price=form.invoice_sale_price.data
+            if form.invoice_sale_price.data is not None
+            else form.price.data,
             cost=cost,
             sales_gl_code_id=sales_gl_code_id,
             recipe_yield_quantity=float(yield_quantity),
@@ -655,6 +667,7 @@ def copy_product(product_id):
     form = ProductWithRecipeForm()
     form.name.data = product_obj.name
     form.price.data = product_obj.price
+    form.invoice_sale_price.data = product_obj.invoice_sale_price
     form.cost.data = product_obj.cost or 0.0
     form.gl_code.data = product_obj.gl_code
     form.gl_code_id.data = product_obj.gl_code_id
@@ -695,6 +708,11 @@ def edit_product(product_id):
     if form.validate_on_submit():
         product.name = form.name.data
         product.price = form.price.data
+        product.invoice_sale_price = (
+            form.invoice_sale_price.data
+            if form.invoice_sale_price.data is not None
+            else form.price.data
+        )
         product.cost = form.cost.data or 0.0  # 👈 Update cost
         selected_gl_code_id = form.gl_code_id.data or None
         if selected_gl_code_id == 0:
@@ -746,6 +764,7 @@ def edit_product(product_id):
     elif request.method == "GET":
         form.name.data = product.name
         form.price.data = product.price
+        form.invoice_sale_price.data = product.invoice_sale_price
         form.cost.data = product.cost or 0.0  # 👈 Pre-fill cost
         form.gl_code.data = product.gl_code
         form.gl_code_id.data = product.gl_code_id
@@ -1060,7 +1079,14 @@ def search_products():
     ).all()
     # Include id so that search results can be referenced elsewhere
     product_data = [
-        {"id": product.id, "name": product.name, "price": product.price}
+        {
+            "id": product.id,
+            "name": product.name,
+            "price": product.price,
+            "invoice_sale_price": float(product.invoice_sale_price)
+            if product.invoice_sale_price is not None
+            else None,
+        }
         for product in matched_products
     ]
     # Return matched product names and prices as JSON

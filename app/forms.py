@@ -883,6 +883,11 @@ class ProductForm(FlaskForm):
     price = DecimalField(
         "Price", validators=[InputRequired(), NumberRange(min=0)]
     )
+    invoice_sale_price = DecimalField(
+        "Invoice Sale Price",
+        validators=[Optional(), NumberRange(min=0)],
+        places=2,
+    )
     cost = DecimalField(
         "Cost", validators=[InputRequired(), NumberRange(min=0)], default=0.0
     )
@@ -1078,6 +1083,11 @@ class QuickProductForm(FlaskForm):
     name = StringField("Product Name", validators=[DataRequired(), Length(max=100)])
     price = DecimalField(
         "Price", validators=[InputRequired(), NumberRange(min=0)]
+    )
+    invoice_sale_price = DecimalField(
+        "Invoice Sale Price",
+        validators=[Optional(), NumberRange(min=0)],
+        places=2,
     )
     cost = DecimalField(
         "Cost", validators=[Optional(), NumberRange(min=0)], default=0.0

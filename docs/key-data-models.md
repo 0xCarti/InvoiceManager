@@ -48,7 +48,9 @@ background tasks.
 
 ### Product
 * **Table**: `product`
-* **Purpose**: Sellable item with price, cost, and GL codes for accounting.
+* **Purpose**: Sellable item with separate terminal/event `price`, dedicated
+  `invoice_sale_price` for 3rd-party customer invoices, cost, and GL codes for
+  accounting.
 * **Key Relationships**: Connected to `InvoiceProduct` (sales history),
   `ProductRecipeItem` (ingredients), `TerminalSale` (event sales), and optional
   `GLCode` entries for accounting mappings.

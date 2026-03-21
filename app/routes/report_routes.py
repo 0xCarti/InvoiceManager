@@ -292,6 +292,9 @@ def _create_product_from_quick_form(form: QuickProductForm) -> Product:
     product_obj = Product(
         name=form.name.data,
         price=form.price.data,
+        invoice_sale_price=form.invoice_sale_price.data
+        if form.invoice_sale_price.data is not None
+        else form.price.data,
         cost=cost_value,
         sales_gl_code_id=sales_gl_code_id,
         recipe_yield_quantity=float(yield_quantity),
