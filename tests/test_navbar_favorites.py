@@ -66,3 +66,21 @@ def test_profile_favorite_toggle_is_keyboard_accessible(client, app):
     html = response.data.decode()
     assert "/favorite/auth.profile" in html
     assert 'aria-label="Toggle favorite for Profile"' in html
+
+
+def test_sidebar_menu_search_includes_report_destinations(client, app):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.data.decode()
+    assert 'id="sidebarMenuSearch"' in html
+    assert "Search menu..." in html
+    assert "No matches found" in html
+    assert (
+        'data-nav-endpoint="report.customer_invoice_report"' in html
+    )

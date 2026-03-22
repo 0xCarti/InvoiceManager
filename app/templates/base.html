@@ -100,6 +100,22 @@
             padding-left: 0.75rem;
         }
 
+        .offcanvas-body .nav-search-empty {
+            display: none;
+        }
+
+        .offcanvas-body .nav-search-empty.is-visible {
+            display: block;
+        }
+
+        .offcanvas-body .nav-item.is-filtered-out {
+            display: none;
+        }
+
+        .offcanvas-body .nav-group-wrapper.is-filtered-out {
+            display: none;
+        }
+
         .navbar-nav.flex-row .nav-item {
             margin-right: 0.5rem;
         }
@@ -272,6 +288,20 @@
                     {% set current_endpoint = request.endpoint %}
                     <ul class="navbar-nav me-auto">
                         {% if current_user.is_authenticated %}
+                        {% set report_links = [
+                            ('report.customer_invoice_report', 'Customer Invoice Report'),
+                            ('report.received_invoice_report', 'Received Invoice Report'),
+                            ('report.purchase_inventory_summary', 'Purchase Inventory Summary'),
+                            ('report.inventory_variance_report', 'Inventory Variance Report'),
+                            ('report.product_sales_report', 'Revenue Report'),
+                            ('report.product_stock_usage_report', 'Stock Usage Report'),
+                            ('report.department_sales_forecast', 'Department Sales Forecast'),
+                            ('report.product_recipe_report', 'Recipe Report'),
+                            ('report.product_location_sales_report', 'Product Location Sales Report'),
+                            ('report.event_terminal_sales_report', 'Event Terminal Sales Report'),
+                            ('report.purchase_cost_forecast', 'Forecasted Stock Item Sales'),
+                            ('report.customer_invoice_report', 'Vendor Invoices Report')
+                        ] %}
                         {% set nav_groups = [
                             ('Sales', [
                                 ('invoice.view_invoices', 'Invoices'),
@@ -293,7 +323,8 @@
                                 ('glcode.view_gl_codes', 'GL Codes'),
                                 ('transfer.view_transfers', 'Transfers'),
                                 ('spoilage.view_spoilage', 'Spoilage')
-                            ])
+                            ]),
+                            ('Reports', report_links)
                         ] %}
                         {% if current_user.is_admin %}
                         {% set nav_groups = nav_groups + [
@@ -308,6 +339,18 @@
                             ])
                         ] %}
                         {% endif %}
+                        <li class="mb-2">
+                            <input
+                                type="search"
+                                id="sidebarMenuSearch"
+                                class="form-control form-control-sm"
+                                placeholder="Search menu..."
+                                aria-label="Search menu"
+                            >
+                        </li>
+                        <li id="sidebarMenuSearchEmptyState" class="nav-search-empty text-muted small px-1 py-2">
+                            No matches found
+                        </li>
                         {% for group_label, links in nav_groups %}
                         {% set group_namespace = group_label.lower().replace('/', '-').replace(' ', '-') %}
                         {% set group_id = 'nav-group-' ~ group_namespace %}
@@ -317,7 +360,7 @@
                                 {% set ns.has_active = true %}
                             {% endif %}
                         {% endfor %}
-                        <li class="nav-item d-block">
+                        <li class="nav-item d-block nav-group-wrapper" data-nav-group-wrapper data-nav-group-id="{{ group_id }}">
                             <button
                                 class="nav-group-toggle"
                                 type="button"
@@ -325,13 +368,14 @@
                                 data-bs-target="#{{ group_id }}"
                                 aria-expanded="{{ 'true' if ns.has_active else 'false' }}"
                                 aria-controls="{{ group_id }}"
+                                data-default-expanded="{{ 'true' if ns.has_active else 'false' }}"
                             >
                                 {{ group_label }}
                             </button>
                             <ul class="collapse nav-group-links{% if ns.has_active %} show{% endif %}" id="{{ group_id }}">
                                 {% for endpoint, label in links %}
                                 {% set module_url = safe_url_for(endpoint) %}
-                                <li class="nav-item">
+                                <li class="nav-item{% if group_label == 'Reports' %} is-filtered-out{% endif %}" data-nav-search-item data-nav-label="{{ label|lower|trim }}" data-nav-endpoint="{{ endpoint|lower }}">
                                     {% if module_url %}
                                     <a class="nav-link{% if current_endpoint == endpoint %} active fw-semibold{% endif %}" href="{{ module_url }}">
                                         {{ label }}
@@ -431,6 +475,78 @@
     <script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
     <script src="{{ url_for('static', filename='js/filter_defaults.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/security.js') }}" defer></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const searchInput = document.getElementById("sidebarMenuSearch");
+            const emptyState = document.getElementById("sidebarMenuSearchEmptyState");
+            if (!searchInput || !emptyState) {
+                return;
+            }
+            const groupWrappers = Array.from(
+                document.querySelectorAll("[data-nav-group-wrapper]")
+            );
+            const searchItems = Array.from(
+                document.querySelectorAll("[data-nav-search-item]")
+            );
+
+            const setGroupExpanded = (wrapper, shouldExpand) => {
+                const toggle = wrapper.querySelector(".nav-group-toggle");
+                const targetSelector = toggle ? toggle.dataset.bsTarget : "";
+                const groupList = targetSelector ? document.querySelector(targetSelector) : null;
+                if (!toggle || !groupList) {
+                    return;
+                }
+                toggle.setAttribute("aria-expanded", shouldExpand ? "true" : "false");
+                groupList.classList.toggle("show", shouldExpand);
+            };
+
+            const filterMenu = () => {
+                const normalizedQuery = searchInput.value.trim().toLowerCase();
+                const hasQuery = normalizedQuery.length > 0;
+                let totalVisibleMatches = 0;
+
+                searchItems.forEach((item) => {
+                    const label = item.dataset.navLabel || "";
+                    const endpoint = item.dataset.navEndpoint || "";
+                    const matches = !hasQuery || label.includes(normalizedQuery) || endpoint.includes(normalizedQuery);
+                    item.classList.toggle("is-filtered-out", !matches);
+                    if (matches) {
+                        totalVisibleMatches += 1;
+                    }
+                });
+
+                groupWrappers.forEach((wrapper) => {
+                    const groupId = wrapper.dataset.navGroupId;
+                    const items = groupId
+                        ? Array.from(
+                            wrapper.querySelectorAll(`#${groupId} [data-nav-search-item]`)
+                        )
+                        : [];
+                    const visibleItems = items.filter(
+                        (item) => !item.classList.contains("is-filtered-out")
+                    );
+                    const hasVisibleItems = visibleItems.length > 0;
+                    wrapper.classList.toggle("is-filtered-out", !hasVisibleItems);
+
+                    if (hasQuery && hasVisibleItems) {
+                        setGroupExpanded(wrapper, true);
+                        return;
+                    }
+                    const toggle = wrapper.querySelector(".nav-group-toggle");
+                    const defaultExpanded = toggle?.dataset.defaultExpanded === "true";
+                    setGroupExpanded(wrapper, defaultExpanded);
+                });
+
+                emptyState.classList.toggle(
+                    "is-visible",
+                    hasQuery && totalVisibleMatches === 0
+                );
+            };
+
+            searchInput.addEventListener("input", filterMenu);
+            filterMenu();
+        });
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 
