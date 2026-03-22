@@ -77,24 +77,24 @@
             background-color: #f8f8f8;
         }
 
-        .offcanvas-body .nav-item {
+        #navbarNav .offcanvas-body .nav-item {
             display: flex;
             align-items: center;
             gap: 0.25rem;
         }
 
-        .offcanvas-body .nav-item .nav-link {
+        #navbarNav .offcanvas-body .nav-item .nav-link {
             display: inline-block;
             width: auto;
         }
 
-        .offcanvas-body .nav-group-wrapper {
+        #navbarNav .offcanvas-body .nav-group-wrapper {
             border-top: 1px solid var(--bs-border-color-translucent);
             padding-top: 0.15rem;
             margin-top: 0.2rem;
         }
 
-        .offcanvas-body .nav-group-toggle {
+        #navbarNav .offcanvas-body .nav-group-toggle {
             width: 100%;
             text-align: left;
             border: 0;
@@ -110,42 +110,42 @@
             justify-content: space-between;
         }
 
-        .offcanvas-body .nav-group-toggle:hover {
+        #navbarNav .offcanvas-body .nav-group-toggle:hover {
             color: var(--bs-body-color);
             background-color: var(--bs-tertiary-bg);
         }
 
-        .offcanvas-body .nav-group-toggle:focus-visible,
-        .offcanvas-body .nav-link:focus-visible,
-        .offcanvas-body .nav-favorite-toggle:focus-visible {
+        #navbarNav .offcanvas-body .nav-group-toggle:focus-visible,
+        #navbarNav .offcanvas-body .nav-link:focus-visible,
+        #navbarNav .offcanvas-body .nav-favorite-toggle:focus-visible {
             outline: 2px solid var(--bs-primary);
             outline-offset: 2px;
             border-radius: 0.25rem;
         }
 
-        .offcanvas-body .nav-group-toggle .nav-group-chevron {
+        #navbarNav .offcanvas-body .nav-group-toggle .nav-group-chevron {
             font-size: 0.8rem;
             transition: transform 0.2s ease;
             color: var(--bs-secondary-color);
         }
 
-        .offcanvas-body .nav-group-toggle[aria-expanded="true"] .nav-group-chevron {
+        #navbarNav .offcanvas-body .nav-group-toggle[aria-expanded="true"] .nav-group-chevron {
             transform: rotate(90deg);
             color: var(--bs-body-color);
         }
 
-        .offcanvas-body .nav-group-links {
+        #navbarNav .offcanvas-body .nav-group-links {
             padding-left: 0;
             margin-bottom: 0.25rem;
         }
 
-        .offcanvas-body .nav-group-links .nav-item {
+        #navbarNav .offcanvas-body .nav-group-links .nav-item {
             padding-left: 0.8rem;
             border-left: 2px solid transparent;
             min-height: 2rem;
         }
 
-        .offcanvas-body .nav-group-links .nav-link {
+        #navbarNav .offcanvas-body .nav-group-links .nav-link {
             flex: 1;
             padding: 0.3rem 0.45rem;
             border-radius: 0.25rem;
@@ -153,39 +153,56 @@
             font-size: 0.95rem;
         }
 
-        .offcanvas-body .nav-group-links .nav-link.active {
+        #navbarNav .offcanvas-body .nav-group-links .nav-link.active {
             font-weight: 700;
             color: var(--bs-emphasis-color);
             background-color: rgba(var(--bs-primary-rgb), 0.14);
         }
 
-        .offcanvas-body .nav-group-links .nav-item.nav-item-active {
+        #navbarNav .offcanvas-body .nav-group-links .nav-item.nav-item-active {
             border-left-color: var(--bs-primary);
             background-color: rgba(var(--bs-primary-rgb), 0.06);
             border-radius: 0 0.25rem 0.25rem 0;
         }
 
-        .offcanvas-body .nav-favorite-toggle {
+        #navbarNav .offcanvas-body .nav-favorite-toggle {
             text-decoration: none;
             padding: 0.15rem 0.2rem;
             line-height: 1;
             border-radius: 0.2rem;
         }
 
-        .offcanvas-body .nav-search-empty {
+        #navbarNav .offcanvas-body .nav-search-empty {
             display: none;
         }
 
-        .offcanvas-body .nav-search-empty.is-visible {
+        #navbarNav .offcanvas-body .nav-search-empty.is-visible {
             display: block;
         }
 
-        .offcanvas-body .nav-item.is-filtered-out {
+        #navbarNav .offcanvas-body .nav-item.is-filtered-out {
             display: none;
         }
 
-        .offcanvas-body .nav-group-wrapper.is-filtered-out {
+        #navbarNav .offcanvas-body .nav-group-wrapper.is-filtered-out {
             display: none;
+        }
+
+        #navbarNav .offcanvas-body {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        #navbarNav .offcanvas-body .sidebar-primary-nav {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        #navbarNav .offcanvas-body .sidebar-secondary-nav {
+            margin-top: 0.75rem;
+            padding-top: 0.6rem;
+            border-top: 1px solid var(--bs-border-color-translucent);
         }
 
         .navbar-nav.flex-row .nav-item {
@@ -325,7 +342,7 @@
             .narrow-field {
                 max-width: 100%;
             }
-            .offcanvas-body .nav-group-links .nav-item {
+            #navbarNav .offcanvas-body .nav-group-links .nav-item {
                 align-items: center;
                 flex-direction: row;
             }
@@ -387,7 +404,7 @@
                 </div>
                 <div class="offcanvas-body">
                     {% set current_endpoint = request.endpoint %}
-                    <ul class="navbar-nav me-auto">
+                    <ul class="navbar-nav sidebar-primary-nav me-auto">
                         {% if current_user.is_authenticated %}
                         {% set nav_groups = GROUPED_NAV_LINKS() %}
                         <li class="mb-2">
@@ -445,7 +462,7 @@
                         {% endfor %}
                         {% endif %}
                     </ul>
-                    <ul class="navbar-nav">
+                    <ul class="navbar-nav sidebar-secondary-nav">
                         {% if not current_user.is_authenticated %}
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('auth.login') }}">Login</a>
