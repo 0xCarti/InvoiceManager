@@ -229,6 +229,12 @@
             text-decoration: none;
         }
 
+        .sidebar-collapse-toggle {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
         .nav-top:hover {
             background-color: #dedcdc;
             color: black;
@@ -277,6 +283,42 @@
             .desktop-dense .compact-table td {
                 padding: 0.45rem 0.55rem;
             }
+
+            body.has-auth-sidebar {
+                --desktop-sidebar-expanded-width: 18rem;
+                --desktop-sidebar-collapsed-width: 13.5rem;
+            }
+
+            body.has-auth-sidebar #navbarNav.offcanvas-lg {
+                width: var(--desktop-sidebar-expanded-width);
+                max-width: 100%;
+                top: 0;
+                border-right: 1px solid var(--bs-border-color);
+            }
+
+            body.has-auth-sidebar #navbarNav .offcanvas-body {
+                padding-bottom: 1rem;
+            }
+
+            body.has-auth-sidebar.sidebar-desktop-collapsed #navbarNav.offcanvas-lg {
+                width: var(--desktop-sidebar-collapsed-width);
+            }
+
+            body.has-auth-sidebar .container.mt-3 {
+                margin-left: calc(var(--desktop-sidebar-expanded-width) + 1rem);
+                max-width: none;
+                width: auto;
+                transition: margin-left 0.2s ease;
+            }
+
+            body.has-auth-sidebar.sidebar-desktop-collapsed .container.mt-3 {
+                margin-left: calc(var(--desktop-sidebar-collapsed-width) + 1rem);
+            }
+
+            body.has-auth-sidebar nav.navbar .container-fluid {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
         }
 
         @media (max-width: 576px) {
@@ -301,7 +343,7 @@
     </style>
 </head>
 
-<body>
+<body class="{% if current_user.is_authenticated %}has-auth-sidebar{% endif %}">
     <nav class="navbar navbar-light bg-light">
         <div class="container-fluid">
             <button class="navbar-toggler me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
@@ -347,9 +389,14 @@
             </ul>
             </div>
             {% endif %}
-            <div class="offcanvas offcanvas-start" tabindex="-1" id="navbarNav" aria-labelledby="offcanvasNavbarLabel">
+            <div class="offcanvas offcanvas-start offcanvas-lg" tabindex="-1" id="navbarNav" aria-labelledby="offcanvasNavbarLabel">
                 <div class="offcanvas-header">
                     <h5 class="offcanvas-title" id="offcanvasNavbarLabel">Menu</h5>
+                    {% if current_user.is_authenticated %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary sidebar-collapse-toggle d-none d-lg-inline-flex me-2" id="sidebarCollapseToggle" aria-pressed="false">
+                        Collapse
+                    </button>
+                    {% endif %}
                     <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"
                         aria-label="Close"></button>
                 </div>
@@ -549,6 +596,10 @@
         document.addEventListener("DOMContentLoaded", () => {
             const searchInput = document.getElementById("sidebarMenuSearch");
             const emptyState = document.getElementById("sidebarMenuSearchEmptyState");
+            const sidebarElement = document.getElementById("navbarNav");
+            const sidebarCollapseToggle = document.getElementById("sidebarCollapseToggle");
+            const desktopBreakpointQuery = window.matchMedia("(min-width: 992px)");
+            const storageKey = "assetflow.sidebarDesktopCollapsed";
             if (!searchInput || !emptyState) {
                 return;
             }
@@ -568,6 +619,25 @@
                 }
                 toggle.setAttribute("aria-expanded", shouldExpand ? "true" : "false");
                 groupList.classList.toggle("show", shouldExpand);
+            };
+
+            const expandActiveGroups = () => {
+                groupWrappers.forEach((wrapper) => {
+                    const activeItem = wrapper.querySelector(".nav-item-active");
+                    if (activeItem) {
+                        setGroupExpanded(wrapper, true);
+                    }
+                });
+            };
+
+            const applyDesktopSidebarState = () => {
+                const prefersCollapsed = window.localStorage.getItem(storageKey) === "true";
+                const shouldCollapse = desktopBreakpointQuery.matches && prefersCollapsed;
+                document.body.classList.toggle("sidebar-desktop-collapsed", shouldCollapse);
+                if (sidebarCollapseToggle) {
+                    sidebarCollapseToggle.setAttribute("aria-pressed", shouldCollapse ? "true" : "false");
+                    sidebarCollapseToggle.textContent = shouldCollapse ? "Expand" : "Collapse";
+                }
             };
 
             const filterMenu = () => {
@@ -614,7 +684,35 @@
             };
 
             searchInput.addEventListener("input", filterMenu);
+            if (sidebarCollapseToggle) {
+                sidebarCollapseToggle.addEventListener("click", () => {
+                    const currentlyCollapsed =
+                        window.localStorage.getItem(storageKey) === "true";
+                    window.localStorage.setItem(
+                        storageKey,
+                        currentlyCollapsed ? "false" : "true"
+                    );
+                    applyDesktopSidebarState();
+                });
+            }
+
+            if (sidebarElement) {
+                sidebarElement.addEventListener("show.bs.offcanvas", expandActiveGroups);
+            }
+
+            desktopBreakpointQuery.addEventListener("change", applyDesktopSidebarState);
+            document.querySelectorAll("#navbarNav .nav-link[href]").forEach((link) => {
+                link.addEventListener("click", () => {
+                    if (!desktopBreakpointQuery.matches && sidebarElement) {
+                        const offcanvasInstance = bootstrap.Offcanvas.getInstance(sidebarElement);
+                        offcanvasInstance?.hide();
+                    }
+                });
+            });
+
+            applyDesktopSidebarState();
             filterMenu();
+            expandActiveGroups();
         });
     </script>
     {% block scripts %}{% endblock %}
