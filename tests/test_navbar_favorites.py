@@ -1,6 +1,5 @@
 import os
 
-from app import db
 from app.models import User
 from tests.utils import login
 
@@ -37,3 +36,33 @@ def test_navbar_renders_when_favorite_endpoint_is_missing(
     html = response.data.decode()
     assert "Transfers" in html
     assert "missing.endpoint" not in html
+
+
+def test_sidebar_group_links_keep_favorite_toggle_controls(client, app):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.data.decode()
+    assert 'aria-controls="nav-group-sales"' in html
+    assert "/favorite/invoice.view_invoices" in html
+    assert 'aria-label="Toggle favorite for Invoices"' in html
+    assert "&#9733;" in html or "&#9734;" in html
+
+
+def test_profile_favorite_toggle_is_keyboard_accessible(client, app):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.data.decode()
+    assert "/favorite/auth.profile" in html
+    assert 'aria-label="Toggle favorite for Profile"' in html

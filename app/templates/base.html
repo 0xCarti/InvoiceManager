@@ -339,7 +339,7 @@
                                     {% else %}
                                     <span class="nav-link disabled" title="Unavailable in this build">{{ label }}</span>
                                     {% endif %}
-                                    <a href="{{ url_for('auth.toggle_favorite', link=endpoint) }}" class="ms-1">
+                                    <a href="{{ url_for('auth.toggle_favorite', link=endpoint) }}" class="ms-1" aria-label="Toggle favorite for {{ label }}" title="Toggle favorite">
                                         {% if endpoint in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
                                     </a>
                                 </li>
@@ -368,7 +368,7 @@
                             {% else %}
                             <span class="nav-link disabled" title="Unavailable in this build">Profile</span>
                             {% endif %}
-                            <a href="{{ url_for('auth.toggle_favorite', link='auth.profile') }}" class="ms-1">
+                            <a href="{{ url_for('auth.toggle_favorite', link='auth.profile') }}" class="ms-1" aria-label="Toggle favorite for Profile" title="Toggle favorite">
                                 {% if 'auth.profile' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
                             </a>
                         </li>
