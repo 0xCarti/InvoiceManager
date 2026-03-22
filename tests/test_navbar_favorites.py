@@ -4,7 +4,9 @@ from app.models import User
 from tests.utils import login
 
 
-def test_navbar_has_separate_admin_section(client, app):
+def test_navbar_renders_single_favorites_row_without_special_admin_block(
+    client, app
+):
     admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
     admin_pass = os.getenv("ADMIN_PASS", "adminpass")
     with client:
@@ -13,7 +15,7 @@ def test_navbar_has_separate_admin_section(client, app):
         assert resp.status_code == 200
         html = resp.data.decode()
         assert '<ul class="navbar-nav flex-row me-auto">' in html
-        assert '<ul class="navbar-nav flex-row ms-auto">' in html
+        assert '<ul class="navbar-nav flex-row ms-auto">' not in html
 
 
 def test_navbar_renders_when_favorite_endpoint_is_missing(
@@ -84,3 +86,21 @@ def test_sidebar_menu_search_includes_report_destinations(client, app):
     assert (
         'data-nav-endpoint="report.customer_invoice_report"' in html
     )
+
+
+def test_sidebar_menu_search_includes_admin_destinations_for_admins(
+    client, app
+):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.data.decode()
+    assert "System/Admin" in html
+    assert 'data-nav-endpoint="admin.users"' in html
+    assert "/favorite/admin.users" in html
+    assert 'aria-label="Toggle favorite for Control Panel"' in html

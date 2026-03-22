@@ -360,22 +360,7 @@
             {% if current_user.is_authenticated %}
             <div class="d-none d-md-block">
             <ul class="navbar-nav flex-row me-auto">
-                {% for fav in current_user.get_favorites() if not fav.startswith('admin.') %}
-                {% set label = NAV_LINKS.get(fav, fav.split('.')[-1].replace('_', ' ').title()) %}
-                {% set fav_url = safe_url_for(fav) %}
-                <li class="nav-item">
-                    {% if fav_url %}
-                    <a class="nav-link nav-top px-2" href="{{ fav_url }}">{{ label }}</a>
-                    {% else %}
-                    <span class="nav-link nav-top px-2 disabled" title="Unavailable in this build">{{ label }}</span>
-                    {% endif %}
-                </li>
-                {% endfor %}
-            </ul>
-            </div>
-            <div class="d-none d-md-block">
-            <ul class="navbar-nav flex-row ms-auto">
-                {% for fav in current_user.get_favorites() if fav.startswith('admin.') %}
+                {% for fav in current_user.get_favorites() %}
                 {% set label = NAV_LINKS.get(fav, fav.split('.')[-1].replace('_', ' ').title()) %}
                 {% set fav_url = safe_url_for(fav) %}
                 <li class="nav-item">
@@ -404,57 +389,7 @@
                     {% set current_endpoint = request.endpoint %}
                     <ul class="navbar-nav me-auto">
                         {% if current_user.is_authenticated %}
-                        {% set report_links = [
-                            ('report.customer_invoice_report', 'Customer Invoice Report'),
-                            ('report.received_invoice_report', 'Received Invoice Report'),
-                            ('report.purchase_inventory_summary', 'Purchase Inventory Summary'),
-                            ('report.inventory_variance_report', 'Inventory Variance Report'),
-                            ('report.product_sales_report', 'Revenue Report'),
-                            ('report.product_stock_usage_report', 'Stock Usage Report'),
-                            ('report.department_sales_forecast', 'Department Sales Forecast'),
-                            ('report.product_recipe_report', 'Recipe Report'),
-                            ('report.product_location_sales_report', 'Product Location Sales Report'),
-                            ('report.event_terminal_sales_report', 'Event Terminal Sales Report'),
-                            ('report.purchase_cost_forecast', 'Forecasted Stock Item Sales'),
-                            ('report.customer_invoice_report', 'Vendor Invoices Report')
-                        ] %}
-                        {% set nav_groups = [
-                            ('Sales', [
-                                ('invoice.view_invoices', 'Invoices'),
-                                ('customer.view_customers', 'Customers'),
-                                ('event.view_events', 'Events')
-                            ]),
-                            ('Purchasing', [
-                                ('purchase.view_purchase_orders', 'Purchase Orders'),
-                                ('purchase.view_purchase_invoices', 'Purchase Invoices'),
-                                ('vendor.view_vendors', 'Vendors')
-                            ]),
-                            ('Catalog', [
-                                ('item.view_items', 'Items'),
-                                ('product.view_products', 'Products'),
-                                ('menu.view_menus', 'Menus'),
-                                ('locations.view_locations', 'Locations')
-                            ]),
-                            ('Finance', [
-                                ('glcode.view_gl_codes', 'GL Codes'),
-                                ('transfer.view_transfers', 'Transfers'),
-                                ('spoilage.view_spoilage', 'Spoilage')
-                            ]),
-                            ('Reports', report_links)
-                        ] %}
-                        {% if current_user.is_admin %}
-                        {% set nav_groups = nav_groups + [
-                            ('System/Admin', [
-                                ('admin.users', 'Control Panel'),
-                                ('admin.settings', 'Settings'),
-                                ('admin.backups', 'Backups'),
-                                ('admin.import_page', 'Data Imports'),
-                                ('admin.activity_logs', 'Activity Logs'),
-                                ('admin.terminal_sales_mappings', 'Terminal Sales Mappings'),
-                                ('admin.vendor_item_aliases', 'Vendor Item Aliases')
-                            ])
-                        ] %}
-                        {% endif %}
+                        {% set nav_groups = GROUPED_NAV_LINKS() %}
                         <li class="mb-2">
                             <input
                                 type="search"

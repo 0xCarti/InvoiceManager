@@ -70,7 +70,79 @@ NAV_LINKS = {
     "admin.import_page": "Data Imports",
     "admin.activity_logs": "Activity Logs",
     "admin.system_info": "System Info",
+    "admin.vendor_item_aliases": "Vendor Item Aliases",
 }
+
+NAV_GROUPS = (
+    (
+        "Sales",
+        (
+            ("invoice.view_invoices", "Invoices"),
+            ("customer.view_customers", "Customers"),
+            ("event.view_events", "Events"),
+        ),
+        False,
+    ),
+    (
+        "Purchasing",
+        (
+            ("purchase.view_purchase_orders", "Purchase Orders"),
+            ("purchase.view_purchase_invoices", "Purchase Invoices"),
+            ("vendor.view_vendors", "Vendors"),
+        ),
+        False,
+    ),
+    (
+        "Catalog",
+        (
+            ("item.view_items", "Items"),
+            ("product.view_products", "Products"),
+            ("menu.view_menus", "Menus"),
+            ("locations.view_locations", "Locations"),
+        ),
+        False,
+    ),
+    (
+        "Finance",
+        (
+            ("glcode.view_gl_codes", "GL Codes"),
+            ("transfer.view_transfers", "Transfers"),
+            ("spoilage.view_spoilage", "Spoilage"),
+        ),
+        False,
+    ),
+    (
+        "Reports",
+        (
+            ("report.customer_invoice_report", "Customer Invoice Report"),
+            ("report.received_invoice_report", "Received Invoice Report"),
+            ("report.purchase_inventory_summary", "Purchase Inventory Summary"),
+            ("report.inventory_variance_report", "Inventory Variance Report"),
+            ("report.product_sales_report", "Revenue Report"),
+            ("report.product_stock_usage_report", "Stock Usage Report"),
+            ("report.department_sales_forecast", "Department Sales Forecast"),
+            ("report.product_recipe_report", "Recipe Report"),
+            ("report.product_location_sales_report", "Product Location Sales Report"),
+            ("report.event_terminal_sales_report", "Event Terminal Sales Report"),
+            ("report.purchase_cost_forecast", "Forecasted Stock Item Sales"),
+            ("report.customer_invoice_report", "Vendor Invoices Report"),
+        ),
+        False,
+    ),
+    (
+        "System/Admin",
+        (
+            ("admin.users", "Control Panel"),
+            ("admin.settings", "Settings"),
+            ("admin.backups", "Backups"),
+            ("admin.import_page", "Data Imports"),
+            ("admin.activity_logs", "Activity Logs"),
+            ("admin.terminal_sales_mappings", "Terminal Sales Mappings"),
+            ("admin.vendor_item_aliases", "Vendor Item Aliases"),
+        ),
+        True,
+    ),
+)
 
 # Endpoints required for baseline navigation/rendering support.
 MANDATORY_NAV_ENDPOINTS = [
@@ -243,6 +315,21 @@ def create_app(args=None):
     def inject_nav_links():
         """Provide navigation labels to templates."""
         return dict(NAV_LINKS=NAV_LINKS)
+
+    @app.context_processor
+    def inject_grouped_nav_links():
+        """Provide grouped navigation metadata to templates."""
+
+        def grouped_nav_links():
+            if not current_user.is_authenticated:
+                return []
+            return [
+                (label, links)
+                for label, links, admin_only in NAV_GROUPS
+                if not admin_only or current_user.is_admin
+            ]
+
+        return {"GROUPED_NAV_LINKS": grouped_nav_links}
 
     @app.context_processor
     def inject_safe_url_for():
