@@ -80,6 +80,7 @@
         .offcanvas-body .nav-item {
             display: flex;
             align-items: center;
+            gap: 0.25rem;
         }
 
         .offcanvas-body .nav-item .nav-link {
@@ -87,17 +88,88 @@
             width: auto;
         }
 
+        .offcanvas-body .nav-group-wrapper {
+            border-top: 1px solid var(--bs-border-color-translucent);
+            padding-top: 0.15rem;
+            margin-top: 0.2rem;
+        }
+
         .offcanvas-body .nav-group-toggle {
             width: 100%;
             text-align: left;
             border: 0;
             background: transparent;
-            padding: 0.5rem 0;
+            padding: 0.45rem 0.15rem;
+            font-size: 0.82rem;
             font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--bs-secondary-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .offcanvas-body .nav-group-toggle:hover {
+            color: var(--bs-body-color);
+            background-color: var(--bs-tertiary-bg);
+        }
+
+        .offcanvas-body .nav-group-toggle:focus-visible,
+        .offcanvas-body .nav-link:focus-visible,
+        .offcanvas-body .nav-favorite-toggle:focus-visible {
+            outline: 2px solid var(--bs-primary);
+            outline-offset: 2px;
+            border-radius: 0.25rem;
+        }
+
+        .offcanvas-body .nav-group-toggle .nav-group-chevron {
+            font-size: 0.8rem;
+            transition: transform 0.2s ease;
+            color: var(--bs-secondary-color);
+        }
+
+        .offcanvas-body .nav-group-toggle[aria-expanded="true"] .nav-group-chevron {
+            transform: rotate(90deg);
+            color: var(--bs-body-color);
         }
 
         .offcanvas-body .nav-group-links {
-            padding-left: 0.75rem;
+            padding-left: 0;
+            margin-bottom: 0.25rem;
+        }
+
+        .offcanvas-body .nav-group-links .nav-item {
+            padding-left: 0.8rem;
+            border-left: 2px solid transparent;
+            min-height: 2rem;
+        }
+
+        .offcanvas-body .nav-group-links .nav-link {
+            flex: 1;
+            padding: 0.3rem 0.45rem;
+            border-radius: 0.25rem;
+            color: var(--bs-body-color);
+            font-size: 0.95rem;
+        }
+
+        .offcanvas-body .nav-group-links .nav-link.active {
+            font-weight: 700;
+            color: var(--bs-emphasis-color);
+            background-color: rgba(var(--bs-primary-rgb), 0.14);
+        }
+
+        .offcanvas-body .nav-group-links .nav-item.nav-item-active {
+            border-left-color: var(--bs-primary);
+            background-color: rgba(var(--bs-primary-rgb), 0.06);
+            border-radius: 0 0.25rem 0.25rem 0;
+        }
+
+        .offcanvas-body .nav-favorite-toggle {
+            text-decoration: none;
+            padding: 0.15rem 0.2rem;
+            line-height: 1;
+            border-radius: 0.2rem;
         }
 
         .offcanvas-body .nav-search-empty {
@@ -211,12 +283,9 @@
             .narrow-field {
                 max-width: 100%;
             }
-            .offcanvas-body .nav-item {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .offcanvas-body .nav-item .nav-link {
-                margin-bottom: .25rem;
+            .offcanvas-body .nav-group-links .nav-item {
+                align-items: center;
+                flex-direction: row;
             }
             .btn {
                 width: 100%;
@@ -370,12 +439,13 @@
                                 aria-controls="{{ group_id }}"
                                 data-default-expanded="{{ 'true' if ns.has_active else 'false' }}"
                             >
-                                {{ group_label }}
+                                <span>{{ group_label }}</span>
+                                <span class="nav-group-chevron" aria-hidden="true">&#8250;</span>
                             </button>
                             <ul class="collapse nav-group-links{% if ns.has_active %} show{% endif %}" id="{{ group_id }}">
                                 {% for endpoint, label in links %}
                                 {% set module_url = safe_url_for(endpoint) %}
-                                <li class="nav-item{% if group_label == 'Reports' %} is-filtered-out{% endif %}" data-nav-search-item data-nav-label="{{ label|lower|trim }}" data-nav-endpoint="{{ endpoint|lower }}">
+                                <li class="nav-item{% if group_label == 'Reports' %} is-filtered-out{% endif %}{% if current_endpoint == endpoint %} nav-item-active{% endif %}" data-nav-search-item data-nav-label="{{ label|lower|trim }}" data-nav-endpoint="{{ endpoint|lower }}">
                                     {% if module_url %}
                                     <a class="nav-link{% if current_endpoint == endpoint %} active fw-semibold{% endif %}" href="{{ module_url }}">
                                         {{ label }}
@@ -383,7 +453,7 @@
                                     {% else %}
                                     <span class="nav-link disabled" title="Unavailable in this build">{{ label }}</span>
                                     {% endif %}
-                                    <a href="{{ url_for('auth.toggle_favorite', link=endpoint) }}" class="ms-1" aria-label="Toggle favorite for {{ label }}" title="Toggle favorite">
+                                    <a href="{{ url_for('auth.toggle_favorite', link=endpoint) }}" class="ms-1 nav-favorite-toggle" aria-label="Toggle favorite for {{ label }}" title="Toggle favorite">
                                         {% if endpoint in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
                                     </a>
                                 </li>
@@ -412,7 +482,7 @@
                             {% else %}
                             <span class="nav-link disabled" title="Unavailable in this build">Profile</span>
                             {% endif %}
-                            <a href="{{ url_for('auth.toggle_favorite', link='auth.profile') }}" class="ms-1" aria-label="Toggle favorite for Profile" title="Toggle favorite">
+                            <a href="{{ url_for('auth.toggle_favorite', link='auth.profile') }}" class="ms-1 nav-favorite-toggle" aria-label="Toggle favorite for Profile" title="Toggle favorite">
                                 {% if 'auth.profile' in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
                             </a>
                         </li>
