@@ -87,6 +87,19 @@
             width: auto;
         }
 
+        .offcanvas-body .nav-group-toggle {
+            width: 100%;
+            text-align: left;
+            border: 0;
+            background: transparent;
+            padding: 0.5rem 0;
+            font-weight: 600;
+        }
+
+        .offcanvas-body .nav-group-links {
+            padding-left: 0.75rem;
+        }
+
         .navbar-nav.flex-row .nav-item {
             margin-right: 0.5rem;
         }
@@ -256,33 +269,82 @@
                         aria-label="Close"></button>
                 </div>
                 <div class="offcanvas-body">
+                    {% set current_endpoint = request.endpoint %}
                     <ul class="navbar-nav me-auto">
                         {% if current_user.is_authenticated %}
-                        {% for endpoint, label in [
-                            ('transfer.view_transfers', 'Transfers'),
-                            ('spoilage.view_spoilage', 'Spoilage'),
-                            ('item.view_items', 'Items'),
-                            ('locations.view_locations', 'Locations'),
-                            ('menu.view_menus', 'Menus'),
-                            ('product.view_products', 'Products'),
-                            ('glcode.view_gl_codes', 'GL Codes'),
-                            ('purchase.view_purchase_orders', 'Purchase Orders'),
-                            ('purchase.view_purchase_invoices', 'Purchase Invoices'),
-                            ('customer.view_customers', 'Customers'),
-                            ('vendor.view_vendors', 'Vendors'),
-                            ('invoice.view_invoices', 'Invoices'),
-                            ('event.view_events', 'Events')
+                        {% set nav_groups = [
+                            ('Sales', [
+                                ('invoice.view_invoices', 'Invoices'),
+                                ('customer.view_customers', 'Customers'),
+                                ('event.view_events', 'Events')
+                            ]),
+                            ('Purchasing', [
+                                ('purchase.view_purchase_orders', 'Purchase Orders'),
+                                ('purchase.view_purchase_invoices', 'Purchase Invoices'),
+                                ('vendor.view_vendors', 'Vendors')
+                            ]),
+                            ('Catalog', [
+                                ('item.view_items', 'Items'),
+                                ('product.view_products', 'Products'),
+                                ('menu.view_menus', 'Menus'),
+                                ('locations.view_locations', 'Locations')
+                            ]),
+                            ('Finance', [
+                                ('glcode.view_gl_codes', 'GL Codes'),
+                                ('transfer.view_transfers', 'Transfers'),
+                                ('spoilage.view_spoilage', 'Spoilage')
+                            ])
                         ] %}
-                        {% set module_url = safe_url_for(endpoint) %}
-                        <li class="nav-item">
-                            {% if module_url %}
-                            <a class="nav-link" href="{{ module_url }}">{{ label }}</a>
-                            {% else %}
-                            <span class="nav-link disabled" title="Unavailable in this build">{{ label }}</span>
+                        {% if current_user.is_admin %}
+                        {% set nav_groups = nav_groups + [
+                            ('System/Admin', [
+                                ('admin.users', 'Control Panel'),
+                                ('admin.settings', 'Settings'),
+                                ('admin.backups', 'Backups'),
+                                ('admin.import_page', 'Data Imports'),
+                                ('admin.activity_logs', 'Activity Logs'),
+                                ('admin.terminal_sales_mappings', 'Terminal Sales Mappings'),
+                                ('admin.vendor_item_aliases', 'Vendor Item Aliases')
+                            ])
+                        ] %}
+                        {% endif %}
+                        {% for group_label, links in nav_groups %}
+                        {% set group_namespace = group_label.lower().replace('/', '-').replace(' ', '-') %}
+                        {% set group_id = 'nav-group-' ~ group_namespace %}
+                        {% set ns = namespace(has_active=false) %}
+                        {% for endpoint, label in links %}
+                            {% if current_endpoint == endpoint %}
+                                {% set ns.has_active = true %}
                             {% endif %}
-                            <a href="{{ url_for('auth.toggle_favorite', link=endpoint) }}" class="ms-1">
-                                {% if endpoint in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
-                            </a>
+                        {% endfor %}
+                        <li class="nav-item d-block">
+                            <button
+                                class="nav-group-toggle"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#{{ group_id }}"
+                                aria-expanded="{{ 'true' if ns.has_active else 'false' }}"
+                                aria-controls="{{ group_id }}"
+                            >
+                                {{ group_label }}
+                            </button>
+                            <ul class="collapse nav-group-links{% if ns.has_active %} show{% endif %}" id="{{ group_id }}">
+                                {% for endpoint, label in links %}
+                                {% set module_url = safe_url_for(endpoint) %}
+                                <li class="nav-item">
+                                    {% if module_url %}
+                                    <a class="nav-link{% if current_endpoint == endpoint %} active fw-semibold{% endif %}" href="{{ module_url }}">
+                                        {{ label }}
+                                    </a>
+                                    {% else %}
+                                    <span class="nav-link disabled" title="Unavailable in this build">{{ label }}</span>
+                                    {% endif %}
+                                    <a href="{{ url_for('auth.toggle_favorite', link=endpoint) }}" class="ms-1">
+                                        {% if endpoint in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
                         </li>
                         {% endfor %}
                         {% endif %}
@@ -295,34 +357,6 @@
 
                         {% else %}
                         {% if current_user.is_admin %}
-                        <li class="nav-item mt-2">
-                            <hr class="dropdown-divider">
-                        </li>
-                        <li class="nav-item">
-                            <span class="nav-link disabled fw-bold">Admin</span>
-                        </li>
-                        {% for endpoint, label in [
-                            ('admin.users', 'Control Panel'),
-                            ('admin.backups', 'Backups'),
-                            ('admin.settings', 'Settings'),
-                            ('admin.terminal_sales_mappings', 'Terminal Sales Mappings'),
-                            ('admin.vendor_item_aliases', 'Vendor Item Aliases'),
-                            ('admin.import_page', 'Data Imports'),
-                            ('admin.activity_logs', 'Activity Logs'),
-                            ('admin.system_info', 'System Info')
-                        ] %}
-                        {% set admin_url = safe_url_for(endpoint) %}
-                        <li class="nav-item">
-                            {% if admin_url %}
-                            <a class="nav-link" href="{{ admin_url }}">{{ label }}</a>
-                            {% else %}
-                            <span class="nav-link disabled" title="Unavailable in this build">{{ label }}</span>
-                            {% endif %}
-                            <a href="{{ url_for('auth.toggle_favorite', link=endpoint) }}" class="ms-1">
-                                {% if endpoint in current_user.get_favorites() %}&#9733;{% else %}&#9734;{% endif %}
-                            </a>
-                        </li>
-                        {% endfor %}
                         <li class="nav-item">
                             <hr class="dropdown-divider">
                         </li>
