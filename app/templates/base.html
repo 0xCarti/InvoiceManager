@@ -552,6 +552,7 @@
             const sidebarCollapseToggle = document.getElementById("sidebarCollapseToggle");
             const desktopBreakpointQuery = window.matchMedia("(min-width: 992px)");
             const storageKey = "assetflow.sidebarDesktopCollapsed";
+            let sidebarOffcanvasInstance = null;
             if (!searchInput || !emptyState) {
                 return;
             }
@@ -590,6 +591,19 @@
                     sidebarCollapseToggle.setAttribute("aria-pressed", shouldCollapse ? "true" : "false");
                     sidebarCollapseToggle.textContent = shouldCollapse ? "Expand" : "Collapse";
                 }
+            };
+
+            const configureSidebarOffcanvas = () => {
+                if (!sidebarElement || !window.bootstrap?.Offcanvas) {
+                    return;
+                }
+                const shouldUseBackdrop = !desktopBreakpointQuery.matches;
+                sidebarOffcanvasInstance?.dispose();
+                sidebarOffcanvasInstance = new bootstrap.Offcanvas(sidebarElement, {
+                    backdrop: shouldUseBackdrop,
+                    keyboard: true,
+                    scroll: !shouldUseBackdrop
+                });
             };
 
             const filterMenu = () => {
@@ -649,20 +663,30 @@
             }
 
             if (sidebarElement) {
-                sidebarElement.addEventListener("show.bs.offcanvas", expandActiveGroups);
+                sidebarElement.addEventListener("show.bs.offcanvas", (event) => {
+                    if (desktopBreakpointQuery.matches) {
+                        const backdrop = document.querySelector(".offcanvas-backdrop");
+                        backdrop?.remove();
+                        document.body.classList.remove("offcanvas-backdrop");
+                    }
+                    expandActiveGroups(event);
+                });
             }
 
-            desktopBreakpointQuery.addEventListener("change", applyDesktopSidebarState);
+            desktopBreakpointQuery.addEventListener("change", () => {
+                applyDesktopSidebarState();
+                configureSidebarOffcanvas();
+            });
             document.querySelectorAll("#navbarNav .nav-link[href]").forEach((link) => {
                 link.addEventListener("click", () => {
                     if (!desktopBreakpointQuery.matches && sidebarElement) {
-                        const offcanvasInstance = bootstrap.Offcanvas.getInstance(sidebarElement);
-                        offcanvasInstance?.hide();
+                        sidebarOffcanvasInstance?.hide();
                     }
                 });
             });
 
             applyDesktopSidebarState();
+            configureSidebarOffcanvas();
             filterMenu();
             expandActiveGroups();
         });
