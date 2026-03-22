@@ -614,9 +614,6 @@
             const desktopBreakpointQuery = window.matchMedia("(min-width: 992px)");
             const storageKey = "assetflow.sidebarDesktopCollapsed";
             let sidebarOffcanvasInstance = null;
-            if (!searchInput || !emptyState) {
-                return;
-            }
             const groupWrappers = Array.from(
                 document.querySelectorAll("[data-nav-group-wrapper]")
             );
@@ -644,112 +641,130 @@
                 });
             };
 
-            const applyDesktopSidebarState = () => {
-                const prefersCollapsed = window.localStorage.getItem(storageKey) === "true";
-                const shouldCollapse = desktopBreakpointQuery.matches && prefersCollapsed;
-                document.body.classList.toggle("sidebar-desktop-collapsed", shouldCollapse);
-                if (sidebarCollapseToggle) {
-                    sidebarCollapseToggle.setAttribute("aria-pressed", shouldCollapse ? "true" : "false");
-                    sidebarCollapseToggle.textContent = shouldCollapse ? "Expand" : "Collapse";
-                }
-            };
-
-            const configureSidebarOffcanvas = () => {
-                if (!sidebarElement || !window.bootstrap?.Offcanvas) {
-                    return;
-                }
-                const shouldUseBackdrop = !desktopBreakpointQuery.matches;
-                sidebarOffcanvasInstance?.dispose();
-                sidebarOffcanvasInstance = new bootstrap.Offcanvas(sidebarElement, {
-                    backdrop: shouldUseBackdrop,
-                    keyboard: true,
-                    scroll: !shouldUseBackdrop
-                });
-            };
-
-            const filterMenu = () => {
-                const normalizedQuery = searchInput.value.trim().toLowerCase();
-                const hasQuery = normalizedQuery.length > 0;
-                let totalVisibleMatches = 0;
-
-                searchItems.forEach((item) => {
-                    const label = item.dataset.navLabel || "";
-                    const endpoint = item.dataset.navEndpoint || "";
-                    const matches = !hasQuery || label.includes(normalizedQuery) || endpoint.includes(normalizedQuery);
-                    item.classList.toggle("is-filtered-out", !matches);
-                    if (matches) {
-                        totalVisibleMatches += 1;
+            const initDesktopCollapseState = () => {
+                const applyDesktopSidebarState = () => {
+                    const prefersCollapsed = window.localStorage.getItem(storageKey) === "true";
+                    const shouldCollapse = desktopBreakpointQuery.matches && prefersCollapsed;
+                    document.body.classList.toggle("sidebar-desktop-collapsed", shouldCollapse);
+                    if (sidebarCollapseToggle) {
+                        sidebarCollapseToggle.setAttribute("aria-pressed", shouldCollapse ? "true" : "false");
+                        sidebarCollapseToggle.textContent = shouldCollapse ? "Expand" : "Collapse";
                     }
-                });
+                };
 
-                groupWrappers.forEach((wrapper) => {
-                    const groupId = wrapper.dataset.navGroupId;
-                    const items = groupId
-                        ? Array.from(
-                            wrapper.querySelectorAll(`#${groupId} [data-nav-search-item]`)
-                        )
-                        : [];
-                    const visibleItems = items.filter(
-                        (item) => !item.classList.contains("is-filtered-out")
-                    );
-                    const hasVisibleItems = visibleItems.length > 0;
-                    wrapper.classList.toggle("is-filtered-out", !hasVisibleItems);
-
-                    if (hasQuery && hasVisibleItems) {
-                        setGroupExpanded(wrapper, true);
+                const configureSidebarOffcanvas = () => {
+                    if (!sidebarElement || !window.bootstrap?.Offcanvas) {
                         return;
                     }
-                    const toggle = wrapper.querySelector(".nav-group-toggle");
-                    const defaultExpanded = toggle?.dataset.defaultExpanded === "true";
-                    setGroupExpanded(wrapper, defaultExpanded);
-                });
+                    const shouldUseBackdrop = !desktopBreakpointQuery.matches;
+                    sidebarOffcanvasInstance?.dispose();
+                    sidebarOffcanvasInstance = new bootstrap.Offcanvas(sidebarElement, {
+                        backdrop: shouldUseBackdrop,
+                        keyboard: true,
+                        scroll: !shouldUseBackdrop
+                    });
+                };
 
-                emptyState.classList.toggle(
-                    "is-visible",
-                    hasQuery && totalVisibleMatches === 0
-                );
-            };
+                if (sidebarCollapseToggle) {
+                    sidebarCollapseToggle.addEventListener("click", () => {
+                        const currentlyCollapsed =
+                            window.localStorage.getItem(storageKey) === "true";
+                        window.localStorage.setItem(
+                            storageKey,
+                            currentlyCollapsed ? "false" : "true"
+                        );
+                        applyDesktopSidebarState();
+                    });
+                }
 
-            searchInput.addEventListener("input", filterMenu);
-            if (sidebarCollapseToggle) {
-                sidebarCollapseToggle.addEventListener("click", () => {
-                    const currentlyCollapsed =
-                        window.localStorage.getItem(storageKey) === "true";
-                    window.localStorage.setItem(
-                        storageKey,
-                        currentlyCollapsed ? "false" : "true"
-                    );
+                desktopBreakpointQuery.addEventListener("change", () => {
                     applyDesktopSidebarState();
+                    configureSidebarOffcanvas();
                 });
-            }
 
-            if (sidebarElement) {
-                sidebarElement.addEventListener("show.bs.offcanvas", (event) => {
-                    if (desktopBreakpointQuery.matches) {
-                        const backdrop = document.querySelector(".offcanvas-backdrop");
-                        backdrop?.remove();
-                        document.body.classList.remove("offcanvas-backdrop");
-                    }
-                    expandActiveGroups(event);
+                document.querySelectorAll("#navbarNav .nav-link[href]").forEach((link) => {
+                    link.addEventListener("click", () => {
+                        if (!desktopBreakpointQuery.matches && sidebarElement) {
+                            sidebarOffcanvasInstance?.hide();
+                        }
+                    });
                 });
-            }
 
-            desktopBreakpointQuery.addEventListener("change", () => {
                 applyDesktopSidebarState();
                 configureSidebarOffcanvas();
-            });
-            document.querySelectorAll("#navbarNav .nav-link[href]").forEach((link) => {
-                link.addEventListener("click", () => {
-                    if (!desktopBreakpointQuery.matches && sidebarElement) {
-                        sidebarOffcanvasInstance?.hide();
-                    }
-                });
-            });
+            };
 
-            applyDesktopSidebarState();
-            configureSidebarOffcanvas();
-            filterMenu();
-            expandActiveGroups();
+            const initMenuFilterSearch = () => {
+                const filterMenu = () => {
+                    const normalizedQuery = searchInput
+                        ? searchInput.value.trim().toLowerCase()
+                        : "";
+                    const hasQuery = normalizedQuery.length > 0;
+                    let totalVisibleMatches = 0;
+
+                    searchItems.forEach((item) => {
+                        const label = item.dataset.navLabel || "";
+                        const endpoint = item.dataset.navEndpoint || "";
+                        const matches = !hasQuery || label.includes(normalizedQuery) || endpoint.includes(normalizedQuery);
+                        item.classList.toggle("is-filtered-out", !matches);
+                        if (matches) {
+                            totalVisibleMatches += 1;
+                        }
+                    });
+
+                    groupWrappers.forEach((wrapper) => {
+                        const groupId = wrapper.dataset.navGroupId;
+                        const items = groupId
+                            ? Array.from(
+                                wrapper.querySelectorAll(`#${groupId} [data-nav-search-item]`)
+                            )
+                            : [];
+                        const visibleItems = items.filter(
+                            (item) => !item.classList.contains("is-filtered-out")
+                        );
+                        const hasVisibleItems = visibleItems.length > 0;
+                        wrapper.classList.toggle("is-filtered-out", !hasVisibleItems);
+
+                        if (hasQuery && hasVisibleItems) {
+                            setGroupExpanded(wrapper, true);
+                            return;
+                        }
+                        const toggle = wrapper.querySelector(".nav-group-toggle");
+                        const defaultExpanded = toggle?.dataset.defaultExpanded === "true";
+                        setGroupExpanded(wrapper, defaultExpanded);
+                    });
+
+                    if (emptyState) {
+                        emptyState.classList.toggle(
+                            "is-visible",
+                            hasQuery && totalVisibleMatches === 0
+                        );
+                    }
+                };
+
+                if (searchInput) {
+                    searchInput.addEventListener("input", filterMenu);
+                }
+                filterMenu();
+            };
+
+            const initActiveGroupExpansion = () => {
+                if (sidebarElement) {
+                    sidebarElement.addEventListener("show.bs.offcanvas", () => {
+                        if (desktopBreakpointQuery.matches) {
+                            const backdrop = document.querySelector(".offcanvas-backdrop");
+                            backdrop?.remove();
+                            document.body.classList.remove("offcanvas-backdrop");
+                        }
+                        expandActiveGroups();
+                    });
+                }
+                expandActiveGroups();
+            };
+
+            initDesktopCollapseState();
+            initMenuFilterSearch();
+            initActiveGroupExpansion();
         });
     </script>
     {% block scripts %}{% endblock %}
