@@ -450,7 +450,7 @@
                             <ul class="collapse nav-group-links{% if ns.has_active %} show{% endif %}" id="{{ group_id }}">
                                 {% for endpoint, label in links %}
                                 {% set module_url = safe_url_for(endpoint) %}
-                                <li class="nav-item{% if group_label == 'Reports' %} is-filtered-out{% endif %}{% if current_endpoint == endpoint %} nav-item-active{% endif %}" data-nav-search-item data-nav-label="{{ label|lower|trim }}" data-nav-endpoint="{{ endpoint|lower }}">
+                                <li class="nav-item{% if current_endpoint == endpoint %} nav-item-active{% endif %}" data-nav-search-item data-nav-label="{{ label|lower|trim }}" data-nav-endpoint="{{ endpoint|lower }}">
                                     {% if module_url %}
                                     <a class="nav-link{% if current_endpoint == endpoint %} active fw-semibold{% endif %}" href="{{ module_url }}">
                                         {{ label }}
