@@ -268,3 +268,76 @@ def test_sales_invoice_uses_invoice_sale_price_for_line_snapshot(client, app):
         refreshed_line = db.session.get(type(invoice_line), invoice_line.id)
         assert refreshed_line.unit_price == pytest.approx(12.5)
         assert refreshed_line.line_subtotal == pytest.approx(25.0)
+
+
+def test_bulk_invoice_payment_status_updates_selected_invoices(client, app):
+    email, cust_id, prod_name, _ = setup_sales(app)
+
+    with client:
+        login(client, email, "pass")
+        for _ in range(2):
+            create_resp = client.post(
+                "/create_invoice",
+                data={"customer": float(cust_id), "products": f"{prod_name}?1??"},
+                follow_redirects=True,
+            )
+            assert create_resp.status_code == 200
+
+    with app.app_context():
+        invoices = (
+            Invoice.query.filter_by(customer_id=cust_id)
+            .order_by(Invoice.date_created.asc())
+            .all()
+        )
+        assert len(invoices) == 2
+        invoice_ids = [invoice.id for invoice in invoices]
+        assert all(invoice.is_paid is False for invoice in invoices)
+
+    with client:
+        login(client, email, "pass")
+        response = client.post(
+            "/invoices/bulk-payment-status",
+            json={"invoice_ids": invoice_ids, "is_paid": True},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["success"] is True
+        assert payload["count"] == 2
+        assert payload["status"] == "paid"
+
+    with app.app_context():
+        updated_invoices = Invoice.query.filter(Invoice.id.in_(invoice_ids)).all()
+        assert len(updated_invoices) == 2
+        assert all(invoice.is_paid is True for invoice in updated_invoices)
+        assert all(invoice.paid_at is not None for invoice in updated_invoices)
+
+
+def test_bulk_invoice_payment_status_rejects_invalid_status(client, app):
+    email, cust_id, prod_name, _ = setup_sales(app)
+
+    with client:
+        login(client, email, "pass")
+        create_resp = client.post(
+            "/create_invoice",
+            data={"customer": float(cust_id), "products": f"{prod_name}?1??"},
+            follow_redirects=True,
+        )
+        assert create_resp.status_code == 200
+
+    with app.app_context():
+        invoice = Invoice.query.filter_by(customer_id=cust_id).first()
+        assert invoice is not None
+        invoice_id = invoice.id
+
+    with client:
+        login(client, email, "pass")
+        response = client.post(
+            "/invoices/bulk-payment-status",
+            json={"invoice_ids": [invoice_id], "is_paid": "sometimes"},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        assert response.status_code == 400
+        payload = response.get_json()
+        assert payload["success"] is False
+        assert payload["message"] == "Select a valid payment status."
