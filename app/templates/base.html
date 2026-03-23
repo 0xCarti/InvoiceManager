@@ -99,25 +99,27 @@
         }
 
         #navbarNav .offcanvas-body .nav-group-wrapper {
-            border-top: 1px solid var(--bs-border-color-translucent);
+            border-top: 1px solid var(--sidebar-separator);
             padding-top: 0.15rem;
             margin-top: 0.2rem;
         }
 
         #navbarNav {
-            --bs-offcanvas-bg: var(--bs-body-bg);
-            background-color: var(--bs-body-bg);
-            opacity: 1;
+            --sidebar-bg: var(--bs-body-bg);
+            --sidebar-border: rgba(var(--bs-emphasis-color-rgb), 0.16);
+            --sidebar-separator: rgba(var(--bs-emphasis-color-rgb), 0.12);
+            --sidebar-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.08);
+            --bs-offcanvas-bg: var(--sidebar-bg);
+            background-color: var(--sidebar-bg);
             --sidebar-link-color: var(--bs-emphasis-color);
-            --sidebar-link-hover-bg: rgba(var(--bs-primary-rgb), 0.12);
-            --sidebar-link-active-bg: rgba(var(--bs-primary-rgb), 0.24);
+            --sidebar-link-hover-bg: rgba(var(--bs-primary-rgb), 0.1);
+            --sidebar-link-active-bg: rgba(var(--bs-primary-rgb), 0.18);
             --sidebar-link-active-color: var(--bs-primary-text-emphasis);
         }
 
         #navbarNav .offcanvas-header,
         #navbarNav .offcanvas-body {
-            background-color: var(--bs-body-bg);
-            opacity: 1;
+            background-color: var(--sidebar-bg);
         }
 
         #navbarNav .offcanvas-body .nav-group-toggle {
@@ -191,12 +193,12 @@
             font-weight: 700;
             color: var(--sidebar-link-active-color);
             background-color: var(--sidebar-link-active-bg);
-            box-shadow: inset 0 0 0 1px rgba(var(--bs-primary-rgb), 0.5);
+            box-shadow: inset 0 0 0 1px rgba(var(--bs-primary-rgb), 0.58);
         }
 
         #navbarNav .offcanvas-body .nav-group-links .nav-item.nav-item-active {
             border-left-color: var(--bs-primary);
-            background-color: rgba(var(--bs-primary-rgb), 0.06);
+            background-color: rgba(var(--bs-primary-rgb), 0.09);
             border-radius: 0 0.25rem 0.25rem 0;
         }
 
@@ -246,7 +248,7 @@
         #navbarNav .offcanvas-body .sidebar-secondary-nav {
             margin-top: 0.75rem;
             padding-top: 0.6rem;
-            border-top: 1px solid var(--bs-border-color-translucent);
+            border-top: 1px solid var(--sidebar-separator);
         }
 
         .navbar-nav.flex-row .nav-item {
@@ -355,9 +357,9 @@
                 width: var(--desktop-sidebar-expanded-width);
                 max-width: 100%;
                 top: 0;
-                border-right: 1px solid var(--bs-border-color);
-                background-color: var(--bs-body-bg);
-                opacity: 1;
+                border-right: 1px solid var(--sidebar-border);
+                background-color: var(--sidebar-bg);
+                box-shadow: var(--sidebar-shadow);
             }
 
             body.has-auth-sidebar #navbarNav.offcanvas-lg.show,
