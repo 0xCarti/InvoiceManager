@@ -84,8 +84,8 @@
         }
 
         #navbarNav .offcanvas-body .nav-item .nav-link {
-            display: inline-block;
-            width: auto;
+            display: block;
+            width: 100%;
         }
 
         #navbarNav .offcanvas-body .nav-item .nav-link {
@@ -111,6 +111,7 @@
             --sidebar-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.08);
             --bs-offcanvas-bg: var(--sidebar-bg);
             background-color: var(--sidebar-bg);
+            opacity: 1;
             --sidebar-link-color: var(--bs-emphasis-color);
             --sidebar-link-hover-bg: rgba(var(--bs-primary-rgb), 0.1);
             --sidebar-link-active-bg: rgba(var(--bs-primary-rgb), 0.18);
@@ -122,11 +123,19 @@
             background-color: var(--sidebar-bg);
         }
 
+        #navbarNav .offcanvas-body .sidebar-primary-nav,
+        #navbarNav .offcanvas-body .sidebar-secondary-nav,
+        #navbarNav .offcanvas-body .nav-group-wrapper,
+        #navbarNav .offcanvas-body .nav-group-links,
+        #navbarNav .offcanvas-body .nav-item {
+            width: 100%;
+        }
+
         #navbarNav .offcanvas-body .nav-group-toggle {
             width: 100%;
             text-align: left;
             border: 0;
-            background: transparent;
+            background-color: var(--sidebar-bg);
             padding: 0.5rem 0.5rem;
             min-height: 2.35rem;
             font-size: 0.92rem;
