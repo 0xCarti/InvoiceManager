@@ -659,6 +659,9 @@
             const sidebarElement = document.getElementById("navbarNav");
             const sidebarCollapseToggle = document.getElementById("sidebarCollapseToggle");
             const sidebarMenuToggle = document.getElementById("sidebarMenuToggle");
+            const sidebarHeaderCloseButton = document.querySelector(
+                "#navbarNav .offcanvas-header .btn-close[data-bs-dismiss=\"offcanvas\"]"
+            );
             const desktopBreakpointQuery = window.matchMedia("(min-width: 992px)");
             const storageKey = "assetflow.sidebarDesktopOpen";
             let sidebarOffcanvasInstance = null;
@@ -712,6 +715,14 @@
                     });
                 };
 
+                const syncDesktopStateOnOffcanvasHide = () => {
+                    if (!desktopBreakpointQuery.matches) {
+                        return;
+                    }
+                    window.localStorage.setItem(storageKey, "false");
+                    applyDesktopSidebarState();
+                };
+
                 if (sidebarMenuToggle) {
                     sidebarMenuToggle.addEventListener("click", (event) => {
                         if (!desktopBreakpointQuery.matches) {
@@ -731,6 +742,20 @@
                         window.localStorage.setItem(storageKey, currentlyOpen ? "false" : "true");
                         applyDesktopSidebarState();
                     });
+                }
+
+                if (sidebarElement) {
+                    sidebarElement.addEventListener(
+                        "hide.bs.offcanvas",
+                        syncDesktopStateOnOffcanvasHide
+                    );
+                }
+
+                if (sidebarHeaderCloseButton) {
+                    sidebarHeaderCloseButton.addEventListener(
+                        "click",
+                        syncDesktopStateOnOffcanvasHide
+                    );
                 }
 
                 desktopBreakpointQuery.addEventListener("change", () => {
