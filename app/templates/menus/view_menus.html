@@ -90,7 +90,7 @@
                             <a href="{{ url_for('menu.assign_menu', menu_id=menu.id) }}" class="btn btn-sm btn-outline-primary">Assign</a>
                             <form method="post" action="{{ url_for('menu.delete_menu', menu_id=menu.id) }}" class="d-inline">
                                 {{ delete_form.hidden_tag() }}
-                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this menu?');">Delete</button>
+                                <button type="submit" class="btn btn-sm btn-outline-danger" data-confirm-message="Delete this menu?">Delete</button>
                             </form>
                         </div>
                     </td>

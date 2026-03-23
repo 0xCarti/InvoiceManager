@@ -56,7 +56,7 @@
                                     action="{{ url_for('product.remove_terminal_sale_alias', product_id=product_id, alias_id=alias.id) }}">
                                     {{ alias_delete_form.hidden_tag() }}
                                     <button type="submit" class="btn btn-outline-danger btn-sm"
-                                        onclick="return confirm('Remove this mapping?');">Remove</button>
+                                        data-confirm-message="Remove this mapping?">Remove</button>
                                 </form>
                             </td>
                         </tr>

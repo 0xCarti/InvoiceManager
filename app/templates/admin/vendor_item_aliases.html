@@ -100,7 +100,7 @@
                                         <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.vendor_item_aliases', alias_id=alias.id) }}">Edit</a>
                                         <form method="post" action="{{ url_for('admin.delete_vendor_item_alias', alias_id=alias.id) }}">
                                             {{ delete_form.hidden_tag() }}
-                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this alias?');">Delete</button>
+                                            <button type="submit" class="btn btn-sm btn-danger" data-confirm-message="Delete this alias?">Delete</button>
                                         </form>
                                     </div>
                                 </td>
