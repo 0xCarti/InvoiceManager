@@ -169,22 +169,87 @@ def delete_invoice(invoice_id):
 
 
 def _set_invoice_payment_status(invoice_id, *, is_paid):
-    invoice_record = db.session.get(Invoice, invoice_id)
-    if invoice_record is None:
+    updated_invoices, missing_invoice_ids = _apply_invoice_payment_status(
+        [invoice_id], is_paid=is_paid
+    )
+    if missing_invoice_ids:
         abort(404)
 
-    invoice_record.is_paid = is_paid
-    invoice_record.paid_at = datetime.utcnow() if is_paid else None
-    db.session.commit()
-
+    invoice_record = updated_invoices[0]
     status = "paid" if is_paid else "unpaid"
     flash(f"Invoice {invoice_record.id} marked as {status}.", "success")
-    log_activity(f"Updated invoice {invoice_record.id} status to {status}")
 
     return redirect(
         request.referrer
         or url_for("invoice.view_invoice", invoice_id=invoice_record.id)
     )
+
+
+def _normalize_invoice_ids(raw_invoice_ids):
+    if raw_invoice_ids is None:
+        return []
+    if isinstance(raw_invoice_ids, str):
+        candidates = raw_invoice_ids.split(",")
+    elif isinstance(raw_invoice_ids, (list, tuple, set)):
+        candidates = []
+        for value in raw_invoice_ids:
+            if isinstance(value, str):
+                candidates.extend(value.split(","))
+            else:
+                candidates.append(str(value))
+    else:
+        candidates = [str(raw_invoice_ids)]
+
+    normalized = []
+    seen = set()
+    for candidate in candidates:
+        invoice_id = str(candidate).strip()
+        if not invoice_id or invoice_id in seen:
+            continue
+        normalized.append(invoice_id)
+        seen.add(invoice_id)
+    return normalized
+
+
+def _parse_is_paid(raw_status):
+    if isinstance(raw_status, bool):
+        return raw_status
+    if raw_status is None:
+        return None
+
+    normalized = str(raw_status).strip().lower()
+    if normalized in {"true", "1", "paid"}:
+        return True
+    if normalized in {"false", "0", "unpaid"}:
+        return False
+    return None
+
+
+def _apply_invoice_payment_status(invoice_ids, *, is_paid):
+    normalized_invoice_ids = _normalize_invoice_ids(invoice_ids)
+    if not normalized_invoice_ids:
+        return [], []
+
+    invoices = Invoice.query.filter(Invoice.id.in_(normalized_invoice_ids)).all()
+    invoices_by_id = {invoice.id: invoice for invoice in invoices}
+    missing_invoice_ids = [
+        invoice_id
+        for invoice_id in normalized_invoice_ids
+        if invoice_id not in invoices_by_id
+    ]
+    if missing_invoice_ids:
+        return [], missing_invoice_ids
+
+    paid_at = datetime.utcnow() if is_paid else None
+    for invoice in invoices:
+        invoice.is_paid = is_paid
+        invoice.paid_at = paid_at
+
+    db.session.commit()
+    status = "paid" if is_paid else "unpaid"
+    log_activity(f"Marked {len(invoices)} invoice(s) as {status}")
+
+    return [invoices_by_id[invoice_id] for invoice_id in normalized_invoice_ids], []
 
 
 @invoice.route("/invoice/<invoice_id>/mark-paid", methods=["POST"])
@@ -199,6 +264,90 @@ def mark_invoice_paid(invoice_id):
 def mark_invoice_unpaid(invoice_id):
     """Mark an invoice as unpaid and clear payment time."""
     return _set_invoice_payment_status(invoice_id, is_paid=False)
+
+
+@invoice.route("/invoices/bulk-payment-status", methods=["POST"])
+@login_required
+def bulk_invoice_payment_status():
+    """Bulk-update payment status for one or more invoices."""
+    form = DeleteForm()
+    is_ajax = (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or request.is_json
+    )
+
+    if not form.validate_on_submit():
+        message = "Invalid CSRF token."
+        if is_ajax:
+            return {"success": False, "message": message}, 400
+        flash(message, "danger")
+        return redirect(request.referrer or url_for("invoice.view_invoices"))
+
+    payload = request.get_json(silent=True) if request.is_json else {}
+    if request.is_json:
+        raw_invoice_ids = payload.get("invoice_ids")
+        raw_status = payload.get("is_paid")
+    else:
+        raw_invoice_ids = (
+            request.form.getlist("invoice_ids")
+            or request.form.get("invoice_ids")
+        )
+        raw_status = request.form.get("is_paid")
+
+    invoice_ids = _normalize_invoice_ids(raw_invoice_ids)
+    if not invoice_ids:
+        message = "Please select at least one invoice."
+        if is_ajax:
+            return {"success": False, "message": message}, 400
+        flash(message, "danger")
+        return redirect(request.referrer or url_for("invoice.view_invoices"))
+
+    is_paid = _parse_is_paid(raw_status)
+    if is_paid is None:
+        message = "Invalid payment status value."
+        if is_ajax:
+            return {"success": False, "message": message}, 400
+        flash(message, "danger")
+        return redirect(request.referrer or url_for("invoice.view_invoices"))
+
+    updated_invoices, missing_invoice_ids = _apply_invoice_payment_status(
+        invoice_ids, is_paid=is_paid
+    )
+    if missing_invoice_ids:
+        message = (
+            "Some invoices were not found: "
+            + ", ".join(sorted(missing_invoice_ids))
+        )
+        if is_ajax:
+            return {
+                "success": False,
+                "message": message,
+                "missing_invoice_ids": missing_invoice_ids,
+            }, 404
+        flash(message, "danger")
+        return redirect(request.referrer or url_for("invoice.view_invoices"))
+
+    status = "paid" if is_paid else "unpaid"
+    if is_ajax:
+        return {
+            "success": True,
+            "count": len(updated_invoices),
+            "status": status,
+            "updated": [
+                {
+                    "id": invoice.id,
+                    "is_paid": invoice.is_paid,
+                    "paid_at": (
+                        invoice.paid_at.isoformat() if invoice.paid_at else None
+                    ),
+                    "payment_status": "Paid" if invoice.is_paid else "Unpaid",
+                }
+                for invoice in updated_invoices
+            ],
+        }
+
+    flash(f"Marked {len(updated_invoices)} invoice(s) as {status}.", "success")
+    return redirect(request.referrer or url_for("invoice.view_invoices"))
 
 
 @invoice.route("/view_invoice/<invoice_id>", methods=["GET"])
