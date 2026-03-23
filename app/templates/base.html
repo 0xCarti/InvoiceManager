@@ -349,12 +349,14 @@
                 --desktop-sidebar-expanded-width: 19.5rem;
                 --desktop-sidebar-collapsed-width: 19.5rem;
                 --desktop-content-sidebar-gap: 1.25rem;
+                --top-navbar-height: 56px;
             }
 
             body.has-auth-sidebar #navbarNav.offcanvas-lg {
                 width: var(--desktop-sidebar-expanded-width);
                 max-width: 100%;
-                top: 0;
+                top: var(--top-navbar-height);
+                height: calc(100vh - var(--top-navbar-height));
                 border-right: 1px solid var(--bs-border-color);
                 background-color: var(--bs-body-bg);
                 opacity: 1;
@@ -424,7 +426,7 @@
 <body class="{% if current_user.is_authenticated %}has-auth-sidebar{% endif %}">
     <nav class="navbar navbar-light bg-light">
         <div class="container-fluid">
-            <button class="navbar-toggler me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
+            <button class="navbar-toggler d-lg-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
                 aria-controls="navbarNav" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
