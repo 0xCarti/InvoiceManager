@@ -375,8 +375,6 @@
 
             body.has-auth-sidebar {
                 --desktop-sidebar-expanded-width: 19.5rem;
-                --desktop-sidebar-collapsed-width: 19.5rem;
-                --desktop-content-sidebar-gap: 1.25rem;
                 --top-navbar-height: 56px;
             }
 
@@ -385,23 +383,25 @@
                 left: 0;
                 width: var(--desktop-sidebar-expanded-width);
                 max-width: 100%;
-                top: var(--top-navbar-height);
-                height: calc(100vh - var(--top-navbar-height));
+                top: 0;
+                height: 100vh;
                 border-right: 1px solid var(--bs-border-color);
                 background-color: var(--bs-body-bg);
                 opacity: 1;
                 border-right: 1px solid var(--sidebar-border);
                 background-color: var(--sidebar-bg);
                 box-shadow: var(--sidebar-shadow);
-                transform: none !important;
+                transform: translateX(-100%);
                 visibility: visible !important;
-                z-index: 1035;
+                z-index: 1055;
+                transition: transform 0.25s ease;
             }
 
+            body.has-auth-sidebar.sidebar-desktop-open #navbarNav.offcanvas-lg,
             body.has-auth-sidebar #navbarNav.offcanvas-lg.show,
             body.has-auth-sidebar #navbarNav.offcanvas-lg.showing {
                 visibility: visible;
-                transform: none;
+                transform: translateX(0);
             }
 
             body.has-auth-sidebar .offcanvas-backdrop.show {
@@ -419,23 +419,14 @@
                 padding-bottom: 1rem;
             }
 
-            body.has-auth-sidebar.sidebar-desktop-collapsed #navbarNav.offcanvas-lg {
-                width: var(--desktop-sidebar-collapsed-width);
-            }
-
             body.has-auth-sidebar .container.mt-3 {
-                margin-left: calc(var(--desktop-sidebar-expanded-width) + var(--desktop-content-sidebar-gap));
                 max-width: none;
                 width: auto;
-                transition: margin-left 0.2s ease;
-            }
-
-            body.has-auth-sidebar.sidebar-desktop-collapsed .container.mt-3 {
-                margin-left: calc(var(--desktop-sidebar-collapsed-width) + var(--desktop-content-sidebar-gap));
+                transition: none;
             }
 
             body.has-auth-sidebar #sidebarCollapseToggle {
-                display: inline-flex !important;
+                display: none !important;
             }
 
             body.has-auth-sidebar nav.navbar .container-fluid {
@@ -469,7 +460,7 @@
 <body class="{% if current_user.is_authenticated %}has-auth-sidebar{% endif %}">
     <nav class="navbar navbar-light bg-light">
         <div class="container-fluid">
-            <button class="navbar-toggler d-lg-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
+            <button class="navbar-toggler me-2" id="sidebarMenuToggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav"
                 aria-controls="navbarNav" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -656,8 +647,9 @@
             const emptyState = document.getElementById("sidebarMenuSearchEmptyState");
             const sidebarElement = document.getElementById("navbarNav");
             const sidebarCollapseToggle = document.getElementById("sidebarCollapseToggle");
+            const sidebarMenuToggle = document.getElementById("sidebarMenuToggle");
             const desktopBreakpointQuery = window.matchMedia("(min-width: 992px)");
-            const storageKey = "assetflow.sidebarDesktopCollapsed";
+            const storageKey = "assetflow.sidebarDesktopOpen";
             let sidebarOffcanvasInstance = null;
             const groupWrappers = Array.from(
                 document.querySelectorAll("[data-nav-group-wrapper]")
@@ -688,12 +680,11 @@
 
             const initDesktopCollapseState = () => {
                 const applyDesktopSidebarState = () => {
-                    const prefersCollapsed = window.localStorage.getItem(storageKey) === "true";
-                    const shouldCollapse = desktopBreakpointQuery.matches && prefersCollapsed;
-                    document.body.classList.toggle("sidebar-desktop-collapsed", shouldCollapse);
-                    if (sidebarCollapseToggle) {
-                        sidebarCollapseToggle.setAttribute("aria-pressed", shouldCollapse ? "true" : "false");
-                        sidebarCollapseToggle.textContent = shouldCollapse ? "Expand" : "Collapse";
+                    const shouldOpenDesktop = window.localStorage.getItem(storageKey) !== "false";
+                    const shouldOpen = desktopBreakpointQuery.matches && shouldOpenDesktop;
+                    document.body.classList.toggle("sidebar-desktop-open", shouldOpen);
+                    if (sidebarMenuToggle) {
+                        sidebarMenuToggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
                     }
                 };
 
@@ -710,14 +701,23 @@
                     });
                 };
 
+                if (sidebarMenuToggle) {
+                    sidebarMenuToggle.addEventListener("click", (event) => {
+                        if (!desktopBreakpointQuery.matches) {
+                            return;
+                        }
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const currentlyOpen = window.localStorage.getItem(storageKey) !== "false";
+                        window.localStorage.setItem(storageKey, currentlyOpen ? "false" : "true");
+                        applyDesktopSidebarState();
+                    });
+                }
+
                 if (sidebarCollapseToggle) {
                     sidebarCollapseToggle.addEventListener("click", () => {
-                        const currentlyCollapsed =
-                            window.localStorage.getItem(storageKey) === "true";
-                        window.localStorage.setItem(
-                            storageKey,
-                            currentlyCollapsed ? "false" : "true"
-                        );
+                        const currentlyOpen = window.localStorage.getItem(storageKey) !== "false";
+                        window.localStorage.setItem(storageKey, currentlyOpen ? "false" : "true");
                         applyDesktopSidebarState();
                     });
                 }
@@ -729,7 +729,12 @@
 
                 document.querySelectorAll("#navbarNav .nav-link[href]").forEach((link) => {
                     link.addEventListener("click", () => {
-                        if (!desktopBreakpointQuery.matches && sidebarElement) {
+                        if (desktopBreakpointQuery.matches) {
+                            window.localStorage.setItem(storageKey, "false");
+                            applyDesktopSidebarState();
+                            return;
+                        }
+                        if (sidebarElement) {
                             sidebarOffcanvasInstance?.hide();
                         }
                     });
