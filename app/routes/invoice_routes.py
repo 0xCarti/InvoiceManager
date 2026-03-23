@@ -14,7 +14,12 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 
 from app import GST, db
-from app.forms import DeleteForm, InvoiceFilterForm, InvoiceForm
+from app.forms import (
+    BulkInvoicePaymentForm,
+    DeleteForm,
+    InvoiceFilterForm,
+    InvoiceForm,
+)
 from app.models import Customer, Invoice, InvoiceProduct, Product
 from app.utils.activity import log_activity
 from app.utils.numeric import coerce_float
@@ -270,45 +275,52 @@ def mark_invoice_unpaid(invoice_id):
 @login_required
 def bulk_invoice_payment_status():
     """Bulk-update payment status for one or more invoices."""
-    form = DeleteForm()
     is_ajax = (
         request.headers.get("X-Requested-With") == "XMLHttpRequest"
         or request.is_json
     )
 
-    if not form.validate_on_submit():
-        message = "Invalid CSRF token."
-        if is_ajax:
-            return {"success": False, "message": message}, 400
-        flash(message, "danger")
-        return redirect(request.referrer or url_for("invoice.view_invoices"))
-
     payload = request.get_json(silent=True) if request.is_json else {}
     if request.is_json:
-        raw_invoice_ids = payload.get("invoice_ids")
-        raw_status = payload.get("is_paid")
+        form = BulkInvoicePaymentForm(meta={"csrf": False})
+        raw_invoice_ids = payload.get("invoice_ids", payload.get("selected_ids"))
+        raw_status = payload.get("is_paid", payload.get("payment_status"))
     else:
+        form = BulkInvoicePaymentForm()
         raw_invoice_ids = (
             request.form.getlist("invoice_ids")
             or request.form.get("invoice_ids")
         )
         raw_status = request.form.get("is_paid")
 
-    invoice_ids = _normalize_invoice_ids(raw_invoice_ids)
-    if not invoice_ids:
-        message = "Please select at least one invoice."
+    normalized_invoice_ids = _normalize_invoice_ids(raw_invoice_ids)
+    if normalized_invoice_ids:
+        form.selected_ids.data = ",".join(normalized_invoice_ids)
+
+    parsed_status = _parse_is_paid(raw_status)
+    if parsed_status is True:
+        form.payment_status.data = "paid"
+    elif parsed_status is False:
+        form.payment_status.data = "unpaid"
+    elif raw_status is not None:
+        form.payment_status.data = str(raw_status)
+
+    form_is_valid = form.validate() if request.is_json else form.validate_on_submit()
+    if not form_is_valid:
+        message = (
+            form.selected_ids.errors[0]
+            if form.selected_ids.errors
+            else form.payment_status.errors[0]
+            if form.payment_status.errors
+            else "Invalid form submission."
+        )
         if is_ajax:
             return {"success": False, "message": message}, 400
         flash(message, "danger")
         return redirect(request.referrer or url_for("invoice.view_invoices"))
 
-    is_paid = _parse_is_paid(raw_status)
-    if is_paid is None:
-        message = "Invalid payment status value."
-        if is_ajax:
-            return {"success": False, "message": message}, 400
-        flash(message, "danger")
-        return redirect(request.referrer or url_for("invoice.view_invoices"))
+    invoice_ids = _normalize_invoice_ids(form.selected_ids.data)
+    is_paid = form.payment_status.data == "paid"
 
     updated_invoices, missing_invoice_ids = _apply_invoice_payment_status(
         invoice_ids, is_paid=is_paid

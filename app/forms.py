@@ -1144,6 +1144,44 @@ class InvoiceForm(FlaskForm):
     submit = SubmitField("Add Product")
 
 
+class BulkInvoicePaymentForm(FlaskForm):
+    """Form used to bulk-update invoice payment status."""
+
+    selected_ids = HiddenField(
+        validators=[DataRequired(message="Select at least one invoice.")]
+    )
+    payment_status = SelectField(
+        "Payment Status",
+        choices=[("paid", "Paid"), ("unpaid", "Unpaid")],
+        validators=[DataRequired(message="Select a valid payment status.")],
+        validate_choice=False,
+    )
+    submit = SubmitField("Apply")
+
+    def validate(self, **kwargs):
+        valid = super().validate(**kwargs)
+        if not valid:
+            return False
+
+        selected_ids = [
+            value.strip()
+            for value in str(self.selected_ids.data or "").split(",")
+            if value and value.strip()
+        ]
+        if not selected_ids:
+            self.selected_ids.errors.append("Select at least one invoice.")
+            return False
+
+        payment_status = str(self.payment_status.data or "").strip().lower()
+        if payment_status not in {"paid", "unpaid"}:
+            self.payment_status.errors.append("Select a valid payment status.")
+            return False
+
+        self.selected_ids.data = ",".join(selected_ids)
+        self.payment_status.data = payment_status
+        return True
+
+
 class VendorInvoiceReportForm(FlaskForm):
     payment_status = SelectField(
         "Payment Status",
