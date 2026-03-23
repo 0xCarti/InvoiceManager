@@ -105,12 +105,12 @@
         }
 
         #navbarNav {
-            --sidebar-bg: var(--bs-body-bg);
+            --sidebar-bg: rgb(var(--bs-body-bg-rgb));
             --sidebar-border: rgba(var(--bs-emphasis-color-rgb), 0.16);
             --sidebar-separator: rgba(var(--bs-emphasis-color-rgb), 0.12);
             --sidebar-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.08);
             --bs-offcanvas-bg: var(--sidebar-bg);
-            background-color: var(--sidebar-bg);
+            background-color: var(--sidebar-bg) !important;
             opacity: 1;
             --sidebar-link-color: var(--bs-emphasis-color);
             --sidebar-link-hover-bg: rgba(var(--bs-primary-rgb), 0.1);
@@ -118,9 +118,11 @@
             --sidebar-link-active-color: var(--bs-primary-text-emphasis);
         }
 
+        #navbarNav.offcanvas,
+        #navbarNav.offcanvas-start,
         #navbarNav .offcanvas-header,
         #navbarNav .offcanvas-body {
-            background-color: var(--sidebar-bg);
+            background-color: var(--sidebar-bg) !important;
         }
 
         #navbarNav .offcanvas-body .sidebar-primary-nav,
