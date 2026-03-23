@@ -59,7 +59,7 @@
                     <div class="d-flex flex-wrap gap-2">
                         <button type="submit" name="{{ product_form.delete_selected.name }}" value="y" class="btn btn-danger">Delete Selected</button>
                         <button type="submit" name="{{ product_form.delete_all.name }}" value="y" class="btn btn-outline-danger"
-                                onclick="return confirm('Delete all stored product mappings? This cannot be undone.');">
+                                data-confirm-message="Delete all stored product mappings? This cannot be undone.">
                             Delete All
                         </button>
                     </div>
@@ -119,7 +119,7 @@
                     <div class="d-flex flex-wrap gap-2">
                         <button type="submit" name="{{ location_form.delete_selected.name }}" value="y" class="btn btn-danger">Delete Selected</button>
                         <button type="submit" name="{{ location_form.delete_all.name }}" value="y" class="btn btn-outline-danger"
-                                onclick="return confirm('Delete all stored location mappings? This cannot be undone.');">
+                                data-confirm-message="Delete all stored location mappings? This cannot be undone.">
                             Delete All
                         </button>
                     </div>
