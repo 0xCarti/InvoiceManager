@@ -127,14 +127,17 @@
             text-align: left;
             border: 0;
             background: transparent;
-            padding: 0.6rem 0.3rem;
-            font-size: 0.88rem;
-            font-weight: 500;
-            letter-spacing: 0.01em;
-            color: var(--sidebar-link-color);
+            padding: 0.5rem 0.5rem;
+            min-height: 2.35rem;
+            font-size: 0.92rem;
+            font-weight: 560;
+            letter-spacing: 0.005em;
+            color: rgba(var(--bs-emphasis-color-rgb), 0.84);
             display: flex;
             align-items: center;
             justify-content: space-between;
+            border-radius: 0.375rem;
+            line-height: 1.2;
         }
 
         #navbarNav .offcanvas-body .nav-group-toggle:hover,
@@ -147,8 +150,8 @@
         #navbarNav .offcanvas-body .nav-link:focus-visible,
         #navbarNav .offcanvas-body .nav-favorite-toggle:focus-visible {
             outline: 2px solid var(--bs-primary);
-            outline-offset: 2px;
-            border-radius: 0.25rem;
+            outline-offset: 1px;
+            border-radius: 0.375rem;
         }
 
         #navbarNav .offcanvas-body .nav-group-toggle .nav-group-chevron {
@@ -168,7 +171,7 @@
         }
 
         #navbarNav .offcanvas-body .nav-group-links .nav-item {
-            padding-left: 1rem;
+            padding-left: 0.95rem;
             border-left: 2px solid transparent;
             min-height: 2.35rem;
             display: flex;
@@ -177,10 +180,11 @@
 
         #navbarNav .offcanvas-body .nav-group-links .nav-link {
             flex: 1;
-            padding: 0.45rem 0.65rem;
-            border-radius: 0.25rem;
+            padding: 0.45rem 0.7rem;
+            border-radius: 0.375rem;
             color: var(--sidebar-link-color);
             font-size: 0.95rem;
+            line-height: 1.2;
         }
 
         #navbarNav .offcanvas-body .nav-group-links .nav-link:hover,
@@ -204,9 +208,22 @@
 
         #navbarNav .offcanvas-body .nav-favorite-toggle {
             text-decoration: none;
-            padding: 0.15rem 0.2rem;
+            width: 1.75rem;
+            min-width: 1.75rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.2rem;
             line-height: 1;
-            border-radius: 0.2rem;
+            border-radius: 0.375rem;
+            color: rgba(var(--bs-emphasis-color-rgb), 0.46);
+            transition: color 0.15s ease, background-color 0.15s ease;
+        }
+
+        #navbarNav .offcanvas-body .nav-favorite-toggle:hover,
+        #navbarNav .offcanvas-body .nav-favorite-toggle:focus-visible {
+            color: rgba(var(--bs-emphasis-color-rgb), 0.82);
+            background-color: rgba(var(--bs-primary-rgb), 0.08);
         }
 
         #navbarNav .offcanvas-body .nav-search-empty {
@@ -238,11 +255,20 @@
             display: flex;
             flex-direction: column;
             align-items: stretch;
+            padding-top: 0.9rem;
         }
 
         #navbarNav .offcanvas-body .sidebar-primary-nav {
             flex: 1 1 auto;
             min-height: 0;
+        }
+
+        #navbarNav .offcanvas-body .sidebar-primary-nav .sidebar-search-row {
+            margin-bottom: 0.6rem;
+        }
+
+        #navbarNav .offcanvas-body .sidebar-primary-nav .nav-group-wrapper:first-of-type {
+            margin-top: 0.45rem;
         }
 
         #navbarNav .offcanvas-body .sidebar-secondary-nav {
@@ -379,6 +405,7 @@
             }
 
             body.has-auth-sidebar #navbarNav .offcanvas-body {
+                padding-top: 1rem;
                 padding-bottom: 1rem;
             }
 
@@ -476,7 +503,7 @@
                     <ul class="navbar-nav sidebar-primary-nav me-auto">
                         {% if current_user.is_authenticated %}
                         {% set nav_groups = GROUPED_NAV_LINKS() %}
-                        <li class="mb-2">
+                        <li class="mb-2 sidebar-search-row">
                             <input
                                 type="search"
                                 id="sidebarMenuSearch"
