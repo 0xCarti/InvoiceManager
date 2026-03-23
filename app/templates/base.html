@@ -652,7 +652,7 @@
     <script src="{{ url_for('static', filename='js/column_visibility.js') }}"></script>
     <script src="{{ url_for('static', filename='js/filter_defaults.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/security.js') }}" defer></script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
         document.addEventListener("DOMContentLoaded", () => {
             const searchInput = document.getElementById("sidebarMenuSearch");
             const emptyState = document.getElementById("sidebarMenuSearchEmptyState");
