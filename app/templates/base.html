@@ -691,7 +691,7 @@
 
             const initDesktopCollapseState = () => {
                 const applyDesktopSidebarState = () => {
-                    const shouldOpenDesktop = window.localStorage.getItem(storageKey) !== "false";
+                    const shouldOpenDesktop = window.localStorage.getItem(storageKey) === "true";
                     const shouldOpen = desktopBreakpointQuery.matches && shouldOpenDesktop;
                     document.body.classList.toggle("sidebar-desktop-open", shouldOpen);
                     if (sidebarMenuToggle) {
@@ -719,7 +719,7 @@
                         }
                         event.preventDefault();
                         event.stopPropagation();
-                        const currentlyOpen = window.localStorage.getItem(storageKey) !== "false";
+                        const currentlyOpen = window.localStorage.getItem(storageKey) === "true";
                         window.localStorage.setItem(storageKey, currentlyOpen ? "false" : "true");
                         applyDesktopSidebarState();
                     });
@@ -727,7 +727,7 @@
 
                 if (sidebarCollapseToggle) {
                     sidebarCollapseToggle.addEventListener("click", () => {
-                        const currentlyOpen = window.localStorage.getItem(storageKey) !== "false";
+                        const currentlyOpen = window.localStorage.getItem(storageKey) === "true";
                         window.localStorage.setItem(storageKey, currentlyOpen ? "false" : "true");
                         applyDesktopSidebarState();
                     });
