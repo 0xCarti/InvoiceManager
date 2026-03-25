@@ -3,27 +3,32 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h2>Manage Users</h2>
-    <form action="{{ url_for('admin.users') }}" method="post" class="mb-3">
-        {{ invite_form.hidden_tag() }}
-        <div class="input-group">
-            {{ invite_form.email(class_='form-control', placeholder='Email') }}
-            <button type="submit" class="btn btn-success">{{ invite_form.submit.label.text }}</button>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+        <div>
+            <h2 class="mb-1">Manage Users</h2>
+            <p class="text-muted mb-0">Invite and manage user access</p>
         </div>
-    </form>
-    <div class="d-flex justify-content-end mb-2">
-        {{ column_visibility_dropdown(
-            table_id='admin-users-table',
-            storage_key='adminUsersTableColumnVisibility',
-            align='end',
-            columns=[
-                {'id': 'toggle-user-email', 'target': 'col-user-email', 'label': 'Email', 'checked': True},
-                {'id': 'toggle-user-active', 'target': 'col-user-active', 'label': 'Active', 'checked': True},
-                {'id': 'toggle-user-admin', 'target': 'col-user-admin', 'label': 'Admin', 'checked': True},
-                {'id': 'toggle-user-actions', 'target': 'col-user-actions', 'label': 'Actions', 'checked': True},
-                {'id': 'toggle-user-profile', 'target': 'col-user-profile', 'label': 'Profile', 'checked': True},
-            ]
-        ) }}
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <form action="{{ url_for('admin.users') }}" method="post" class="d-flex flex-grow-1 flex-wrap align-items-center gap-2">
+            {{ invite_form.hidden_tag() }}
+            {{ invite_form.email(class_='form-control', placeholder='Email', style='max-width: 24rem;') }}
+            <button type="submit" class="btn btn-primary">{{ invite_form.submit.label.text }}</button>
+        </form>
+        <div>
+            {{ column_visibility_dropdown(
+                table_id='admin-users-table',
+                storage_key='adminUsersTableColumnVisibility',
+                align='end',
+                columns=[
+                    {'id': 'toggle-user-email', 'target': 'col-user-email', 'label': 'Email', 'checked': True},
+                    {'id': 'toggle-user-active', 'target': 'col-user-active', 'label': 'Active', 'checked': True},
+                    {'id': 'toggle-user-admin', 'target': 'col-user-admin', 'label': 'Admin', 'checked': True},
+                    {'id': 'toggle-user-actions', 'target': 'col-user-actions', 'label': 'Actions', 'checked': True},
+                    {'id': 'toggle-user-profile', 'target': 'col-user-profile', 'label': 'Profile', 'checked': True},
+                ]
+            ) }}
+        </div>
     </div>
     <div class="table-responsive">
     <table class="table sortable" id="admin-users-table">

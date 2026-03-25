@@ -2,18 +2,32 @@
 {% from 'macros/filter_modal.html' import filter_modal %}
 {% block content %}
 <div class="container mt-4">
-    <h2>Purchase Invoices</h2>
-    <div class="row justify-content-end g-2">
-        <div class="col-auto">
-            <a href="{{ url_for('report.received_invoice_report') }}" class="btn btn-secondary mb-3">Received Invoice Report</a>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+        <div>
+            <h2 class="mb-1">Purchase Invoices</h2>
+            <p class="text-muted mb-0">Review received vendor invoices and related details</p>
         </div>
-        <div class="col-auto">
-            <a href="{{ url_for('report.purchase_inventory_summary') }}" class="btn btn-secondary mb-3">Purchase Inventory Summary</a>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div class="dropdown d-md-none">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                More actions
+            </button>
+            <ul class="dropdown-menu">
+                <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button></li>
+            </ul>
         </div>
-        <div class="col-auto">
-            <a href="{{ url_for('report.inventory_variance_report') }}" class="btn btn-secondary mb-3">Inventory Variance Report</a>
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                Reports
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="{{ url_for('report.received_invoice_report') }}">Received Invoice Report</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('report.purchase_inventory_summary') }}">Purchase Inventory Summary</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('report.inventory_variance_report') }}">Inventory Variance Report</a></li>
+            </ul>
         </div>
-        <div class="col-auto text-end">
+        <div>
             <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="purchase-invoices-table" data-storage-key="purchaseInvoiceTableColumnVisibility">
                 <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="purchaseInvoiceColumnSelector"
                     data-bs-toggle="dropdown" aria-expanded="false">
@@ -102,10 +116,8 @@
                     </div>
                 </div>
             </div>
-            <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
-                Filters
-            </button>
         </div>
+        <button type="button" class="btn btn-outline-secondary d-none d-md-inline-flex" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button>
     </div>
 
     <!-- Filter Modal -->
@@ -186,31 +198,35 @@
             </div>
         </div>
     {% endcall %}
-    {% if invoice_number %}
-    <div class="mb-3"><strong>Filtering by Invoice #:</strong> {{ invoice_number }}</div>
-    {% endif %}
-    {% if po_number %}
-    <div class="mb-3"><strong>Filtering by PO Number:</strong> {{ po_number }}</div>
-    {% endif %}
-    {% if active_vendor %}
-    <div class="mb-3"><strong>Filtering by Vendor:</strong> {{ active_vendor.first_name }} {{ active_vendor.last_name }}</div>
-    {% endif %}
-    {% if active_location %}
-    <div class="mb-3"><strong>Filtering by Location:</strong> {{ active_location.name }}</div>
-    {% endif %}
-    {% if selected_item_names %}
-    <div class="mb-3"><strong>Filtering by Items:</strong> {{ selected_item_names | join(', ') }}</div>
-    {% endif %}
-    {% if start_date or end_date %}
-    <div class="mb-3"><strong>Filtering by Date:</strong>
-        {% if start_date %}From {{ start_date }}{% endif %}
-        {% if end_date %} to {{ end_date }}{% endif %}
-    </div>
-    {% endif %}
-    {% if amount_filter and amount_value is not none %}
+    {% if invoice_number or po_number or active_vendor or active_location or selected_item_names or start_date or end_date or (amount_filter and amount_value is not none) %}
     {% set comparator_labels = {'gt': 'Greater than', 'lt': 'Less than', 'eq': 'Equal to'} %}
-    <div class="mb-3">
-        <span class="badge bg-info text-dark">Filtering by Amount: {{ comparator_labels[amount_filter] }} {{ amount_value }}</span>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <span class="text-muted small">Active filters:</span>
+        {% if invoice_number %}
+        <span class="badge rounded-pill text-bg-light border">Invoice #: {{ invoice_number }}</span>
+        {% endif %}
+        {% if po_number %}
+        <span class="badge rounded-pill text-bg-light border">PO Number: {{ po_number }}</span>
+        {% endif %}
+        {% if active_vendor %}
+        <span class="badge rounded-pill text-bg-light border">Vendor: {{ active_vendor.first_name }} {{ active_vendor.last_name }}</span>
+        {% endif %}
+        {% if active_location %}
+        <span class="badge rounded-pill text-bg-light border">Location: {{ active_location.name }}</span>
+        {% endif %}
+        {% if selected_item_names %}
+        <span class="badge rounded-pill text-bg-light border">Items: {{ selected_item_names | join(', ') }}</span>
+        {% endif %}
+        {% if start_date or end_date %}
+        <span class="badge rounded-pill text-bg-light border">
+            Date:
+            {% if start_date %}From {{ start_date }}{% endif %}
+            {% if end_date %} to {{ end_date }}{% endif %}
+        </span>
+        {% endif %}
+        {% if amount_filter and amount_value is not none %}
+        <span class="badge rounded-pill text-bg-light border">Amount: {{ comparator_labels[amount_filter] }} {{ amount_value }}</span>
+        {% endif %}
     </div>
     {% endif %}
     <div class="table-responsive">
