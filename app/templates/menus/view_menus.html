@@ -3,11 +3,24 @@
 {% block content %}
 <div class="container my-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
-        <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-3">
-            <h1 class="h3 mb-0">Menus</h1>
+        <div>
+            <h2 class="mb-1">Menus</h2>
+            <p class="text-muted mb-0">Manage menu definitions and assignments</p>
+        </div>
+        <div>
             <a href="{{ url_for('menu.add_menu') }}" class="btn btn-primary">Create Menu</a>
         </div>
-        <div class="text-md-end">
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div class="dropdown d-md-none">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                More actions
+            </button>
+            <ul class="dropdown-menu">
+                <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#menuFilterModal">Filters</button></li>
+            </ul>
+        </div>
+        <div>
             {{ column_visibility_dropdown(
                 table_id='menus-table',
                 storage_key='menusTableColumnVisibility',
@@ -20,20 +33,23 @@
                     {'id': 'toggle-menu-actions', 'target': 'col-menu-actions', 'label': 'Actions', 'checked': True},
                 ]
             ) }}
-            <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#menuFilterModal">
-                Filters
-            </button>
         </div>
+        <button type="button" class="btn btn-outline-secondary d-none d-md-inline-flex" data-bs-toggle="modal" data-bs-target="#menuFilterModal">Filters</button>
     </div>
 
-    {% if name_query %}
-    <div class="mb-2"><strong>Filtering by Name ({{ match_mode.replace('_', ' ')|title }}):</strong> {{ name_query }}</div>
-    {% endif %}
-    {% if assigned_status != 'all' %}
-    <div class="mb-2"><strong>Assigned Status:</strong> {{ 'Assigned to locations' if assigned_status == 'assigned' else 'Not assigned to any location' }}</div>
-    {% endif %}
-    {% if product_status != 'all' %}
-    <div class="mb-3"><strong>Product Status:</strong> {{ 'Has products' if product_status == 'with' else 'No products' }}</div>
+    {% if name_query or assigned_status != 'all' or product_status != 'all' %}
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <span class="text-muted small">Active filters:</span>
+        {% if name_query %}
+        <span class="badge rounded-pill text-bg-light border">Name ({{ match_mode.replace('_', ' ')|title }}): {{ name_query }}</span>
+        {% endif %}
+        {% if assigned_status != 'all' %}
+        <span class="badge rounded-pill text-bg-light border">Assigned Status: {{ 'Assigned to locations' if assigned_status == 'assigned' else 'Not assigned to any location' }}</span>
+        {% endif %}
+        {% if product_status != 'all' %}
+        <span class="badge rounded-pill text-bg-light border">Product Status: {{ 'Has products' if product_status == 'with' else 'No products' }}</span>
+        {% endif %}
+    </div>
     {% endif %}
 
     {% if menus %}
