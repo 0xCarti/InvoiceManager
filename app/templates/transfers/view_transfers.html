@@ -3,19 +3,39 @@
 
 {% block content %}
 <div class="container mt-5">
-    <h2>Transfers List</h2>
-    <div class="row mb-3 align-items-center justify-content-between">
-        <div class="col-12 col-lg-auto mb-2 mb-lg-0 d-flex align-items-center">
-            <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addTransferModal">Add New Transfer</button>
-            <button id="new-transfer-alert" type="button" class="btn btn-warning me-2" data-action="reload"
-                    style="display: none;">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+        <div>
+            <h2 class="mb-1">Transfers</h2>
+            <p class="text-muted mb-0">Track transfers between locations</p>
+        </div>
+        <div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTransferModal">Add New Transfer</button>
+        </div>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <button id="new-transfer-alert" type="button" class="btn btn-warning" data-action="reload"
+                style="display: none;">
                 <img src="{{ url_for('static', filename='img/alert_icon.png') }}" alt="Reload"
                      style="width: 20px; height: 20px;"/>
+        </button>
+        <div class="dropdown d-md-none">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                More actions
             </button>
-            <a href="{{ url_for('transfer.generate_report') }}" class="btn btn-info me-2">Generate Report</a>
-            <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#searchModal">Search/Filter</button>
+            <ul class="dropdown-menu">
+                <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#searchModal">Search/Filter</button></li>
+            </ul>
         </div>
-        <div class="col-auto text-end">
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                Reports
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="{{ url_for('transfer.generate_report') }}">Generate Report</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('transfer.view_report') }}">View Last Report</a></li>
+            </ul>
+        </div>
+        <div>
             {{ column_visibility_dropdown(
                 table_id='transfer-table',
                 storage_key='transferTableColumnVisibility',
@@ -28,6 +48,7 @@
                 ]
             ) }}
         </div>
+        <button class="btn btn-outline-secondary d-none d-md-inline-flex" data-bs-toggle="modal" data-bs-target="#searchModal">Search/Filter</button>
     </div>
     <div class="table-responsive">
     <table class="table sortable" id="transfer-table">
