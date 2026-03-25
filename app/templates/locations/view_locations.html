@@ -4,23 +4,36 @@
 
 {% block content %}
 <div class="container mt-5">
-    <h2>Locations</h2>
-    <div class="row justify-content-between">
-        <div class="col-auto">
-            <button id="addLocationBtn" class="btn btn-primary mb-3" type="button">Add New Location</button>
-            <button type="button" class="btn btn-outline-secondary mb-3" id="bulkEditLocationsBtn" disabled>Bulk Edit</button>
-            <button
-                type="button"
-                class="btn btn-outline-secondary mb-3"
-                id="emailStandSheetsBtn"
-                data-email-stand-sheet
-                data-email-action="{{ url_for('locations.email_stand_sheets') }}"
-                disabled
-            >
-                Email Stand Sheets
-            </button>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+        <div>
+            <h2 class="mb-1">Locations</h2>
+            <p class="text-muted mb-0">Manage active and archived locations</p>
         </div>
-        <div class="col-auto text-end">
+        <div>
+            <button id="addLocationBtn" class="btn btn-primary" type="button">Add New Location</button>
+        </div>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <button type="button" class="btn btn-outline-secondary" id="bulkEditLocationsBtn" disabled>Bulk Edit</button>
+        <button
+            type="button"
+            class="btn btn-outline-secondary"
+            id="emailStandSheetsBtn"
+            data-email-stand-sheet
+            data-email-action="{{ url_for('locations.email_stand_sheets') }}"
+            disabled
+        >
+            Email Stand Sheets
+        </button>
+        <div class="dropdown d-md-none">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                More actions
+            </button>
+            <ul class="dropdown-menu">
+                <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button></li>
+            </ul>
+        </div>
+        <div>
             {{ column_visibility_dropdown(
                 table_id='locations-table',
                 storage_key='locationsTableColumnVisibility',
@@ -30,25 +43,12 @@
                     {'id': 'toggle-location-actions', 'target': 'col-location-actions', 'label': 'Actions', 'checked': True},
                 ]
             ) }}
-            <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
-                Filters
-            </button>
         </div>
+        <button type="button" class="btn btn-outline-secondary d-none d-md-inline-flex" data-bs-toggle="modal" data-bs-target="#filterModal">
+            Filters
+        </button>
     </div>
     <input type="hidden" id="csrf_token" value="{{ csrf_token() }}" />
-    {% if name_query %}
-    <div class="mb-3"><strong>Filtering by Name:</strong> {{ name_query }}</div>
-    {% endif %}
-    {% if archived == 'archived' %}
-    <div class="mb-3"><strong>Viewing:</strong> Archived locations</div>
-    {% elif archived == 'all' %}
-    <div class="mb-3"><strong>Viewing:</strong> All locations</div>
-    {% endif %}
-    {% if spoilage_filter == 'spoilage' %}
-    <div class="mb-3"><strong>Spoilage Filter:</strong> Spoilage only</div>
-    {% elif spoilage_filter == 'non_spoilage' %}
-    <div class="mb-3"><strong>Spoilage Filter:</strong> Non-spoilage only</div>
-    {% endif %}
     {% set menu_filters = namespace(values=[]) %}
     {% if include_no_menu %}
         {% set menu_filters.values = menu_filters.values + ['No Menu'] %}
@@ -58,8 +58,26 @@
             {% set menu_filters.values = menu_filters.values + [menu.name] %}
         {% endif %}
     {% endfor %}
-    {% if menu_filters.values %}
-    <div class="mb-3"><strong>Menus:</strong> {{ menu_filters.values | join(', ') }}</div>
+    {% if name_query or archived != 'active' or spoilage_filter != 'all' or menu_filters.values %}
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <span class="text-muted small">Active filters:</span>
+        {% if name_query %}
+        <span class="badge rounded-pill text-bg-light border">Name: {{ name_query }}</span>
+        {% endif %}
+        {% if archived == 'archived' %}
+        <span class="badge rounded-pill text-bg-light border">Status: Archived</span>
+        {% elif archived == 'all' %}
+        <span class="badge rounded-pill text-bg-light border">Status: All</span>
+        {% endif %}
+        {% if spoilage_filter == 'spoilage' %}
+        <span class="badge rounded-pill text-bg-light border">Spoilage: Spoilage only</span>
+        {% elif spoilage_filter == 'non_spoilage' %}
+        <span class="badge rounded-pill text-bg-light border">Spoilage: Non-spoilage only</span>
+        {% endif %}
+        {% if menu_filters.values %}
+        <span class="badge rounded-pill text-bg-light border">Menus: {{ menu_filters.values | join(', ') }}</span>
+        {% endif %}
+    </div>
     {% endif %}
     <div class="table-responsive">
     <table class="table sortable" id="locations-table">
