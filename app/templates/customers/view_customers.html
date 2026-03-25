@@ -6,12 +6,27 @@
 
 {% block content %}
 <div class="container mt-5">
-    <h2>Customers</h2>
-    <div class="row justify-content-between">
-        <div class="col-auto">
-            <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createCustomerModal">Create Customer</button>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+        <div>
+            <h2 class="mb-1">Customers</h2>
+            <p class="text-muted mb-0">Browse and manage customer records</p>
         </div>
-        <div class="col-auto text-end">
+        <div>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createCustomerModal">Create Customer</button>
+        </div>
+    </div>
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div class="dropdown d-md-none">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                More actions
+            </button>
+            <ul class="dropdown-menu">
+                <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button></li>
+            </ul>
+        </div>
+
+        <div>
             {{ column_visibility_dropdown(
                 table_id='customerTable',
                 storage_key='customerTableColumnVisibility',
@@ -22,8 +37,8 @@
                     {'id': 'toggle-customer-actions', 'target': 'col-customer-actions', 'label': 'Actions', 'checked': True},
                 ]
             ) }}
-            <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button>
         </div>
+        <button type="button" class="btn btn-outline-secondary d-none d-md-inline-flex" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button>
     </div>
 
     <!-- Filter Modal -->
@@ -67,14 +82,19 @@
         </div>
     {% endcall %}
 
-    {% if name_query %}
-    <p>Filtering by Name: {{ name_query }}</p>
-    {% endif %}
-    {% if gst_exempt != 'all' %}
-    <p>Filtering by GST Exempt: {{ 'Yes' if gst_exempt == 'yes' else 'No' }}</p>
-    {% endif %}
-    {% if pst_exempt != 'all' %}
-    <p>Filtering by PST Exempt: {{ 'Yes' if pst_exempt == 'yes' else 'No' }}</p>
+    {% if name_query or gst_exempt != 'all' or pst_exempt != 'all' %}
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <span class="text-muted small">Active filters:</span>
+        {% if name_query %}
+        <span class="badge rounded-pill text-bg-light border">Name: {{ name_query }}</span>
+        {% endif %}
+        {% if gst_exempt != 'all' %}
+        <span class="badge rounded-pill text-bg-light border">GST Exempt: {{ 'Yes' if gst_exempt == 'yes' else 'No' }}</span>
+        {% endif %}
+        {% if pst_exempt != 'all' %}
+        <span class="badge rounded-pill text-bg-light border">PST Exempt: {{ 'Yes' if pst_exempt == 'yes' else 'No' }}</span>
+        {% endif %}
+    </div>
     {% endif %}
     <div class="table-responsive">
     <table class="table sortable" id="customerTable">
