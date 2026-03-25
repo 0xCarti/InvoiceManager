@@ -1,4 +1,5 @@
 import os
+import re
 import secrets
 import sys
 import traceback
@@ -44,31 +45,78 @@ def _redact_error_details(details: str) -> str:
     if not details:
         return ""
 
-    secret_markers = (
-        "password",
-        "passwd",
-        "pwd",
-        "secret",
-        "token",
-        "api_key",
-        "apikey",
-        "authorization",
-        "cookie",
-        "session",
+    redacted = details
+
+    # Common key/value pairs: password=..., api_key: ..., token=...
+    redacted = re.sub(
+        (
+            r"(?im)\b(password|passwd|pwd|secret|api[_-]?key|token|"
+            r"session(?:id)?|cookie)\b\s*[:=]\s*([^\s,;\"']+)"
+        ),
+        r"\1=<redacted>",
+        redacted,
+    )
+    # Authorization headers and bearer tokens.
+    redacted = re.sub(
+        r"(?im)\bauthorization\b\s*:\s*bearer\s+[^\s]+",
+        "Authorization: Bearer <redacted>",
+        redacted,
+    )
+    redacted = re.sub(
+        r"(?i)\bbearer\s+[a-z0-9\-._~+/]+=*",
+        "Bearer <redacted>",
+        redacted,
+    )
+    # URL credentials in connection strings (scheme://user:pass@host).
+    redacted = re.sub(
+        r"([a-zA-Z][a-zA-Z0-9+\-.]*://)([^/\s:@]+):([^@\s/]+)@",
+        r"\1<redacted>:<redacted>@",
+        redacted,
+    )
+    # Cookie and Set-Cookie header values.
+    redacted = re.sub(
+        r"(?im)\b(set-cookie|cookie)\b\s*:\s*.+",
+        r"\1: <redacted>",
+        redacted,
     )
 
-    redacted_lines: list[str] = []
-    for line in details.splitlines():
-        lowered = line.lower()
-        if any(marker in lowered for marker in secret_markers) and "=" in line:
-            key = line.split("=", 1)[0]
-            redacted_lines.append(f"{key}=<redacted>")
-        elif any(marker in lowered for marker in secret_markers) and ":" in line:
-            key = line.split(":", 1)[0]
-            redacted_lines.append(f"{key}: <redacted>")
-        else:
-            redacted_lines.append(line)
-    return "\n".join(redacted_lines)
+    return redacted
+
+
+def _truncate_error_details(details: str, max_length: int, error_token: str) -> str:
+    """Truncate oversized error details and append support guidance."""
+    if max_length <= 0 or len(details) <= max_length:
+        return details
+    truncated = details[:max_length].rstrip()
+    return (
+        f"{truncated}\n\n...[truncated]...\n"
+        f"Trace output exceeded {max_length} characters. "
+        f"See token {error_token} for full logs."
+    )
+
+
+def _build_user_error_details(
+    traceback_text: str,
+    *,
+    show_detailed_trace: bool,
+    max_length: int,
+    error_token: str,
+) -> str:
+    """Return redacted details appropriate for end-user error pages."""
+    redacted_details = _redact_error_details(traceback_text)
+    if show_detailed_trace:
+        return _truncate_error_details(redacted_details, max_length, error_token)
+
+    summary_line = "An internal error occurred."
+    for line in reversed(redacted_details.splitlines()):
+        if line.strip():
+            summary_line = line.strip()
+            break
+    return (
+        f"{summary_line}\n\n"
+        "Detailed traceback is hidden for safety. "
+        f"Share token {error_token} with support for full logs."
+    )
 
 
 def _configure_error_file_logging(app: Flask) -> None:
@@ -298,6 +346,15 @@ def create_app(args=None):
     )
     enforce_https = _get_bool_env("ENFORCE_HTTPS", default=False)
     app.config["ENFORCE_HTTPS"] = enforce_https
+    support_mode = _get_bool_env("SUPPORT_MODE", default=False)
+    app.config["SUPPORT_MODE"] = support_mode
+    app.config["SHOW_ERROR_DETAILS_TO_USERS"] = _get_bool_env(
+        "SHOW_ERROR_DETAILS_TO_USERS",
+        default=support_mode,
+    )
+    app.config["ERROR_DETAILS_MAX_LENGTH"] = int(
+        os.getenv("ERROR_DETAILS_MAX_LENGTH", "8000")
+    )
     app.config.update(
         SESSION_COOKIE_SECURE=session_cookie_secure,
         REMEMBER_COOKIE_SECURE=session_cookie_secure,
@@ -701,12 +758,22 @@ def create_app(args=None):
                     "traceback_text": traceback_text,
                 },
             )
-            error_details = _redact_error_details(traceback_text)
+            error_details = _build_user_error_details(
+                traceback_text,
+                show_detailed_trace=app.config.get(
+                    "SHOW_ERROR_DETAILS_TO_USERS", False
+                ),
+                max_length=int(app.config.get("ERROR_DETAILS_MAX_LENGTH", 8000)),
+                error_token=error_token,
+            )
             return (
                 render_template(
                     "errors/internal_error.html",
                     error_token=error_token,
                     error_details=error_details,
+                    show_error_details=app.config.get(
+                        "SHOW_ERROR_DETAILS_TO_USERS", False
+                    ),
                 ),
                 500,
             )
