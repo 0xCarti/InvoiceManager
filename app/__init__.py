@@ -2,7 +2,9 @@ import os
 import secrets
 import sys
 import traceback
+import logging
 from datetime import date, datetime, timedelta
+from logging.handlers import RotatingFileHandler
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
@@ -67,6 +69,60 @@ def _redact_error_details(details: str) -> str:
         else:
             redacted_lines.append(line)
     return "\n".join(redacted_lines)
+
+
+def _configure_error_file_logging(app: Flask) -> None:
+    """Configure rotating file logging for unhandled error incidents."""
+    logs_dir = os.path.join(os.getcwd(), "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+    error_log_path = os.path.join(logs_dir, "errors.log")
+    app.config["ERROR_LOG_PATH"] = error_log_path
+
+    for handler in app.logger.handlers:
+        if (
+            isinstance(handler, RotatingFileHandler)
+            and os.path.abspath(getattr(handler, "baseFilename", ""))
+            == os.path.abspath(error_log_path)
+        ):
+            return
+
+    rotating_handler = RotatingFileHandler(
+        error_log_path,
+        maxBytes=int(os.getenv("ERROR_LOG_MAX_BYTES", 5 * 1024 * 1024)),
+        backupCount=int(os.getenv("ERROR_LOG_BACKUP_COUNT", 5)),
+        encoding="utf-8",
+    )
+
+    class _ErrorContextDefaultsFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            defaults = {
+                "error_token": "-",
+                "request_path": "-",
+                "request_method": "-",
+                "user_identity": "-",
+                "remote_addr": "-",
+                "user_agent": "-",
+                "traceback_text": "-",
+            }
+            for key, value in defaults.items():
+                if not hasattr(record, key):
+                    setattr(record, key, value)
+            return True
+
+    rotating_handler.addFilter(_ErrorContextDefaultsFilter())
+    rotating_handler.setLevel(logging.ERROR)
+    rotating_handler.setFormatter(
+        logging.Formatter(
+            (
+                "%(asctime)s %(levelname)s token=%(error_token)s "
+                "path=%(request_path)s method=%(request_method)s "
+                "user=%(user_identity)s remote_addr=%(remote_addr)s "
+                "user_agent=%(user_agent)s traceback=%(traceback_text)s"
+            )
+        )
+    )
+    app.logger.addHandler(rotating_handler)
+    app.logger.setLevel(logging.INFO)
 DEFAULT_CSP_TEMPLATE = (
     "default-src 'self'; "
     "img-src 'self' data:; "
@@ -299,6 +355,7 @@ def create_app(args=None):
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
     os.makedirs(app.config["BACKUP_FOLDER"], exist_ok=True)
     os.makedirs(app.config["IMPORT_FILES_FOLDER"], exist_ok=True)
+    _configure_error_file_logging(app)
 
     if "--demo" in args:
         app.config["DEMO"] = True
@@ -620,6 +677,30 @@ def create_app(args=None):
                         error.__traceback__,
                     )
                 )
+            user_identity = "anonymous"
+            if getattr(current_user, "is_authenticated", False):
+                user_id = getattr(current_user, "id", None)
+                user_email = getattr(current_user, "email", None)
+                if user_id is not None and user_email:
+                    user_identity = f"{user_id}:{user_email}"
+                elif user_id is not None:
+                    user_identity = str(user_id)
+                elif user_email:
+                    user_identity = user_email
+            app.logger.error(
+                "Unhandled exception",
+                extra={
+                    "error_token": error_token,
+                    "request_path": request.path,
+                    "request_method": request.method,
+                    "user_identity": user_identity,
+                    "remote_addr": request.headers.get(
+                        "X-Forwarded-For", request.remote_addr or "-"
+                    ),
+                    "user_agent": str(request.user_agent),
+                    "traceback_text": traceback_text,
+                },
+            )
             error_details = _redact_error_details(traceback_text)
             return (
                 render_template(
