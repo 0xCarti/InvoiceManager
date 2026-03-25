@@ -5,18 +5,38 @@
 
 {% block content %}
 <div class="container mt-5">
-    <h2>Products</h2>
-    <div class="row justify-content-between">
-        <div class="col-auto">
-            <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createProductModal">Create Product</button>
-            <a href="{{ url_for('report.product_recipe_report') }}" class="btn btn-secondary mb-3">Recipe Report</a>
-            <a href="{{ url_for('report.product_sales_report') }}" class="btn btn-secondary mb-3">Revenue Report</a>
-            <a href="{{ url_for('report.product_stock_usage_report') }}" class="btn btn-secondary mb-3">Stock Usage Report</a>
-            <a href="{{ url_for('report.department_sales_forecast') }}" class="btn btn-secondary mb-3">Department Sales Forecast</a>
-            <button type="submit" class="btn btn-warning mb-3" form="bulk-cost-form">Set Cost From Recipe</button>
-            <button type="button" class="btn btn-outline-secondary mb-3" id="bulkEditProductsBtn" disabled>Bulk Edit</button>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+        <div>
+            <h2 class="mb-1">Products</h2>
+            <p class="text-muted mb-0">Manage product pricing, recipes, and sales configuration</p>
         </div>
-        <div class="col-auto text-end">
+        <div>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createProductModal">Create Product</button>
+        </div>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <button type="submit" class="btn btn-warning" form="bulk-cost-form">Set Cost From Recipe</button>
+        <button type="button" class="btn btn-outline-secondary" id="bulkEditProductsBtn" disabled>Bulk Edit</button>
+        <div class="dropdown d-md-none">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                More actions
+            </button>
+            <ul class="dropdown-menu">
+                <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button></li>
+            </ul>
+        </div>
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                Reports
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="{{ url_for('report.product_recipe_report') }}">Recipe Report</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('report.product_sales_report') }}">Revenue Report</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('report.product_stock_usage_report') }}">Stock Usage Report</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('report.department_sales_forecast') }}">Department Sales Forecast</a></li>
+            </ul>
+        </div>
+        <div>
             <div class="dropdown d-inline-block mb-3 me-2" data-column-visibility data-table-id="product-table" data-storage-key="productTableColumnVisibility">
                 <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="productColumnSelector"
                     data-bs-toggle="dropdown" aria-expanded="false">
@@ -105,10 +125,8 @@
                     </div>
                 </div>
             </div>
-            <button type="button" class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#filterModal">
-                Filters
-            </button>
         </div>
+        <button type="button" class="btn btn-outline-secondary d-none d-md-inline-flex" data-bs-toggle="modal" data-bs-target="#filterModal">Filters</button>
     </div>
 
     <!-- Edit Product Modal -->
@@ -232,11 +250,16 @@
             </div>
         </div>
     </div>
-    {% if selected_sales_gl_codes %}
-    <p>Filtering by Sales GL Code: {{ selected_sales_gl_codes | map(attribute='code') | join(', ') }}</p>
-    {% endif %}
-    {% if selected_customer %}
-    <p>Filtering by Customer: {{ selected_customer.first_name }} {{ selected_customer.last_name }}</p>
+    {% if selected_sales_gl_codes or selected_customer %}
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <span class="text-muted small">Active filters:</span>
+        {% if selected_sales_gl_codes %}
+        <span class="badge rounded-pill text-bg-light border">Sales GL Code: {{ selected_sales_gl_codes | map(attribute='code') | join(', ') }}</span>
+        {% endif %}
+        {% if selected_customer %}
+        <span class="badge rounded-pill text-bg-light border">Customer: {{ selected_customer.first_name }} {{ selected_customer.last_name }}</span>
+        {% endif %}
+    </div>
     {% endif %}
     <form id="bulk-cost-form" action="{{ url_for('product.bulk_set_cost_from_recipe') }}" method="post">
         {{ bulk_cost_form.hidden_tag() }}
