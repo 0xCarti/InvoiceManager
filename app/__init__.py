@@ -1,6 +1,7 @@
 import os
 import secrets
 import sys
+import traceback
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -14,6 +15,7 @@ from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import CSRFProtect
 from flask_wtf.csrf import CSRFError
+from werkzeug.exceptions import HTTPException
 from werkzeug.routing import BuildError
 from werkzeug.security import generate_password_hash
 
@@ -33,6 +35,38 @@ def _get_bool_env(var_name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _redact_error_details(details: str) -> str:
+    """Redact sensitive values from exception details shown in UI."""
+    if not details:
+        return ""
+
+    secret_markers = (
+        "password",
+        "passwd",
+        "pwd",
+        "secret",
+        "token",
+        "api_key",
+        "apikey",
+        "authorization",
+        "cookie",
+        "session",
+    )
+
+    redacted_lines: list[str] = []
+    for line in details.splitlines():
+        lowered = line.lower()
+        if any(marker in lowered for marker in secret_markers) and "=" in line:
+            key = line.split("=", 1)[0]
+            redacted_lines.append(f"{key}=<redacted>")
+        elif any(marker in lowered for marker in secret_markers) and ":" in line:
+            key = line.split(":", 1)[0]
+            redacted_lines.append(f"{key}: <redacted>")
+        else:
+            redacted_lines.append(line)
+    return "\n".join(redacted_lines)
 DEFAULT_CSP_TEMPLATE = (
     "default-src 'self'; "
     "img-src 'self' data:; "
@@ -568,6 +602,32 @@ def create_app(args=None):
                     reason=error.description,
                 ),
                 400,
+            )
+
+        @app.errorhandler(Exception)
+        def handle_unhandled_exception(error):
+            """Render safe internal-error details without masking HTTP status codes."""
+            if isinstance(error, HTTPException):
+                return error
+
+            error_token = secrets.token_hex(8)
+            traceback_text = traceback.format_exc()
+            if traceback_text.strip() in {"", "NoneType: None"}:
+                traceback_text = "".join(
+                    traceback.format_exception(
+                        type(error),
+                        error,
+                        error.__traceback__,
+                    )
+                )
+            error_details = _redact_error_details(traceback_text)
+            return (
+                render_template(
+                    "errors/internal_error.html",
+                    error_token=error_token,
+                    error_details=error_details,
+                ),
+                500,
             )
 
     return app, socketio
