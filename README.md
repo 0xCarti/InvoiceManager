@@ -33,6 +33,8 @@ The application requires several variables to be present in your environment:
 - `ADMIN_EMAIL` – email address for the initial administrator account.
 - `ADMIN_PASS` – password for the administrator account.
 - `PORT` – port the web server listens on (optional, defaults to 5000).
+- `APP_ENV` – runtime environment (`development` or `production`).
+- `DB_ENGINE` – database backend (`sqlite` or `postgres`).
 - `SMTP_HOST` – hostname of your SMTP server.
 - `SMTP_PORT` – port for the SMTP server (defaults to 25).
 - `SMTP_USERNAME` – username for SMTP authentication.
@@ -53,6 +55,17 @@ The GST number can now be set from the application control panel after installat
 These can be placed in a `.env` file or exported in your shell before starting the app.
 
 ### Optional Environment Variables
+
+- `DATABASE_URL` – full SQLAlchemy connection string. When set, this overrides
+  `DB_ENGINE` and individual database variables.
+- `SQLITE_PATH` – path to the SQLite file when using SQLite.
+- `DATABASE_PATH` – legacy alias for `SQLITE_PATH` (still supported).
+- `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`,
+  `POSTGRES_PASSWORD`, `POSTGRES_SSLMODE` – PostgreSQL connection settings when
+  `DB_ENGINE=postgres`.
+- `POSTGRES_PORTS` – Docker Compose port mapping list for PostgreSQL host
+  exposure (defaults to `[]` for internal-only networking). Example:
+  `["5432:5432"]`.
 
 - `SESSION_COOKIE_SECURE` – set to `false` when running over plain HTTP (for
   example in local development). Defaults to `true` so cookies are only sent
@@ -88,7 +101,11 @@ python run.py
 
 Set `PORT` in your environment to change the port (default `5000`).
 
-The application uses a local SQLite database located at `inventory.db` and creates `uploads` and `backups` directories automatically on startup.
+By default in development, the app uses a local SQLite database at
+`inventory.db` (or `SQLITE_PATH` when set). When `DB_ENGINE=postgres` (or
+`DATABASE_URL` is set), the app connects to PostgreSQL instead. In production
+(`APP_ENV=production`), PostgreSQL settings are required when `DB_ENGINE` is
+not SQLite.
 
 For production deployments using Gunicorn, use the provided configuration to enable WebSocket support and prevent worker timeouts:
 
@@ -102,16 +119,16 @@ A high-level overview of the Flask application structure, shared services, and k
 
 ## Docker Setup
 
-The project includes a `Dockerfile` and a `docker-compose.yml` to make running
-the application in a container straightforward on Linux and Windows. The image
-starts Gunicorn using the included `gunicorn.conf.py`, so no additional commands
-are required. Create a `.env` file containing the environment variables
-described above. A persistent backing service such as Redis is required for
-rate limiting in production; set `RATELIMIT_STORAGE_URI` to its connection
-string. You can also specify the port the app will use by adding a `PORT`
-variable to `.env` (or by exporting it in your shell) before starting the
-service. Database migrations run automatically when the container starts via
-`entrypoint.sh`, rather than during the image build:
+The project includes a `Dockerfile` and a single `docker-compose.yml` that runs
+both the application and a PostgreSQL service. The image starts Gunicorn using
+the included `gunicorn.conf.py`, so no additional commands are required. Create
+a `.env` file (you can start from `.env.example`) containing the environment
+variables described above. A persistent backing service such as Redis is
+required for rate limiting in production; set `RATELIMIT_STORAGE_URI` to its
+connection string. You can also specify the port the app will use by adding a
+`PORT` variable to `.env` (or by exporting it in your shell) before starting
+the service. Database migrations run automatically when the container starts
+via `entrypoint.sh`, rather than during the image build:
 
 ```bash
 docker compose up --build
@@ -120,11 +137,15 @@ docker compose up --build
 The repository includes an `import_files` directory containing example CSV files
 that can be used as templates for data imports.
 
-The web interface will be available at `http://localhost:$PORT` (default `5000`). Uploaded files,
-import templates, backups and the SQLite database are stored on the host in the
-`uploads`, `backups`, `import_files` and `data` directories respectively. These
-folders are created automatically when the container starts so no manual setup
-is required.
+The web interface will be available at `http://localhost:$PORT` (default
+`5000`). Uploaded files, import templates, backups and (when using SQLite) the
+SQLite database are stored on the host in the `uploads`, `backups`,
+`import_files` and `data` directories respectively. PostgreSQL data is stored
+in the named Docker volume `postgres_data`.
+
+PostgreSQL is internal to the Docker network by default. If you need host
+access (for example from a desktop SQL client), set `POSTGRES_PORTS` in `.env`
+to a mapping such as `["5432:5432"]`.
 
 ## Running Tests
 

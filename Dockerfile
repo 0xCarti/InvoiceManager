@@ -37,7 +37,9 @@ ARG PORT=5000
 ENV PORT=${PORT}
 ENV FLASK_APP=run.py
 ENV FLASK_SKIP_CREATE_ALL=1
-ENV DATABASE_PATH=/app/data/inventory.db
+ENV APP_ENV=production
+ENV DB_ENGINE=postgres
+ENV SQLITE_PATH=/app/data/inventory.db
 
 EXPOSE ${PORT}
 

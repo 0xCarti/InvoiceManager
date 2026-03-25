@@ -2,6 +2,7 @@ import os
 import secrets
 import sys
 from datetime import date, datetime, timedelta
+from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
@@ -33,6 +34,58 @@ def _get_bool_env(var_name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_database_uri(base_dir: str) -> str:
+    """Build SQLAlchemy database URI from environment configuration."""
+
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return database_url
+
+    db_engine = os.getenv("DB_ENGINE", "sqlite").strip().lower()
+    app_env = os.getenv("APP_ENV", "development").strip().lower()
+
+    if db_engine == "postgres":
+        host = os.getenv("POSTGRES_HOST")
+        port = os.getenv("POSTGRES_PORT", "5432")
+        db_name = os.getenv("POSTGRES_DB")
+        user = os.getenv("POSTGRES_USER")
+        password = os.getenv("POSTGRES_PASSWORD")
+        sslmode = os.getenv("POSTGRES_SSLMODE")
+
+        if not all([host, db_name, user, password]):
+            if app_env == "production":
+                raise RuntimeError(
+                    "PostgreSQL is enabled but required POSTGRES_* variables are missing."
+                )
+            db_engine = "sqlite"
+        else:
+            query_suffix = f"?sslmode={sslmode}" if sslmode else ""
+            encoded_user = quote_plus(user)
+            encoded_password = quote_plus(password)
+            return (
+                "postgresql+psycopg2://"
+                f"{encoded_user}:{encoded_password}@{host}:{port}/{db_name}"
+                f"{query_suffix}"
+            )
+
+    if db_engine != "sqlite" and app_env == "production":
+        raise RuntimeError(
+            f"Unsupported DB_ENGINE '{db_engine}' for production. Use 'postgres'."
+        )
+
+    # Allow overriding the database location via DATABASE_PATH or SQLITE_PATH.
+    # If the provided path is a directory, store the SQLite file inside it.
+    default_db_path = os.path.join(base_dir, "inventory.db")
+    db_path = os.getenv("SQLITE_PATH") or os.getenv("DATABASE_PATH", default_db_path)
+    if os.path.isdir(db_path):
+        db_path = os.path.join(db_path, "inventory.db")
+
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    return f"sqlite:///{db_path}"
+
+
 DEFAULT_CSP_TEMPLATE = (
     "default-src 'self'; "
     "img-src 'self' data:; "
@@ -227,17 +280,7 @@ def create_app(args=None):
     repo_dir = os.path.abspath(
         os.path.join(os.path.dirname(__file__), os.pardir)
     )
-    # Allow overriding the database location via the DATABASE_PATH environment
-    # variable.  This is useful for container deployments where the database
-    # may reside in a mounted volume.  If the provided path is a directory,
-    # store the SQLite file inside that directory.
-    default_db_path = os.path.join(base_dir, "inventory.db")
-    db_path = os.getenv("DATABASE_PATH", default_db_path)
-    if os.path.isdir(db_path):
-        db_path = os.path.join(db_path, "inventory.db")
-
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    app.config["SQLALCHEMY_DATABASE_URI"] = _build_database_uri(base_dir)
     app.config["UPLOAD_FOLDER"] = os.path.join(base_dir, "uploads")
     app.config["BACKUP_FOLDER"] = os.path.join(base_dir, "backups")
     app.config["IMPORT_FILES_FOLDER"] = os.path.join(repo_dir, "import_files")
