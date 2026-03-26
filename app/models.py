@@ -1185,6 +1185,7 @@ class PosSalesImportRow(db.Model):
     )
     approval_batch_id = db.Column(db.String(64), nullable=True)
     reversal_batch_id = db.Column(db.String(64), nullable=True)
+    approval_metadata = db.Column(db.Text, nullable=True)
     created_at = db.Column(
         db.DateTime,
         nullable=False,
