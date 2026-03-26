@@ -16,6 +16,7 @@ from werkzeug.utils import secure_filename
 
 from app.models import PosSalesImport, db
 from app.services.pos_sales_ingest import stage_pos_sales_import
+from app.utils.activity import log_activity
 
 mailgun = Blueprint("mailgun", __name__, url_prefix="/webhooks/mailgun")
 
@@ -128,7 +129,6 @@ def inbound_mailgun():
                     {
                         "ok": False,
                         "error": "unsupported_attachment_type",
-                        "filename": filename,
                     }
                 ),
                 400,
@@ -165,6 +165,9 @@ def inbound_mailgun():
             ).first()
             if existing:
                 imported.append({"id": existing.id, "duplicate": True})
+                log_activity(
+                    f"Received duplicate POS sales import webhook payload for existing import {existing.id}"
+                )
                 continue
             return jsonify({"ok": False, "error": "duplicate_import"}), 409
 
@@ -172,6 +175,7 @@ def inbound_mailgun():
             stage_pos_sales_import(sales_import, str(file_path), extension)
             db.session.commit()
             imported.append({"id": sales_import.id, "duplicate": False})
+            log_activity(f"Received POS sales import {sales_import.id} via Mailgun webhook")
         except Exception:
             db.session.rollback()
             failure = PosSalesImport(
@@ -186,6 +190,9 @@ def inbound_mailgun():
             db.session.add(failure)
             db.session.commit()
             current_app.logger.exception("Failed to stage inbound Mailgun attachment")
+            log_activity(
+                f"Failed to parse POS sales import attachment via Mailgun webhook; failure import {failure.id}"
+            )
             return jsonify({"ok": False, "error": "parse_failed"}), 422
 
     if not imported:

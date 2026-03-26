@@ -1375,6 +1375,7 @@ def sales_import_detail(import_id: int):
             selectinload(PosSalesImport.locations).selectinload(PosSalesImportLocation.location),
             selectinload(PosSalesImport.approver),
             selectinload(PosSalesImport.reverser),
+            selectinload(PosSalesImport.deleter),
         )
         .filter(PosSalesImport.id == import_id)
         .first_or_404()
@@ -1533,6 +1534,10 @@ def sales_import_detail(import_id: int):
                     alias.location_id = target_location_id
                 db.session.commit()
                 flash("Location mapping saved.", "success")
+                log_activity(
+                    f"Saved location mapping for POS sales import {sales_import.id}: "
+                    f"'{location_record.source_location_name}' -> location {target_location_id}"
+                )
 
         elif action == "create_location":
             location_import_id = request.form.get("location_import_id", type=int)
@@ -1574,6 +1579,10 @@ def sales_import_detail(import_id: int):
                     alias.location_id = created_location.id
                 db.session.commit()
                 flash("Location created and mapping saved.", "success")
+                log_activity(
+                    f"Created/saved location mapping for POS sales import {sales_import.id}: "
+                    f"'{location_record.source_location_name}' -> location {created_location.id}"
+                )
 
         elif action == "map_product":
             row_id = request.form.get("row_id", type=int)
@@ -1612,6 +1621,10 @@ def sales_import_detail(import_id: int):
                     alias.product_id = target_product_id
                 db.session.commit()
                 flash("Product mapping saved.", "success")
+                log_activity(
+                    f"Saved product mapping for POS sales import {sales_import.id}: "
+                    f"'{row_record.source_product_name}' -> product {target_product_id}"
+                )
 
         elif action == "create_product":
             row_id = request.form.get("row_id", type=int)
@@ -1663,11 +1676,16 @@ def sales_import_detail(import_id: int):
                     alias.product_id = created_product.id
                 db.session.commit()
                 flash("Product created and mapping saved.", "success")
+                log_activity(
+                    f"Created/saved product mapping for POS sales import {sales_import.id}: "
+                    f"'{row_record.source_product_name}' -> product {created_product.id}"
+                )
 
         elif action == "refresh_auto_mapping":
             if _apply_auto_mappings():
                 db.session.commit()
                 flash("Applied latest automatic mappings.", "success")
+                log_activity(f"Refreshed automatic mappings for POS sales import {sales_import.id}")
             else:
                 flash("No additional automatic mappings were found.", "info")
         elif action == "approve_import":
@@ -2000,6 +2018,50 @@ def sales_import_detail(import_id: int):
             except Exception:
                 db.session.rollback()
                 flash("Unable to undo approved import due to an unexpected error.", "danger")
+        elif action == "delete_import":
+            deletion_reason = (request.form.get("deletion_reason") or "").strip()
+            try:
+                locked_import = (
+                    PosSalesImport.query.filter(PosSalesImport.id == sales_import.id)
+                    .with_for_update()
+                    .first()
+                )
+                if locked_import is None:
+                    flash("The requested import could not be found.", "danger")
+                    return redirect(url_for("admin.sales_imports"))
+
+                if locked_import.status == "approved":
+                    flash(
+                        "Approved imports must be undone before they can be deleted.",
+                        "warning",
+                    )
+                    return redirect(
+                        url_for("admin.sales_import_detail", import_id=sales_import.id)
+                    )
+
+                if locked_import.status == "deleted":
+                    flash("This import is already deleted.", "info")
+                    return redirect(
+                        url_for("admin.sales_import_detail", import_id=sales_import.id)
+                    )
+
+                locked_import.status = "deleted"
+                locked_import.deleted_by = current_user.id
+                locked_import.deleted_at = datetime.utcnow()
+                locked_import.deletion_reason = deletion_reason or None
+                db.session.commit()
+                flash("Import marked as deleted.", "success")
+                log_activity(
+                    f"Soft-deleted POS sales import {locked_import.id}"
+                    + (
+                        f" with reason: {deletion_reason}"
+                        if deletion_reason
+                        else ""
+                    )
+                )
+            except Exception:
+                db.session.rollback()
+                flash("Unable to delete import due to an unexpected error.", "danger")
 
         return redirect(
             url_for(

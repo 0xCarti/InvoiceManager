@@ -1052,6 +1052,9 @@ class PosSalesImport(db.Model):
     reversed_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     reversed_at = db.Column(db.DateTime, nullable=True)
     reversal_reason = db.Column(db.Text, nullable=True)
+    deleted_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    deletion_reason = db.Column(db.Text, nullable=True)
     approval_batch_id = db.Column(db.String(64), nullable=True)
     reversal_batch_id = db.Column(db.String(64), nullable=True)
     failure_reason = db.Column(db.Text, nullable=True)
@@ -1071,6 +1074,7 @@ class PosSalesImport(db.Model):
 
     approver = relationship("User", foreign_keys=[approved_by])
     reverser = relationship("User", foreign_keys=[reversed_by])
+    deleter = relationship("User", foreign_keys=[deleted_by])
     locations = relationship(
         "PosSalesImportLocation",
         back_populates="sales_import",
@@ -1099,6 +1103,7 @@ class PosSalesImport(db.Model):
         db.Index("ix_pos_sales_import_received_at", "received_at"),
         db.Index("ix_pos_sales_import_approved_by", "approved_by", "approved_at"),
         db.Index("ix_pos_sales_import_reversed_by", "reversed_by", "reversed_at"),
+        db.Index("ix_pos_sales_import_deleted_by", "deleted_by", "deleted_at"),
         db.Index("ix_pos_sales_import_approval_batch", "approval_batch_id"),
         db.Index("ix_pos_sales_import_reversal_batch", "reversal_batch_id"),
     )

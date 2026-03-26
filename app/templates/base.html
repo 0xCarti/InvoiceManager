@@ -609,6 +609,7 @@
                     <ul class="navbar-nav">
                         {% if current_user.is_authenticated %}
                         {% for fav in current_user.get_favorites() %}
+                        {% if not (fav.startswith('admin.') and not current_user.is_admin) %}
                         {% set label = NAV_LINKS.get(fav, fav.split('.')[-1].replace('_', ' ').title()) %}
                         {% set fav_url = safe_url_for(fav) %}
                         <li class="nav-item">
@@ -618,6 +619,7 @@
                             <span class="nav-link disabled" title="Unavailable in this build">{{ label }}</span>
                             {% endif %}
                         </li>
+                        {% endif %}
                         {% endfor %}
                         {% endif %}
                     </ul>
