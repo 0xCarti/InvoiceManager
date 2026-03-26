@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import math
 import re
+from collections import OrderedDict
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Iterable, List, Sequence
 
 from app.utils.numeric import coerce_float
@@ -61,6 +63,25 @@ _CURRENCY_PREFIX_RE = re.compile(
 _CURRENCY_SYMBOLS_RE = re.compile(r"[$€£¥₩₽]")
 
 
+_HEADER_TOKEN_RE = re.compile(r"[^a-z0-9]+")
+
+
+_HEADER_ALIASES: dict[str, set[str]] = {
+    "product_code": {"productcode", "code", "plu", "itemcode", "sku"},
+    "product_name": {"productname", "product", "item", "description", "name"},
+    "quantity": {"quantity", "qty", "items", "units"},
+    "net_inc": {
+        "netinc",
+        "netincludingtax",
+        "netincgst",
+        "netincvat",
+        "net",
+    },
+    "discount": {"discount", "discounts", "disc", "discountamt"},
+    "amount": {"amount", "linetotal", "total", "extprice"},
+}
+
+
 _EXCEL_ERROR_VALUES = {
     "#NULL!",
     "#DIV/0!",
@@ -110,6 +131,167 @@ def parse_terminal_sales_number(value) -> float | None:
         return float(cleaned)
     except (TypeError, ValueError):
         return None
+
+
+def parse_terminal_sales_decimal(value) -> Decimal | None:
+    """Best-effort conversion of spreadsheet values to ``Decimal``."""
+
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+
+    text = str(value).replace("\u00A0", " ")
+    cleaned = text.strip().strip('"').strip("'")
+    if not cleaned:
+        return None
+
+    sign = ""
+    if cleaned[0] in "+-":
+        sign = cleaned[0]
+        cleaned = cleaned[1:].lstrip()
+
+    while True:
+        stripped = _CURRENCY_PREFIX_RE.sub("", cleaned, count=1)
+        if stripped == cleaned:
+            break
+        cleaned = stripped.lstrip()
+
+    cleaned = (sign + _CURRENCY_SYMBOLS_RE.sub("", cleaned)).strip()
+    cleaned = cleaned.replace(",", "")
+    if not cleaned:
+        return None
+
+    match = re.search(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", cleaned)
+    if not match:
+        return None
+
+    try:
+        return Decimal(match.group(0))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _header_token(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return _HEADER_TOKEN_RE.sub("", value.strip().lower())
+
+
+def _detect_tolerant_header_indices(row: Sequence[object]) -> dict[str, int] | None:
+    mapping: dict[str, int] = {}
+    for idx, cell in enumerate(row):
+        token = _header_token(cell)
+        if not token:
+            continue
+        for key, aliases in _HEADER_ALIASES.items():
+            if token in aliases and key not in mapping:
+                mapping[key] = idx
+                break
+
+    if "product_name" not in mapping:
+        return None
+    if not any(key in mapping for key in ("quantity", "net_inc", "discount", "amount")):
+        return None
+    return mapping
+
+
+def parse_terminal_sales_email_rows(
+    rows: Iterable[Sequence[object]],
+) -> dict[str, dict[str, list[dict]]]:
+    """Parse POS email attachment rows into location buckets with row ordering."""
+
+    parsed: "OrderedDict[str, dict[str, list[dict]]]" = OrderedDict()
+    current_location: str | None = None
+    current_header: dict[str, int] = {}
+
+    for row_number, raw_row in enumerate(rows, start=1):
+        row = list(raw_row)
+        if not row:
+            continue
+
+        location_name = extract_terminal_sales_location(row)
+        if location_name:
+            current_location = location_name
+            current_header = {}
+            parsed.setdefault(current_location, {"rows": [], "location_totals": []})
+            continue
+
+        if not current_location:
+            continue
+
+        header_indices = _detect_tolerant_header_indices(row)
+        if header_indices:
+            current_header = header_indices
+            continue
+
+        column_map = {
+            "product_code": current_header.get("product_code", 0),
+            "product_name": current_header.get("product_name", 1),
+            "quantity": current_header.get("quantity", 4),
+            "net_inc": current_header.get("net_inc", 7),
+            "discount": current_header.get("discount", 8),
+            "amount": current_header.get("amount", 5),
+        }
+
+        def _get(col_name: str):
+            idx = column_map[col_name]
+            return row[idx] if idx < len(row) else None
+
+        product_name_cell = _get("product_name")
+        product_name = product_name_cell.strip() if isinstance(product_name_cell, str) else ""
+
+        quantity = parse_terminal_sales_decimal(_get("quantity")) or Decimal("0")
+        net_inc = parse_terminal_sales_decimal(_get("net_inc")) or Decimal("0")
+        discount_raw = parse_terminal_sales_decimal(_get("discount"))
+        discount_abs = abs(discount_raw) if discount_raw is not None else Decimal("0")
+        line_total = net_inc + discount_abs
+
+        has_numeric_aggregate = any(
+            parse_terminal_sales_decimal(_get(name)) is not None
+            for name in ("quantity", "net_inc", "discount", "amount")
+        )
+        if not product_name and has_numeric_aggregate:
+            parsed[current_location]["location_totals"].append(
+                {
+                    "row_number": row_number,
+                    "raw_row": row,
+                    "quantity": quantity,
+                    "net_inc": net_inc,
+                    "discount_raw": discount_raw,
+                    "discount_abs": discount_abs,
+                    "line_total": line_total,
+                }
+            )
+            continue
+
+        if not product_name:
+            continue
+
+        unit_price = line_total / quantity if abs(quantity) > Decimal("0") else line_total
+        product_code_cell = _get("product_code")
+        product_code = str(product_code_cell).strip() if product_code_cell is not None else ""
+
+        parsed[current_location]["rows"].append(
+            {
+                "row_number": row_number,
+                "raw_row": row,
+                "source_product_code": product_code or None,
+                "source_product_name": product_name,
+                "quantity": quantity,
+                "net_inc": net_inc,
+                "discount_raw": discount_raw,
+                "discount_abs": discount_abs,
+                "line_total": line_total,
+                "unit_price": unit_price,
+            }
+        )
+
+    return dict(parsed)
 
 
 def _is_effectively_zero(value: float | None) -> bool:
@@ -481,4 +663,3 @@ def parse_department_sales_forecast(filepath: str, extension: str) -> Department
 
     rows = iter_pos_excel_rows(filepath, extension)
     return parse_department_sales_forecast_rows(rows)
-

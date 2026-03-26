@@ -20,6 +20,7 @@ from app.utils.pos_import import (
     group_terminal_sales_rows,
     iter_pos_excel_rows,
     normalize_pos_alias,
+    parse_terminal_sales_email_rows,
     parse_terminal_sales_number,
     terminal_sales_cell_is_blank,
 )
@@ -27,6 +28,50 @@ from app.utils.pos_import import (
 
 def _parse_rows(filepath: str, extension: str) -> list[dict]:
     """Return normalized row dictionaries from an uploaded POS spreadsheet."""
+
+    parsed_locations = parse_terminal_sales_email_rows(
+        iter_pos_excel_rows(filepath, extension)
+    )
+    if parsed_locations:
+        normalized_rows: list[dict] = []
+        for location_name, payload in parsed_locations.items():
+            for summary in payload.get("location_totals", []):
+                normalized_rows.append(
+                    {
+                        "location": location_name,
+                        "is_location_total": True,
+                        "quantity": float(summary.get("quantity", 0.0) or 0.0),
+                        "net_including_tax_total": float(
+                            summary.get("net_inc", 0.0) or 0.0
+                        ),
+                        "discount_total": float(
+                            summary.get("discount_raw", 0.0) or 0.0
+                        ),
+                        "amount": float(summary.get("line_total", 0.0) or 0.0),
+                        "line_total": float(summary.get("line_total", 0.0) or 0.0),
+                        "raw_row": summary.get("raw_row"),
+                    }
+                )
+            for row in payload.get("rows", []):
+                normalized_rows.append(
+                    {
+                        "location": location_name,
+                        "product": row.get("source_product_name"),
+                        "quantity": float(row.get("quantity", 0.0) or 0.0),
+                        "price": float(row.get("unit_price", 0.0) or 0.0),
+                        "amount": float(row.get("line_total", 0.0) or 0.0),
+                        "net_including_tax_total": float(
+                            row.get("net_inc", 0.0) or 0.0
+                        ),
+                        "discount_total": float(
+                            row.get("discount_raw", 0.0) or 0.0
+                        ),
+                        "source_product_code": row.get("source_product_code"),
+                        "line_total": float(row.get("line_total", 0.0) or 0.0),
+                        "raw_row": row.get("raw_row"),
+                    }
+                )
+        return normalized_rows
 
     rows: list[dict] = []
     current_loc: str | None = None
@@ -203,8 +248,13 @@ def stage_pos_sales_import(pos_import: PosSalesImport, filepath: str, extension:
         line_total = combine_terminal_sales_totals(net_inc, discount_value)
         if line_total is None:
             line_total = coerce_float(entry.get("amount"), default=0.0) or 0.0
+        explicit_line_total = coerce_float(entry.get("line_total"))
+        if explicit_line_total is not None:
+            line_total = explicit_line_total
 
         computed_unit_price = coerce_float(entry.get("price"), default=0.0) or 0.0
+        if abs(quantity) < 1e-9:
+            computed_unit_price = float(line_total)
         if abs(quantity) > 1e-9 and abs(computed_unit_price) < 1e-9:
             computed_unit_price = float(line_total) / float(quantity)
 
@@ -212,7 +262,7 @@ def stage_pos_sales_import(pos_import: PosSalesImport, filepath: str, extension:
             sales_import=pos_import,
             import_location=location_record,
             source_product_name=product_name,
-            source_product_code=None,
+            source_product_code=entry.get("source_product_code"),
             normalized_product_name=normalized_product,
             product_id=product_id,
             quantity=quantity,
