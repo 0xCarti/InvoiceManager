@@ -127,11 +127,9 @@ def _configure_error_file_logging(app: Flask) -> None:
     app.config["ERROR_LOG_PATH"] = error_log_path
 
     for handler in app.logger.handlers:
-        if (
-            isinstance(handler, RotatingFileHandler)
-            and os.path.abspath(getattr(handler, "baseFilename", ""))
-            == os.path.abspath(error_log_path)
-        ):
+        if isinstance(handler, RotatingFileHandler) and os.path.abspath(
+            getattr(handler, "baseFilename", "")
+        ) == os.path.abspath(error_log_path):
             return
 
     rotating_handler = RotatingFileHandler(
@@ -171,6 +169,8 @@ def _configure_error_file_logging(app: Flask) -> None:
     )
     app.logger.addHandler(rotating_handler)
     app.logger.setLevel(logging.INFO)
+
+
 DEFAULT_CSP_TEMPLATE = (
     "default-src 'self'; "
     "img-src 'self' data:; "
@@ -373,9 +373,7 @@ def create_app(args=None):
     # always point to the intended location.
 
     base_dir = os.getcwd()
-    repo_dir = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), os.pardir)
-    )
+    repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     # Allow overriding the database location via the DATABASE_PATH environment
     # variable.  This is useful for container deployments where the database
     # may reside in a mounted volume.  If the provided path is a directory,
@@ -390,16 +388,49 @@ def create_app(args=None):
     app.config["UPLOAD_FOLDER"] = os.path.join(base_dir, "uploads")
     app.config["BACKUP_FOLDER"] = os.path.join(base_dir, "backups")
     app.config["IMPORT_FILES_FOLDER"] = os.path.join(repo_dir, "import_files")
-    app.config["MAILGUN_WEBHOOK_SIGNING_KEY"] = os.getenv("MAILGUN_WEBHOOK_SIGNING_KEY", "")
+    app.config["MAILGUN_WEBHOOK_SIGNING_KEY"] = os.getenv(
+        "MAILGUN_WEBHOOK_SIGNING_KEY", ""
+    )
     app.config["MAILGUN_WEBHOOK_MAX_AGE_SECONDS"] = int(
         os.getenv("MAILGUN_WEBHOOK_MAX_AGE_SECONDS", "900")
     )
     app.config["MAILGUN_ALLOWED_SENDERS"] = os.getenv("MAILGUN_ALLOWED_SENDERS", "")
-    app.config["MAILGUN_ALLOWED_SENDER_DOMAINS"] = os.getenv("MAILGUN_ALLOWED_SENDER_DOMAINS", "")
+    app.config["MAILGUN_ALLOWED_SENDER_DOMAINS"] = os.getenv(
+        "MAILGUN_ALLOWED_SENDER_DOMAINS", ""
+    )
     app.config["MAILGUN_ALLOWED_ATTACHMENT_EXTENSIONS"] = os.getenv(
         "MAILGUN_ALLOWED_ATTACHMENT_EXTENSIONS", "xls,xlsx"
     )
-    app.config["MAILGUN_INBOUND_STORAGE_DIR"] = os.getenv("MAILGUN_INBOUND_STORAGE_DIR", "")
+    app.config["MAILGUN_INBOUND_STORAGE_DIR"] = os.getenv(
+        "MAILGUN_INBOUND_STORAGE_DIR", ""
+    )
+    app.config["POS_IMPORT_INGEST_MODE"] = os.getenv(
+        "POS_IMPORT_INGEST_MODE", "webhook"
+    )
+    app.config["POS_IMPORT_POLL_PROVIDER"] = os.getenv(
+        "POS_IMPORT_POLL_PROVIDER", "imap"
+    )
+    app.config["POS_IMPORT_POLL_INTERVAL_SECONDS"] = int(
+        os.getenv("POS_IMPORT_POLL_INTERVAL_SECONDS", "3600")
+    )
+    app.config["POS_IMPORT_IMAP_HOST"] = os.getenv("POS_IMPORT_IMAP_HOST", "")
+    app.config["POS_IMPORT_IMAP_PORT"] = int(os.getenv("POS_IMPORT_IMAP_PORT", "993"))
+    app.config["POS_IMPORT_IMAP_USERNAME"] = os.getenv("POS_IMPORT_IMAP_USERNAME", "")
+    app.config["POS_IMPORT_IMAP_PASSWORD"] = os.getenv("POS_IMPORT_IMAP_PASSWORD", "")
+    app.config["POS_IMPORT_IMAP_MAILBOX"] = os.getenv(
+        "POS_IMPORT_IMAP_MAILBOX", "INBOX"
+    )
+    app.config["POS_IMPORT_IMAP_USE_SSL"] = _get_bool_env(
+        "POS_IMPORT_IMAP_USE_SSL", default=True
+    )
+    app.config["POS_IMPORT_API_BASE_URL"] = os.getenv("POS_IMPORT_API_BASE_URL", "")
+    app.config["POS_IMPORT_API_TOKEN"] = os.getenv("POS_IMPORT_API_TOKEN", "")
+    app.config["POS_IMPORT_API_MESSAGES_PATH"] = os.getenv(
+        "POS_IMPORT_API_MESSAGES_PATH", "/messages/unseen"
+    )
+    app.config["POS_IMPORT_API_ACK_PATH_TEMPLATE"] = os.getenv(
+        "POS_IMPORT_API_ACK_PATH_TEMPLATE", "/messages/{message_id}/ack"
+    )
     app.config.setdefault(
         "RESTORE_REQUIRED_TABLES",
         ["setting", "user", "invoice", "transfer"],
@@ -417,7 +448,7 @@ def create_app(args=None):
                 "module": "admin_backups",
                 "enabled": True,
                 "endpoints": ["admin.backups"],
-            }
+            },
         ],
     )
 
@@ -657,24 +688,18 @@ def create_app(args=None):
             if retail_price_setting is not None:
                 RETAIL_POP_PRICE = retail_price_setting.value or "0.00"
 
-            tz_setting = Setting.query.filter_by(
-                name="DEFAULT_TIMEZONE"
-            ).first()
+            tz_setting = Setting.query.filter_by(name="DEFAULT_TIMEZONE").first()
             if tz_setting is not None and tz_setting.value:
                 DEFAULT_TIMEZONE = tz_setting.value
 
-            auto_setting = Setting.query.filter_by(
-                name="AUTO_BACKUP_ENABLED"
-            ).first()
+            auto_setting = Setting.query.filter_by(name="AUTO_BACKUP_ENABLED").first()
             interval_value_setting = Setting.query.filter_by(
                 name="AUTO_BACKUP_INTERVAL_VALUE"
             ).first()
             interval_unit_setting = Setting.query.filter_by(
                 name="AUTO_BACKUP_INTERVAL_UNIT"
             ).first()
-            max_backups_setting = Setting.query.filter_by(
-                name="MAX_BACKUPS"
-            ).first()
+            max_backups_setting = Setting.query.filter_by(name="MAX_BACKUPS").first()
             conversions_setting = Setting.query.filter_by(
                 name="BASE_UNIT_CONVERSIONS"
             ).first()
@@ -684,6 +709,7 @@ def create_app(args=None):
                 DEFAULT_BASE_UNIT_CONVERSIONS,
                 parse_conversion_setting,
             )
+            from app.services.pos_sales_polling import start_pos_sales_mailbox_poller
 
             app.config["AUTO_BACKUP_ENABLED"] = (
                 auto_setting.value == "1" if auto_setting else False
@@ -716,6 +742,7 @@ def create_app(args=None):
                 * UNIT_SECONDS[app.config["AUTO_BACKUP_INTERVAL_UNIT"]]
             )
             start_auto_backup_thread(app)
+            start_pos_sales_mailbox_poller(app)
         except OperationalError:
             pass
 
