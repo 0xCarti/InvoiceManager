@@ -51,6 +51,9 @@ from app.models import (
     Customer,
     GLCode,
     Invoice,
+    PosSalesImport,
+    PosSalesImportLocation,
+    PosSalesImportRow,
     Setting,
     TerminalSaleLocationAlias,
     TerminalSaleProductAlias,
@@ -1231,6 +1234,118 @@ def terminal_sales_mappings():
         location_form=location_form,
         product_aliases=product_aliases,
         location_aliases=location_aliases,
+    )
+
+
+@admin.route("/controlpanel/sales-imports", methods=["GET"])
+@login_required
+def sales_imports():
+    """Render staged POS sales imports for admin review."""
+
+    if not current_user.is_admin:
+        abort(403)
+
+    status_filter = (request.args.get("status") or "").strip().lower()
+
+    query = PosSalesImport.query.options(
+        selectinload(PosSalesImport.locations),
+        selectinload(PosSalesImport.rows),
+    ).order_by(
+        PosSalesImport.received_at.desc(),
+        PosSalesImport.id.desc(),
+    )
+    if status_filter:
+        query = query.filter(PosSalesImport.status == status_filter)
+
+    imports = query.limit(200).all()
+    available_statuses = [
+        "pending",
+        "needs_mapping",
+        "approved",
+        "reversed",
+        "deleted",
+        "failed",
+    ]
+
+    return render_template(
+        "admin/sales_imports.html",
+        imports=imports,
+        status_filter=status_filter,
+        available_statuses=available_statuses,
+    )
+
+
+@admin.route("/controlpanel/sales-imports/<int:import_id>", methods=["GET"])
+@login_required
+def sales_import_detail(import_id: int):
+    """Render location and row-level detail for a staged POS sales import."""
+
+    if not current_user.is_admin:
+        abort(403)
+
+    sales_import = (
+        PosSalesImport.query.options(
+            selectinload(PosSalesImport.locations)
+            .selectinload(PosSalesImportLocation.rows)
+            .selectinload(PosSalesImportRow.product),
+            selectinload(PosSalesImport.locations).selectinload(PosSalesImportLocation.location),
+            selectinload(PosSalesImport.approver),
+            selectinload(PosSalesImport.reverser),
+        )
+        .filter(PosSalesImport.id == import_id)
+        .first_or_404()
+    )
+
+    selected_location_id = request.args.get("location_id", type=int)
+    selected_location = None
+    if selected_location_id is not None:
+        selected_location = next(
+            (
+                location
+                for location in sales_import.locations
+                if location.id == selected_location_id
+            ),
+            None,
+        )
+    if selected_location is None and sales_import.locations:
+        selected_location = sales_import.locations[0]
+
+    import_totals = {
+        "quantity": sum(float(loc.total_quantity or 0.0) for loc in sales_import.locations),
+        "net_inc": sum(float(loc.net_inc or 0.0) for loc in sales_import.locations),
+        "discounts_abs": sum(
+            float(loc.discounts_abs or 0.0) for loc in sales_import.locations
+        ),
+        "computed_total": sum(
+            float(loc.computed_total or 0.0) for loc in sales_import.locations
+        ),
+    }
+
+    location_errors: dict[int, list[str]] = {}
+    row_errors: dict[int, list[str]] = {}
+    for location in sales_import.locations:
+        errors: list[str] = []
+        if location.location_id is None:
+            errors.append("Location is not mapped.")
+        location_errors[location.id] = errors
+
+        for row in location.rows:
+            row_validation_errors: list[str] = []
+            if row.product_id is None:
+                row_validation_errors.append("Product is not mapped.")
+            if row.is_zero_quantity:
+                row_validation_errors.append(
+                    "Quantity is zero; treat as informational and exclude from stock operations."
+                )
+            row_errors[row.id] = row_validation_errors
+
+    return render_template(
+        "admin/sales_import_detail.html",
+        sales_import=sales_import,
+        selected_location=selected_location,
+        import_totals=import_totals,
+        location_errors=location_errors,
+        row_errors=row_errors,
     )
 
 
