@@ -187,6 +187,16 @@ def stage_pos_sales_import(pos_import: PosSalesImport, filepath: str, extension:
         alias.normalized_name: alias.product_id
         for alias in TerminalSaleProductAlias.query.all()
     }
+    exact_location_by_name = {
+        (location.name or "").strip().casefold(): location.id
+        for location in Location.query.all()
+        if location.name
+    }
+    exact_product_by_name = {
+        (product.name or "").strip().casefold(): product.id
+        for product in Product.query.all()
+        if product.name
+    }
     location_by_name = {
         normalize_pos_alias(location.name or ""): location.id
         for location in Location.query.all()
@@ -201,10 +211,11 @@ def stage_pos_sales_import(pos_import: PosSalesImport, filepath: str, extension:
     location_records: dict[str, PosSalesImportLocation] = {}
     for loc_index, (location_name, payload) in enumerate(grouped.items()):
         normalized_location = normalize_pos_alias(location_name)
-        location_id = (
-            location_aliases.get(normalized_location)
-            or location_by_name.get(normalized_location)
-        )
+        location_id = exact_location_by_name.get((location_name or "").strip().casefold())
+        if location_id is None:
+            location_id = location_aliases.get(normalized_location)
+        if location_id is None:
+            location_id = location_by_name.get(normalized_location)
 
         location_record = PosSalesImportLocation(
             sales_import=pos_import,
@@ -236,10 +247,11 @@ def stage_pos_sales_import(pos_import: PosSalesImport, filepath: str, extension:
 
         product_name = (entry.get("product") or "").strip()
         normalized_product = normalize_pos_alias(product_name)
-        product_id = (
-            product_aliases.get(normalized_product)
-            or product_by_name.get(normalized_product)
-        )
+        product_id = exact_product_by_name.get((product_name or "").strip().casefold())
+        if product_id is None:
+            product_id = product_aliases.get(normalized_product)
+        if product_id is None:
+            product_id = product_by_name.get(normalized_product)
 
         quantity = coerce_float(entry.get("quantity"), default=0.0) or 0.0
         net_inc = coerce_float(entry.get("net_including_tax_total"), default=0.0) or 0.0

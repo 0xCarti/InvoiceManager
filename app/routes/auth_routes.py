@@ -50,10 +50,12 @@ from app.models import (
     ActivityLog,
     Customer,
     GLCode,
+    Location,
     Invoice,
     PosSalesImport,
     PosSalesImportLocation,
     PosSalesImportRow,
+    Product,
     Setting,
     TerminalSaleLocationAlias,
     TerminalSaleProductAlias,
@@ -88,6 +90,7 @@ from app.utils.units import (
     parse_conversion_setting,
     serialize_conversion_setting,
 )
+from app.utils.pos_import import normalize_pos_alias
 
 auth = Blueprint("auth", __name__)
 admin = Blueprint("admin", __name__)
@@ -1275,7 +1278,7 @@ def sales_imports():
     )
 
 
-@admin.route("/controlpanel/sales-imports/<int:import_id>", methods=["GET"])
+@admin.route("/controlpanel/sales-imports/<int:import_id>", methods=["GET", "POST"])
 @login_required
 def sales_import_detail(import_id: int):
     """Render location and row-level detail for a staged POS sales import."""
@@ -1295,6 +1298,282 @@ def sales_import_detail(import_id: int):
         .filter(PosSalesImport.id == import_id)
         .first_or_404()
     )
+
+    def _refresh_import_mapping_status() -> tuple[int, int]:
+        unresolved_location_count = sum(
+            1 for location in sales_import.locations if location.location_id is None
+        )
+        unresolved_row_count = sum(
+            1
+            for location in sales_import.locations
+            for row in location.rows
+            if row.product_id is None
+        )
+        next_status = (
+            "needs_mapping"
+            if unresolved_location_count or unresolved_row_count
+            else "pending"
+        )
+        if sales_import.status != next_status:
+            sales_import.status = next_status
+            db.session.commit()
+        return unresolved_location_count, unresolved_row_count
+
+    def _apply_auto_mappings() -> bool:
+        changed = False
+
+        exact_location_lookup = {
+            (location.name or "").strip().casefold(): location.id
+            for location in Location.query.all()
+            if location.name
+        }
+        exact_product_lookup = {
+            (product.name or "").strip().casefold(): product.id
+            for product in Product.query.all()
+            if product.name
+        }
+
+        location_alias_lookup = {
+            alias.normalized_name: alias.location_id
+            for alias in TerminalSaleLocationAlias.query.all()
+            if alias.normalized_name and alias.location_id
+        }
+        product_alias_lookup = {
+            alias.normalized_name: alias.product_id
+            for alias in TerminalSaleProductAlias.query.all()
+            if alias.normalized_name and alias.product_id
+        }
+
+        normalized_location_lookup = {
+            normalize_pos_alias(location.name or ""): location.id
+            for location in Location.query.all()
+            if location.name
+        }
+        normalized_product_lookup = {
+            normalize_pos_alias(product.name or ""): product.id
+            for product in Product.query.all()
+            if product.name
+        }
+
+        for location in sales_import.locations:
+            if location.location_id is None:
+                exact_key = (location.source_location_name or "").strip().casefold()
+                normalized_key = location.normalized_location_name or normalize_pos_alias(
+                    location.source_location_name or ""
+                )
+                matched_location_id = exact_location_lookup.get(exact_key)
+                if matched_location_id is None and normalized_key:
+                    matched_location_id = location_alias_lookup.get(normalized_key)
+                if matched_location_id is None and normalized_key:
+                    matched_location_id = normalized_location_lookup.get(normalized_key)
+                if matched_location_id is not None:
+                    location.location_id = matched_location_id
+                    changed = True
+
+            for row in location.rows:
+                if row.product_id is not None:
+                    continue
+                exact_key = (row.source_product_name or "").strip().casefold()
+                normalized_key = row.normalized_product_name or normalize_pos_alias(
+                    row.source_product_name or ""
+                )
+                matched_product_id = exact_product_lookup.get(exact_key)
+                if matched_product_id is None and normalized_key:
+                    matched_product_id = product_alias_lookup.get(normalized_key)
+                if matched_product_id is None and normalized_key:
+                    matched_product_id = normalized_product_lookup.get(normalized_key)
+                if matched_product_id is not None:
+                    row.product_id = matched_product_id
+                    changed = True
+
+        return changed
+
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+        selected_location_id = request.form.get("selected_location_id", type=int)
+
+        if action == "map_location":
+            location_import_id = request.form.get("location_import_id", type=int)
+            target_location_id = request.form.get("target_location_id", type=int)
+            location_record = next(
+                (loc for loc in sales_import.locations if loc.id == location_import_id),
+                None,
+            )
+            if not location_record:
+                flash("Unable to find the selected import location.", "danger")
+            elif not target_location_id:
+                flash("Select a location to map.", "warning")
+            else:
+                normalized_key = location_record.normalized_location_name
+                for scoped_location in sales_import.locations:
+                    if scoped_location.normalized_location_name == normalized_key:
+                        scoped_location.location_id = target_location_id
+
+                alias = TerminalSaleLocationAlias.query.filter_by(
+                    normalized_name=normalized_key
+                ).first()
+                if alias is None:
+                    alias = TerminalSaleLocationAlias(
+                        source_name=location_record.source_location_name,
+                        normalized_name=normalized_key,
+                        location_id=target_location_id,
+                    )
+                    db.session.add(alias)
+                else:
+                    alias.source_name = location_record.source_location_name
+                    alias.location_id = target_location_id
+                db.session.commit()
+                flash("Location mapping saved.", "success")
+
+        elif action == "create_location":
+            location_import_id = request.form.get("location_import_id", type=int)
+            new_location_name = (request.form.get("new_location_name") or "").strip()
+            location_record = next(
+                (loc for loc in sales_import.locations if loc.id == location_import_id),
+                None,
+            )
+            if not location_record:
+                flash("Unable to find the selected import location.", "danger")
+            elif not new_location_name:
+                flash("Enter a new location name before creating.", "warning")
+            else:
+                existing = Location.query.filter_by(name=new_location_name).first()
+                if existing:
+                    created_location = existing
+                else:
+                    created_location = Location(name=new_location_name)
+                    db.session.add(created_location)
+                    db.session.flush()
+
+                normalized_key = location_record.normalized_location_name
+                for scoped_location in sales_import.locations:
+                    if scoped_location.normalized_location_name == normalized_key:
+                        scoped_location.location_id = created_location.id
+
+                alias = TerminalSaleLocationAlias.query.filter_by(
+                    normalized_name=normalized_key
+                ).first()
+                if alias is None:
+                    alias = TerminalSaleLocationAlias(
+                        source_name=location_record.source_location_name,
+                        normalized_name=normalized_key,
+                        location_id=created_location.id,
+                    )
+                    db.session.add(alias)
+                else:
+                    alias.source_name = location_record.source_location_name
+                    alias.location_id = created_location.id
+                db.session.commit()
+                flash("Location created and mapping saved.", "success")
+
+        elif action == "map_product":
+            row_id = request.form.get("row_id", type=int)
+            target_product_id = request.form.get("target_product_id", type=int)
+            row_record = next(
+                (
+                    row
+                    for location in sales_import.locations
+                    for row in location.rows
+                    if row.id == row_id
+                ),
+                None,
+            )
+            if not row_record:
+                flash("Unable to find the selected import row.", "danger")
+            elif not target_product_id:
+                flash("Select a product to map.", "warning")
+            else:
+                normalized_key = row_record.normalized_product_name
+                for scoped_row in sales_import.rows:
+                    if scoped_row.normalized_product_name == normalized_key:
+                        scoped_row.product_id = target_product_id
+
+                alias = TerminalSaleProductAlias.query.filter_by(
+                    normalized_name=normalized_key
+                ).first()
+                if alias is None:
+                    alias = TerminalSaleProductAlias(
+                        source_name=row_record.source_product_name,
+                        normalized_name=normalized_key,
+                        product_id=target_product_id,
+                    )
+                    db.session.add(alias)
+                else:
+                    alias.source_name = row_record.source_product_name
+                    alias.product_id = target_product_id
+                db.session.commit()
+                flash("Product mapping saved.", "success")
+
+        elif action == "create_product":
+            row_id = request.form.get("row_id", type=int)
+            new_product_name = (request.form.get("new_product_name") or "").strip()
+            row_record = next(
+                (
+                    row
+                    for location in sales_import.locations
+                    for row in location.rows
+                    if row.id == row_id
+                ),
+                None,
+            )
+            if not row_record:
+                flash("Unable to find the selected import row.", "danger")
+            elif not new_product_name:
+                flash("Enter a new product name before creating.", "warning")
+            else:
+                existing = Product.query.filter_by(name=new_product_name).first()
+                if existing:
+                    created_product = existing
+                else:
+                    created_product = Product(
+                        name=new_product_name,
+                        price=0.0,
+                        invoice_sale_price=0,
+                        cost=0.0,
+                    )
+                    db.session.add(created_product)
+                    db.session.flush()
+
+                normalized_key = row_record.normalized_product_name
+                for scoped_row in sales_import.rows:
+                    if scoped_row.normalized_product_name == normalized_key:
+                        scoped_row.product_id = created_product.id
+
+                alias = TerminalSaleProductAlias.query.filter_by(
+                    normalized_name=normalized_key
+                ).first()
+                if alias is None:
+                    alias = TerminalSaleProductAlias(
+                        source_name=row_record.source_product_name,
+                        normalized_name=normalized_key,
+                        product_id=created_product.id,
+                    )
+                    db.session.add(alias)
+                else:
+                    alias.source_name = row_record.source_product_name
+                    alias.product_id = created_product.id
+                db.session.commit()
+                flash("Product created and mapping saved.", "success")
+
+        elif action == "refresh_auto_mapping":
+            if _apply_auto_mappings():
+                db.session.commit()
+                flash("Applied latest automatic mappings.", "success")
+            else:
+                flash("No additional automatic mappings were found.", "info")
+
+        return redirect(
+            url_for(
+                "admin.sales_import_detail",
+                import_id=sales_import.id,
+                location_id=selected_location_id,
+            )
+        )
+
+    if _apply_auto_mappings():
+        db.session.commit()
+
+    unresolved_location_count, unresolved_row_count = _refresh_import_mapping_status()
 
     selected_location_id = request.args.get("location_id", type=int)
     selected_location = None
@@ -1346,6 +1625,10 @@ def sales_import_detail(import_id: int):
         import_totals=import_totals,
         location_errors=location_errors,
         row_errors=row_errors,
+        locations=Location.query.order_by(Location.name).all(),
+        products=Product.query.order_by(Product.name).all(),
+        unresolved_location_count=unresolved_location_count,
+        unresolved_row_count=unresolved_row_count,
     )
 
 
