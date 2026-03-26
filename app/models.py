@@ -1028,6 +1028,194 @@ class TerminalSalesResolutionState(db.Model):
     )
 
 
+class PosSalesImport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    source_provider = db.Column(db.String(100), nullable=False)
+    message_id = db.Column(db.String(255), nullable=False)
+    attachment_filename = db.Column(db.String(255), nullable=False)
+    attachment_sha256 = db.Column(db.String(64), nullable=False)
+    received_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=func.now(),
+    )
+    status = db.Column(
+        db.String(32),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+    )
+    approved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    reversed_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    reversed_at = db.Column(db.DateTime, nullable=True)
+    approval_batch_id = db.Column(db.String(64), nullable=True)
+    reversal_batch_id = db.Column(db.String(64), nullable=True)
+    failure_reason = db.Column(db.Text, nullable=True)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=func.now(),
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=func.now(),
+        onupdate=datetime.utcnow,
+    )
+
+    approver = relationship("User", foreign_keys=[approved_by])
+    reverser = relationship("User", foreign_keys=[reversed_by])
+    locations = relationship(
+        "PosSalesImportLocation",
+        back_populates="sales_import",
+        cascade="all, delete-orphan",
+        order_by="PosSalesImportLocation.parse_index.asc()",
+    )
+    rows = relationship(
+        "PosSalesImportRow",
+        back_populates="sales_import",
+        cascade="all, delete-orphan",
+        order_by="PosSalesImportRow.parse_index.asc()",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "source_provider",
+            "message_id",
+            "attachment_sha256",
+            name="uq_pos_sales_import_idempotency",
+        ),
+        db.CheckConstraint(
+            "status IN ('pending', 'needs_mapping', 'approved', 'reversed', 'deleted', 'failed')",
+            name="ck_pos_sales_import_status",
+        ),
+        db.Index("ix_pos_sales_import_status_received_at", "status", "received_at"),
+        db.Index("ix_pos_sales_import_received_at", "received_at"),
+        db.Index("ix_pos_sales_import_approved_by", "approved_by", "approved_at"),
+        db.Index("ix_pos_sales_import_reversed_by", "reversed_by", "reversed_at"),
+        db.Index("ix_pos_sales_import_approval_batch", "approval_batch_id"),
+        db.Index("ix_pos_sales_import_reversal_batch", "reversal_batch_id"),
+    )
+
+
+class PosSalesImportLocation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    import_id = db.Column(
+        db.Integer,
+        db.ForeignKey("pos_sales_import.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_location_name = db.Column(db.String(255), nullable=False)
+    normalized_location_name = db.Column(db.String(255), nullable=False)
+    location_id = db.Column(db.Integer, db.ForeignKey("location.id"), nullable=True)
+    total_quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    net_inc = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    discounts_abs = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    computed_total = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    parse_index = db.Column(db.Integer, nullable=False)
+    approval_batch_id = db.Column(db.String(64), nullable=True)
+    reversal_batch_id = db.Column(db.String(64), nullable=True)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=func.now(),
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=func.now(),
+        onupdate=datetime.utcnow,
+    )
+
+    sales_import = relationship("PosSalesImport", back_populates="locations")
+    location = relationship("Location")
+    rows = relationship(
+        "PosSalesImportRow",
+        back_populates="import_location",
+        cascade="all, delete-orphan",
+        order_by="PosSalesImportRow.parse_index.asc()",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("import_id", "parse_index", name="uq_pos_sales_import_location_order"),
+        db.Index("ix_pos_sales_import_location_import", "import_id"),
+        db.Index("ix_pos_sales_import_location_normalized", "normalized_location_name"),
+        db.Index("ix_pos_sales_import_location_location_id", "location_id"),
+        db.Index("ix_pos_sales_import_location_approval_batch", "approval_batch_id"),
+        db.Index("ix_pos_sales_import_location_reversal_batch", "reversal_batch_id"),
+    )
+
+
+class PosSalesImportRow(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    import_id = db.Column(
+        db.Integer,
+        db.ForeignKey("pos_sales_import.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    location_import_id = db.Column(
+        db.Integer,
+        db.ForeignKey("pos_sales_import_location.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_product_code = db.Column(db.String(128), nullable=True)
+    source_product_name = db.Column(db.String(255), nullable=False)
+    normalized_product_name = db.Column(db.String(255), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True)
+    quantity = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    net_inc = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    discount_raw = db.Column(db.String(64), nullable=True)
+    discount_abs = db.Column(db.Float, nullable=False, default=0.0, server_default="0.0")
+    computed_line_total = db.Column(
+        db.Float, nullable=False, default=0.0, server_default="0.0"
+    )
+    computed_unit_price = db.Column(
+        db.Float, nullable=False, default=0.0, server_default="0.0"
+    )
+    parse_index = db.Column(db.Integer, nullable=False)
+    is_zero_quantity = db.Column(
+        db.Boolean, nullable=False, default=False, server_default="0"
+    )
+    approval_batch_id = db.Column(db.String(64), nullable=True)
+    reversal_batch_id = db.Column(db.String(64), nullable=True)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=func.now(),
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=func.now(),
+        onupdate=datetime.utcnow,
+    )
+
+    sales_import = relationship("PosSalesImport", back_populates="rows")
+    import_location = relationship("PosSalesImportLocation", back_populates="rows")
+    product = relationship("Product")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "location_import_id", "parse_index", name="uq_pos_sales_import_row_order"
+        ),
+        db.Index("ix_pos_sales_import_row_import", "import_id"),
+        db.Index("ix_pos_sales_import_row_location_import", "location_import_id"),
+        db.Index("ix_pos_sales_import_row_normalized_product", "normalized_product_name"),
+        db.Index("ix_pos_sales_import_row_product_id", "product_id"),
+        db.Index("ix_pos_sales_import_row_zero_qty", "is_zero_quantity"),
+        db.Index("ix_pos_sales_import_row_approval_batch", "approval_batch_id"),
+        db.Index("ix_pos_sales_import_row_reversal_batch", "reversal_batch_id"),
+    )
+
+
 class EventStandSheetItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     event_location_id = db.Column(
