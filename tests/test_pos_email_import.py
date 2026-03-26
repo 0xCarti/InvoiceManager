@@ -39,3 +39,27 @@ def test_parse_terminal_sales_email_rows_detects_locations_and_totals():
     assert tap_rows[0]["quantity"] == Decimal("0")
     assert tap_rows[0]["line_total"] == Decimal("14.00")
     assert tap_rows[0]["unit_price"] == Decimal("14.00")
+
+
+def test_parse_terminal_sales_email_rows_handles_sectioned_blocks_and_decimal_formats():
+    rows = [
+        ["SUITE 1", "", "", "", "", "", "", "", ""],
+        ["Code", "Product", "", "", "Quantity", "", "", "Net Inc Tax", "Discount"],
+        ["200", "Nachos", "", "", "1.50", "", "", "$3,210.25", "-10.25"],
+        ["", "", "", "", "1.50", "", "", "3,210.25", "-10.25"],
+        ["SUITE 2", "", "", "", "", "", "", "", ""],
+        ["Code", "Product", "", "", "QTY", "", "", "Net Inc", "Discounts"],
+        ["201", "VIP Water", "", "", "0", "", "", "2.25", "-0.25"],
+        ["", "", "", "", "0", "", "", "2.25", "-0.25"],
+    ]
+
+    parsed = parse_terminal_sales_email_rows(rows)
+
+    assert list(parsed.keys()) == ["SUITE 1", "SUITE 2"]
+    assert parsed["SUITE 1"]["rows"][0]["quantity"] == Decimal("1.50")
+    assert parsed["SUITE 1"]["rows"][0]["line_total"] == Decimal("3220.50")
+    assert parsed["SUITE 1"]["location_totals"][0]["line_total"] == Decimal("3220.50")
+
+    assert parsed["SUITE 2"]["rows"][0]["quantity"] == Decimal("0")
+    assert parsed["SUITE 2"]["rows"][0]["unit_price"] == Decimal("2.50")
+    assert parsed["SUITE 2"]["location_totals"][0]["quantity"] == Decimal("0")

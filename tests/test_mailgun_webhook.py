@@ -105,3 +105,35 @@ def test_mailgun_webhook_stages_import_and_deduplicates(client, app, tmp_path):
 
     with app.app_context():
         assert PosSalesImport.query.count() == 1
+
+
+def test_mailgun_webhook_rejects_stale_timestamp(client, app):
+    app.config.update({"MAILGUN_WEBHOOK_SIGNING_KEY": "secret-key"})
+    stale_timestamp = str(int(time.time()) - 3600)
+    token = "tok-123"
+
+    response = client.post(
+        "/webhooks/mailgun/inbound",
+        data={
+            "timestamp": stale_timestamp,
+            "token": token,
+            "signature": _signature("secret-key", stale_timestamp, token),
+        },
+    )
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "invalid_signature"
+
+
+def test_mailgun_webhook_rejects_missing_attachment_payload(client, app):
+    app.config.update(
+        {
+            "MAILGUN_WEBHOOK_SIGNING_KEY": "secret-key",
+            "MAILGUN_ALLOWED_SENDER_DOMAINS": "example.com",
+        }
+    )
+
+    response = client.post("/webhooks/mailgun/inbound", data=_payload("secret-key"))
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert payload["error"] == "missing_attachment"
