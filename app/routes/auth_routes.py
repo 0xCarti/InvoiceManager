@@ -30,6 +30,7 @@ from app import limiter
 from app.forms import (
     ActivityLogFilterForm,
     ChangePasswordForm,
+    ConfirmForm,
     CreateBackupForm,
     DeleteForm,
     ImportForm,
@@ -1282,6 +1283,82 @@ def sales_imports():
     )
 
 
+def _parse_sales_import_approval_changes(row: PosSalesImportRow) -> list[dict]:
+    if not row.approval_metadata:
+        return []
+    try:
+        payload = json.loads(row.approval_metadata)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, dict):
+        return []
+    changes = payload.get("changes") or []
+    if not isinstance(changes, list):
+        return []
+    return [change for change in changes if isinstance(change, dict)]
+
+
+def _check_negative_sales_import_reverse(import_record: PosSalesImport) -> list[str]:
+    """Return warnings if reversing an approved import could cause negative inventory."""
+
+    warnings: list[str] = []
+    for row in import_record.rows:
+        for change in _parse_sales_import_approval_changes(row):
+            try:
+                consumed_quantity = float(change.get("consumed_quantity") or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if abs(consumed_quantity) < 1e-9:
+                continue
+
+            item_id = change.get("item_id")
+            location_id = change.get("location_id")
+            if item_id is None:
+                continue
+
+            item = db.session.get(Item, item_id)
+            if item is None:
+                warnings.append(
+                    f"Cannot reverse import row '{row.source_product_name}' because linked item ID {item_id} no longer exists."
+                )
+                continue
+
+            stand_record = None
+            stand_record_id = change.get("location_stand_item_id")
+            if stand_record_id is not None:
+                stand_record = db.session.get(LocationStandItem, stand_record_id)
+            if stand_record is None and location_id is not None:
+                stand_record = LocationStandItem.query.filter_by(
+                    location_id=location_id,
+                    item_id=item_id,
+                ).first()
+
+            location_name = "Unknown location"
+            if stand_record is not None and stand_record.location is not None:
+                location_name = stand_record.location.name
+            elif location_id is not None:
+                mapped_location = db.session.get(Location, location_id)
+                if mapped_location is not None:
+                    location_name = mapped_location.name
+
+            current_expected = (
+                float(stand_record.expected_count or 0.0) if stand_record is not None else 0.0
+            )
+            expected_after_reverse = current_expected + consumed_quantity
+            if expected_after_reverse < 0:
+                warnings.append(
+                    f"Reversing this import will result in negative inventory for {item.name} at {location_name}."
+                )
+
+            current_item_qty = float(item.quantity or 0.0)
+            item_qty_after_reverse = current_item_qty + consumed_quantity
+            if item_qty_after_reverse < 0:
+                warnings.append(
+                    f"Reversing this import will make global inventory negative for {item.name}."
+                )
+    return warnings
+
+
 @admin.route("/controlpanel/sales-imports/<int:import_id>", methods=["GET", "POST"])
 @login_required
 def sales_import_detail(import_id: int):
@@ -1754,6 +1831,175 @@ def sales_import_detail(import_id: int):
             except Exception:
                 db.session.rollback()
                 flash("Unable to approve import due to an unexpected error.", "danger")
+        elif action == "undo_approved_import":
+            reversal_reason = (request.form.get("reversal_reason") or "").strip()
+            has_warning_confirmation = request.form.get("confirm_reversal") == "1"
+
+            if not reversal_reason:
+                flash("Enter a reversal reason before undoing an approved import.", "warning")
+                return redirect(
+                    url_for("admin.sales_import_detail", import_id=sales_import.id)
+                )
+
+            try:
+                locked_import = (
+                    PosSalesImport.query.filter(PosSalesImport.id == sales_import.id)
+                    .with_for_update()
+                    .first()
+                )
+                if locked_import is None:
+                    flash("The requested import could not be found.", "danger")
+                    return redirect(url_for("admin.sales_imports"))
+
+                locked_import = (
+                    PosSalesImport.query.options(
+                        selectinload(PosSalesImport.locations).selectinload(
+                            PosSalesImportLocation.rows
+                        ),
+                        selectinload(PosSalesImport.rows),
+                    )
+                    .filter(PosSalesImport.id == sales_import.id)
+                    .first()
+                )
+                if locked_import is None:
+                    flash("The requested import could not be found.", "danger")
+                    return redirect(url_for("admin.sales_imports"))
+
+                if locked_import.status != "approved":
+                    flash(
+                        "Undo is only allowed when the import status is Approved.",
+                        "warning",
+                    )
+                    return redirect(
+                        url_for("admin.sales_import_detail", import_id=sales_import.id)
+                    )
+
+                warnings = _check_negative_sales_import_reverse(locked_import)
+                if warnings and not has_warning_confirmation:
+                    flash(
+                        "Undo blocked: this reversal may cause negative inventory. Confirm to continue.",
+                        "warning",
+                    )
+                    for warning in warnings:
+                        flash(warning, "warning")
+                    return redirect(
+                        url_for("admin.sales_import_detail", import_id=sales_import.id)
+                    )
+
+                reversal_time = datetime.utcnow()
+                reversal_batch_id = f"pos-import-reverse-{locked_import.id}-{uuid.uuid4().hex[:12]}"
+                row_change_count = 0
+
+                for import_location in locked_import.locations:
+                    if import_location.approval_batch_id:
+                        import_location.reversal_batch_id = reversal_batch_id
+                    for row in import_location.rows:
+                        row_changes = _parse_sales_import_approval_changes(row)
+                        if not row_changes:
+                            continue
+
+                        reversal_changes: list[dict] = []
+                        for change in row_changes:
+                            item_id = change.get("item_id")
+                            location_id = change.get("location_id")
+                            if item_id is None:
+                                continue
+
+                            try:
+                                consumed_quantity = float(
+                                    change.get("consumed_quantity") or 0.0
+                                )
+                            except (TypeError, ValueError):
+                                continue
+                            if abs(consumed_quantity) < 1e-9:
+                                continue
+
+                            stand_record = None
+                            stand_record_id = change.get("location_stand_item_id")
+                            if stand_record_id is not None:
+                                stand_record = db.session.get(
+                                    LocationStandItem, stand_record_id
+                                )
+                            if stand_record is None and location_id is not None:
+                                stand_record = LocationStandItem.query.filter_by(
+                                    location_id=location_id,
+                                    item_id=item_id,
+                                ).first()
+                            if stand_record is None and location_id is not None:
+                                stand_record = LocationStandItem(
+                                    location_id=location_id,
+                                    item_id=item_id,
+                                    expected_count=0,
+                                )
+                                db.session.add(stand_record)
+                                db.session.flush()
+
+                            expected_before = (
+                                float(stand_record.expected_count or 0.0)
+                                if stand_record is not None
+                                else 0.0
+                            )
+                            expected_after = expected_before + consumed_quantity
+                            if stand_record is not None:
+                                stand_record.expected_count = expected_after
+
+                            item = db.session.get(Item, item_id)
+                            item_qty_before = float(item.quantity or 0.0) if item else 0.0
+                            item_qty_after = item_qty_before + consumed_quantity
+                            if item is not None:
+                                item.quantity = item_qty_after
+
+                            reversal_changes.append(
+                                {
+                                    "item_id": item_id,
+                                    "location_id": location_id,
+                                    "location_stand_item_id": (
+                                        stand_record.id if stand_record is not None else None
+                                    ),
+                                    "expected_count_before": expected_before,
+                                    "expected_count_after": expected_after,
+                                    "item_quantity_before": item_qty_before,
+                                    "item_quantity_after": item_qty_after,
+                                    "reversed_quantity": consumed_quantity,
+                                }
+                            )
+
+                        row.reversal_batch_id = reversal_batch_id
+                        if reversal_changes:
+                            metadata = {}
+                            if row.approval_metadata:
+                                try:
+                                    metadata = json.loads(row.approval_metadata)
+                                except (TypeError, ValueError, json.JSONDecodeError):
+                                    metadata = {}
+                            metadata["reversal"] = {
+                                "reversal_batch_id": reversal_batch_id,
+                                "reversed_at": reversal_time.isoformat(),
+                                "reversed_by": current_user.id,
+                                "reason": reversal_reason,
+                                "changes": reversal_changes,
+                            }
+                            row.approval_metadata = json.dumps(metadata)
+                            row_change_count += 1
+
+                locked_import.status = "reversed"
+                locked_import.reversed_by = current_user.id
+                locked_import.reversed_at = reversal_time
+                locked_import.reversal_batch_id = reversal_batch_id
+                locked_import.reversal_reason = reversal_reason
+                db.session.commit()
+                flash(
+                    f"Import reversal complete. Reversed inventory updates for {row_change_count} row"
+                    f"{'s' if row_change_count != 1 else ''}.",
+                    "success",
+                )
+                log_activity(
+                    f"Reversed POS sales import {locked_import.id} "
+                    f"(batch {reversal_batch_id}) with reason: {reversal_reason}"
+                )
+            except Exception:
+                db.session.rollback()
+                flash("Unable to undo approved import due to an unexpected error.", "danger")
 
         return redirect(
             url_for(
@@ -1811,6 +2057,11 @@ def sales_import_detail(import_id: int):
                 )
             row_errors[row.id] = row_validation_errors
 
+    reversal_warnings: list[str] = []
+    if sales_import.status == "approved":
+        reversal_warnings = _check_negative_sales_import_reverse(sales_import)
+    undo_confirm_form = ConfirmForm()
+
     return render_template(
         "admin/sales_import_detail.html",
         sales_import=sales_import,
@@ -1822,6 +2073,8 @@ def sales_import_detail(import_id: int):
         products=Product.query.order_by(Product.name).all(),
         unresolved_location_count=unresolved_location_count,
         unresolved_row_count=unresolved_row_count,
+        reversal_warnings=reversal_warnings,
+        undo_confirm_form=undo_confirm_form,
     )
 
 

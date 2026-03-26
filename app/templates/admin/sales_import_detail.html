@@ -4,6 +4,13 @@
     <div>
         <h1 class="mb-1">Sales Import #{{ sales_import.id }}</h1>
         <p class="text-muted mb-0">Status: {{ sales_import.status|replace('_', ' ')|title }} • Source: {{ sales_import.source_provider }}</p>
+        {% if sales_import.reversed_at %}
+        <p class="text-muted mb-0 small">
+            Reversed by {{ sales_import.reverser.username if sales_import.reverser else ('User #' ~ sales_import.reversed_by) }}
+            at {{ sales_import.reversed_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}
+            {% if sales_import.reversal_reason %}• Reason: {{ sales_import.reversal_reason }}{% endif %}
+        </p>
+        {% endif %}
     </div>
     <div class="d-flex gap-2">
         <form method="post" class="d-inline">
@@ -17,6 +24,15 @@
                 Approve Import
             </button>
         </form>
+        <button
+            type="button"
+            class="btn btn-warning btn-sm"
+            data-bs-toggle="modal"
+            data-bs-target="#undoImportModal"
+            {% if sales_import.status != 'approved' %}disabled{% endif %}
+        >
+            Undo Approved Import
+        </button>
         <form method="post" class="d-inline">
             <input type="hidden" name="action" value="refresh_auto_mapping">
             <input type="hidden" name="selected_location_id" value="{{ selected_location.id if selected_location else '' }}">
@@ -36,6 +52,17 @@
 {% else %}
 <div class="alert alert-success py-2">
     All mappings are resolved. This import is ready for approval.
+</div>
+{% endif %}
+
+{% if reversal_warnings %}
+<div class="alert alert-warning">
+    <div class="fw-semibold">Undo warning</div>
+    <ul class="mb-0 small">
+        {% for warning in reversal_warnings %}
+        <li>{{ warning }}</li>
+        {% endfor %}
+    </ul>
 </div>
 {% endif %}
 
@@ -245,6 +272,44 @@
         {% else %}
         <div class="alert alert-info mb-0">No locations are available for this import.</div>
         {% endif %}
+    </div>
+</div>
+
+<div class="modal fade" id="undoImportModal" tabindex="-1" aria-labelledby="undoImportModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post">
+                {{ undo_confirm_form.hidden_tag() }}
+                <input type="hidden" name="action" value="undo_approved_import">
+                <input type="hidden" name="selected_location_id" value="{{ selected_location.id if selected_location else '' }}">
+                {% if reversal_warnings %}
+                <input type="hidden" name="confirm_reversal" value="1">
+                {% endif %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="undoImportModalLabel">Undo Approved Import</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">This will reverse inventory updates using stored approval metadata and set this import to <strong>Reversed</strong>.</p>
+                    {% if reversal_warnings %}
+                    <div class="alert alert-warning py-2 small">
+                        <div class="fw-semibold">Potential negative inventory impact:</div>
+                        <ul class="mb-0">
+                            {% for warning in reversal_warnings %}
+                            <li>{{ warning }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    <label for="reversal_reason" class="form-label">Reversal reason</label>
+                    <textarea id="reversal_reason" name="reversal_reason" class="form-control" rows="3" required placeholder="Explain why this approved import is being undone"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Confirm Undo</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}
