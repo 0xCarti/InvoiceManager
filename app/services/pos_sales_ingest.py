@@ -1,6 +1,13 @@
-"""POS sales ingestion helpers for webhook-based imports."""
+"""POS sales ingestion helpers for webhook and poll-based imports."""
 
 from __future__ import annotations
+
+import hashlib
+import secrets
+from pathlib import Path
+
+from flask import current_app
+from sqlalchemy.exc import IntegrityError
 
 from app.models import (
     Location,
@@ -12,6 +19,7 @@ from app.models import (
     TerminalSaleProductAlias,
     db,
 )
+from app.utils.activity import log_activity
 from app.utils.numeric import coerce_float
 from app.utils.pos_import import (
     combine_terminal_sales_totals,
@@ -63,9 +71,7 @@ def _parse_rows(filepath: str, extension: str) -> list[dict]:
                         "net_including_tax_total": float(
                             row.get("net_inc", 0.0) or 0.0
                         ),
-                        "discount_total": float(
-                            row.get("discount_raw", 0.0) or 0.0
-                        ),
+                        "discount_total": float(row.get("discount_raw", 0.0) or 0.0),
                         "source_product_code": row.get("source_product_code"),
                         "line_total": float(row.get("line_total", 0.0) or 0.0),
                         "raw_row": row.get("raw_row"),
@@ -125,7 +131,9 @@ def _parse_rows(filepath: str, extension: str) -> list[dict]:
         quantity_value = summary_quantity
         price_cell = row[2] if len(row) > 2 else None
 
-        combined_total_value = combine_terminal_sales_totals(summary_net, summary_discount)
+        combined_total_value = combine_terminal_sales_totals(
+            summary_net, summary_discount
+        )
         computed_price = None
         if (
             combined_total_value is not None
@@ -173,7 +181,9 @@ def _parse_rows(filepath: str, extension: str) -> list[dict]:
     return rows
 
 
-def stage_pos_sales_import(pos_import: PosSalesImport, filepath: str, extension: str) -> None:
+def stage_pos_sales_import(
+    pos_import: PosSalesImport, filepath: str, extension: str
+) -> None:
     """Parse spreadsheet and persist normalized staging rows for ``pos_import``."""
 
     parsed_rows = _parse_rows(filepath, extension)
@@ -211,7 +221,9 @@ def stage_pos_sales_import(pos_import: PosSalesImport, filepath: str, extension:
     location_records: dict[str, PosSalesImportLocation] = {}
     for loc_index, (location_name, payload) in enumerate(grouped.items()):
         normalized_location = normalize_pos_alias(location_name)
-        location_id = exact_location_by_name.get((location_name or "").strip().casefold())
+        location_id = exact_location_by_name.get(
+            (location_name or "").strip().casefold()
+        )
         if location_id is None:
             location_id = location_aliases.get(normalized_location)
         if location_id is None:
@@ -288,3 +300,84 @@ def stage_pos_sales_import(pos_import: PosSalesImport, filepath: str, extension:
         )
         db.session.add(row_record)
         row_index_by_location[location_name] += 1
+
+
+def ingest_pos_sales_attachment(
+    *,
+    source_provider: str,
+    source_message_id: str,
+    filename: str,
+    content: bytes,
+    storage_dir: str | Path,
+) -> tuple[PosSalesImport, bool]:
+    """Persist and stage a single POS sales attachment.
+
+    Returns ``(sales_import, duplicate)`` where ``duplicate`` indicates an existing
+    idempotent import record was reused.
+    """
+
+    extension = Path(filename).suffix.lower()
+    if not extension:
+        raise ValueError("Attachment is missing a file extension.")
+
+    attachment_sha256 = hashlib.sha256(content).hexdigest()
+    destination_dir = Path(storage_dir)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    persisted_path = destination_dir / f"{attachment_sha256}{extension}"
+    if not persisted_path.exists():
+        persisted_path.write_bytes(content)
+
+    sales_import = PosSalesImport(
+        source_provider=source_provider,
+        message_id=source_message_id,
+        attachment_filename=filename,
+        attachment_sha256=attachment_sha256,
+        attachment_storage_path=str(persisted_path),
+        status="pending",
+    )
+    db.session.add(sales_import)
+    try:
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        existing = PosSalesImport.query.filter_by(
+            source_provider=source_provider,
+            message_id=source_message_id,
+            attachment_sha256=attachment_sha256,
+        ).first()
+        if existing:
+            log_activity(
+                f"Skipped duplicate POS sales import for source {source_provider}; existing import {existing.id}"
+            )
+            return existing, True
+        raise
+
+    try:
+        stage_pos_sales_import(sales_import, str(persisted_path), extension)
+        db.session.commit()
+        log_activity(
+            f"Received POS sales import {sales_import.id} via {source_provider}"
+        )
+        return sales_import, False
+    except Exception:
+        db.session.rollback()
+        failure = PosSalesImport(
+            source_provider=source_provider,
+            message_id=f"{source_message_id}:failed:{secrets.token_hex(4)}",
+            attachment_filename=filename,
+            attachment_sha256=attachment_sha256,
+            attachment_storage_path=str(persisted_path),
+            status="failed",
+            failure_reason="Unable to parse POS spreadsheet attachment.",
+        )
+        db.session.add(failure)
+        db.session.commit()
+        current_app.logger.exception(
+            "Failed to stage inbound POS sales attachment from %s",
+            source_provider,
+        )
+        log_activity(
+            "Failed to parse POS sales import attachment via "
+            f"{source_provider}; failure import {failure.id}"
+        )
+        raise

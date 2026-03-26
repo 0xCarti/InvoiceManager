@@ -43,6 +43,7 @@ The application requires several variables to be present in your environment:
   persistent store such as Redis in production (e.g., `redis://redis:6379/0`).
 - `MAILGUN_WEBHOOK_SIGNING_KEY` – Mailgun inbound signing key used to verify webhook authenticity.
 - `MAILGUN_ALLOWED_SENDER_DOMAINS` – comma-separated sender domains allowed to submit imports (for example `example.com`).
+- `POS_IMPORT_INGEST_MODE` – POS import ingestion strategy. Use `webhook` (default) to accept Mailgun inbound webhooks, or `poll` to ingest from a mailbox provider on a schedule.
 
 A persistent backing store is required for rate limiting in production. Set
 `RATELIMIT_STORAGE_URI` to a supported service so that limits are shared
@@ -66,8 +67,36 @@ These can be placed in a `.env` file or exported in your shell before starting t
 - `MAILGUN_ALLOWED_ATTACHMENT_EXTENSIONS` – optional comma-separated attachment extension allowlist; defaults to `xls,xlsx`.
 - `MAILGUN_WEBHOOK_MAX_AGE_SECONDS` – maximum accepted age for Mailgun timestamps (defaults to `900`).
 - `MAILGUN_INBOUND_STORAGE_DIR` – optional absolute path for inbound attachment staging; defaults to `<UPLOAD_FOLDER>/mailgun_inbound`.
+- `POS_IMPORT_POLL_PROVIDER` – mailbox polling backend when `POS_IMPORT_INGEST_MODE=poll`; supported values: `imap` (default) and `api`.
+- `POS_IMPORT_POLL_INTERVAL_SECONDS` – poller frequency in seconds; defaults to `3600` (hourly).
+- `POS_IMPORT_IMAP_HOST` / `POS_IMPORT_IMAP_PORT` / `POS_IMPORT_IMAP_USERNAME` / `POS_IMPORT_IMAP_PASSWORD` – required when `POS_IMPORT_POLL_PROVIDER=imap`.
+- `POS_IMPORT_IMAP_MAILBOX` – IMAP mailbox folder to monitor for unseen messages (defaults to `INBOX`).
+- `POS_IMPORT_IMAP_USE_SSL` – set to `false` to use plaintext IMAP instead of IMAPS (defaults to `true`).
+- `POS_IMPORT_API_BASE_URL` / `POS_IMPORT_API_TOKEN` – required when `POS_IMPORT_POLL_PROVIDER=api`.
+- `POS_IMPORT_API_MESSAGES_PATH` – API path used to fetch unseen messages (defaults to `/messages/unseen`).
+- `POS_IMPORT_API_ACK_PATH_TEMPLATE` – API path template used to acknowledge processed messages (defaults to `/messages/{message_id}/ack`).
 
 Mailgun should post inbound events to `POST /webhooks/mailgun/inbound`.
+
+### POS Sales Ingestion Modes
+
+- **Default (`POS_IMPORT_INGEST_MODE=webhook`)**: inbound email attachments are pushed by Mailgun to `POST /webhooks/mailgun/inbound`.
+- **Fallback (`POS_IMPORT_INGEST_MODE=poll`)**: a background worker polls the configured mailbox provider every hour (or `POS_IMPORT_POLL_INTERVAL_SECONDS`), fetches unseen messages, and stages `.xls` / `.xlsx` attachments through the **same parser and staging pipeline** used by webhook ingestion.
+
+#### Poll mode operational setup
+
+1. Set `POS_IMPORT_INGEST_MODE=poll`.
+2. Configure provider settings:
+   - IMAP: set `POS_IMPORT_POLL_PROVIDER=imap` and IMAP credentials/host variables.
+   - API: set `POS_IMPORT_POLL_PROVIDER=api` and API URL/token variables.
+3. Keep `MAILGUN_ALLOWED_ATTACHMENT_EXTENSIONS` configured as needed; the same extension allowlist is applied in poll mode.
+4. Ensure the process remains running continuously so the background poller thread can execute hourly checks.
+
+#### Failure handling and idempotency
+
+- Each attachment is hashed and staged with idempotency on `(source_provider, message_id, attachment_sha256)`, so duplicate polling runs do not create duplicate imports.
+- Parse failures produce a `failed` `PosSalesImport` record with a `failure_reason`, while successful parses remain `pending` for the standard mapping/approval workflow.
+- Messages are acknowledged only after all supported attachments in that message are processed without staging errors; failed messages remain unseen/unacknowledged for retry on the next polling pass.
 
 ## Database Setup
 

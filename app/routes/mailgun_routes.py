@@ -5,17 +5,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
-import secrets
 import time
 from email.utils import parseaddr
 from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, request
-from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 
-from app.models import PosSalesImport, db
-from app.services.pos_sales_ingest import stage_pos_sales_import
+from app.services.pos_sales_ingest import ingest_pos_sales_attachment
 from app.utils.activity import log_activity
 
 mailgun = Blueprint("mailgun", __name__, url_prefix="/webhooks/mailgun")
@@ -76,7 +73,9 @@ def _message_id() -> str:
     for value in candidates:
         if value and value.strip():
             return value.strip()
-    return f"mailgun:{request.form.get('timestamp', '')}:{request.form.get('token', '')}"
+    return (
+        f"mailgun:{request.form.get('timestamp', '')}:{request.form.get('token', '')}"
+    )
 
 
 @mailgun.route("/inbound", methods=["POST"])
@@ -91,7 +90,9 @@ def inbound_mailgun():
     sender_domain = _extract_domain(sender_value)
 
     allowed_senders = _csv_config_set(current_app.config.get("MAILGUN_ALLOWED_SENDERS"))
-    allowed_domains = _csv_config_set(current_app.config.get("MAILGUN_ALLOWED_SENDER_DOMAINS"))
+    allowed_domains = _csv_config_set(
+        current_app.config.get("MAILGUN_ALLOWED_SENDER_DOMAINS")
+    )
 
     if allowed_senders and sender_value not in allowed_senders:
         return jsonify({"ok": False, "error": "sender_not_allowed"}), 403
@@ -134,65 +135,26 @@ def inbound_mailgun():
                 400,
             )
 
-        raw_bytes = upload.read()
-        if not raw_bytes:
+        content = upload.read()
+        if not content:
             continue
 
-        attachment_sha256 = hashlib.sha256(raw_bytes).hexdigest()
-        persisted_filename = f"{attachment_sha256}{extension}"
-        file_path = storage_dir / persisted_filename
-        if not file_path.exists():
-            file_path.write_bytes(raw_bytes)
-
         message_id = _message_id()
-        sales_import = PosSalesImport(
-            source_provider="mailgun",
-            message_id=message_id,
-            attachment_filename=filename,
-            attachment_sha256=attachment_sha256,
-            attachment_storage_path=str(file_path),
-            status="pending",
-        )
-        db.session.add(sales_import)
         try:
-            db.session.flush()
-        except IntegrityError:
-            db.session.rollback()
-            existing = PosSalesImport.query.filter_by(
+            sales_import, duplicate = ingest_pos_sales_attachment(
                 source_provider="mailgun",
-                message_id=message_id,
-                attachment_sha256=attachment_sha256,
-            ).first()
-            if existing:
-                imported.append({"id": existing.id, "duplicate": True})
+                source_message_id=message_id,
+                filename=filename,
+                content=content,
+                storage_dir=storage_dir,
+            )
+            imported.append({"id": sales_import.id, "duplicate": duplicate})
+            if duplicate:
                 log_activity(
-                    f"Received duplicate POS sales import webhook payload for existing import {existing.id}"
+                    "Received duplicate POS sales import webhook payload "
+                    f"for existing import {sales_import.id}"
                 )
-                continue
-            return jsonify({"ok": False, "error": "duplicate_import"}), 409
-
-        try:
-            stage_pos_sales_import(sales_import, str(file_path), extension)
-            db.session.commit()
-            imported.append({"id": sales_import.id, "duplicate": False})
-            log_activity(f"Received POS sales import {sales_import.id} via Mailgun webhook")
         except Exception:
-            db.session.rollback()
-            failure = PosSalesImport(
-                source_provider="mailgun",
-                message_id=f"{message_id}:failed:{secrets.token_hex(4)}",
-                attachment_filename=filename,
-                attachment_sha256=attachment_sha256,
-                attachment_storage_path=str(file_path),
-                status="failed",
-                failure_reason="Unable to parse POS spreadsheet attachment.",
-            )
-            db.session.add(failure)
-            db.session.commit()
-            current_app.logger.exception("Failed to stage inbound Mailgun attachment")
-            log_activity(
-                f"Failed to parse POS sales import attachment via Mailgun webhook; failure import {failure.id}"
-            )
             return jsonify({"ok": False, "error": "parse_failed"}), 422
 
     if not imported:
