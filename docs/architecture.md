@@ -19,8 +19,8 @@ Key responsibilities include:
 * Configuring global extensions: SQLAlchemy for persistence, Flask-Login for
   authentication, Flask-Limiter for rate limiting, Flask-Bootstrap for UI
   helpers, Flask-SocketIO for real-time updates, and CSRF protection for forms.
-* Initialising the database (creating tables if migrations have not yet been
-  applied) and ensuring the default admin account exists.
+* Importing models, wiring startup services, and ensuring the default admin
+  account can be seeded after migrations are applied.
 * Registering blueprints under `app/routes/…`, so each functional area (items,
   transfers, invoices, reports, administration, etc.) owns its URLs and view
   logic.
