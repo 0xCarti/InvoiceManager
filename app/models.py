@@ -1034,6 +1034,7 @@ class PosSalesImport(db.Model):
     message_id = db.Column(db.String(255), nullable=False)
     attachment_filename = db.Column(db.String(255), nullable=False)
     attachment_sha256 = db.Column(db.String(64), nullable=False)
+    attachment_storage_path = db.Column(db.String(1024), nullable=True)
     received_at = db.Column(
         db.DateTime,
         nullable=False,

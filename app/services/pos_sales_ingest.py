@@ -1,0 +1,228 @@
+"""POS sales ingestion helpers for webhook-based imports."""
+
+from __future__ import annotations
+
+from app.models import (
+    Location,
+    PosSalesImport,
+    PosSalesImportLocation,
+    PosSalesImportRow,
+    Product,
+    TerminalSaleLocationAlias,
+    TerminalSaleProductAlias,
+    db,
+)
+from app.utils.numeric import coerce_float
+from app.utils.pos_import import (
+    combine_terminal_sales_totals,
+    derive_terminal_sales_quantity,
+    extract_terminal_sales_location,
+    group_terminal_sales_rows,
+    iter_pos_excel_rows,
+    normalize_pos_alias,
+    parse_terminal_sales_number,
+    terminal_sales_cell_is_blank,
+)
+
+
+def _parse_rows(filepath: str, extension: str) -> list[dict]:
+    """Return normalized row dictionaries from an uploaded POS spreadsheet."""
+
+    rows: list[dict] = []
+    current_loc: str | None = None
+
+    for row in iter_pos_excel_rows(filepath, extension):
+        location_name = extract_terminal_sales_location(row)
+        if location_name:
+            current_loc = location_name
+            continue
+
+        if not current_loc:
+            continue
+
+        second = row[1] if len(row) > 1 else None
+        first_cell = row[0] if row else None
+        quantity_cell = row[4] if len(row) > 4 else None
+        amount_cell = row[5] if len(row) > 5 else None
+        net_cell = row[7] if len(row) > 7 else None
+        discount_cell = row[8] if len(row) > 8 else None
+
+        summary_quantity = parse_terminal_sales_number(quantity_cell)
+        summary_amount = parse_terminal_sales_number(amount_cell)
+        summary_net = parse_terminal_sales_number(net_cell)
+        summary_discount = parse_terminal_sales_number(discount_cell)
+
+        if (
+            terminal_sales_cell_is_blank(first_cell)
+            and not isinstance(second, str)
+            and (
+                summary_quantity is not None
+                or summary_amount is not None
+                or summary_net is not None
+                or summary_discount is not None
+            )
+        ):
+            entry = {"location": current_loc, "is_location_total": True}
+            if summary_quantity is not None:
+                entry["quantity"] = summary_quantity
+            if summary_amount is not None:
+                entry["amount"] = summary_amount
+            if summary_net is not None:
+                entry["net_including_tax_total"] = summary_net
+            if summary_discount is not None:
+                entry["discount_total"] = summary_discount
+            rows.append(entry)
+            continue
+
+        if not isinstance(second, str):
+            continue
+
+        quantity_value = summary_quantity
+        price_cell = row[2] if len(row) > 2 else None
+
+        combined_total_value = combine_terminal_sales_totals(summary_net, summary_discount)
+        computed_price = None
+        if (
+            combined_total_value is not None
+            and quantity_value is not None
+            and abs(quantity_value) > 1e-9
+        ):
+            try:
+                computed_price = float(combined_total_value) / float(quantity_value)
+            except (TypeError, ValueError, ZeroDivisionError):
+                computed_price = None
+
+        price_value = parse_terminal_sales_number(
+            computed_price if computed_price is not None else price_cell
+        )
+        raw_price_value = parse_terminal_sales_number(price_cell)
+        amount_value = parse_terminal_sales_number(amount_cell)
+        quantity_value = derive_terminal_sales_quantity(
+            quantity_value,
+            price=price_value,
+            amount=amount_value,
+            net_including_tax_total=summary_net,
+            discounts_total=summary_discount,
+        )
+
+        if quantity_value is None:
+            continue
+
+        entry = {
+            "location": current_loc,
+            "product": second.strip(),
+            "quantity": quantity_value,
+        }
+        if price_value is not None:
+            entry["price"] = price_value
+        if raw_price_value is not None:
+            entry["raw_price"] = raw_price_value
+        if amount_value is not None:
+            entry["amount"] = amount_value
+        if summary_net is not None:
+            entry["net_including_tax_total"] = summary_net
+        if summary_discount is not None:
+            entry["discount_total"] = summary_discount
+        rows.append(entry)
+
+    return rows
+
+
+def stage_pos_sales_import(pos_import: PosSalesImport, filepath: str, extension: str) -> None:
+    """Parse spreadsheet and persist normalized staging rows for ``pos_import``."""
+
+    parsed_rows = _parse_rows(filepath, extension)
+    grouped = group_terminal_sales_rows(parsed_rows)
+
+    location_aliases = {
+        alias.normalized_name: alias.location_id
+        for alias in TerminalSaleLocationAlias.query.all()
+    }
+    product_aliases = {
+        alias.normalized_name: alias.product_id
+        for alias in TerminalSaleProductAlias.query.all()
+    }
+    location_by_name = {
+        normalize_pos_alias(location.name or ""): location.id
+        for location in Location.query.all()
+        if location.name
+    }
+    product_by_name = {
+        normalize_pos_alias(product.name or ""): product.id
+        for product in Product.query.all()
+        if product.name
+    }
+
+    location_records: dict[str, PosSalesImportLocation] = {}
+    for loc_index, (location_name, payload) in enumerate(grouped.items()):
+        normalized_location = normalize_pos_alias(location_name)
+        location_id = (
+            location_aliases.get(normalized_location)
+            or location_by_name.get(normalized_location)
+        )
+
+        location_record = PosSalesImportLocation(
+            sales_import=pos_import,
+            source_location_name=location_name,
+            normalized_location_name=normalized_location,
+            location_id=location_id,
+            total_quantity=coerce_float(payload.get("total"), default=0.0) or 0.0,
+            net_inc=coerce_float(payload.get("net_including_tax_total"), default=0.0)
+            or 0.0,
+            discounts_abs=abs(
+                coerce_float(payload.get("discount_total"), default=0.0) or 0.0
+            ),
+            computed_total=coerce_float(payload.get("total_amount"), default=0.0)
+            or 0.0,
+            parse_index=loc_index,
+        )
+        db.session.add(location_record)
+        location_records[location_name] = location_record
+
+    row_index_by_location: dict[str, int] = {name: 0 for name in location_records}
+    for entry in parsed_rows:
+        if entry.get("is_location_total"):
+            continue
+
+        location_name = entry.get("location")
+        location_record = location_records.get(location_name)
+        if location_record is None:
+            continue
+
+        product_name = (entry.get("product") or "").strip()
+        normalized_product = normalize_pos_alias(product_name)
+        product_id = (
+            product_aliases.get(normalized_product)
+            or product_by_name.get(normalized_product)
+        )
+
+        quantity = coerce_float(entry.get("quantity"), default=0.0) or 0.0
+        net_inc = coerce_float(entry.get("net_including_tax_total"), default=0.0) or 0.0
+        discount_raw = entry.get("discount_total")
+        discount_value = coerce_float(discount_raw, default=0.0) or 0.0
+        line_total = combine_terminal_sales_totals(net_inc, discount_value)
+        if line_total is None:
+            line_total = coerce_float(entry.get("amount"), default=0.0) or 0.0
+
+        computed_unit_price = coerce_float(entry.get("price"), default=0.0) or 0.0
+        if abs(quantity) > 1e-9 and abs(computed_unit_price) < 1e-9:
+            computed_unit_price = float(line_total) / float(quantity)
+
+        row_record = PosSalesImportRow(
+            sales_import=pos_import,
+            import_location=location_record,
+            source_product_name=product_name,
+            source_product_code=None,
+            normalized_product_name=normalized_product,
+            product_id=product_id,
+            quantity=quantity,
+            net_inc=net_inc,
+            discount_raw=None if discount_raw is None else str(discount_raw),
+            discount_abs=abs(discount_value),
+            computed_line_total=line_total,
+            computed_unit_price=computed_unit_price,
+            parse_index=row_index_by_location[location_name],
+            is_zero_quantity=abs(quantity) < 1e-9,
+        )
+        db.session.add(row_record)
+        row_index_by_location[location_name] += 1

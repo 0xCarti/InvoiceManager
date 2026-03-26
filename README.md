@@ -41,6 +41,8 @@ The application requires several variables to be present in your environment:
 - `SMTP_USE_TLS` – set to `true` to enable TLS.
 - `RATELIMIT_STORAGE_URI` – URI for the rate limiting backend. Use a
   persistent store such as Redis in production (e.g., `redis://redis:6379/0`).
+- `MAILGUN_WEBHOOK_SIGNING_KEY` – Mailgun inbound signing key used to verify webhook authenticity.
+- `MAILGUN_ALLOWED_SENDER_DOMAINS` – comma-separated sender domains allowed to submit imports (for example `example.com`).
 
 A persistent backing store is required for rate limiting in production. Set
 `RATELIMIT_STORAGE_URI` to a supported service so that limits are shared
@@ -60,6 +62,12 @@ These can be placed in a `.env` file or exported in your shell before starting t
 - `ENFORCE_HTTPS` – set to `true` to always send the
   `Strict-Transport-Security` header, even if the request is not detected as
   secure (useful when SSL termination happens upstream). Defaults to `false`.
+- `MAILGUN_ALLOWED_SENDERS` – optional comma-separated sender email allowlist (checked before domain checks).
+- `MAILGUN_ALLOWED_ATTACHMENT_EXTENSIONS` – optional comma-separated attachment extension allowlist; defaults to `xls,xlsx`.
+- `MAILGUN_WEBHOOK_MAX_AGE_SECONDS` – maximum accepted age for Mailgun timestamps (defaults to `900`).
+- `MAILGUN_INBOUND_STORAGE_DIR` – optional absolute path for inbound attachment staging; defaults to `<UPLOAD_FOLDER>/mailgun_inbound`.
+
+Mailgun should post inbound events to `POST /webhooks/mailgun/inbound`.
 
 ## Database Setup
 

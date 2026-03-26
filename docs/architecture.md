@@ -96,6 +96,10 @@ aware timestamps.
 4. Responses render templates or return JSON. Template rendering leverages the
    shared context processors and filters registered in the factory. Real-time
    responses can emit `socketio` events when necessary.
+   External systems can also post machine-to-machine requests (for example
+   Mailgun inbound webhooks at `POST /webhooks/mailgun/inbound`) that validate
+   signatures, stage spreadsheet attachments, and create pending POS sales
+   imports for downstream mapping/approval workflows.
 5. Background helpers such as the automatic backup thread (started during app
    creation) run independently, using the app context as needed.
 
