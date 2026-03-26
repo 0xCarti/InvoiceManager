@@ -1051,6 +1051,7 @@ class PosSalesImport(db.Model):
     approved_at = db.Column(db.DateTime, nullable=True)
     reversed_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     reversed_at = db.Column(db.DateTime, nullable=True)
+    reversal_reason = db.Column(db.Text, nullable=True)
     approval_batch_id = db.Column(db.String(64), nullable=True)
     reversal_batch_id = db.Column(db.String(64), nullable=True)
     failure_reason = db.Column(db.Text, nullable=True)
