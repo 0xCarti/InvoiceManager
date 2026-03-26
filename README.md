@@ -116,6 +116,28 @@ settings (GST number and timezone) using the provided script:
 python seed_data.py
 ```
 
+### Runbook: recovering drifted `pos_sales_import*` tables before Alembic `202603260001`
+
+> **Warning:** Use this recovery path only for drifted environments where
+> `pos_sales_import*` tables were created outside Alembic before revision
+> `202603260001`.
+
+If your environment already has those tables and migration history is behind,
+run the following recovery sequence exactly:
+
+1. Disable auto schema creation so runtime startup does not call `db.create_all()`:
+   ```bash
+   export AUTO_CREATE_SCHEMA=0
+   ```
+2. Stamp the database to the reconciled baseline:
+   ```bash
+   flask db stamp 202603260005
+   ```
+3. Apply remaining migrations normally:
+   ```bash
+   flask db upgrade
+   ```
+
 > **Note:** Both setup scripts execute these commands automatically after installing the dependencies. Run them manually only if you performed the installation steps yourself.
 
 ## Running the Application
