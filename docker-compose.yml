@@ -16,3 +16,4 @@ services:
     environment:
       - PORT=${PORT:-5000}
       - DATABASE_PATH=/app/data/inventory.db
+      - AUTO_CREATE_SCHEMA=0
