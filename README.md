@@ -57,6 +57,9 @@ These can be placed in a `.env` file or exported in your shell before starting t
 
 ### Optional Environment Variables
 
+- `AUTO_CREATE_SCHEMA` – set to `1` only for controlled/test scenarios where
+  you explicitly want startup or seeding code to call `db.create_all()`.
+  Default is disabled so schema management is handled through migrations.
 - `SESSION_COOKIE_SECURE` – set to `false` when running over plain HTTP (for
   example in local development). Defaults to `true` so cookies are only sent
   over HTTPS in production.
@@ -124,6 +127,12 @@ python run.py
 ```
 
 Set `PORT` in your environment to change the port (default `5000`).
+
+Before starting the app, apply migrations with:
+
+```bash
+flask db upgrade
+```
 
 The application uses a local SQLite database located at `inventory.db` and creates `uploads` and `backups` directories automatically on startup.
 

@@ -305,14 +305,21 @@ def load_user(user_id):
 def create_admin_user():
     """Ensure an admin user exists for the application."""
     from app.models import User
+    from sqlalchemy.exc import OperationalError
 
-    # Ensure all tables are created before querying. This guards against
-    # OperationalError exceptions when the database has not been
-    # initialised yet (e.g. during first run or tests).
-    db.create_all()
+    auto_create_schema = _get_bool_env("AUTO_CREATE_SCHEMA", default=False)
+    if auto_create_schema:
+        db.create_all()
 
     # Check if any admin exists
-    admin_exists = User.query.filter_by(is_admin=True).first()
+    try:
+        admin_exists = User.query.filter_by(is_admin=True).first()
+    except OperationalError as exc:
+        db.session.rollback()
+        raise RuntimeError(
+            "Database schema is missing. Run 'flask db upgrade' before seeding data, "
+            "or set AUTO_CREATE_SCHEMA=1 for explicit auto-creation."
+        ) from exc
     if not admin_exists:
 
         # Create an admin user
@@ -628,12 +635,16 @@ def create_app(args=None):
         return Response("\n".join(lines) + "\n", mimetype="text/plain")
 
     with app.app_context():
-        # Ensure models are imported and the database schema is created on
-        # application start.  This allows the app to run even if migrations
-        # have not been executed yet, avoiding "no such table" errors.
+        # Ensure models are imported during application start.
         from . import models  # noqa: F401
 
-        db.create_all()
+        auto_create_schema = _get_bool_env("AUTO_CREATE_SCHEMA", default=False)
+        if auto_create_schema:
+            app.logger.warning(
+                "AUTO_CREATE_SCHEMA is enabled; creating tables at startup. "
+                "Use only for controlled/test scenarios."
+            )
+            db.create_all()
 
         from app.routes.auth_routes import admin, auth
         from app.routes.customer_routes import customer
