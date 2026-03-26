@@ -307,18 +307,13 @@ def create_admin_user():
     from app.models import User
     from sqlalchemy.exc import OperationalError
 
-    auto_create_schema = _get_bool_env("AUTO_CREATE_SCHEMA", default=False)
-    if auto_create_schema:
-        db.create_all()
-
     # Check if any admin exists
     try:
         admin_exists = User.query.filter_by(is_admin=True).first()
     except OperationalError as exc:
         db.session.rollback()
         raise RuntimeError(
-            "Database schema is missing. Run 'flask db upgrade' before seeding data, "
-            "or set AUTO_CREATE_SCHEMA=1 for explicit auto-creation."
+            "Database schema is missing. Run 'flask db upgrade' before seeding data."
         ) from exc
     if not admin_exists:
 
@@ -637,14 +632,6 @@ def create_app(args=None):
     with app.app_context():
         # Ensure models are imported during application start.
         from . import models  # noqa: F401
-
-        auto_create_schema = _get_bool_env("AUTO_CREATE_SCHEMA", default=False)
-        if auto_create_schema:
-            app.logger.warning(
-                "AUTO_CREATE_SCHEMA is enabled; creating tables at startup. "
-                "Use only for controlled/test scenarios."
-            )
-            db.create_all()
 
         from app.routes.auth_routes import admin, auth
         from app.routes.customer_routes import customer

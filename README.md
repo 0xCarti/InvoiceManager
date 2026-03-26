@@ -57,9 +57,9 @@ These can be placed in a `.env` file or exported in your shell before starting t
 
 ### Optional Environment Variables
 
-- `AUTO_CREATE_SCHEMA` – set to `1` only for controlled/test scenarios where
-  you explicitly want startup or seeding code to call `db.create_all()`.
-  Default is disabled so schema management is handled through migrations.
+- `AUTO_CREATE_SCHEMA` – keep this at `0` in runtime environments. Container
+  startup uses `flask db upgrade`, and schema management is handled through
+  migrations rather than `db.create_all()`.
 - `SESSION_COOKIE_SECURE` – set to `false` when running over plain HTTP (for
   example in local development). Defaults to `true` so cookies are only sent
   over HTTPS in production.
@@ -157,7 +157,9 @@ rate limiting in production; set `RATELIMIT_STORAGE_URI` to its connection
 string. You can also specify the port the app will use by adding a `PORT`
 variable to `.env` (or by exporting it in your shell) before starting the
 service. Database migrations run automatically when the container starts via
-`entrypoint.sh`, rather than during the image build:
+`entrypoint.sh`, rather than during the image build. Container runtime defaults
+explicitly force `AUTO_CREATE_SCHEMA=0` so startup relies on `flask db upgrade`
+instead of `db.create_all()`:
 
 ```bash
 docker compose up --build
