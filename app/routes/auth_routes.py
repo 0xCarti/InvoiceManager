@@ -3,6 +3,7 @@ import os
 import platform
 import sqlite3
 import subprocess
+import uuid
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
@@ -52,9 +53,12 @@ from app.models import (
     GLCode,
     Location,
     Invoice,
+    Item,
+    LocationStandItem,
     PosSalesImport,
     PosSalesImportLocation,
     PosSalesImportRow,
+    ProductRecipeItem,
     Product,
     Setting,
     TerminalSaleLocationAlias,
@@ -1314,7 +1318,10 @@ def sales_import_detail(import_id: int):
             if unresolved_location_count or unresolved_row_count
             else "pending"
         )
-        if sales_import.status != next_status:
+        if (
+            sales_import.status in {"pending", "needs_mapping"}
+            and sales_import.status != next_status
+        ):
             sales_import.status = next_status
             db.session.commit()
         return unresolved_location_count, unresolved_row_count
@@ -1387,6 +1394,31 @@ def sales_import_detail(import_id: int):
                     changed = True
 
         return changed
+
+    def _collect_mapping_state(
+        import_record: PosSalesImport,
+    ) -> tuple[int, int, list[str]]:
+        unresolved_location_count = sum(
+            1 for location in import_record.locations if location.location_id is None
+        )
+        unresolved_row_count = sum(
+            1
+            for location in import_record.locations
+            for row in location.rows
+            if row.product_id is None
+        )
+        errors: list[str] = []
+        if unresolved_location_count:
+            errors.append(
+                f"{unresolved_location_count} import location"
+                f"{'s are' if unresolved_location_count != 1 else ' is'} unresolved."
+            )
+        if unresolved_row_count:
+            errors.append(
+                f"{unresolved_row_count} import row"
+                f"{'s are' if unresolved_row_count != 1 else ' is'} unresolved."
+            )
+        return unresolved_location_count, unresolved_row_count, errors
 
     if request.method == "POST":
         action = (request.form.get("action") or "").strip()
@@ -1561,6 +1593,167 @@ def sales_import_detail(import_id: int):
                 flash("Applied latest automatic mappings.", "success")
             else:
                 flash("No additional automatic mappings were found.", "info")
+        elif action == "approve_import":
+            try:
+                locked_import = (
+                    PosSalesImport.query.filter(PosSalesImport.id == sales_import.id)
+                    .with_for_update()
+                    .first()
+                )
+                if locked_import is None:
+                    flash("The requested import could not be found.", "danger")
+                    return redirect(
+                        url_for("admin.sales_imports")
+                    )
+
+                locked_import = (
+                    PosSalesImport.query.options(
+                        selectinload(PosSalesImport.locations)
+                        .selectinload(PosSalesImportLocation.rows)
+                        .selectinload(PosSalesImportRow.product)
+                        .selectinload(Product.recipe_items)
+                        .selectinload(ProductRecipeItem.unit),
+                        selectinload(PosSalesImport.locations)
+                        .selectinload(PosSalesImportLocation.rows)
+                        .selectinload(PosSalesImportRow.product)
+                        .selectinload(Product.recipe_items)
+                        .selectinload(ProductRecipeItem.item),
+                    )
+                    .filter(PosSalesImport.id == sales_import.id)
+                    .first()
+                )
+                if locked_import is None:
+                    flash("The requested import could not be found.", "danger")
+                    return redirect(url_for("admin.sales_imports"))
+
+                if locked_import.status != "pending":
+                    flash(
+                        "Import approval is only allowed while the import status is Pending.",
+                        "warning",
+                    )
+                    return redirect(
+                        url_for("admin.sales_import_detail", import_id=sales_import.id)
+                    )
+
+                _, _, mapping_errors = _collect_mapping_state(locked_import)
+                if mapping_errors:
+                    flash(
+                        "Approval blocked: resolve mappings before approval.",
+                        "warning",
+                    )
+                    for error in mapping_errors:
+                        flash(error, "warning")
+                    return redirect(
+                        url_for("admin.sales_import_detail", import_id=sales_import.id)
+                    )
+
+                approval_batch_id = f"pos-import-{locked_import.id}-{uuid.uuid4().hex[:12]}"
+                approval_time = datetime.utcnow()
+                row_change_count = 0
+
+                for import_location in locked_import.locations:
+                    if import_location.location_id is None:
+                        continue
+                    import_location.approval_batch_id = approval_batch_id
+                    for row in import_location.rows:
+                        if row.product_id is None or row.is_zero_quantity:
+                            continue
+
+                        product = row.product
+                        if product is None:
+                            continue
+
+                        row_changes: list[dict] = []
+                        for recipe_item in product.recipe_items:
+                            if not recipe_item.countable or recipe_item.item_id is None:
+                                continue
+                            factor = recipe_item.unit.factor if recipe_item.unit else 1.0
+                            units_per_product = float(recipe_item.quantity or 0.0) * float(
+                                factor or 1.0
+                            )
+                            if units_per_product <= 0:
+                                continue
+
+                            sold_quantity = float(row.quantity or 0.0)
+                            delta = sold_quantity * units_per_product
+                            if abs(delta) < 1e-9:
+                                continue
+
+                            record = LocationStandItem.query.filter_by(
+                                location_id=import_location.location_id,
+                                item_id=recipe_item.item_id,
+                            ).first()
+                            if record is None:
+                                record = LocationStandItem(
+                                    location_id=import_location.location_id,
+                                    item_id=recipe_item.item_id,
+                                    expected_count=0,
+                                    purchase_gl_code_id=(
+                                        recipe_item.item.purchase_gl_code_id
+                                        if recipe_item.item is not None
+                                        else None
+                                    ),
+                                )
+                                db.session.add(record)
+                                db.session.flush()
+                            elif (
+                                record.purchase_gl_code_id is None
+                                and recipe_item.item is not None
+                                and recipe_item.item.purchase_gl_code_id is not None
+                            ):
+                                record.purchase_gl_code_id = recipe_item.item.purchase_gl_code_id
+
+                            expected_before = float(record.expected_count or 0.0)
+                            expected_after = expected_before - delta
+                            record.expected_count = expected_after
+
+                            item = db.session.get(Item, recipe_item.item_id)
+                            item_qty_before = float(item.quantity or 0.0) if item else 0.0
+                            item_qty_after = item_qty_before - delta
+                            if item is not None:
+                                item.quantity = item_qty_after
+
+                            row_changes.append(
+                                {
+                                    "item_id": recipe_item.item_id,
+                                    "location_id": import_location.location_id,
+                                    "location_stand_item_id": record.id,
+                                    "expected_count_before": expected_before,
+                                    "expected_count_after": expected_after,
+                                    "item_quantity_before": item_qty_before,
+                                    "item_quantity_after": item_qty_after,
+                                    "consumed_quantity": delta,
+                                }
+                            )
+
+                        row.approval_batch_id = approval_batch_id
+                        if row_changes:
+                            row.approval_metadata = json.dumps(
+                                {
+                                    "approval_batch_id": approval_batch_id,
+                                    "approved_at": approval_time.isoformat(),
+                                    "changes": row_changes,
+                                }
+                            )
+                            row_change_count += 1
+
+                locked_import.status = "approved"
+                locked_import.approved_by = current_user.id
+                locked_import.approved_at = approval_time
+                locked_import.approval_batch_id = approval_batch_id
+                db.session.commit()
+                flash(
+                    f"Import approved. Applied inventory updates for {row_change_count} row"
+                    f"{'s' if row_change_count != 1 else ''}.",
+                    "success",
+                )
+                log_activity(
+                    f"Approved POS sales import {locked_import.id} "
+                    f"(batch {approval_batch_id})"
+                )
+            except Exception:
+                db.session.rollback()
+                flash("Unable to approve import due to an unexpected error.", "danger")
 
         return redirect(
             url_for(
