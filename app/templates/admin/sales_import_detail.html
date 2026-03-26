@@ -5,8 +5,28 @@
         <h1 class="mb-1">Sales Import #{{ sales_import.id }}</h1>
         <p class="text-muted mb-0">Status: {{ sales_import.status|replace('_', ' ')|title }} • Source: {{ sales_import.source_provider }}</p>
     </div>
-    <a href="{{ url_for('admin.sales_imports') }}" class="btn btn-outline-secondary">Back to Imports</a>
+    <div class="d-flex gap-2">
+        <form method="post" class="d-inline">
+            <input type="hidden" name="action" value="refresh_auto_mapping">
+            <input type="hidden" name="selected_location_id" value="{{ selected_location.id if selected_location else '' }}">
+            <button type="submit" class="btn btn-outline-primary btn-sm">Refresh Auto-Mapping</button>
+        </form>
+        <a href="{{ url_for('admin.sales_imports') }}" class="btn btn-outline-secondary">Back to Imports</a>
+    </div>
 </div>
+
+{% if unresolved_location_count or unresolved_row_count %}
+<div class="alert alert-warning">
+    <div class="fw-semibold">Approval blocked while unresolved mappings remain.</div>
+    <div class="small">
+        Unresolved locations: {{ unresolved_location_count }} • Unresolved product rows: {{ unresolved_row_count }}
+    </div>
+</div>
+{% else %}
+<div class="alert alert-success py-2">
+    All mappings are resolved. This import is ready for approval.
+</div>
+{% endif %}
 
 <div class="row g-3 mb-3">
     <div class="col-md-3">
@@ -82,6 +102,40 @@
                     </ul>
                 </div>
                 {% endif %}
+                {% if selected_location.location_id is none %}
+                <div class="border rounded p-3 mb-3 bg-light">
+                    <div class="fw-semibold mb-2">Resolve location mapping</div>
+                    <form method="post" class="row g-2 align-items-end mb-2">
+                        <input type="hidden" name="action" value="map_location">
+                        <input type="hidden" name="selected_location_id" value="{{ selected_location.id }}">
+                        <input type="hidden" name="location_import_id" value="{{ selected_location.id }}">
+                        <div class="col-md-8">
+                            <label class="form-label mb-1">Map to existing location</label>
+                            <select class="form-select form-select-sm" name="target_location_id" required>
+                                <option value="">Select location</option>
+                                {% for location in locations %}
+                                <option value="{{ location.id }}">{{ location.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary btn-sm w-100">Save Mapping</button>
+                        </div>
+                    </form>
+                    <form method="post" class="row g-2 align-items-end">
+                        <input type="hidden" name="action" value="create_location">
+                        <input type="hidden" name="selected_location_id" value="{{ selected_location.id }}">
+                        <input type="hidden" name="location_import_id" value="{{ selected_location.id }}">
+                        <div class="col-md-8">
+                            <label class="form-label mb-1">Or create new location</label>
+                            <input type="text" class="form-control form-control-sm" name="new_location_name" placeholder="New location name" required>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-outline-primary btn-sm w-100">Create + Map</button>
+                        </div>
+                    </form>
+                </div>
+                {% endif %}
                 <div class="row g-2">
                     <div class="col-sm-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Quantity</div><div class="fw-semibold">{{ '%.2f'|format(selected_location.total_quantity) }}</div></div></div>
                     <div class="col-sm-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Net (Inc)</div><div class="fw-semibold">{{ '%.2f'|format(selected_location.net_inc) }}</div></div></div>
@@ -132,6 +186,42 @@
                                     {% endif %}
                                 </td>
                             </tr>
+                            {% if row.product_id is none %}
+                            <tr class="table-warning-subtle">
+                                <td colspan="8">
+                                    <div class="small fw-semibold mb-2">Resolve product mapping for “{{ row.source_product_name }}”</div>
+                                    <form method="post" class="row g-2 align-items-end mb-2">
+                                        <input type="hidden" name="action" value="map_product">
+                                        <input type="hidden" name="selected_location_id" value="{{ selected_location.id }}">
+                                        <input type="hidden" name="row_id" value="{{ row.id }}">
+                                        <div class="col-md-8">
+                                            <label class="form-label mb-1">Map to existing product</label>
+                                            <select class="form-select form-select-sm" name="target_product_id" required>
+                                                <option value="">Select product</option>
+                                                {% for product in products %}
+                                                <option value="{{ product.id }}">{{ product.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <button type="submit" class="btn btn-primary btn-sm w-100">Save Mapping</button>
+                                        </div>
+                                    </form>
+                                    <form method="post" class="row g-2 align-items-end">
+                                        <input type="hidden" name="action" value="create_product">
+                                        <input type="hidden" name="selected_location_id" value="{{ selected_location.id }}">
+                                        <input type="hidden" name="row_id" value="{{ row.id }}">
+                                        <div class="col-md-8">
+                                            <label class="form-label mb-1">Or create new product</label>
+                                            <input type="text" class="form-control form-control-sm" name="new_product_name" placeholder="New product name" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <button type="submit" class="btn btn-outline-primary btn-sm w-100">Create + Map</button>
+                                        </div>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endif %}
                             {% endfor %}
                         </tbody>
                     </table>
