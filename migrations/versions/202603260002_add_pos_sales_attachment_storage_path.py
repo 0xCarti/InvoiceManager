@@ -15,12 +15,19 @@ branch_labels = None
 depends_on = None
 
 
+def _column_names(table_name):
+    inspector = sa.inspect(op.get_bind())
+    return {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade():
-    op.add_column(
-        "pos_sales_import",
-        sa.Column("attachment_storage_path", sa.String(length=1024), nullable=True),
-    )
+    if "attachment_storage_path" not in _column_names("pos_sales_import"):
+        op.add_column(
+            "pos_sales_import",
+            sa.Column("attachment_storage_path", sa.String(length=1024), nullable=True),
+        )
 
 
 def downgrade():
-    op.drop_column("pos_sales_import", "attachment_storage_path")
+    if "attachment_storage_path" in _column_names("pos_sales_import"):
+        op.drop_column("pos_sales_import", "attachment_storage_path")
