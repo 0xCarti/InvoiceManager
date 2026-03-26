@@ -51,6 +51,9 @@ def test_mailgun_webhook_rejects_non_spreadsheet_attachment(client, app):
         "/webhooks/mailgun/inbound", data=data, content_type="multipart/form-data"
     )
     assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["error"] == "unsupported_attachment_type"
+    assert "filename" not in payload
 
 
 def test_mailgun_webhook_stages_import_and_deduplicates(client, app, tmp_path):

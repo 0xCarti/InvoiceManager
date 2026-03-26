@@ -388,3 +388,41 @@ def test_sales_import_detail_shows_undo_negative_inventory_warnings(client, app)
         )
         assert response.status_code == 200
         assert b"Potential negative inventory impact" in response.data
+
+
+def test_admin_can_soft_delete_sales_import(client, app):
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_pass = os.getenv("ADMIN_PASS", "adminpass")
+
+    with app.app_context():
+        sales_import = PosSalesImport(
+            source_provider="mailgun",
+            message_id="msg-delete-1",
+            attachment_filename="sales.xls",
+            attachment_sha256="f" * 64,
+            status="pending",
+        )
+        db.session.add(sales_import)
+        db.session.commit()
+        sales_import_id = sales_import.id
+
+    with client:
+        login(client, admin_email, admin_pass)
+        response = client.post(
+            f"/controlpanel/sales-imports/{sales_import_id}",
+            data={
+                "action": "delete_import",
+                "deletion_reason": "Duplicate staging run",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Import marked as deleted" in response.data
+
+    with app.app_context():
+        sales_import = db.session.get(PosSalesImport, sales_import_id)
+        assert sales_import is not None
+        assert sales_import.status == "deleted"
+        assert sales_import.deleted_by is not None
+        assert sales_import.deleted_at is not None
+        assert sales_import.deletion_reason == "Duplicate staging run"
