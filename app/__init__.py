@@ -388,6 +388,16 @@ def create_app(args=None):
     app.config["UPLOAD_FOLDER"] = os.path.join(base_dir, "uploads")
     app.config["BACKUP_FOLDER"] = os.path.join(base_dir, "backups")
     app.config["IMPORT_FILES_FOLDER"] = os.path.join(repo_dir, "import_files")
+    app.config["MAILGUN_WEBHOOK_SIGNING_KEY"] = os.getenv("MAILGUN_WEBHOOK_SIGNING_KEY", "")
+    app.config["MAILGUN_WEBHOOK_MAX_AGE_SECONDS"] = int(
+        os.getenv("MAILGUN_WEBHOOK_MAX_AGE_SECONDS", "900")
+    )
+    app.config["MAILGUN_ALLOWED_SENDERS"] = os.getenv("MAILGUN_ALLOWED_SENDERS", "")
+    app.config["MAILGUN_ALLOWED_SENDER_DOMAINS"] = os.getenv("MAILGUN_ALLOWED_SENDER_DOMAINS", "")
+    app.config["MAILGUN_ALLOWED_ATTACHMENT_EXTENSIONS"] = os.getenv(
+        "MAILGUN_ALLOWED_ATTACHMENT_EXTENSIONS", "xls,xlsx"
+    )
+    app.config["MAILGUN_INBOUND_STORAGE_DIR"] = os.getenv("MAILGUN_INBOUND_STORAGE_DIR", "")
     app.config.setdefault(
         "RESTORE_REQUIRED_TABLES",
         ["setting", "user", "invoice", "transfer"],
@@ -599,6 +609,7 @@ def create_app(args=None):
         from app.routes.invoice_routes import invoice
         from app.routes.item_routes import item
         from app.routes.location_routes import location
+        from app.routes.mailgun_routes import mailgun
         from app.routes.main_routes import main
         from app.routes.menu_routes import menu as menu_bp
         from app.routes.note_routes import notes
@@ -625,6 +636,7 @@ def create_app(args=None):
         app.register_blueprint(purchase)
         app.register_blueprint(report)
         app.register_blueprint(vendor)
+        app.register_blueprint(mailgun)
         app.register_blueprint(event)
         app.register_blueprint(glcode_bp)
         app.register_blueprint(preferences)
@@ -705,7 +717,8 @@ def create_app(args=None):
         except OperationalError:
             pass
 
-        CSRFProtect(app)
+        csrf_protect = CSRFProtect(app)
+        csrf_protect.exempt(mailgun)
 
         @app.errorhandler(CSRFError)
         def handle_csrf_error(error):
