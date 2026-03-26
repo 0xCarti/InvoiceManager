@@ -1,7 +1,11 @@
 #!/bin/sh
 set -e
 
-flask db upgrade
+if ! flask db upgrade; then
+    echo >&2 "[entrypoint] Migration failed while applying revision 202603260003 against pos_sales_import_row.approval_metadata."
+    echo >&2 "[entrypoint] If you hit duplicate column name: approval_metadata, follow README.md -> Runbook: recovering drifted pos_sales_import* tables before Alembic 202603260001 -> If you see duplicate column name: approval_metadata."
+    exit 1
+fi
 
 # Ensure the database has the initial admin user and settings
 python <<'PYTHON'

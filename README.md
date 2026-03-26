@@ -138,6 +138,16 @@ run the following recovery sequence exactly:
    flask db upgrade
    ```
 
+#### If you see `duplicate column name: approval_metadata`
+
+Run this exact recovery sequence before retrying startup:
+
+```bash
+export AUTO_CREATE_SCHEMA=0
+flask db stamp 202603260005
+flask db upgrade
+```
+
 > **Note:** Both setup scripts execute these commands automatically after installing the dependencies. Run them manually only if you performed the installation steps yourself.
 
 ## Running the Application
